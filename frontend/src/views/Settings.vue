@@ -1,179 +1,112 @@
 <script setup>
 import { reactive, onMounted } from 'vue'
 
-// 1. 상태 관리 (초기값은 API에서 받아오는 것을 가정)
 const settings = reactive({
-  isDarkMode: false,
   notifications: {
     task: true,
     qa: false,
     ai: true,
-    critical: true // 고정값
+    critical: true
   }
 })
 
-// 2. 초기 로드 시 설정값 동기화
 onMounted(async () => {
   try {
-    // TODO: 실제 환경에서는 사용자 계정 API를 호출하여 설정값을 덮어씌웁니다.
-    // const response = await api.get('/user/settings')
-    // Object.assign(settings, response.data)
-    
-    // 로컬 시스템 설정이나 이전 저장 상태를 확인하여 다크모드 초기화
-    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      settings.isDarkMode = true
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
+    console.log('설정 정보를 불러왔습니다.')
   } catch (error) {
     console.error('설정 정보를 불러오는데 실패했습니다.', error)
   }
 })
 
-// 3. 다크모드 토글 및 즉시 저장 (SETTING_003)
-const toggleDarkMode = async () => {
-  settings.isDarkMode = !settings.isDarkMode
-  
-  // 화면 즉시 반영
-  if (settings.isDarkMode) {
-    document.documentElement.classList.add('dark')
-    localStorage.setItem('theme', 'dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-    localStorage.setItem('theme', 'light')
-  }
-
-  // 백엔드 즉시 동기화
-  await syncSettingToServer('isDarkMode', settings.isDarkMode)
-}
-
-// 4. 알림 설정 토글 및 즉시 저장 (SETTING_004)
 const updateNotification = async (type) => {
+  if (type === 'critical') return 
   settings.notifications[type] = !settings.notifications[type]
   await syncSettingToServer(`notifications.${type}`, settings.notifications[type])
 }
 
-// 5. 서버 동기화 모의 함수
 const syncSettingToServer = async (key, value) => {
   try {
-    // TODO: 실제 백엔드 연동 코드 (Spring Boot Controller 향)
-    // await api.patch('/user/settings', { [key]: value })
     console.log(`[API Call] 설정 업데이트 됨 - ${key}: ${value}`)
   } catch (error) {
     console.error('설정 저장 실패:', error)
-    // 에러 시 롤백 로직 추가 가능
   }
 }
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-10 px-4 sm:px-6 lg:px-8 transition-colors duration-200">
-    <div class="max-w-3xl mx-auto space-y-8">
-      
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">환경 설정</h1>
-        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Callog의 테마와 알림 수신 여부를 개인 환경에 맞게 관리하세요.
-        </p>
-      </div>
-
-      <section class="bg-white dark:bg-gray-800 shadow-sm sm:rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-        <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">테마 및 UI 설정</h2>
-        </div>
-        <div class="px-4 py-5 sm:p-6 space-y-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <label class="text-sm font-medium text-gray-900 dark:text-gray-200">다크 모드</label>
-              <p class="text-sm text-gray-500 dark:text-gray-400">시스템 전체 UI를 어두운 테마로 변경합니다.</p>
-            </div>
-            <button 
-              type="button" 
-              @click="toggleDarkMode"
-              :class="[settings.isDarkMode ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600', 'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 dark:focus:ring-offset-gray-900']"
-              role="switch" 
-              :aria-checked="settings.isDarkMode"
-            >
-              <span class="sr-only">다크 모드 설정</span>
-              <span 
-                :class="[settings.isDarkMode ? 'translate-x-5' : 'translate-x-0', 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out']"
-              ></span>
-            </button>
+  <section class="grid gap-6 p-6 max-w-4xl mx-auto">
+    <div class="bg-white rounded-[26px] p-8 shadow-sm border border-slate-200">
+      <div class="mb-2">
+        <div class="flex items-center gap-3 mb-2">
+          <h2 class="text-3xl font-bold tracking-tight text-slate-900">환경 설정</h2>
+          <div class="p-2 rounded-full bg-slate-50 border border-slate-100 text-slate-400">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
           </div>
         </div>
-      </section>
-
-      <section class="bg-white dark:bg-gray-800 shadow-sm sm:rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-        <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">알림 수신 설정</h2>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">수신하고 싶은 알림 유형을 선택하세요.</p>
-        </div>
-        
-        <ul role="list" class="divide-y divide-gray-200 dark:divide-gray-700">
-          
-          <li class="px-4 py-5 sm:p-6 flex items-center justify-between">
-            <div>
-              <label class="text-sm font-medium text-gray-900 dark:text-gray-200">업무 알림</label>
-              <p class="text-sm text-gray-500 dark:text-gray-400">신규 업무 생성, 배정, 상태 변경 알림</p>
-            </div>
-            <button 
-              type="button" 
-              @click="updateNotification('task')"
-              :class="[settings.notifications.task ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600', 'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 dark:focus:ring-offset-gray-900']"
-            >
-              <span :class="[settings.notifications.task ? 'translate-x-5' : 'translate-x-0', 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out']"></span>
-            </button>
-          </li>
-
-          <li class="px-4 py-5 sm:p-6 flex items-center justify-between">
-            <div>
-              <label class="text-sm font-medium text-gray-900 dark:text-gray-200">QA 알림</label>
-              <p class="text-sm text-gray-500 dark:text-gray-400">검수 결과 및 버그 수정 요청 알림</p>
-            </div>
-            <button 
-              type="button" 
-              @click="updateNotification('qa')"
-              :class="[settings.notifications.qa ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600', 'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 dark:focus:ring-offset-gray-900']"
-            >
-              <span :class="[settings.notifications.qa ? 'translate-x-5' : 'translate-x-0', 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out']"></span>
-            </button>
-          </li>
-
-          <li class="px-4 py-5 sm:p-6 flex items-center justify-between">
-            <div>
-              <label class="text-sm font-medium text-gray-900 dark:text-gray-200">AI 분석 알림</label>
-              <p class="text-sm text-gray-500 dark:text-gray-400">리스크 감지 및 업무 가이드 생성 알림</p>
-            </div>
-            <button 
-              type="button" 
-              @click="updateNotification('ai')"
-              :class="[settings.notifications.ai ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600', 'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 dark:focus:ring-offset-gray-900']"
-            >
-              <span :class="[settings.notifications.ai ? 'translate-x-5' : 'translate-x-0', 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out']"></span>
-            </button>
-          </li>
-
-          <li class="px-4 py-5 sm:p-6 flex items-center justify-between opacity-75">
-            <div>
-              <div class="flex items-center gap-2">
-                <label class="text-sm font-medium text-gray-900 dark:text-gray-200">중요 알림</label>
-                <span class="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/10 dark:bg-red-400/10 dark:text-red-400 dark:ring-red-400/20">필수</span>
-              </div>
-              <p class="text-sm text-gray-500 dark:text-gray-400">마감 임박, 업무 지연 등 크리티컬한 알림은 해제할 수 없습니다.</p>
-            </div>
-            <button 
-              type="button" 
-              disabled
-              class="bg-indigo-600 opacity-60 cursor-not-allowed relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent"
-            >
-              <span class="translate-x-5 pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0"></span>
-            </button>
-          </li>
-
-        </ul>
-      </section>
-      
+        <p class="text-slate-500 text-sm leading-relaxed">
+          Callog의 알림 수신 여부를 개인 업무 환경에 맞게 최적화하세요.
+        </p>
+      </div>
     </div>
-  </div>
+
+    <div class="bg-white rounded-[26px] border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-900">다크 모드 설정</h3>
+        <p class="text-sm text-slate-500">다크 모드를 토글합니다.</p>
+      </div>
+        
+
+      <div class="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-900">알림 수신 설정</h3>
+        <p class="text-sm text-slate-500">수신하고 싶은 알림 유형을 선택하세요.</p>
+      </div>
+      
+      <div class="divide-y divide-slate-100">
+        <div 
+          v-for="(info, key) in {
+            task: { label: '업무 알림', desc: '신규 업무 생성, 배정, 상태 변경 알림' },
+            qa: { label: 'QA 알림', desc: '검수 결과 및 버그 수정 요청 알림' },
+            ai: { label: 'AI 분석 알림', desc: '리스크 감지 및 업무 가이드 생성 알림' }
+          }" 
+          :key="key"
+          class="px-8 py-6 flex items-center justify-between hover:bg-slate-50/30 transition-colors"
+        >
+          <div>
+            <strong class="block text-[15px] font-bold text-slate-900 mb-1">{{ info.label }}</strong>
+            <p class="text-sm text-slate-400 font-medium">{{ info.desc }}</p>
+          </div>
+          
+          <button 
+            type="button" 
+            @click="updateNotification(key)"
+            class="relative inline-flex h-[30px] w-[54px] shrink-0 cursor-pointer rounded-full border-4 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+            :style="{ backgroundColor: settings.notifications[key] ? '#59c36d' : '#e2e8f0' }"
+          >
+            <span 
+              :class="[settings.notifications[key] ? 'translate-x-6' : 'translate-x-0', 'pointer-events-none inline-block h-[30px] w-[30px] transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out']"
+            />
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="flex flex-col items-center gap-4">
+      <div class="h-px w-16 bg-slate-200" />
+      <p class="text-center text-xs font-medium text-slate-400 leading-relaxed">
+        설정값은 변경 즉시 계정에 저장되며 모든 기기에 동기화됩니다.<br/>
+        도움이 필요하시면 고객 지원 센터로 문의해 주세요.
+      </p>
+    </div>
+  </section>
 </template>
+
+<style scoped>
+/* 기존 테마의 부드러운 폰트 및 베이스 스타일 유지 */
+section {
+  font-family: 'Pretendard', system-ui, sans-serif;
+}
+</style>

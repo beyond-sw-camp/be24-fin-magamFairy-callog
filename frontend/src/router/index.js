@@ -4,13 +4,14 @@ import CalendarView from '@/views/CalendarView.vue'
 import TasksView from '@/views/TasksView.vue'
 import TemplatesView from '@/views/TemplatesView.vue'
 import ReportsView from '@/views/ReportsView.vue'
+import Settings from '@/views/Settings.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      redirect: '/dashboard',
+      redirect: '/calendar',
     },
     {
       path: '/dashboard',
@@ -28,6 +29,15 @@ const router = createRouter({
       meta: {
         title: '캘린더',
         section: '운영 플래너',
+      },
+    },
+        {
+      path: '/settings',
+      name: 'settings',
+      component: Settings,
+      meta: {
+        title: '설정',
+        section: '설정',
       },
     },
     {
