@@ -61,9 +61,46 @@ const hoveredMetric = computed(() => {
   return activeMetrics.value.find((metric) => metric.id === store.hoverMetricKey) ?? null
 })
 
-const hoveredMetricPreviewItems = computed(() => {
-  return hoveredMetric.value ? store.getMetricPreview(hoveredMetric.value.id) : []
+const pinnedMetric = computed(() => {
+  return activeMetrics.value.find((metric) => metric.id === store.activeMetricKey) ?? null
 })
+
+const previewMetric = computed(() => {
+  return pinnedMetric.value ?? hoveredMetric.value ?? null
+})
+
+const previewMetricItems = computed(() => {
+  return previewMetric.value ? store.getMetricPreview(previewMetric.value.id) : []
+})
+
+const previewGridStyle = computed(() => {
+  if (previewMetric.value?.id === 'metric-balance') {
+    return {
+      gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+    }
+  }
+
+  return {
+    gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+  }
+})
+
+const panelClass =
+  'rounded-[24px] border border-[color:var(--border-color)] bg-[var(--panel-color)] shadow-[var(--shadow-soft)]'
+const compactPanelClass =
+  'rounded-[24px] border border-[color:var(--border-color)] bg-[var(--panel-color)] shadow-[var(--shadow-soft)]'
+const primaryButtonClass =
+  'inline-flex min-h-[2.7rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--accent-color)] bg-[var(--accent-color)] px-4 text-sm font-semibold text-white shadow-[var(--shadow-soft)] transition duration-200 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0'
+const segmentedButtonClass =
+  'min-h-[2.15rem] rounded-full px-4 text-sm font-bold text-[color:var(--muted-text)] transition duration-200'
+const filterChipClass =
+  'inline-flex min-h-[1.95rem] items-center justify-center rounded-full border border-[color:var(--border-color)] px-3 text-[0.78rem] font-bold text-[color:var(--muted-text)] transition duration-200'
+const metricCardClass =
+  'relative z-0 flex min-h-[90px] cursor-pointer flex-col items-center justify-center gap-3 overflow-hidden rounded-[20px] border border-[color:var(--border-strong)] px-4 py-3.5 text-center shadow-[0_8px_22px_rgba(19,35,68,0.05)] transition duration-200 hover:-translate-y-px hover:shadow-[0_14px_28px_rgba(19,35,68,0.10)] focus-visible:-translate-y-px focus-visible:shadow-[0_14px_28px_rgba(19,35,68,0.10)]'
+const hoverPreviewActionClass =
+  'inline-flex min-h-8 items-center justify-center rounded-full border border-[color:var(--border-color)] bg-white/80 px-3 text-xs font-bold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]'
+const metricPreviewItemClass =
+  'grid min-w-0 min-h-[92px] content-start gap-2 overflow-hidden rounded-[18px] border border-[color:var(--border-color)] px-4 py-3.5 text-left shadow-[0_8px_18px_rgba(19,35,68,0.05)] transition duration-200 hover:-translate-y-px hover:shadow-[0_14px_28px_rgba(19,35,68,0.10)] focus-visible:-translate-y-px focus-visible:shadow-[0_14px_28px_rgba(19,35,68,0.10)]'
 
 const pendingPersonalTask = computed(() => {
   return store.personalTaskNotes.find((task) => !task.isMarkedComplete) ?? store.personalTaskNotes[0] ?? null
@@ -183,25 +220,153 @@ function handleMetricClick(metricId) {
   clearMetricPreview()
   store.activateMetric(metricId)
 }
+
+function applyMetric(metricId) {
+  clearMetricPreview()
+
+  if (store.activeMetricKey !== metricId) {
+    store.activateMetric(metricId)
+  }
+}
+
+function metricCardStyle(metric) {
+  if (store.activeMetricKey === metric.id) {
+    return {
+      borderColor: `color-mix(in srgb, ${metric.accent} 46%, var(--border-color))`,
+      background: `linear-gradient(180deg, color-mix(in srgb, ${metric.accent} 22%, white), color-mix(in srgb, ${metric.accent} 8%, var(--panel-color)))`,
+      boxShadow: `0 20px 36px rgba(15, 23, 42, 0.10), 0 0 0 1px color-mix(in srgb, ${metric.accent} 26%, white)`,
+    }
+  }
+
+  return {
+    borderColor: `color-mix(in srgb, ${metric.accent} 26%, var(--border-strong))`,
+    background: `linear-gradient(180deg, color-mix(in srgb, ${metric.accent} 16%, white), color-mix(in srgb, ${metric.accent} 6%, var(--panel-color)))`,
+    boxShadow: '0 10px 30px rgba(19, 35, 68, 0.06)',
+  }
+}
+
+function metricLabelStyle(metric) {
+  return {
+    color: `color-mix(in srgb, ${metric.accent} 82%, var(--text-secondary))`,
+  }
+}
+
+function metricDotStyle(metric) {
+  return {
+    background: metric.accent,
+    boxShadow: `0 0 0 4px color-mix(in srgb, ${metric.accent} 14%, white)`,
+  }
+}
+
+function metricValueStyle(metric) {
+  return {
+    color:
+      store.activeMetricKey === metric.id
+        ? `color-mix(in srgb, ${metric.accent} 72%, var(--text-primary))`
+        : `color-mix(in srgb, ${metric.accent} 60%, var(--text-primary))`,
+  }
+}
+
+function previewItemAccent(metric, item, index) {
+  if (metric.id === 'metric-balance') {
+    const weekdayPalette = {
+      월: '#2f80ed',
+      화: '#28b57a',
+      수: '#7c4dff',
+      목: '#f5b64e',
+      금: '#df5f75',
+    }
+
+    return weekdayPalette[item.title] ?? metric.accent
+  }
+
+  const palette = ['#2f80ed', '#59c36d', '#f5b64e', '#7c4dff', '#df5f75']
+  return palette[index % palette.length] ?? metric.accent
+}
+
+function previewPanelStyle(metric) {
+  if (!metric) return null
+
+  return {
+    borderColor: `color-mix(in srgb, ${metric.accent} 28%, var(--border-color))`,
+    background: `linear-gradient(180deg, color-mix(in srgb, ${metric.accent} 12%, white), color-mix(in srgb, ${metric.accent} 4%, var(--panel-color)))`,
+    boxShadow: `0 18px 36px rgba(19, 35, 68, 0.08)`,
+  }
+}
+
+function previewItemStyle(metric, item, index) {
+  if (!metric) return null
+
+  const accent = previewItemAccent(metric, item, index)
+
+  return {
+    borderColor: `color-mix(in srgb, ${accent} 26%, var(--border-color))`,
+    background: `linear-gradient(180deg, color-mix(in srgb, ${accent} 16%, white), color-mix(in srgb, ${accent} 8%, var(--panel-muted)))`,
+    boxShadow: `0 10px 20px color-mix(in srgb, ${accent} 12%, rgba(19, 35, 68, 0.06))`,
+  }
+}
+
+function previewItemMarkerStyle(metric, item, index) {
+  if (!metric) return null
+
+  const accent = previewItemAccent(metric, item, index)
+
+  return {
+    background: accent,
+    boxShadow: `0 0 0 4px color-mix(in srgb, ${accent} 16%, white)`,
+  }
+}
+
+function previewItemTitleStyle(metric, item, index) {
+  if (!metric) return null
+
+  const accent = previewItemAccent(metric, item, index)
+
+  return {
+    color: `color-mix(in srgb, ${accent} 78%, var(--text-primary))`,
+  }
+}
+
+function previewItemMetaStyle(metric, item, index) {
+  if (!metric) return null
+
+  const accent = previewItemAccent(metric, item, index)
+
+  return {
+    color: `color-mix(in srgb, ${accent} 58%, var(--muted-text))`,
+  }
+}
 </script>
 
 <template>
-  <section class="operations-view">
-    <header class="surface-card operations-header">
-      <div class="operations-header__top">
-        <div class="operations-header__headline">
+  <section class="grid gap-[0.95rem]">
+    <header
+      :class="panelClass"
+      class="sticky top-0 z-[12] grid gap-[1.05rem] px-5 py-4"
+      style="background: linear-gradient(180deg, color-mix(in srgb, var(--panel-color) 97%, white), var(--panel-color)), var(--panel-color);"
+    >
+      <div class="flex flex-col items-start justify-between gap-[0.95rem] max-[1080px]:items-start min-[1081px]:flex-row min-[1081px]:items-center">
+        <div class="grid gap-[0.45rem]">
           <p class="section-eyebrow">운영 허브</p>
-          <h2>{{ activeTabTitle }}</h2>
+          <h2 class="text-[1.35rem] leading-[1.1] text-[color:var(--text-primary)]">{{ activeTabTitle }}</h2>
         </div>
 
-        <div class="operations-header__actions">
-          <div class="operations-segmented" role="tablist" aria-label="역할 전환">
+        <div class="flex w-full flex-wrap items-center justify-between gap-[0.65rem] min-[1081px]:w-auto min-[1081px]:justify-end">
+          <div
+            class="inline-flex items-center gap-1 rounded-full border border-[color:var(--border-color)] bg-[var(--panel-muted)] p-1"
+            role="tablist"
+            aria-label="역할 전환"
+          >
             <button
               v-for="role in store.operationRoleOptions"
               :key="role.value"
               type="button"
-              class="operations-segmented__button"
-              :class="{ 'operations-segmented__button--active': store.activeRole === role.value }"
+              :class="[
+                segmentedButtonClass,
+                store.activeRole === role.value
+                  ? 'bg-[var(--panel-color)] text-[color:var(--text-primary)] shadow-[var(--shadow-soft)]'
+                  : '',
+              ]"
               @click="store.setActiveRole(role.value)"
             >
               {{ role.label }}
@@ -209,7 +374,7 @@ function handleMetricClick(metricId) {
           </div>
 
           <button
-            class="primary-button operations-header__primary"
+            :class="[primaryButtonClass, 'max-[820px]:hidden']"
             type="button"
             :disabled="headerPrimaryAction.disabled"
             @click="handleHeaderPrimaryAction"
@@ -219,29 +384,37 @@ function handleMetricClick(metricId) {
         </div>
       </div>
 
-      <div class="operations-header__bottom">
+      <div class="flex flex-col items-start justify-between gap-[0.95rem] border-t border-[color:var(--border-color)] pt-3 min-[1081px]:flex-row min-[1081px]:items-center">
         <PageTabs :active="store.activeTab" :tabs="domainTabs" @select="store.setActiveTab($event)" />
 
-        <div v-if="store.activeTab === 'customers'" class="operations-context-filters">
+        <div v-if="store.activeTab === 'customers'" class="flex flex-wrap gap-2">
           <button
             v-for="option in customerFilterOptions"
             :key="option.value"
             type="button"
-            class="operations-filter-chip"
-            :class="{ 'operations-filter-chip--active': store.customerHealthFilter === option.value }"
+            :class="[
+              filterChipClass,
+              store.customerHealthFilter === option.value
+                ? 'border-[color:var(--accent-color)] bg-[var(--panel-muted)] text-[color:var(--text-primary)]'
+                : '',
+            ]"
             @click="store.setCustomerHealthFilter(option.value)"
           >
             {{ option.label }}
           </button>
         </div>
 
-        <div v-else-if="store.activeTab === 'workload'" class="operations-context-filters">
+        <div v-else-if="store.activeTab === 'workload'" class="flex flex-wrap gap-2">
           <button
             v-for="option in workloadFilterOptions"
             :key="option.value"
             type="button"
-            class="operations-filter-chip"
-            :class="{ 'operations-filter-chip--active': store.workInboxFilter === option.value }"
+            :class="[
+              filterChipClass,
+              store.workInboxFilter === option.value
+                ? 'border-[color:var(--accent-color)] bg-[var(--panel-muted)] text-[color:var(--text-primary)]'
+                : '',
+            ]"
             @click="store.setWorkInboxFilter(option.value)"
           >
             {{ option.label }}
@@ -251,57 +424,100 @@ function handleMetricClick(metricId) {
     </header>
 
     <div
-      class="operations-metrics-block"
+      class="grid gap-[0.55rem]"
       @mouseleave="clearMetricPreview"
       @focusout="handleMetricGroupFocusOut"
     >
-      <div class="operations-metrics">
+      <div class="grid grid-cols-4 gap-[0.95rem] max-[1080px]:grid-cols-2 max-[820px]:grid-cols-1">
         <button
           v-for="metric in activeMetrics"
           :key="metric.id"
           type="button"
-          class="surface-card operations-metric"
-          :class="{ 'operations-metric--active': store.activeMetricKey === metric.id }"
-          :style="{ '--metric-accent': metric.accent }"
+          :class="metricCardClass"
+          :style="metricCardStyle(metric)"
           :aria-pressed="store.activeMetricKey === metric.id"
           @mouseenter="store.setHoverMetricKey(metric.id)"
           @focus="store.setHoverMetricKey(metric.id)"
           @click="handleMetricClick(metric.id)"
         >
-          <small>{{ metric.label }}</small>
-          <strong>{{ metric.value }}</strong>
+          <div class="flex min-w-0 items-center justify-center gap-2.5">
+            <span
+              class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+              :style="metricDotStyle(metric)"
+            />
+            <small
+              class="min-w-0 break-keep whitespace-normal text-[0.88rem] font-semibold leading-[1.25] [overflow-wrap:anywhere]"
+              :style="metricLabelStyle(metric)"
+            >
+              {{ metric.label }}
+            </small>
+          </div>
+
+          <div class="grid min-w-0 justify-items-center gap-1">
+            <strong
+              class="break-words text-[1.55rem] leading-none tracking-[-0.03em]"
+              :style="metricValueStyle(metric)"
+            >
+              {{ metric.value }}
+            </strong>
+
+            <span class="text-[0.72rem] font-medium leading-4 text-[color:var(--muted-text)]">
+              {{ store.activeMetricKey === metric.id ? '적용 중' : '클릭해 보기' }}
+            </span>
+          </div>
         </button>
       </div>
 
       <div
-        v-if="hoveredMetric && hoveredMetricPreviewItems.length"
-        class="surface-card operations-metric-preview-panel"
+        v-if="previewMetric && previewMetricItems.length"
+        :class="[compactPanelClass, 'grid gap-[0.9rem] px-4 py-4 max-[820px]:hidden']"
+        :style="previewPanelStyle(previewMetric)"
       >
-        <div class="operations-metric-preview-panel__header">
-          <div class="operations-metric-preview-panel__summary">
-            <small>{{ hoveredMetric.label }}</small>
-            <strong>{{ hoveredMetric.value }}</strong>
+        <div class="flex items-center justify-between gap-[0.85rem]">
+          <div class="grid gap-[0.18rem]">
+            <small class="text-[0.76rem] text-[color:var(--muted-text)]">{{ previewMetric.label }}</small>
+            <strong class="text-[1.05rem] leading-tight text-[color:var(--text-primary)]">{{ previewMetric.value }}</strong>
           </div>
 
           <button
             type="button"
-            class="operations-metric-preview-panel__action"
-            @click="handleMetricClick(hoveredMetric.id)"
+            :class="hoverPreviewActionClass"
+            @click="applyMetric(previewMetric.id)"
           >
             보기 적용
           </button>
         </div>
 
-        <div class="operations-metric-preview-panel__list">
+        <div class="grid gap-[0.75rem]" :style="previewGridStyle">
           <button
-            v-for="item in hoveredMetricPreviewItems"
-            :key="`${hoveredMetric.id}-${item.title}`"
+            v-for="(item, index) in previewMetricItems"
+            :key="`${previewMetric.id}-${item.title}`"
             type="button"
-            class="operations-metric-preview-panel__item"
-            @click="handleMetricClick(hoveredMetric.id)"
+            :class="metricPreviewItemClass"
+            :style="previewItemStyle(previewMetric, item, index)"
+            @click="applyMetric(previewMetric.id)"
           >
-            <span>{{ item.title }}</span>
-            <small>{{ item.meta }}</small>
+            <div class="flex min-w-0 items-start gap-3">
+              <span
+                class="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                :style="previewItemMarkerStyle(previewMetric, item, index)"
+              />
+
+              <div class="grid min-w-0 gap-1.5">
+                <span
+                  class="break-keep whitespace-normal text-[0.92rem] font-bold leading-[1.35] [overflow-wrap:anywhere]"
+                  :style="previewItemTitleStyle(previewMetric, item, index)"
+                >
+                  {{ item.title }}
+                </span>
+                <small
+                  class="break-words text-[0.74rem] leading-5"
+                  :style="previewItemMetaStyle(previewMetric, item, index)"
+                >
+                  {{ item.meta }}
+                </small>
+              </div>
+            </div>
           </button>
         </div>
       </div>
@@ -311,10 +527,12 @@ function handleMetricClick(metricId) {
     <OperationsWorkloadBoard v-else-if="store.activeTab === 'workload'" />
     <OperationsTasknotesBoard v-else />
 
-    <div class="surface-card operations-mobile-bar">
-      <strong>{{ headerPrimaryAction.label }}</strong>
+    <div
+      :class="[compactPanelClass, 'fixed bottom-4 left-4 right-4 z-30 hidden items-center justify-between gap-3 rounded-[22px] bg-[color:color-mix(in_srgb,var(--panel-color)_92%,white)] px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur-[16px] max-[820px]:flex']"
+    >
+      <strong class="text-[color:var(--text-primary)]">{{ headerPrimaryAction.label }}</strong>
       <button
-        class="primary-button"
+        :class="primaryButtonClass"
         type="button"
         :disabled="headerPrimaryAction.disabled"
         @click="handleHeaderPrimaryAction"
@@ -324,292 +542,3 @@ function handleMetricClick(metricId) {
     </div>
   </section>
 </template>
-
-<style scoped>
-.operations-view {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.operations-header {
-  position: sticky;
-  top: 0;
-  z-index: 12;
-  padding: 0.85rem 1rem;
-  display: grid;
-  gap: 0.7rem;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--panel-color) 97%, white), var(--panel-color)),
-    var(--panel-color);
-}
-
-.operations-header__top,
-.operations-header__bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-}
-
-.operations-header__headline {
-  display: grid;
-  gap: 0.15rem;
-}
-
-.operations-header__headline h2 {
-  font-size: 1.35rem;
-  line-height: 1.1;
-}
-
-.operations-header__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-
-.operations-segmented {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.25rem;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--panel-muted);
-}
-
-.operations-segmented__button {
-  min-height: 2.15rem;
-  padding: 0 0.95rem;
-  border-radius: 999px;
-  color: var(--muted-text);
-  font-weight: 700;
-}
-
-.operations-segmented__button--active {
-  background: var(--panel-color);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-soft);
-}
-
-.operations-context-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.operations-filter-chip {
-  min-height: 1.95rem;
-  padding: 0 0.75rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.78rem;
-  font-weight: 700;
-  background: transparent;
-  color: var(--muted-text);
-}
-
-.operations-filter-chip--active {
-  background: var(--panel-muted);
-  color: var(--text-primary);
-  border-color: color-mix(in srgb, var(--accent-color) 24%, var(--border-color));
-}
-
-.operations-metrics-block {
-  display: grid;
-  gap: 0.55rem;
-}
-
-.operations-metrics {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.8rem;
-  overflow: visible;
-}
-
-.operations-metric {
-  position: relative;
-  z-index: 0;
-  padding: 0.9rem 1rem;
-  border-top: 4px solid var(--metric-accent);
-  display: grid;
-  gap: 0.15rem;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
-    background 0.18s ease;
-}
-
-.operations-metric:hover,
-.operations-metric:focus-visible {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-soft);
-}
-
-.operations-metric:hover,
-.operations-metric:focus-within {
-  z-index: 22;
-}
-
-.operations-metric--active {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--metric-accent) 76%, white);
-  background: color-mix(in srgb, var(--metric-accent) 8%, var(--panel-color));
-  box-shadow:
-    0 18px 32px rgba(15, 23, 42, 0.08),
-    0 0 0 1px color-mix(in srgb, var(--metric-accent) 30%, white);
-}
-
-.operations-metric small {
-  color: var(--muted-text);
-  font-size: 0.8rem;
-}
-
-.operations-metric > strong {
-  font-size: 1.55rem;
-}
-
-.operations-metric-preview-panel {
-  padding: 0.8rem 0.95rem;
-  display: grid;
-  gap: 0.7rem;
-}
-
-.operations-metric-preview-panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.operations-metric-preview-panel__summary {
-  display: grid;
-  gap: 0.08rem;
-}
-
-.operations-metric-preview-panel__summary small,
-.operations-metric-preview-panel__item small {
-  color: var(--muted-text);
-  font-size: 0.74rem;
-}
-
-.operations-metric-preview-panel__summary strong {
-  font-size: 1rem;
-  line-height: 1.1;
-}
-
-.operations-metric-preview-panel__action {
-  min-height: 2rem;
-  padding: 0 0.8rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 16%, var(--border-color));
-  background: color-mix(in srgb, var(--panel-color) 92%, white);
-  font-size: 0.76rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.operations-metric-preview-panel__list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.55rem;
-}
-
-.operations-metric-preview-panel__item {
-  min-width: 0;
-  padding: 0.7rem 0.75rem;
-  border-radius: 16px;
-  border: 1px solid var(--border-color);
-  background: color-mix(in srgb, var(--panel-muted) 76%, white);
-  display: grid;
-  gap: 0.2rem;
-  text-align: left;
-  transition:
-    border-color 0.18s ease,
-    transform 0.18s ease,
-    box-shadow 0.18s ease;
-}
-
-.operations-metric-preview-panel__item:hover,
-.operations-metric-preview-panel__item:focus-visible,
-.operations-metric-preview-panel__action:hover,
-.operations-metric-preview-panel__action:focus-visible {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--accent-color) 24%, var(--border-color));
-  box-shadow: var(--shadow-soft);
-}
-
-.operations-metric-preview-panel__item span {
-  font-size: 0.92rem;
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--text-primary);
-}
-
-.operations-mobile-bar {
-  display: none;
-}
-
-@media (max-width: 1080px) {
-  .operations-header__top,
-  .operations-header__bottom {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .operations-header__actions {
-    width: 100%;
-    justify-content: space-between;
-    flex-wrap: wrap;
-  }
-
-  .operations-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .operations-metric-preview-panel__list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 820px) {
-  .operations-view {
-    padding-bottom: 6rem;
-  }
-
-  .operations-header__primary {
-    display: none;
-  }
-
-  .operations-metrics {
-    grid-template-columns: 1fr;
-  }
-
-  .operations-metric-preview-panel {
-    display: none;
-  }
-
-  .operations-mobile-bar {
-    position: fixed;
-    left: 1rem;
-    right: 1rem;
-    bottom: 1rem;
-    z-index: 30;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.85rem;
-    padding: 0.85rem 0.95rem;
-    border-radius: 22px;
-    background: color-mix(in srgb, var(--panel-color) 92%, white);
-    backdrop-filter: blur(16px);
-    box-shadow: var(--shadow-soft);
-  }
-}
-</style>

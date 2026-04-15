@@ -18,82 +18,32 @@ function handleSelect(value) {
 </script>
 
 <template>
-  <div class="page-tabs">
+  <div
+    class="flex items-center gap-2 overflow-x-auto overflow-y-hidden border-b border-[color:var(--border-color)] px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+  >
     <button
       v-for="tab in props.tabs"
       :key="tab.value"
-      class="page-tabs__item"
-      :class="{ 'page-tabs__item--active': tab.value === props.active }"
+      class="relative inline-flex min-h-[2.9rem] shrink-0 items-center gap-2 rounded-[14px] border border-transparent px-4 py-2.5 text-[color:var(--muted-text)] transition duration-200 hover:border-[color:color-mix(in_srgb,var(--accent-color)_18%,var(--border-color))] hover:bg-[var(--panel-muted)] hover:text-[color:var(--text-primary)]"
+      :class="
+        tab.value === props.active
+          ? 'border-[color:color-mix(in_srgb,var(--accent-color)_24%,var(--border-color))] bg-[var(--panel-muted)] text-[color:var(--text-primary)] shadow-[0_8px_20px_rgba(19,35,68,0.06)]'
+          : ''
+      "
       type="button"
       @click="handleSelect(tab.value)"
     >
-      <svg v-if="tab.icon" viewBox="0 0 24 24" aria-hidden="true">
+      <svg
+        v-if="tab.icon"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        class="h-4 w-4 fill-none stroke-current stroke-[1.8] [stroke-linecap:round] [stroke-linejoin:round]"
+      >
         <path :d="tab.icon" />
       </svg>
 
-      <span>{{ tab.label }}</span>
-      <small v-if="tab.caption">{{ tab.caption }}</small>
+      <span class="font-semibold">{{ tab.label }}</span>
+      <small v-if="tab.caption" class="text-[0.74rem] opacity-75">{{ tab.caption }}</small>
     </button>
   </div>
 </template>
-
-<style scoped>
-.page-tabs {
-  display: flex;
-  align-items: center;
-  gap: 0.1rem;
-  border-bottom: 1px solid var(--border-color);
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-}
-
-.page-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.page-tabs__item {
-  position: relative;
-  min-height: 3rem;
-  flex-shrink: 0;
-  padding: 0.8rem 0.9rem 0.85rem;
-  border-bottom: 2px solid transparent;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: var(--muted-text);
-  cursor: pointer;
-  transition:
-    color 0.18s ease,
-    border-color 0.18s ease;
-}
-
-.page-tabs__item svg {
-  width: 1rem;
-  height: 1rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.page-tabs__item span {
-  font-weight: 600;
-}
-
-.page-tabs__item small {
-  color: inherit;
-  opacity: 0.74;
-  font-size: 0.74rem;
-}
-
-.page-tabs__item:hover,
-.page-tabs__item--active {
-  color: var(--text-primary);
-}
-
-.page-tabs__item--active {
-  border-bottom-color: var(--accent-color);
-}
-</style>

@@ -17,6 +17,40 @@ const suggestionStateLabel = {
   rejected: '보류',
 }
 
+const panelClass =
+  'grid gap-[0.9rem] rounded-[24px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-4 py-4 shadow-[var(--shadow-soft)]'
+const headerClass =
+  'flex items-start justify-between gap-[0.75rem] max-[980px]:flex-col max-[980px]:items-start'
+const fieldClass = 'grid gap-[0.8rem]'
+const fieldLabelClass = 'text-[0.82rem] font-bold text-[color:var(--text-primary)]'
+const inputClass =
+  'w-full rounded-2xl border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 py-3 text-sm text-[color:var(--text-primary)] outline-none transition duration-200 placeholder:text-[color:var(--muted-text)] focus:border-[color:var(--accent-color)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--accent-color)_12%,transparent)]'
+const itemCardClass =
+  'flex items-start justify-between gap-[0.75rem] rounded-[20px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_74%,white)] px-[0.95rem] py-[0.95rem] text-left transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)] max-[980px]:flex-col max-[980px]:items-start'
+const mutedCardClass =
+  'grid gap-2 rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-4 py-4'
+const emptyCardClass =
+  'rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 py-4 text-sm text-[color:var(--muted-text)]'
+const badgeBaseClass =
+  'inline-flex min-h-8 items-center justify-center rounded-full border border-[color:var(--border-color)] px-3 text-[0.78rem] font-bold'
+const softButtonClass =
+  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]'
+const ghostButtonClass =
+  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--border-color)] bg-transparent px-4 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:bg-[var(--panel-muted)]'
+const dangerButtonClass =
+  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--danger-color)] bg-transparent px-4 text-sm font-semibold text-[color:var(--danger-color)] transition duration-200 hover:-translate-y-px hover:bg-[color:color-mix(in_srgb,var(--danger-color)_10%,white)]'
+const primaryButtonClass =
+  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--accent-color)] bg-[var(--accent-color)] px-4 text-sm font-semibold text-white transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]'
+const timelineDotClass = 'mt-1.5 h-3 w-3 rounded-full'
+const focusPanelStyle = {
+  borderColor: 'color-mix(in srgb, var(--accent-color) 30%, var(--border-color))',
+  boxShadow: '0 0 0 3px color-mix(in srgb, var(--accent-color) 10%, transparent)',
+}
+const activeItemStyle = {
+  borderColor: 'color-mix(in srgb, var(--accent-color) 30%, var(--border-color))',
+  background: 'color-mix(in srgb, var(--accent-color) 10%, var(--panel-color))',
+}
+
 const customerTagsText = computed({
   get: () => store.selectedCustomer?.tags.join(', ') ?? '',
   set: (value) => store.updateSelectedCustomerListField('tags', value),
@@ -56,71 +90,111 @@ function customerHealthLabel(health) {
 function customerHealthTone(health) {
   return healthConfig[health]?.tone ?? 'neutral'
 }
+
+function badgeStyle(tone) {
+  if (tone === 'healthy') {
+    return {
+      background: 'color-mix(in srgb, var(--success-color) 12%, white)',
+      borderColor: 'color-mix(in srgb, var(--success-color) 30%, var(--border-color))',
+      color: '#287b47',
+    }
+  }
+
+  if (tone === 'watch') {
+    return {
+      background: 'color-mix(in srgb, var(--warning-color) 16%, white)',
+      borderColor: 'color-mix(in srgb, var(--warning-color) 30%, var(--border-color))',
+      color: '#9a6c0d',
+    }
+  }
+
+  if (tone === 'risk') {
+    return {
+      background: 'color-mix(in srgb, var(--danger-color) 12%, white)',
+      borderColor: 'color-mix(in srgb, var(--danger-color) 28%, var(--border-color))',
+      color: '#b2455f',
+    }
+  }
+
+  return {
+    background: 'var(--panel-muted)',
+    color: 'var(--muted-text)',
+  }
+}
 </script>
 
 <template>
-  <section class="customers-board">
+  <section class="grid items-start gap-4 [grid-template-columns:minmax(280px,320px)_minmax(0,1.15fr)_minmax(300px,360px)] max-[1380px]:grid-cols-1">
     <aside
-      class="surface-card customers-panel customers-panel--sticky"
-      :class="{ 'customers-panel--focus': store.focusTarget === 'customers-list' }"
+      :class="[panelClass, 'sticky top-[7.1rem] max-[1380px]:static']"
+      :style="store.focusTarget === 'customers-list' ? focusPanelStyle : null"
     >
-      <header class="customers-panel__head">
-        <h3>고객 목록</h3>
+      <header :class="headerClass">
+        <h3 class="text-base font-semibold text-[color:var(--text-primary)]">고객 목록</h3>
 
-        <button class="soft-button" type="button" @click="store.createCustomer()">신규 고객</button>
+        <button :class="softButtonClass" type="button" @click="store.createCustomer()">신규 고객</button>
       </header>
 
-      <div class="customers-panel__body customers-panel__body--compact">
-        <label class="customers-search">
+      <div class="grid gap-3">
+        <label class="grid gap-2">
           <span class="sr-only">고객 검색</span>
           <input
             :value="store.customerSearchQuery"
+            :class="inputClass"
             type="text"
             placeholder="이름, 태그, 메모 검색"
             @input="store.setCustomerSearchQuery($event.target.value)"
           />
         </label>
 
-        <div class="customers-list">
+        <div class="grid gap-3">
           <button
             v-for="customer in store.filteredCustomers"
             :key="customer.id"
             type="button"
-            class="customers-item"
-            :class="{ 'customers-item--active': store.selectedCustomerId === customer.id }"
+            :class="itemCardClass"
+            :style="store.selectedCustomerId === customer.id ? activeItemStyle : null"
             @click="store.setSelectedCustomer(customer.id)"
           >
-            <div class="customers-item__copy">
-              <strong>{{ customer.name }}</strong>
-              <p>{{ customer.segment }}</p>
+            <div class="grid gap-1">
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ customer.name }}</strong>
+              <p class="text-sm text-[color:var(--muted-text)]">{{ customer.segment }}</p>
             </div>
 
-            <div class="customers-item__meta">
-              <span :class="['customers-badge', `customers-badge--${customerHealthTone(customer.health)}`]">
+            <div class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+              <span
+                :class="badgeBaseClass"
+                :style="badgeStyle(customerHealthTone(customer.health))"
+              >
                 {{ customerHealthLabel(customer.health) }}
               </span>
-              <small>{{ formatShortDate(customer.lastQaUpdate) }}</small>
+              <small class="text-xs text-[color:var(--muted-text)]">{{ formatShortDate(customer.lastQaUpdate) }}</small>
             </div>
           </button>
 
-          <div v-if="!store.filteredCustomers.length" class="customers-empty">
+          <div v-if="!store.filteredCustomers.length" :class="emptyCardClass">
             검색 조건에 맞는 고객이 없습니다.
           </div>
         </div>
       </div>
     </aside>
 
-    <article class="surface-card customers-panel">
-      <header class="customers-panel__head">
-        <h3>{{ store.selectedCustomer?.name ?? '고객 상세' }}</h3>
+    <article :class="panelClass">
+      <header :class="headerClass">
+        <h3 class="text-base font-semibold text-[color:var(--text-primary)]">
+          {{ store.selectedCustomer?.name ?? '고객 상세' }}
+        </h3>
 
-        <div class="customers-panel__actions">
-          <span v-if="store.selectedCustomer?.lastSavedAt" class="customers-save-hint">
+        <div class="flex items-center gap-3 max-[980px]:flex-col max-[980px]:items-start">
+          <span
+            v-if="store.selectedCustomer?.lastSavedAt"
+            class="text-sm text-[color:var(--muted-text)]"
+          >
             자동 저장 {{ store.selectedCustomer.lastSavedAt }}
           </span>
           <button
             v-if="store.selectedCustomer"
-            class="ghost-button ghost-button--danger"
+            :class="dangerButtonClass"
             type="button"
             @click="confirmDeleteCustomer"
           >
@@ -129,162 +203,179 @@ function customerHealthTone(health) {
         </div>
       </header>
 
-      <div v-if="store.selectedCustomer" class="customers-panel__body">
-        <div class="customers-form-grid">
-          <label class="customers-field">
-            <span>고객명</span>
+      <div v-if="store.selectedCustomer" class="grid gap-4">
+        <div class="grid grid-cols-2 gap-3 max-[980px]:grid-cols-1">
+          <label :class="fieldClass">
+            <span :class="fieldLabelClass">고객명</span>
             <input
               :value="store.selectedCustomer.name"
+              :class="inputClass"
               type="text"
               @input="updateCustomerField('name', $event.target.value)"
             />
           </label>
 
-          <label class="customers-field">
-            <span>담당자</span>
+          <label :class="fieldClass">
+            <span :class="fieldLabelClass">담당자</span>
             <input
               :value="store.findMember(store.selectedCustomer.ownerId)?.name ?? ''"
+              :class="inputClass"
               type="text"
               disabled
             />
           </label>
         </div>
 
-        <div class="customers-form-grid">
-          <label class="customers-field">
-            <span>분류</span>
+        <div class="grid grid-cols-2 gap-3 max-[980px]:grid-cols-1">
+          <label :class="fieldClass">
+            <span :class="fieldLabelClass">분류</span>
             <input
               :value="store.selectedCustomer.segment"
+              :class="inputClass"
               type="text"
               @input="updateCustomerField('segment', $event.target.value)"
             />
           </label>
 
-          <label class="customers-field">
-            <span>이메일</span>
+          <label :class="fieldClass">
+            <span :class="fieldLabelClass">이메일</span>
             <input
               :value="store.selectedCustomer.email"
+              :class="inputClass"
               type="email"
               @input="updateCustomerField('email', $event.target.value)"
             />
           </label>
         </div>
 
-        <label class="customers-field">
-          <span>톤 가이드</span>
+        <label :class="fieldClass">
+          <span :class="fieldLabelClass">톤 가이드</span>
           <input
             :value="store.selectedCustomer.tone"
+            :class="inputClass"
             type="text"
             @input="updateCustomerField('tone', $event.target.value)"
           />
         </label>
 
-        <label class="customers-field">
-          <span>특징</span>
-          <textarea v-model="customerTraitsText" rows="3" />
+        <label :class="fieldClass">
+          <span :class="fieldLabelClass">특징</span>
+          <textarea v-model="customerTraitsText" :class="inputClass" rows="3" />
         </label>
 
-        <label class="customers-field">
-          <span>태그</span>
-          <textarea v-model="customerTagsText" rows="2" />
+        <label :class="fieldClass">
+          <span :class="fieldLabelClass">태그</span>
+          <textarea v-model="customerTagsText" :class="inputClass" rows="2" />
         </label>
 
-        <label class="customers-field">
-          <span>운영 메모</span>
+        <label :class="fieldClass">
+          <span :class="fieldLabelClass">운영 메모</span>
           <textarea
             :value="store.selectedCustomer.memo"
+            :class="inputClass"
             rows="6"
             @input="updateCustomerField('memo', $event.target.value)"
           />
         </label>
       </div>
 
-      <div v-else class="customers-empty">
+      <div v-else :class="emptyCardClass">
         좌측 목록에서 고객을 선택하면 이 영역에서 바로 편집할 수 있습니다.
       </div>
     </article>
 
-    <aside class="customers-side">
+    <aside class="grid gap-4 max-[1380px]:grid-cols-2 max-[980px]:grid-cols-1">
       <article
-        class="surface-card customers-panel"
-        :class="{ 'customers-panel--focus': store.focusTarget === 'customers-suggestions' }"
+        :class="panelClass"
+        :style="store.focusTarget === 'customers-suggestions' ? focusPanelStyle : null"
       >
-        <header class="customers-panel__head">
-          <h3>AI 제안 {{ selectedCustomerSuggestionCount }}건</h3>
+        <header :class="headerClass">
+          <h3 class="text-base font-semibold text-[color:var(--text-primary)]">
+            AI 제안 {{ selectedCustomerSuggestionCount }}건
+          </h3>
         </header>
 
-        <div class="customers-panel__body customers-stack">
+        <div class="grid gap-3">
           <article
             v-for="suggestion in store.customerSuggestionsForSelected"
             :key="suggestion.id"
-            class="customers-card"
+            class="grid gap-3 rounded-[20px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_74%,white)] px-4 py-4"
           >
-            <div class="customers-card__head">
-              <div>
-                <strong>{{ suggestion.title }}</strong>
-                <p>{{ suggestion.source }}</p>
+            <div :class="headerClass">
+              <div class="grid gap-1">
+                <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ suggestion.title }}</strong>
+                <p class="text-sm text-[color:var(--muted-text)]">{{ suggestion.source }}</p>
               </div>
               <span
-                :class="[
-                  'customers-badge',
-                  `customers-badge--${suggestion.status === 'approved' ? 'healthy' : suggestion.status === 'rejected' ? 'neutral' : 'watch'}`,
-                ]"
+                :class="badgeBaseClass"
+                :style="
+                  badgeStyle(
+                    suggestion.status === 'approved'
+                      ? 'healthy'
+                      : suggestion.status === 'rejected'
+                        ? 'neutral'
+                        : 'watch',
+                  )
+                "
               >
                 {{ suggestionStateLabel[suggestion.status] }}
               </span>
             </div>
 
-            <p class="customers-muted">{{ suggestion.summary }}</p>
+            <p class="text-sm text-[color:var(--muted-text)]">{{ suggestion.summary }}</p>
 
-            <div class="customers-note">
-              <strong>제안 메모</strong>
-              <p>{{ suggestion.suggestedMemo }}</p>
+            <div :class="mutedCardClass">
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">제안 메모</strong>
+              <p class="text-sm text-[color:var(--muted-text)]">{{ suggestion.suggestedMemo }}</p>
             </div>
 
-            <div class="customers-meta">
-              <span>{{ suggestion.suggestedTags.join(', ') }}</span>
-              <small>{{ suggestion.createdAt }}</small>
+            <div class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+              <span class="text-sm text-[color:var(--muted-text)]">{{ suggestion.suggestedTags.join(', ') }}</span>
+              <small class="text-xs text-[color:var(--muted-text)]">{{ suggestion.createdAt }}</small>
             </div>
 
             <div
               v-if="store.activeRole === 'admin' && suggestion.status === 'pending'"
-              class="customers-card__actions"
+              class="flex items-center justify-end gap-3 max-[980px]:flex-col max-[980px]:items-stretch"
             >
-              <button class="ghost-button" type="button" @click="store.rejectSuggestion(suggestion.id)">
+              <button :class="ghostButtonClass" type="button" @click="store.rejectSuggestion(suggestion.id)">
                 보류
               </button>
-              <button class="primary-button" type="button" @click="store.approveSuggestion(suggestion.id)">
+              <button :class="primaryButtonClass" type="button" @click="store.approveSuggestion(suggestion.id)">
                 반영
               </button>
             </div>
           </article>
 
-          <div v-if="!store.customerSuggestionsForSelected.length" class="customers-empty">
+          <div v-if="!store.customerSuggestionsForSelected.length" :class="emptyCardClass">
             선택한 고객에 대한 AI 제안이 없습니다.
           </div>
         </div>
       </article>
 
-      <article class="surface-card customers-panel">
-        <header class="customers-panel__head">
-          <h3>변경 이력</h3>
+      <article :class="panelClass">
+        <header :class="headerClass">
+          <h3 class="text-base font-semibold text-[color:var(--text-primary)]">변경 이력</h3>
         </header>
 
-        <div class="customers-panel__body customers-stack">
+        <div class="grid gap-3">
           <div
             v-for="history in store.selectedCustomerHistory"
             :key="history.id"
-            class="customers-history-item"
+            class="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-[20px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_74%,white)] px-4 py-4"
           >
-            <span class="customers-history-item__dot" />
-            <div>
-              <strong>{{ history.title }}</strong>
-              <p>{{ history.detail }}</p>
-              <small>{{ history.createdAt }}</small>
+            <span
+              :class="timelineDotClass"
+              style="background: var(--accent-color); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-color) 14%, transparent);"
+            />
+            <div class="grid gap-1">
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ history.title }}</strong>
+              <p class="text-sm text-[color:var(--muted-text)]">{{ history.detail }}</p>
+              <small class="text-xs text-[color:var(--muted-text)]">{{ history.createdAt }}</small>
             </div>
           </div>
 
-          <div v-if="!store.selectedCustomerHistory.length" class="customers-empty">
+          <div v-if="!store.selectedCustomerHistory.length" :class="emptyCardClass">
             표시할 변경 이력이 없습니다.
           </div>
         </div>
@@ -292,215 +383,3 @@ function customerHealthTone(health) {
     </aside>
   </section>
 </template>
-
-<style scoped>
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.customers-board {
-  display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1.15fr) minmax(300px, 360px);
-  gap: 1rem;
-  align-items: start;
-}
-
-.customers-side {
-  display: grid;
-  gap: 1rem;
-}
-
-.customers-panel {
-  padding: 1rem;
-  display: grid;
-  gap: 0.9rem;
-}
-
-.customers-panel--sticky {
-  position: sticky;
-  top: 7.1rem;
-}
-
-.customers-panel--focus {
-  border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 10%, transparent);
-}
-
-.customers-panel__head,
-.customers-card__head,
-.customers-item,
-.customers-item__meta,
-.customers-meta,
-.customers-card__actions,
-.customers-panel__actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.customers-panel__head {
-  align-items: flex-start;
-}
-
-.customers-panel__body,
-.customers-stack,
-.customers-list,
-.customers-form-grid,
-.customers-card,
-.customers-history-item,
-.customers-note,
-.customers-field {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.customers-panel__body--compact {
-  gap: 0.75rem;
-}
-
-.customers-search input,
-.customers-field input,
-.customers-field textarea {
-  width: 100%;
-  padding: 0.8rem 0.9rem;
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  background: var(--panel-muted);
-}
-
-.customers-field span {
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.customers-form-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.customers-item,
-.customers-card,
-.customers-history-item {
-  padding: 0.95rem;
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  background: color-mix(in srgb, var(--panel-muted) 74%, white);
-  text-align: left;
-}
-
-.customers-item--active {
-  border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color));
-  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-color));
-}
-
-.customers-item__copy,
-.customers-card,
-.customers-note {
-  display: grid;
-  gap: 0.4rem;
-}
-
-.customers-item__copy p,
-.customers-muted,
-.customers-note p,
-.customers-meta,
-.customers-save-hint,
-.customers-empty {
-  color: var(--muted-text);
-}
-
-.customers-note,
-.customers-empty {
-  padding: 0.9rem;
-  border-radius: 18px;
-  background: var(--panel-color);
-  border: 1px solid var(--border-color);
-}
-
-.customers-empty {
-  background: var(--panel-muted);
-}
-
-.customers-badge {
-  min-height: 2rem;
-  padding: 0 0.8rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.customers-badge--healthy {
-  background: color-mix(in srgb, var(--success-color) 12%, white);
-  color: #287b47;
-  border-color: color-mix(in srgb, var(--success-color) 30%, var(--border-color));
-}
-
-.customers-badge--watch {
-  background: color-mix(in srgb, var(--warning-color) 16%, white);
-  color: #9a6c0d;
-  border-color: color-mix(in srgb, var(--warning-color) 30%, var(--border-color));
-}
-
-.customers-badge--neutral {
-  background: var(--panel-muted);
-  color: var(--muted-text);
-}
-
-.customers-history-item {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-}
-
-.customers-history-item__dot {
-  width: 0.75rem;
-  height: 0.75rem;
-  margin-top: 0.35rem;
-  border-radius: 999px;
-  background: var(--accent-color);
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-color) 14%, transparent);
-}
-
-@media (max-width: 1380px) {
-  .customers-board {
-    grid-template-columns: 1fr;
-  }
-
-  .customers-side {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .customers-panel--sticky {
-    position: static;
-  }
-}
-
-@media (max-width: 980px) {
-  .customers-side,
-  .customers-form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .customers-panel__head,
-  .customers-item,
-  .customers-item__meta,
-  .customers-card__head,
-  .customers-meta,
-  .customers-card__actions,
-  .customers-panel__actions {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-</style>

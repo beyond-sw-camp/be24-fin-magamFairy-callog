@@ -9,6 +9,29 @@ const store = useOperationsStore()
 const planner = usePlannerStore()
 const router = useRouter()
 
+const panelClass =
+  'grid gap-[0.75rem] rounded-[24px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-[0.95rem] py-[0.95rem] shadow-[var(--shadow-soft)]'
+const toolbarButtonClass =
+  'inline-flex min-h-8 items-center justify-center rounded-full px-4 text-sm font-bold text-[color:var(--muted-text)] transition duration-200'
+const toolbarWrapClass =
+  'inline-flex items-center gap-1 rounded-full border border-[color:var(--border-color)] bg-[var(--panel-muted)] p-1'
+const cardClass =
+  'grid gap-[0.45rem] rounded-[18px] border border-[color:var(--border-color)] px-[0.9rem] py-[0.9rem]'
+const infoCardClass =
+  'grid gap-[0.85rem] rounded-[18px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_74%,white)] px-[0.9rem] py-[0.9rem]'
+const chipClass =
+  'inline-flex min-h-[1.95rem] items-center justify-center rounded-full border border-[color:var(--border-color)] px-3 text-[0.78rem] font-bold'
+const primaryButtonClass =
+  'inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--accent-color)] bg-[var(--accent-color)] px-4 text-sm font-semibold text-white transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0'
+const softButtonClass =
+  'inline-flex min-h-[2.45rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]'
+const ghostButtonClass =
+  'inline-flex min-h-[2.45rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--border-color)] bg-transparent px-4 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:bg-[var(--panel-muted)]'
+const focusStyle = {
+  borderColor: 'color-mix(in srgb, var(--accent-color) 30%, var(--border-color))',
+  boxShadow: '0 0 0 3px color-mix(in srgb, var(--accent-color) 10%, transparent)',
+}
+
 const selectedTeamTaskMember = computed(() =>
   store.findMember(store.selectedTeamTask?.assigneeId ?? null),
 )
@@ -21,46 +44,101 @@ function openPlannerTask(taskId) {
   planner.openTask(taskId)
   router.push('/calendar')
 }
+
+function chipStyle(tone = 'neutral') {
+  if (tone === 'healthy') {
+    return {
+      background: 'color-mix(in srgb, var(--success-color) 12%, white)',
+      borderColor: 'color-mix(in srgb, var(--success-color) 30%, var(--border-color))',
+      color: '#287b47',
+    }
+  }
+
+  return {
+    background: 'var(--panel-muted)',
+    color: 'var(--muted-text)',
+  }
+}
+
+function personalTaskCardStyle(task) {
+  const accent = task.palette?.accent ?? '#2f80ed'
+
+  return {
+    borderColor: `color-mix(in srgb, ${accent} 22%, var(--border-color))`,
+    background: `linear-gradient(180deg, color-mix(in srgb, ${accent} 8%, white), var(--panel-color)), var(--panel-color)`,
+  }
+}
+
+function teamTaskStyle(isActive) {
+  if (!isActive) {
+    return {
+      background: 'color-mix(in srgb, var(--panel-muted) 74%, white)',
+    }
+  }
+
+  return {
+    borderColor: 'color-mix(in srgb, var(--accent-color) 30%, var(--border-color))',
+    background: 'color-mix(in srgb, var(--accent-color) 10%, var(--panel-color))',
+  }
+}
 </script>
 
 <template>
-  <section class="tasknotes-board">
-    <div class="tasknotes-toolbar">
-      <h3>{{ store.tasknoteMode === 'personal' ? '개인' : '팀' }}</h3>
+  <section class="grid gap-[0.85rem]">
+    <div class="flex items-center justify-between gap-[0.75rem] max-[980px]:flex-col max-[980px]:items-start">
+      <h3 class="text-base font-semibold text-[color:var(--text-primary)]">
+        {{ store.tasknoteMode === 'personal' ? '개인' : '팀' }}
+      </h3>
 
-      <div class="tasknotes-toolbar__controls">
-        <div class="tasknotes-segmented" role="tablist" aria-label="업무일지 보기 전환">
+      <div class="flex flex-wrap items-center gap-2">
+        <div :class="toolbarWrapClass" role="tablist" aria-label="업무일지 보기 전환">
           <button
             type="button"
-            class="tasknotes-segmented__button"
-            :class="{ 'tasknotes-segmented__button--active': store.tasknoteMode === 'personal' }"
+            :class="[
+              toolbarButtonClass,
+              store.tasknoteMode === 'personal'
+                ? 'bg-[var(--panel-color)] text-[color:var(--text-primary)] shadow-[var(--shadow-soft)]'
+                : '',
+            ]"
             @click="store.setTasknoteMode('personal')"
           >
             개인
           </button>
           <button
             type="button"
-            class="tasknotes-segmented__button"
-            :class="{ 'tasknotes-segmented__button--active': store.tasknoteMode === 'team' }"
+            :class="[
+              toolbarButtonClass,
+              store.tasknoteMode === 'team'
+                ? 'bg-[var(--panel-color)] text-[color:var(--text-primary)] shadow-[var(--shadow-soft)]'
+                : '',
+            ]"
             @click="store.setTasknoteMode('team')"
           >
             팀
           </button>
         </div>
 
-        <div v-if="store.tasknoteMode === 'personal'" class="tasknotes-filter-group">
+        <div v-if="store.tasknoteMode === 'personal'" :class="toolbarWrapClass">
           <button
             type="button"
-            class="tasknotes-filter-chip"
-            :class="{ 'tasknotes-filter-chip--active': store.tasknoteListFilter === 'all' }"
+            :class="[
+              toolbarButtonClass,
+              store.tasknoteListFilter === 'all'
+                ? 'bg-[var(--panel-color)] text-[color:var(--text-primary)] shadow-[var(--shadow-soft)]'
+                : '',
+            ]"
             @click="store.setTasknoteListFilter('all')"
           >
             전체
           </button>
           <button
             type="button"
-            class="tasknotes-filter-chip"
-            :class="{ 'tasknotes-filter-chip--active': store.tasknoteListFilter === 'completed' }"
+            :class="[
+              toolbarButtonClass,
+              store.tasknoteListFilter === 'completed'
+                ? 'bg-[var(--panel-color)] text-[color:var(--text-primary)] shadow-[var(--shadow-soft)]'
+                : '',
+            ]"
             @click="store.setTasknoteListFilter('completed')"
           >
             완료
@@ -69,71 +147,77 @@ function openPlannerTask(taskId) {
       </div>
     </div>
 
-    <div v-if="store.tasknoteMode === 'personal'" class="tasknotes-grid">
+    <div
+      v-if="store.tasknoteMode === 'personal'"
+      class="grid gap-[0.85rem] [grid-template-columns:minmax(0,1.15fr)_minmax(300px,340px)] max-[1380px]:grid-cols-1"
+    >
       <article
-        class="surface-card tasknotes-panel"
-        :class="{ 'tasknotes-panel--focus': store.focusTarget === 'tasknotes-list' }"
+        :class="panelClass"
+        :style="store.focusTarget === 'tasknotes-list' ? focusStyle : null"
       >
-        <header class="tasknotes-panel__head">
-          <h4>내 업무 카드</h4>
+        <header class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+          <h4 class="text-base font-semibold text-[color:var(--text-primary)]">내 업무 카드</h4>
         </header>
 
-        <div class="tasknotes-panel__body tasknotes-stack">
+        <div class="grid gap-[0.85rem]">
           <article
             v-for="task in store.filteredPersonalTaskNotes"
             :key="task.id"
-            class="tasknotes-card"
-            :style="{ '--task-accent': task.palette?.accent ?? '#2f80ed' }"
+            :class="cardClass"
+            :style="personalTaskCardStyle(task)"
           >
-            <div class="tasknotes-card__head">
-              <div>
-                <strong>{{ task.title }}</strong>
-                <p>{{ task.customer }} · {{ task.contentType }}</p>
+            <div class="flex items-start justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+              <div class="grid gap-1">
+                <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ task.title }}</strong>
+                <p class="text-sm text-[color:var(--muted-text)]">{{ task.customer }} · {{ task.contentType }}</p>
               </div>
 
-              <div class="tasknotes-chip-group">
-                <span :class="['tasknotes-badge', `tasknotes-badge--${task.isMarkedComplete ? 'healthy' : 'neutral'}`]">
+              <div class="flex flex-wrap gap-2">
+                <span :class="chipClass" :style="chipStyle(task.isMarkedComplete ? 'healthy' : 'neutral')">
                   {{ task.isMarkedComplete ? '완료 표시' : planner.statusLabels[task.status] }}
                 </span>
-                <span class="tasknotes-chip">{{ planner.priorityLabels[task.priority] }}</span>
+                <span :class="chipClass" :style="chipStyle()">{{ planner.priorityLabels[task.priority] }}</span>
               </div>
             </div>
 
-            <div class="tasknotes-meta">
+            <div class="flex items-center justify-between gap-3 text-sm text-[color:var(--muted-text)] max-[980px]:flex-col max-[980px]:items-start">
               <span>{{ formatShortDate(task.dueDate) }}</span>
               <small>{{ task.timeRange }}</small>
             </div>
 
-            <div class="tasknotes-card__footer">
-              <button class="soft-button" type="button" @click="openPlannerTask(task.id)">카드 열기</button>
+            <div class="flex items-center justify-end gap-3 max-[980px]:flex-col max-[980px]:items-stretch">
+              <button :class="softButtonClass" type="button" @click="openPlannerTask(task.id)">카드 열기</button>
 
               <template v-if="store.activeRole !== 'admin'">
-                <button class="ghost-button" type="button" @click="store.requestNextStatus(task.id)">
+                <button :class="ghostButtonClass" type="button" @click="store.requestNextStatus(task.id)">
                   다음 단계 요청
                 </button>
-                <button class="primary-button" type="button" @click="store.toggleTaskCompletion(task.id)">
+                <button :class="primaryButtonClass" type="button" @click="store.toggleTaskCompletion(task.id)">
                   {{ task.isMarkedComplete ? '완료 취소' : '완료 표시' }}
                 </button>
               </template>
             </div>
           </article>
 
-          <div v-if="!store.filteredPersonalTaskNotes.length" class="tasknotes-empty">
+          <div
+            v-if="!store.filteredPersonalTaskNotes.length"
+            class="rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 py-4 text-sm text-[color:var(--muted-text)]"
+          >
             표시할 업무가 없습니다.
           </div>
         </div>
       </article>
 
       <aside
-        class="surface-card tasknotes-panel tasknotes-panel--compact"
-        :class="{ 'tasknotes-panel--focus': store.focusTarget === 'tasknotes-requests' }"
+        :class="panelClass"
+        :style="store.focusTarget === 'tasknotes-requests' ? focusStyle : null"
       >
-        <header class="tasknotes-panel__head">
-          <h4>요청 큐</h4>
+        <header class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+          <h4 class="text-base font-semibold text-[color:var(--text-primary)]">요청 큐</h4>
 
           <button
             v-if="store.activeRole === 'admin'"
-            class="primary-button"
+            :class="primaryButtonClass"
             type="button"
             :disabled="!store.pendingStatusRequests[0]"
             @click="store.applyStatusRequest(store.pendingStatusRequests[0]?.id)"
@@ -142,79 +226,90 @@ function openPlannerTask(taskId) {
           </button>
         </header>
 
-        <div class="tasknotes-panel__body tasknotes-stack">
+        <div class="grid gap-[0.85rem]">
           <article
             v-for="request in store.pendingStatusRequests"
             :key="request.id"
-            class="tasknotes-request"
-            :class="{ 'tasknotes-request--highlight': store.pendingStatusRequests[0]?.id === request.id }"
+            :class="infoCardClass"
+            :style="store.pendingStatusRequests[0]?.id === request.id ? focusStyle : { background: 'color-mix(in srgb, var(--panel-muted) 74%, white)' }"
           >
-            <div class="tasknotes-request__head">
-              <div>
-                <strong>{{ request.task?.title ?? '연결 작업 없음' }}</strong>
-                <p>{{ request.createdAt }}</p>
+            <div class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+              <div class="grid gap-1">
+                <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ request.task?.title ?? '연결 작업 없음' }}</strong>
+                <p class="text-sm text-[color:var(--muted-text)]">{{ request.createdAt }}</p>
               </div>
-              <span class="tasknotes-chip">{{ planner.statusLabels[request.nextStatus] }}</span>
+              <span :class="chipClass" :style="chipStyle()">{{ planner.statusLabels[request.nextStatus] }}</span>
             </div>
           </article>
 
-          <div v-if="!store.pendingStatusRequests.length" class="tasknotes-empty">
+          <div
+            v-if="!store.pendingStatusRequests.length"
+            class="rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 py-4 text-sm text-[color:var(--muted-text)]"
+          >
             대기 중인 요청이 없습니다.
           </div>
         </div>
       </aside>
     </div>
 
-    <div v-else class="tasknotes-grid tasknotes-grid--team">
+    <div
+      v-else
+      class="grid gap-[0.85rem] [grid-template-columns:minmax(0,1.15fr)_minmax(300px,340px)] max-[1380px]:grid-cols-1"
+    >
       <article
-        class="surface-card tasknotes-panel"
-        :class="{ 'tasknotes-panel--focus': store.focusTarget === 'tasknotes-team' }"
+        :class="panelClass"
+        :style="store.focusTarget === 'tasknotes-team' ? focusStyle : null"
       >
-        <header class="tasknotes-panel__head">
-          <h4>팀 일정 보드</h4>
+        <header class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+          <h4 class="text-base font-semibold text-[color:var(--text-primary)]">팀 일정 보드</h4>
         </header>
 
-        <div class="tasknotes-panel__body tasknotes-team-grid">
+        <div class="grid grid-cols-2 gap-[0.85rem] max-[980px]:grid-cols-1">
           <article
             v-for="group in store.teamTaskGroups"
             :key="group.id"
-            class="tasknotes-member-card"
+            class="grid gap-[0.85rem] rounded-[18px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_74%,white)] px-[0.9rem] py-[0.9rem]"
           >
-            <header class="tasknotes-member-card__head">
-              <div class="tasknotes-member-card__identity">
-                <span class="tasknotes-avatar" :style="{ background: group.accent }">{{ group.initials }}</span>
-                <div>
-                  <strong>{{ group.name }}</strong>
-                  <p>{{ group.role }}</p>
+            <header class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+              <div class="flex items-center justify-start gap-3">
+                <span
+                  class="grid h-10 w-10 place-items-center rounded-full text-sm font-extrabold text-white"
+                  :style="{ background: group.accent }"
+                >
+                  {{ group.initials }}
+                </span>
+                <div class="grid gap-1">
+                  <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ group.name }}</strong>
+                  <p class="text-sm text-[color:var(--muted-text)]">{{ group.role }}</p>
                 </div>
               </div>
-              <span class="tasknotes-chip">{{ group.tasks.length }}건</span>
+              <span :class="chipClass" :style="chipStyle()">{{ group.tasks.length }}건</span>
             </header>
 
-            <div class="tasknotes-team-list">
+            <div class="grid gap-[0.85rem]">
               <button
                 v-for="task in group.tasks"
                 :key="task.id"
                 type="button"
-                class="tasknotes-team-task"
-                :class="{ 'tasknotes-team-task--active': store.selectedTeamTask?.id === task.id }"
+                class="grid gap-1 rounded-[18px] border border-[color:var(--border-color)] px-4 py-3 text-left transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]"
+                :style="teamTaskStyle(store.selectedTeamTask?.id === task.id)"
                 @click="store.setSelectedTeamTask(task.id)"
               >
-                <strong>{{ task.title }}</strong>
-                <small>{{ formatShortDate(task.dueDate) }} · {{ planner.statusLabels[task.status] }}</small>
+                <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ task.title }}</strong>
+                <small class="text-xs text-[color:var(--muted-text)]">{{ formatShortDate(task.dueDate) }} · {{ planner.statusLabels[task.status] }}</small>
               </button>
             </div>
           </article>
         </div>
       </article>
 
-      <aside class="surface-card tasknotes-panel tasknotes-panel--compact">
-        <header class="tasknotes-panel__head">
-          <h4>{{ store.selectedTeamTask?.title ?? '일정 조정' }}</h4>
+      <aside :class="panelClass">
+        <header class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+          <h4 class="text-base font-semibold text-[color:var(--text-primary)]">{{ store.selectedTeamTask?.title ?? '일정 조정' }}</h4>
 
           <button
             v-if="store.selectedTeamTask"
-            class="soft-button"
+            :class="softButtonClass"
             type="button"
             @click="openPlannerTask(store.selectedTeamTask.id)"
           >
@@ -222,45 +317,48 @@ function openPlannerTask(taskId) {
           </button>
         </header>
 
-        <div v-if="store.selectedTeamTask" class="tasknotes-panel__body tasknotes-stack">
-          <article class="tasknotes-inline-card">
-            <small>담당자</small>
-            <strong>{{ selectedTeamTaskMember?.name }}</strong>
-            <p>{{ selectedTeamTaskMember?.role }}</p>
+        <div v-if="store.selectedTeamTask" class="grid gap-[0.85rem]">
+          <article :class="infoCardClass">
+            <small class="text-xs text-[color:var(--muted-text)]">담당자</small>
+            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ selectedTeamTaskMember?.name }}</strong>
+            <p class="text-sm text-[color:var(--muted-text)]">{{ selectedTeamTaskMember?.role }}</p>
           </article>
 
-          <div class="tasknotes-detail-list">
-            <div class="tasknotes-detail-row">
-              <span>시작일</span>
-              <strong>{{ formatShortDate(store.selectedTeamTask.startDate) }}</strong>
+          <div :class="infoCardClass">
+            <div class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+              <span class="text-sm text-[color:var(--muted-text)]">시작일</span>
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ formatShortDate(store.selectedTeamTask.startDate) }}</strong>
             </div>
-            <div class="tasknotes-detail-row">
-              <span>마감일</span>
-              <strong>{{ formatShortDate(store.selectedTeamTask.dueDate) }}</strong>
+            <div class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+              <span class="text-sm text-[color:var(--muted-text)]">마감일</span>
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ formatShortDate(store.selectedTeamTask.dueDate) }}</strong>
             </div>
-            <div class="tasknotes-detail-row">
-              <span>상태</span>
-              <strong>{{ planner.statusLabels[store.selectedTeamTask.status] }}</strong>
+            <div class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+              <span class="text-sm text-[color:var(--muted-text)]">상태</span>
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ planner.statusLabels[store.selectedTeamTask.status] }}</strong>
             </div>
           </div>
 
-          <div v-if="store.activeRole === 'admin'" class="tasknotes-request">
-            <div class="tasknotes-card__footer tasknotes-card__footer--stretch">
-              <button class="ghost-button" type="button" @click="store.shiftTeamTask(store.selectedTeamTask.id, -1)">
+          <div
+            v-if="store.activeRole === 'admin'"
+            class="grid gap-[0.85rem] rounded-[18px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_74%,white)] px-[0.9rem] py-[0.9rem]"
+          >
+            <div class="flex items-center justify-stretch gap-3 max-[980px]:flex-col max-[980px]:items-stretch">
+              <button :class="ghostButtonClass" type="button" @click="store.shiftTeamTask(store.selectedTeamTask.id, -1)">
                 하루 앞당기기
               </button>
-              <button class="ghost-button" type="button" @click="store.shiftTeamTask(store.selectedTeamTask.id, 1)">
+              <button :class="ghostButtonClass" type="button" @click="store.shiftTeamTask(store.selectedTeamTask.id, 1)">
                 하루 미루기
               </button>
             </div>
 
-            <div class="tasknotes-chip-group">
+            <div class="flex flex-wrap gap-2">
               <button
                 v-for="member in store.members"
                 :key="member.id"
                 type="button"
-                class="tasknotes-chip tasknotes-chip--button"
-                :class="{ 'tasknotes-chip--active': store.selectedTeamTask.assigneeId === member.id }"
+                :class="chipClass"
+                :style="store.selectedTeamTask.assigneeId === member.id ? focusStyle : chipStyle()"
                 @click="store.reassignTeamTask(store.selectedTeamTask.id, member.id)"
               >
                 {{ member.name }}
@@ -268,267 +366,21 @@ function openPlannerTask(taskId) {
             </div>
           </div>
 
-          <div v-else class="tasknotes-empty">
+          <div
+            v-else
+            class="rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 py-4 text-sm text-[color:var(--muted-text)]"
+          >
             일정 조정은 관리자 전용입니다.
           </div>
         </div>
 
-        <div v-else class="tasknotes-empty">
+        <div
+          v-else
+          class="rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 py-4 text-sm text-[color:var(--muted-text)]"
+        >
           팀 업무를 선택해 주세요.
         </div>
       </aside>
     </div>
   </section>
 </template>
-
-<style scoped>
-.tasknotes-board,
-.tasknotes-grid,
-.tasknotes-stack,
-.tasknotes-panel__body,
-.tasknotes-team-grid,
-.tasknotes-member-card,
-.tasknotes-inline-card,
-.tasknotes-request,
-.tasknotes-detail-list,
-.tasknotes-team-list {
-  display: grid;
-  gap: 0.85rem;
-}
-
-.tasknotes-toolbar,
-.tasknotes-panel__head,
-.tasknotes-card__head,
-.tasknotes-card__footer,
-.tasknotes-meta,
-.tasknotes-member-card__head,
-.tasknotes-member-card__identity,
-.tasknotes-request__head,
-.tasknotes-detail-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.tasknotes-toolbar {
-  align-items: center;
-  justify-content: space-between;
-}
-
-.tasknotes-toolbar h3,
-.tasknotes-panel__head h4 {
-  font-size: 1rem;
-  line-height: 1.2;
-}
-
-.tasknotes-toolbar__controls {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-}
-
-.tasknotes-segmented {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.25rem;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--panel-muted);
-}
-
-.tasknotes-segmented__button,
-.tasknotes-filter-chip {
-  min-height: 2rem;
-  padding: 0 0.9rem;
-  border-radius: 999px;
-  font-weight: 700;
-  color: var(--muted-text);
-}
-
-.tasknotes-segmented__button--active,
-.tasknotes-filter-chip--active {
-  background: var(--panel-color);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-soft);
-}
-
-.tasknotes-filter-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.25rem;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--panel-muted);
-}
-
-.tasknotes-panel {
-  padding: 0.95rem;
-  display: grid;
-  gap: 0.75rem;
-}
-
-.tasknotes-panel--compact {
-  gap: 0.65rem;
-}
-
-.tasknotes-panel--focus {
-  border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 10%, transparent);
-}
-
-.tasknotes-grid {
-  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 340px);
-}
-
-.tasknotes-grid--team {
-  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 340px);
-}
-
-.tasknotes-card,
-.tasknotes-request,
-.tasknotes-member-card,
-.tasknotes-inline-card,
-.tasknotes-empty,
-.tasknotes-team-task {
-  padding: 0.9rem;
-  border: 1px solid var(--border-color);
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--panel-muted) 74%, white);
-}
-
-.tasknotes-card {
-  display: grid;
-  gap: 0.45rem;
-  border-color: color-mix(in srgb, var(--task-accent) 22%, var(--border-color));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--task-accent) 8%, white), var(--panel-color)),
-    var(--panel-color);
-}
-
-.tasknotes-request--highlight {
-  border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color));
-}
-
-.tasknotes-member-card__identity {
-  justify-content: flex-start;
-}
-
-.tasknotes-avatar {
-  width: 2.35rem;
-  height: 2.35rem;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font-weight: 800;
-}
-
-.tasknotes-team-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.tasknotes-team-task {
-  width: 100%;
-  text-align: left;
-  display: grid;
-  gap: 0.2rem;
-}
-
-.tasknotes-team-task--active {
-  border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color));
-  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-color));
-}
-
-.tasknotes-chip-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.tasknotes-chip,
-.tasknotes-badge {
-  min-height: 1.95rem;
-  padding: 0 0.8rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.tasknotes-chip {
-  background: var(--panel-muted);
-  color: var(--muted-text);
-}
-
-.tasknotes-chip--button {
-  background: var(--panel-color);
-  color: var(--text-primary);
-}
-
-.tasknotes-chip--active {
-  border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color));
-  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-color));
-}
-
-.tasknotes-badge--healthy {
-  background: color-mix(in srgb, var(--success-color) 12%, white);
-  color: #287b47;
-  border-color: color-mix(in srgb, var(--success-color) 30%, var(--border-color));
-}
-
-.tasknotes-badge--neutral {
-  background: var(--panel-muted);
-  color: var(--muted-text);
-}
-
-.tasknotes-meta,
-.tasknotes-request__head p,
-.tasknotes-empty {
-  color: var(--muted-text);
-}
-
-.tasknotes-card__footer {
-  justify-content: flex-end;
-}
-
-.tasknotes-card__footer--stretch {
-  justify-content: stretch;
-}
-
-.tasknotes-detail-row strong {
-  color: var(--text-primary);
-}
-
-@media (max-width: 1380px) {
-  .tasknotes-grid,
-  .tasknotes-grid--team {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 980px) {
-  .tasknotes-toolbar,
-  .tasknotes-panel__head,
-  .tasknotes-card__head,
-  .tasknotes-card__footer,
-  .tasknotes-meta,
-  .tasknotes-member-card__head,
-  .tasknotes-member-card__identity,
-  .tasknotes-request__head,
-  .tasknotes-detail-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .tasknotes-team-grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
