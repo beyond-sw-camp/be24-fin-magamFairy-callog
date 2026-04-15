@@ -264,6 +264,10 @@ export const usePlannerStore = defineStore('planner', () => {
     calendarTab.value = tab
   }
 
+  function setSidebarCollapsed(value) {
+    sidebarCollapsed.value = value
+  }
+
   function toggleSidebar() {
     sidebarCollapsed.value = !sidebarCollapsed.value
   }
@@ -398,6 +402,7 @@ export const usePlannerStore = defineStore('planner', () => {
     setCalendarTab,
     setCalendarView,
     setSearchQuery,
+    setSidebarCollapsed,
     setToday,
     shiftPeriod,
     sidebarCollapsed,

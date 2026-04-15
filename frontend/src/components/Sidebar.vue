@@ -18,6 +18,11 @@ const items = [
     icon: 'M7 2v3M17 2v3M3 8h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z',
   },
   {
+    name: '운영 허브',
+    to: '/operations',
+    icon: 'M4 6h16M4 12h16M4 18h10M18 16l2 2 4-4',
+  },
+  {
     name: '작업 보드',
     to: '/tasks',
     icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
@@ -37,12 +42,18 @@ const items = [
 const isCollapsed = computed(() => store.sidebarCollapsed)
 const modeLabel = computed(() => (store.activeMode === 'personal' ? '개인' : '팀'))
 const themeLabel = computed(() => (store.theme === 'light' ? '라이트 모드' : '다크 모드'))
+
+function handleNavigation() {
+  if (typeof window !== 'undefined' && window.innerWidth <= 1100) {
+    store.setSidebarCollapsed(true)
+  }
+}
 </script>
 
 <template>
   <aside class="sidebar" :class="{ 'sidebar--collapsed': isCollapsed }">
     <div class="sidebar__top">
-      <RouterLink class="sidebar__brand" to="/dashboard">
+      <RouterLink class="sidebar__brand" to="/dashboard" @click="handleNavigation">
         <span class="sidebar__logo">M</span>
 
         <div v-if="!isCollapsed" class="sidebar__brand-copy">
@@ -66,6 +77,7 @@ const themeLabel = computed(() => (store.theme === 'light' ? '라이트 모드' 
         class="sidebar__link"
         :class="{ 'sidebar__link--active': route.path === item.to }"
         :title="item.name"
+        @click="handleNavigation"
       >
         <span class="sidebar__link-icon">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -257,10 +269,25 @@ const themeLabel = computed(() => (store.theme === 'light' ? '라이트 모드' 
     top: 0.7rem;
     z-index: 40;
     height: calc(100vh - 1.4rem);
+    width: min(82vw, 320px);
+    min-width: min(82vw, 320px);
+    transform: translateX(-120%);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform 0.22s ease,
+      opacity 0.22s ease;
+  }
+
+  .sidebar:not(.sidebar--collapsed) {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .sidebar--collapsed {
-    transform: translateX(calc(-100% + 92px));
+    width: min(82vw, 320px);
+    min-width: min(82vw, 320px);
   }
 }
 </style>

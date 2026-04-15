@@ -42,13 +42,20 @@ function handleSelect(value) {
   display: flex;
   align-items: center;
   gap: 0.1rem;
-  flex-wrap: wrap;
   border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.page-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .page-tabs__item {
   position: relative;
   min-height: 3rem;
+  flex-shrink: 0;
   padding: 0.8rem 0.9rem 0.85rem;
   border-bottom: 2px solid transparent;
   display: inline-flex;

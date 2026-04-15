@@ -16,6 +16,13 @@ onMounted(() => {
 <template>
   <div class="app-shell">
     <Sidebar />
+    <button
+      class="app-shell__overlay"
+      :class="{ 'app-shell__overlay--visible': !store.sidebarCollapsed }"
+      type="button"
+      aria-label="사이드바 닫기"
+      @click="store.setSidebarCollapsed(true)"
+    />
 
     <div class="app-shell__main">
       <Header />
