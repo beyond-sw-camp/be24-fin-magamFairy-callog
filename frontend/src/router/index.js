@@ -1,10 +1,17 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import DashboardView from '@/views/DashboardView.vue'
 import CalendarView from '@/views/CalendarView.vue'
+import OperationsView from '@/views/OperationsView.vue'
 import TasksView from '@/views/TasksView.vue'
 import TemplatesView from '@/views/TemplatesView.vue'
 import ReportsView from '@/views/ReportsView.vue'
 import Settings from '@/views/Settings.vue'
+import Mypage from '@/views/Mypage.vue'
+import Sidebar from '@/components/Sidebar.vue'
+import Signup from '@/views/Signup.vue'
+import Login from '@/views/Login.vue'
+
+
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -41,6 +48,15 @@ const router = createRouter({
       },
     },
     {
+      path: '/operations',
+      name: 'operations',
+      component: OperationsView,
+      meta: {
+        title: '운영 허브',
+        section: '고객 · 업무 오케스트레이션',
+      },
+    },
+    {
       path: '/tasks',
       name: 'tasks',
       component: TasksView,
@@ -65,6 +81,33 @@ const router = createRouter({
       meta: {
         title: '리포트',
         section: '성과 리뷰',
+      },
+    },
+    {
+      path: '/login',
+      name: 'login',
+      component: Login,
+      meta: {
+        title: '로그인',
+        section: '로그인',
+      },
+    },
+    {
+      path: '/signup',
+      name: 'signup',
+      component: Signup,
+      meta: {
+        title: '회원 가입',
+        section: '회원 생성',
+      },
+    },
+    {
+      path: '/mypage',
+      name: 'mypage',
+      component: Mypage,
+      meta: {
+        title: '내 정보',
+        section: '내 정보',
       },
     },
   ],
