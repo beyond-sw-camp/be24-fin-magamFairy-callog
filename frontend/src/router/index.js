@@ -5,6 +5,12 @@ import TasksView from '@/views/TasksView.vue'
 import TemplatesView from '@/views/TemplatesView.vue'
 import ReportsView from '@/views/ReportsView.vue'
 import Settings from '@/views/Settings.vue'
+import Mypage from '@/views/Mypage.vue'
+import Sidebar from '@/components/Sidebar.vue'
+import Signup from '@/views/Signup.vue'
+import Login from '@/views/Login.vue'
+
+
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -65,6 +71,33 @@ const router = createRouter({
       meta: {
         title: '리포트',
         section: '성과 리뷰',
+      },
+    },
+    {
+      path: '/login',
+      name: 'login',
+      component: Login,
+      meta: {
+        title: '로그인',
+        section: '로그인',
+      },
+    },
+    {
+      path: '/signup',
+      name: 'signup',
+      component: Signup,
+      meta: {
+        title: '회원 가입',
+        section: '회원 생성',
+      },
+    },
+    {
+      path: '/mypage',
+      name: 'mypage',
+      component: Mypage,
+      meta: {
+        title: '내 정보',
+        section: '내 정보',
       },
     },
   ],
