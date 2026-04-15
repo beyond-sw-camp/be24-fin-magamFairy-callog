@@ -1,7 +1,30 @@
-<script setup></script>
+<script setup>
+import { onMounted } from 'vue'
+import { RouterView } from 'vue-router'
+import Header from '@/components/Header.vue'
+import Sidebar from '@/components/Sidebar.vue'
+import TaskModal from '@/components/common/TaskModal.vue'
+import { usePlannerStore } from '@/stores/planner'
+
+const store = usePlannerStore()
+
+onMounted(() => {
+  store.initialize()
+})
+</script>
 
 <template>
-  <RouterView />
-</template>
+  <div class="app-shell">
+    <Sidebar />
 
-<style scoped></style>
+    <div class="app-shell__main">
+      <Header />
+
+      <main class="app-shell__content">
+        <RouterView />
+      </main>
+    </div>
+
+    <TaskModal />
+  </div>
+</template>
