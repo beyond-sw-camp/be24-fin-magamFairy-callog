@@ -1,7 +1,7 @@
 <script setup>
 import { reactive, onMounted } from 'vue'
 
-const settings = reactive({ //zzzz
+const settings = reactive({ //zzzzzzzz
   notifications: {
     task: true,
     qa: false,
