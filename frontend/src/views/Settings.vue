@@ -1,7 +1,7 @@
 <script setup>
 import { reactive, onMounted } from 'vue'
 
-const settings = reactive({ //하이
+const settings = reactive({ //gg
   notifications: {
     task: true,
     qa: false,
