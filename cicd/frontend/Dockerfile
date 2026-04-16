@@ -1,7 +1,7 @@
 FROM node:24.13.0-slim AS builder
 WORKDIR /app
 
-COPY ../frontend/package.json ./
+COPY ../../frontend/package.json ./
 
 RUN npm install ./
 
