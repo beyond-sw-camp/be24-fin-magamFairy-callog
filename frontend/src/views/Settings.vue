@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, onMounted } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
+import { getSettings } from '@/api/settings/index.js'
 
 const store = usePlannerStore()
 
@@ -14,11 +15,12 @@ const settings = reactive({
   darkMode: false, // 다크 모드 상태 추가
   notifications: {
     task: true,
-    qa: false,
+    qa: true,
     ai: true,
     critical: true
   }
 })
+
 
 if (store.theme=='dark'){
   settings.darkMode = true;
@@ -33,6 +35,8 @@ const toggleDarkMode = () => {
 
 onMounted(async () => {
   try {
+    const res = await getSettings()
+    settings.value = res
     console.log('설정 정보를 불러왔습니다.')
   } catch (error) {
     console.error('설정 정보를 불러오는데 실패했습니다.', error)
