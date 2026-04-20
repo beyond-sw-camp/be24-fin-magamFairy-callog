@@ -67,6 +67,15 @@ const router = createRouter({
         section: '성과 리뷰',
       },
     },
+    {
+      path: '/references',
+      name: 'references',
+      component: ReferencesView, 
+      meta: {
+        title: '레퍼런스 관리',
+        section: '콘텐츠 라이브러리',
+      },
+    },
   ],
 })
 
