@@ -27,9 +27,10 @@ if (store.theme=='dark'){
 }
 
 // 다크 모드 토글 함수
-const toggleDarkMode = () => {
+const toggleDarkMode = async () => {
   settings.darkMode = !settings.darkMode
   store.toggleTheme()
+  await updateSettings({darkMode: settings.darkMode})
   syncSettingToServer('darkMode', settings.darkMode)
 }
 
