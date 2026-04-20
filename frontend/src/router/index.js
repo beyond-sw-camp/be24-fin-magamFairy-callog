@@ -1,80 +1,123 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import DashboardView from '@/views/DashboardView.vue'
-import CalendarView from '@/views/CalendarView.vue'
-import TasksView from '@/views/TasksView.vue'
-import TemplatesView from '@/views/TemplatesView.vue'
-import ReportsView from '@/views/ReportsView.vue'
-import Settings from '@/views/Settings.vue'
+import DefaultLayout from '@/layout/DefaultLayout.vue'
+import FirstLayout from '@/layout/FirstLayout.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      redirect: '/calendar',
-    },
-    {
-      path: '/dashboard',
+      component: DefaultLayout,
+      redirect:'dashboard',
+      children: [
+            {
+      path: 'dashboard',
       name: 'dashboard',
-      component: DashboardView,
+      component: () => import('@/views/DashboardView.vue'),
       meta: {
         title: '대시보드',
         section: '운영 플래너',
       },
     },
     {
-      path: '/calendar',
+      path: 'content/editor/:contentId?',
+      alias: 'content-editor',
+      name: 'content-editor',
+      component: () => import('@/views/ContentEditorView.vue'),
+      meta: {
+        title: '콘텐츠 편집',
+        section: '콘텐츠 워크스페이스',
+      },
+    },
+    {
+      path: 'calendar',
       name: 'calendar',
-      component: CalendarView,
+      component: () => import('@/views/CalendarView.vue'),
       meta: {
         title: '캘린더',
         section: '운영 플래너',
       },
     },
         {
-      path: '/settings',
+      path: 'settings',
       name: 'settings',
-      component: Settings,
+      component: () => import('@/views/Settings.vue'),
       meta: {
         title: '설정',
         section: '설정',
       },
     },
     {
-      path: '/tasks',
+      path: 'operations',
+      name: 'operations',
+      component: () => import('@/views/OperationsView.vue'),
+      meta: {
+        title: '운영 허브',
+        section: '고객 · 업무 오케스트레이션',
+      },
+    },
+    {
+      path: 'tasks',
       name: 'tasks',
-      component: TasksView,
+      component: () => import('@/views/TasksView.vue'),
       meta: {
         title: '작업 보드',
         section: '실행 보드',
       },
     },
     {
-      path: '/templates',
+      path: 'templates',
       name: 'templates',
-      component: TemplatesView,
+      component: () => import('@/views/TemplatesView.vue'),
       meta: {
         title: '템플릿',
         section: '콘텐츠 라이브러리',
       },
     },
     {
-      path: '/reports',
+      path: 'reports',
       name: 'reports',
-      component: ReportsView,
+      component: () => import('@/views/ReportsView.vue'),
       meta: {
         title: '리포트',
         section: '성과 리뷰',
       },
     },
     {
-      path: '/references',
-      name: 'references',
-      component: ReferencesView, 
+      path: 'mypage',
+      name: 'mypage',
+      component: () => import('@/views/Mypage.vue'),
       meta: {
-        title: '레퍼런스 관리',
-        section: '콘텐츠 라이브러리',
+        title: '내 정보',
+        section: '내 정보',
       },
+    },
+      ]
+    },
+    {
+      path: '/user',
+      component: FirstLayout,
+      redirect:'user/login',
+      children: [
+        {
+      path: 'login',
+      name: 'login',
+      component: () => import('@/views/Login.vue'),
+      meta: {
+        title: '로그인',
+        section: '로그인',
+      },
+    },
+    {
+      path: 'signup',
+      name: 'signup',
+      component: () => import('@/views/Signup.vue'),
+      meta: {
+        title: '회원 가입',
+        section: '회원 생성',
+      },
+    },
+      ]
     },
   ],
 })

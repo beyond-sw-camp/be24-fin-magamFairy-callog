@@ -78,6 +78,8 @@ export const usePlannerStore = defineStore('planner', () => {
   const sortMode = ref('due')
   const spanMode = ref(false)
   const selectedTaskId = ref(null)
+  const taskOpenToken = ref(0)
+  const createTaskToken = ref(0)
   const modalMode = ref('view')
   const createSeedDate = ref('2026-04-15')
   const tasks = ref(cloneValue(seedTasks))
@@ -264,6 +266,10 @@ export const usePlannerStore = defineStore('planner', () => {
     calendarTab.value = tab
   }
 
+  function setSidebarCollapsed(value) {
+    sidebarCollapsed.value = value
+  }
+
   function toggleSidebar() {
     sidebarCollapsed.value = !sidebarCollapsed.value
   }
@@ -286,6 +292,7 @@ export const usePlannerStore = defineStore('planner', () => {
   function openTask(taskId) {
     selectedTaskId.value = taskId
     modalMode.value = 'view'
+    taskOpenToken.value += 1
   }
 
   function closeTask() {
@@ -297,6 +304,7 @@ export const usePlannerStore = defineStore('planner', () => {
     createSeedDate.value = dateKey
     selectedTaskId.value = null
     modalMode.value = 'create'
+    createTaskToken.value += 1
   }
 
   function updateTask(taskId, patch) {
@@ -380,6 +388,8 @@ export const usePlannerStore = defineStore('planner', () => {
     cycleStatusFilter,
     deleteTask,
     duplicateTask,
+    createSeedDate,
+    createTaskToken,
     filteredTasks,
     findMember,
     initialize,
@@ -407,6 +417,7 @@ export const usePlannerStore = defineStore('planner', () => {
     statusLabels,
     tasks,
     templates,
+    taskOpenToken,
     theme,
     toggleSidebar,
     toggleSpanMode,

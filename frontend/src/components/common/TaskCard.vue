@@ -34,6 +34,95 @@ const durationLabel = computed(
   () => `${differenceInDays(props.task.dueDate, props.task.startDate) + 1}일`,
 )
 
+function normalizeHex(hex) {
+  const value = String(hex ?? '').replace('#', '').trim()
+
+  if (value.length === 3) {
+    return value
+      .split('')
+      .map((char) => `${char}${char}`)
+      .join('')
+  }
+
+  if (value.length === 6) {
+    return value
+  }
+
+  return 'ffffff'
+}
+
+function hexToRgb(hex) {
+  const normalized = normalizeHex(hex)
+  return [
+    Number.parseInt(normalized.slice(0, 2), 16),
+    Number.parseInt(normalized.slice(2, 4), 16),
+    Number.parseInt(normalized.slice(4, 6), 16),
+  ]
+}
+
+function blendHex(fromHex, toHex, ratio) {
+  const from = hexToRgb(fromHex)
+  const to = hexToRgb(toHex)
+  const weight = Math.min(Math.max(ratio, 0), 1)
+
+  const blended = from.map((channel, index) =>
+    Math.round(channel * (1 - weight) + to[index] * weight),
+  )
+
+  return `#${blended.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
+}
+
+function hexToRgba(hex, alpha) {
+  const [red, green, blue] = hexToRgb(hex)
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`
+}
+
+const rootClass = computed(() => {
+  const base =
+    'task-card group relative w-full cursor-pointer select-none text-left transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70'
+
+  if (props.mode === 'bar') {
+    return `${base} border-0 bg-transparent p-0 shadow-none`
+  }
+
+  if (props.mode === 'calendar') {
+    return `${base} isolate flex min-h-[36px] items-center justify-between gap-2 overflow-hidden rounded-[16px] border border-[color:var(--task-border)] bg-[linear-gradient(135deg,var(--task-bg),var(--task-bg-2))] px-[0.72rem] py-[0.48rem] text-[color:var(--task-text)] shadow-[0_12px_24px_var(--task-shadow)] ring-1 ring-white/40 backdrop-blur-[2px] hover:-translate-y-[1px] hover:brightness-[1.02] before:pointer-events-none before:absolute before:-right-5 before:-top-5 before:h-16 before:w-16 before:rounded-full before:bg-white/22 before:blur-3xl before:content-[''] after:pointer-events-none after:absolute after:-left-6 after:-bottom-7 after:h-20 after:w-20 after:rounded-full after:bg-white/14 after:blur-3xl after:content-['']`
+  }
+
+  return `${base} isolate flex min-h-[118px] flex-col justify-between overflow-hidden rounded-[24px] border border-[color:var(--task-border)] bg-[linear-gradient(135deg,var(--task-bg),var(--task-bg-2))] px-[1rem] py-[0.95rem] text-[color:var(--task-text)] shadow-[0_18px_36px_var(--task-shadow)] ring-1 ring-white/45 backdrop-blur-[2px] hover:-translate-y-[1px] hover:brightness-[1.02] before:pointer-events-none before:absolute before:-right-6 before:-top-6 before:h-24 before:w-24 before:rounded-full before:bg-white/22 before:blur-3xl before:content-[''] after:pointer-events-none after:absolute after:-left-10 after:-bottom-10 after:h-28 after:w-28 after:rounded-full after:bg-white/12 after:blur-3xl after:content-['']`
+})
+
+const cardStyle = computed(() => {
+  const surface = props.task.palette?.surface ?? '#eaf3ff'
+  const accent = props.task.palette?.accent ?? '#5b8def'
+  const text = props.task.palette?.text ?? '#1d4f99'
+  const fillRatio = props.mode === 'calendar' ? 0.32 : 0.28
+  const cardFill = blendHex('#ffffff', accent, fillRatio)
+  const cardFillSoft = blendHex(cardFill, surface, props.mode === 'calendar' ? 0.08 : 0.14)
+  const borderColor = hexToRgba(accent, props.mode === 'calendar' ? 0.3 : 0.34)
+  const shadow = hexToRgba(accent, props.mode === 'calendar' ? 0.18 : 0.16)
+
+  if (props.mode === 'bar') {
+    return {
+      '--task-surface': surface,
+      '--task-accent': accent,
+      '--task-text': text,
+    }
+  }
+
+  return {
+    '--task-surface': surface,
+    '--task-accent': accent,
+    '--task-text': text,
+    '--task-bg': cardFill,
+    '--task-bg-2': cardFillSoft,
+    '--task-border': borderColor,
+    '--task-shadow': shadow,
+    backgroundColor: cardFill,
+    color: text,
+  }
+})
+
 function handleClick() {
   emit('select', props.task.id)
 }
@@ -47,236 +136,76 @@ function handleDragStart(event) {
 
 <template>
   <button
-    class="task-card"
-    :class="[`task-card--${props.mode}`]"
-    :style="{
-      '--task-surface': props.task.palette.surface,
-      '--task-accent': props.task.palette.accent,
-      '--task-text': props.task.palette.text,
-    }"
+    :class="rootClass"
+    :style="cardStyle"
     type="button"
     :draggable="props.draggable"
     @click="handleClick"
     @dragstart="handleDragStart"
   >
     <template v-if="props.mode === 'compact'">
-      <div class="task-card__topline">
-        <span class="task-card__status-chip">{{ statusLabel }}</span>
-        <span class="task-card__priority-chip">{{ priorityLabel }}</span>
+      <div class="relative z-10 flex flex-wrap items-center gap-1.5">
+        <span class="inline-flex items-center rounded-full border border-white/55 bg-white/72 px-2.5 py-0.5 text-[0.65rem] font-semibold tracking-[0.04em] text-slate-700 shadow-sm backdrop-blur-sm">
+          {{ statusLabel }}
+        </span>
+        <span class="inline-flex items-center rounded-full border border-white/55 bg-white/72 px-2.5 py-0.5 text-[0.65rem] font-semibold tracking-[0.04em] text-slate-700 shadow-sm backdrop-blur-sm">
+          {{ priorityLabel }}
+        </span>
       </div>
 
-      <strong class="task-card__title">{{ props.task.title }}</strong>
+      <strong class="relative z-10 line-clamp-2 block w-full text-left text-[1rem] font-extrabold leading-[1.22] tracking-[-0.03em] drop-shadow-[0_1px_0_rgba(255,255,255,0.35)]">
+        {{ props.task.title }}
+      </strong>
 
-      <div class="task-card__footer">
+      <div class="relative z-10 flex items-center gap-2 rounded-2xl bg-white/35 px-2.5 py-1.5 ring-1 ring-white/45 backdrop-blur-sm">
         <span
-          class="task-card__avatar"
+          class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[0.72rem] font-extrabold text-white shadow-[0_8px_18px_rgba(15,23,42,0.18)] ring-2 ring-white/75"
           :style="{ backgroundColor: props.member?.accent ?? '#94a3b8' }"
         >
           {{ props.member?.initials ?? 'NA' }}
         </span>
-        <div>
-          <strong>{{ props.member?.name ?? '미지정' }}</strong>
+        <div class="min-w-0 grid">
+          <strong class="truncate text-[0.86rem] font-semibold leading-[1.1] text-slate-900/90">
+            {{ props.member?.name ?? '미지정' }}
+          </strong>
         </div>
       </div>
     </template>
 
     <template v-else-if="props.mode === 'bar'">
-      <div class="task-card__bar">
-        <div class="task-card__bar-copy">
-          <strong>{{ props.task.title }}</strong>
-          <small>{{ statusLabel }} · {{ durationLabel }}</small>
+      <div
+        class="flex h-full min-h-[38px] items-center justify-between gap-[0.75rem] rounded-[14px] px-[0.8rem] py-[0.55rem] text-white shadow-[0_12px_24px_var(--task-shadow)] ring-1 ring-white/20"
+        :style="{
+          backgroundColor: blendHex(props.task.palette?.accent ?? '#5b8def', '#ffffff', 0.18),
+          '--task-shadow': hexToRgba(props.task.palette?.accent ?? '#5b8def', 0.22),
+        }"
+      >
+        <div class="min-w-0">
+          <strong class="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.8rem] font-semibold">
+            {{ props.task.title }}
+          </strong>
+          <small class="block overflow-hidden text-ellipsis whitespace-nowrap text-[0.68rem] font-medium opacity-90">
+            {{ statusLabel }} · {{ durationLabel }}
+          </small>
         </div>
 
-        <span class="task-card__bar-owner">{{ props.member?.initials ?? 'NA' }}</span>
+        <span class="min-w-[1.6rem] rounded-full bg-white/18 px-2 py-0.5 text-right text-[0.7rem] font-bold opacity-95 ring-1 ring-white/20">
+          {{ props.member?.initials ?? 'NA' }}
+        </span>
       </div>
     </template>
 
     <template v-else>
-      <div class="task-card__calendar-pill">
-        <span class="task-card__calendar-dot" />
-        <strong>{{ props.task.title }}</strong>
+      <div class="relative z-10 flex min-w-0 flex-1 items-center gap-[0.42rem]">
+        <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-white/95 shadow-[0_0_0_1px_rgba(255,255,255,0.55)]" />
+        <strong class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[0.74rem] font-bold leading-[1.1]">
+          {{ props.task.title }}
+        </strong>
+      </div>
+
+      <div class="relative z-10 ml-2 flex h-6 shrink-0 items-center rounded-full bg-white/28 px-2 text-[0.63rem] font-black tracking-[0.12em] text-white shadow-sm ring-1 ring-white/35">
+        {{ props.member?.initials ?? 'NA' }}
       </div>
     </template>
   </button>
 </template>
-
-<style scoped>
-.task-card {
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform 0.16s ease,
-    box-shadow 0.16s ease,
-    filter 0.16s ease;
-}
-
-.task-card:hover {
-  transform: translateY(-1px);
-}
-
-.task-card--compact {
-  border: 1px solid color-mix(in srgb, var(--task-accent) 22%, var(--border-color));
-  border-radius: 20px;
-  background:
-    linear-gradient(
-      180deg,
-      var(--task-surface),
-      color-mix(in srgb, var(--task-surface) 76%, white)
-    ),
-    var(--task-surface);
-  box-shadow: 0 18px 28px rgba(18, 38, 63, 0.08);
-  color: var(--task-text);
-  min-height: 108px;
-  padding: 0.9rem 0.95rem;
-  display: grid;
-  gap: 0.55rem;
-}
-
-.task-card__topline,
-.task-card__footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.6rem;
-}
-
-.task-card__topline {
-  flex-wrap: wrap;
-}
-
-.task-card__status-chip,
-.task-card__priority-chip {
-  border-radius: 999px;
-  padding: 0.24rem 0.56rem;
-  font-size: 0.68rem;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.65);
-}
-
-.task-card__title {
-  font-size: 0.98rem;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.task-card__footer > div {
-  display: grid;
-}
-
-.task-card__footer strong {
-  font-size: 0.86rem;
-  line-height: 1.15;
-}
-
-.task-card__avatar {
-  width: 1.8rem;
-  height: 1.8rem;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font-size: 0.72rem;
-  font-weight: 800;
-  flex-shrink: 0;
-}
-
-.task-card--bar {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  box-shadow: none;
-}
-
-.task-card__bar {
-  min-height: 38px;
-  height: 100%;
-  border-radius: 10px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--task-accent) 92%, white),
-    color-mix(in srgb, var(--task-accent) 82%, black 4%)
-  );
-  color: #fff;
-  padding: 0.48rem 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  box-shadow: 0 10px 20px color-mix(in srgb, var(--task-accent) 22%, transparent);
-}
-
-.task-card__bar-copy {
-  min-width: 0;
-}
-
-.task-card__bar-copy strong,
-.task-card__bar-copy small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-card__bar-copy strong {
-  font-size: 0.8rem;
-}
-
-.task-card__bar-copy small,
-.task-card__bar-owner {
-  font-size: 0.7rem;
-  opacity: 0.88;
-}
-
-.task-card__bar-owner {
-  min-width: 1.6rem;
-  text-align: right;
-  font-weight: 700;
-}
-
-.task-card--calendar {
-  border: 0;
-  background: var(--task-accent);
-  color: #fff;
-  border-radius: 6px;
-  box-shadow: none;
-  min-height: 0;
-  padding: 0.35rem 0.55rem;
-}
-
-.task-card--calendar:hover {
-  filter: brightness(1.03);
-}
-
-.task-card__calendar-pill {
-  display: flex;
-  align-items: center;
-  gap: 0.42rem;
-  min-width: 0;
-}
-
-.task-card__calendar-dot {
-  width: 0.42rem;
-  height: 0.42rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  flex-shrink: 0;
-}
-
-.task-card__calendar-pill strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-@media (max-width: 920px) {
-  .task-card__bar {
-    padding-inline: 0.6rem;
-  }
-}
-</style>
