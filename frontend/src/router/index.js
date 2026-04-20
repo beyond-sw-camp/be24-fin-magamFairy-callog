@@ -7,10 +7,11 @@ import TemplatesView from '@/views/TemplatesView.vue'
 import ReportsView from '@/views/ReportsView.vue'
 import Settings from '@/views/Settings.vue'
 import Mypage from '@/views/Mypage.vue'
-import Sidebar from '@/components/Sidebar.vue'
 import Signup from '@/views/Signup.vue'
 import Login from '@/views/Login.vue'
 import ContentEditorView from '@/views/ContentEditorView.vue'
+import DefaultLayout from '@/layout/DefaultLayout.vue'
+import FirstLayout from '@/layout/FirstLayout.vue'
 
 
 
@@ -18,11 +19,12 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/',
-      redirect: '/calendar',
-    },
-    {
-      path: '/dashboard',
+      path: '/feats',
+      component: DefaultLayout,
+      redirect:'feats/dashboard',
+      children: [
+            {
+      path: 'dashboard',
       name: 'dashboard',
       component: DashboardView,
       meta: {
@@ -31,8 +33,8 @@ const router = createRouter({
       },
     },
     {
-      path: '/content/editor/:contentId?',
-      alias: '/content-editor',
+      path: 'content/editor/:contentId?',
+      alias: 'content-editor',
       name: 'content-editor',
       component: ContentEditorView,
       meta: {
@@ -41,7 +43,7 @@ const router = createRouter({
       },
     },
     {
-      path: '/calendar',
+      path: 'calendar',
       name: 'calendar',
       component: CalendarView,
       meta: {
@@ -50,7 +52,7 @@ const router = createRouter({
       },
     },
         {
-      path: '/settings',
+      path: 'settings',
       name: 'settings',
       component: Settings,
       meta: {
@@ -59,7 +61,7 @@ const router = createRouter({
       },
     },
     {
-      path: '/operations',
+      path: 'operations',
       name: 'operations',
       component: OperationsView,
       meta: {
@@ -68,7 +70,7 @@ const router = createRouter({
       },
     },
     {
-      path: '/tasks',
+      path: 'tasks',
       name: 'tasks',
       component: TasksView,
       meta: {
@@ -77,7 +79,7 @@ const router = createRouter({
       },
     },
     {
-      path: '/templates',
+      path: 'templates',
       name: 'templates',
       component: TemplatesView,
       meta: {
@@ -86,7 +88,7 @@ const router = createRouter({
       },
     },
     {
-      path: '/reports',
+      path: 'reports',
       name: 'reports',
       component: ReportsView,
       meta: {
@@ -95,6 +97,22 @@ const router = createRouter({
       },
     },
     {
+      path: 'mypage',
+      name: 'mypage',
+      component: Mypage,
+      meta: {
+        title: '내 정보',
+        section: '내 정보',
+      },
+    },
+      ]
+    },
+    {
+      path: '/',
+      component: FirstLayout,
+      redirect:'/login',
+      children: [
+        {
       path: '/login',
       name: 'login',
       component: Login,
@@ -112,14 +130,7 @@ const router = createRouter({
         section: '회원 생성',
       },
     },
-    {
-      path: '/mypage',
-      name: 'mypage',
-      component: Mypage,
-      meta: {
-        title: '내 정보',
-        section: '내 정보',
-      },
+      ]
     },
   ],
 })
