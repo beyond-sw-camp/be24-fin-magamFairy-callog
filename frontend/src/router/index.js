@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import DashboardView from '@/views/DashboardView.vue'
 import CalendarView from '@/views/CalendarView.vue'
+import OperationsView from '@/views/OperationsView.vue'
 import TasksView from '@/views/TasksView.vue'
 import TemplatesView from '@/views/TemplatesView.vue'
 import ReportsView from '@/views/ReportsView.vue'
@@ -44,6 +45,15 @@ const router = createRouter({
       meta: {
         title: '설정',
         section: '설정',
+      },
+    },
+    {
+      path: '/operations',
+      name: 'operations',
+      component: OperationsView,
+      meta: {
+        title: '운영 허브',
+        section: '고객 · 업무 오케스트레이션',
       },
     },
     {
