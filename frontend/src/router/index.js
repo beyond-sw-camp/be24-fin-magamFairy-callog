@@ -10,6 +10,7 @@ import Mypage from '@/views/Mypage.vue'
 import Sidebar from '@/components/Sidebar.vue'
 import Signup from '@/views/Signup.vue'
 import Login from '@/views/Login.vue'
+import ContentEditorView from '@/views/ContentEditorView.vue'
 
 
 
@@ -27,6 +28,16 @@ const router = createRouter({
       meta: {
         title: '대시보드',
         section: '운영 플래너',
+      },
+    },
+    {
+      path: '/content/editor/:contentId?',
+      alias: '/content-editor',
+      name: 'content-editor',
+      component: ContentEditorView,
+      meta: {
+        title: '콘텐츠 편집',
+        section: '콘텐츠 워크스페이스',
       },
     },
     {
