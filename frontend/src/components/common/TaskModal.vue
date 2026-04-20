@@ -1,8 +1,11 @@
 ﻿<script setup>
 import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 
 const store = usePlannerStore()
+const route = useRoute()
+const router = useRouter()
 
 const isOpen = computed(() => Boolean(store.modalTask))
 const isCreateMode = computed(() => store.modalMode === 'create')
@@ -38,6 +41,39 @@ const attachmentSizes = {
 const form = ref(null)
 const newAttachment = ref('')
 const tagsText = ref('')
+
+function getRouteContentId() {
+  const raw = route.params.contentId
+
+  if (Array.isArray(raw)) {
+    return raw[0] ?? ''
+  }
+
+  return typeof raw === 'string' ? raw : ''
+}
+
+function isSameEditorLocation(location) {
+  const nextContentId = Array.isArray(location.params?.contentId)
+    ? location.params.contentId[0] ?? ''
+    : location.params?.contentId ?? ''
+  const nextQuery = JSON.stringify(location.query ?? {})
+  const currentQuery = JSON.stringify(route.query ?? {})
+
+  return route.name === location.name && getRouteContentId() === nextContentId && currentQuery === nextQuery
+}
+
+function goToEditor(location) {
+  if (isSameEditorLocation(location)) {
+    return
+  }
+
+  if (route.name === 'content-editor') {
+    void router.replace(location)
+    return
+  }
+
+  void router.push(location)
+}
 
 const parsedTags = computed(() =>
   tagsText.value
@@ -77,6 +113,27 @@ watch(
     tagsText.value = task ? (task.tags ?? []).join(', ') : ''
   },
   { immediate: true, deep: true },
+)
+
+watch(
+  [() => store.taskOpenToken, () => store.createTaskToken],
+  ([taskToken, createToken], [prevTaskToken, prevCreateToken]) => {
+    if (taskToken !== prevTaskToken && store.selectedTask?.id) {
+      goToEditor({
+        name: 'content-editor',
+        params: { contentId: store.selectedTask.id },
+      })
+      return
+    }
+
+    if (createToken !== prevCreateToken) {
+      goToEditor({
+        name: 'content-editor',
+        params: { contentId: 'new' },
+        query: store.createSeedDate ? { date: store.createSeedDate } : {},
+      })
+    }
+  },
 )
 
 function memberById(memberId) {
@@ -164,7 +221,7 @@ function deleteTask() {
 
 <template>
   <Teleport to="body">
-    <div v-if="isOpen && form" class="task-modal">
+    <div v-if="false" class="task-modal">
       <div class="task-modal__backdrop" @click="closeModal" />
 
       <section class="task-modal__dialog">
