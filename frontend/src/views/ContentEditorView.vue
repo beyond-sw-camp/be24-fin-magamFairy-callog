@@ -747,10 +747,10 @@ onBeforeUnmount(() => {
       <button
         v-if="!showReference"
         @click="showReference = true"
-        class="fixed right-0 top-15 z-[45] bg-white border border-slate-100 border-r-0 rounded-l-2xl p-2.5 shadow-[-10px_0_30px_rgba(0,0,0,0.03)] hover:bg-slate-50 transition-all flex items-center justify-center group animate-pulse hover:animate-none"
+        class="fixed right-0 top-30 z-[45] bg-white border border-slate-400 border-r-0 rounded-l-2xl p-2.5 shadow-[-10px_0_30px_rgba(0,0,0,0.03)] hover:bg-slate-50 transition-all flex items-center justify-center group animate-pulse hover:animate-none"
       >
         <span
-          class="material-symbols-outlined text-slate-900 font-bold group-hover:scale-110 transition-transform"
+          class="material-symbols-outlined text-slate-900 font-bold group-hover:scale-200 transition-transform"
           >chevron_left</span
         >
       </button>
