@@ -1,37 +1,61 @@
 <script setup>
-import { reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/useAuthStore'
 
-const router = useRouter();
+const router = useRouter()
+const route = useRoute()
+const authStore = useAuthStore()
 
 const form = reactive({
   loginId: '',
   password: '',
-});
+})
 
-const isLoading = ref(false);
+const isLoading = ref(false)
+const errorMessage = ref('')
+
+function getRedirectTarget() {
+  const redirect = Array.isArray(route.query.redirect)
+    ? route.query.redirect[0]
+    : route.query.redirect
+
+  return typeof redirect === 'string' && redirect.startsWith('/')
+    ? redirect
+    : '/dashboard'
+}
 
 const handleLogin = async () => {
-  if (!form.loginId || !form.password) return;
+  if (isLoading.value) {
+    return
+  }
 
-  isLoading.value = true;
+  isLoading.value = true
+  errorMessage.value = ''
 
   try {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    router.push('/dashboard');
+    await authStore.login({
+      loginId: form.loginId,
+      password: form.password,
+    })
+
+    router.push(getRedirectTarget())
   } catch (error) {
-    alert('Unable to sign in. Please try again.');
+    errorMessage.value =
+      error?.message ?? '로그인에 실패했습니다. 아이디와 비밀번호를 확인해 주세요.'
   } finally {
-    isLoading.value = false;
+    isLoading.value = false
   }
-};
+}
 </script>
 
 <template>
   <section class="login-view min-h-screen px-6 py-10">
-    <div class="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl flex-col items-center justify-center">
+    <div class="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center">
       <div class="mb-10 flex flex-col items-center fade-in">
-        <div class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
+        <div
+          class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm"
+        >
           <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
@@ -42,56 +66,95 @@ const handleLogin = async () => {
           </svg>
         </div>
         <h1 class="text-4xl font-bold tracking-tight text-slate-900">CALLOG</h1>
-        <p class="mt-2 text-center text-sm font-medium text-slate-500">
-          Shared scheduling workspace for operational teams.
-        </p>
       </div>
 
       <div class="slide-up w-full max-w-3xl">
         <div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <div class="mb-6">
-            <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Access</p>
-            <h2 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">Sign in</h2>
-            <p class="mt-2 text-sm text-slate-500">
-              Continue to your CALLOG workspace.
+            <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+              Access
             </p>
+            <h2 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">Sign in</h2>
+            <p class="mt-2 text-sm text-slate-500">Continue to your CALLOG workspace.</p>
           </div>
 
-          <form @submit.prevent="handleLogin" class="flex flex-col items-stretch gap-4 md:flex-row md:gap-5">
+          <p
+            v-if="errorMessage"
+            class="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600"
+          >
+            {{ errorMessage }}
+          </p>
+
+          <form
+            class="flex flex-col items-stretch gap-4 md:flex-row md:gap-5"
+            @submit.prevent="handleLogin"
+          >
             <div class="flex-1 space-y-4">
               <label class="block space-y-1.5">
-                <span class="ml-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">아이디</span>
+                <span
+                  class="ml-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400"
+                >
+                  Login ID
+                </span>
                 <span class="relative block">
-                  <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                    <svg class="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span
+                    class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  >
+                    <svg
+                      class="h-4.5 w-4.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <rect x="2" y="4" width="20" height="16" rx="2" stroke-width="2" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"
+                      />
                     </svg>
                   </span>
                   <input
                     v-model="form.loginId"
                     type="text"
-                    required
-                    placeholder="예: CALLOG_team1_홍길동"
+                    autocomplete="username"
+                    placeholder="예: CALLOG_team1_admin"
                     class="w-full rounded-xl border border-slate-200 bg-slate-50 py-4 pl-12 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-900/5"
                   />
                 </span>
               </label>
 
               <label class="block space-y-1.5">
-                <span class="ml-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">비밀번호</span>
+                <span
+                  class="ml-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400"
+                >
+                  Password
+                </span>
                 <span class="relative block">
-                  <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                    <svg class="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span
+                    class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  >
+                    <svg
+                      class="h-4.5 w-4.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <rect x="3" y="11" width="18" height="10" rx="2" stroke-width="2" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M7 11V7a5 5 0 0 1 10 0v4"
+                      />
                     </svg>
                   </span>
                   <input
                     v-model="form.password"
                     type="password"
-                    required
-                    placeholder="12자리 임시 비밀번호"
+                    autocomplete="current-password"
+                    placeholder="비밀번호를 입력하세요"
                     class="w-full rounded-xl border border-slate-200 bg-slate-50 py-4 pl-12 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-900/5"
                   />
                 </span>
@@ -102,35 +165,37 @@ const handleLogin = async () => {
               <button
                 type="submit"
                 :disabled="isLoading"
-                class="flex min-h-[120px] w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 md:min-h-0 md:h-full md:flex-col"
+                class="flex min-h-[120px] w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 md:h-full md:min-h-0 md:flex-col"
               >
                 <template v-if="!isLoading">
-                  <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-7-7 7 7-7 7" />
+                  <span
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10"
+                  >
+                    <svg
+                      class="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M5 12h14m-7-7 7 7-7 7"
+                      />
                     </svg>
                   </span>
                   <span>Log in</span>
                 </template>
                 <template v-else>
-                  <span class="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                  <span
+                    class="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white"
+                  ></span>
                   <span>Signing in</span>
                 </template>
               </button>
             </div>
           </form>
-        </div>
-
-        <div class="mt-8 flex flex-wrap items-center justify-center gap-6 text-sm text-slate-500 fade-in delay-200">
-          <div class="flex items-center gap-2">
-            <strong class="text-slate-900">120%</strong>
-            <span class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Efficiency up</span>
-          </div>
-          <div class="h-1.5 w-1.5 rounded-full bg-slate-300"></div>
-          <div class="flex items-center gap-2">
-            <strong class="text-slate-900">ESG</strong>
-            <span class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Certified flow</span>
-          </div>
         </div>
       </div>
     </div>
@@ -152,10 +217,6 @@ const handleLogin = async () => {
 
 .slide-up {
   animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.delay-200 {
-  animation-delay: 0.2s;
 }
 
 @keyframes fadeIn {
