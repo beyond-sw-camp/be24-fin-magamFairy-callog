@@ -19,9 +19,9 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/feats',
+      path: '/',
       component: DefaultLayout,
-      redirect:'feats/dashboard',
+      redirect:'dashboard',
       children: [
             {
       path: 'dashboard',
@@ -108,12 +108,12 @@ const router = createRouter({
       ]
     },
     {
-      path: '/',
+      path: '/user',
       component: FirstLayout,
       redirect:'/login',
       children: [
         {
-      path: '/login',
+      path: 'login',
       name: 'login',
       component: Login,
       meta: {
@@ -122,7 +122,7 @@ const router = createRouter({
       },
     },
     {
-      path: '/signup',
+      path: 'signup',
       name: 'signup',
       component: Signup,
       meta: {
