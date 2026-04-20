@@ -744,15 +744,9 @@ onBeforeUnmount(() => {
       </aside>
 
       <!-- Reference Sidebar Toggle -->
-      <button
-        v-if="!showReference"
-        @click="showReference = true"
-        class="fixed right-0 top-30 z-[45] bg-white border border-slate-400 border-r-0 rounded-l-2xl p-2.5 shadow-[-10px_0_30px_rgba(0,0,0,0.03)] hover:bg-slate-50 transition-all flex items-center justify-center group animate-pulse hover:animate-none"
-      >
-        <span
-          class="material-symbols-outlined text-slate-900 font-bold group-hover:scale-200 transition-transform"
-          >chevron_left</span
-        >
+      <button v-if="!showReference" @click="showReference = true" class="fixed right-8 bottom-8 z-[45] bg-white border border-slate-200 rounded-2xl p-4 shadow-5xl hover:bg-slate-50 transition-all flex items-center gap-3 group">
+        <span class="text-sm font-extrabold text-slate-900">레퍼런스 보기</span>
+        <span class="material-symbols-outlined text-slate-900 group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
       </button>
 
       <!-- Reference Panel -->

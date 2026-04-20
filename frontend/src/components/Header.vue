@@ -1,42 +1,73 @@
 <script setup>
-import { computed, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 
 const route = useRoute()
+const router = useRouter()
 const store = usePlannerStore()
-const navCompact = ref(false)
+const reportsMenuOpen = ref(false)
+const notificationsOpen = ref(false)
+const appsMenuOpen = ref(false)
+let reportsMenuTimer = null
 
 const navItems = [
+  { id: 'dashboard', to: '/dashboard', label: '대시보드' },
+  { id: 'calendar', to: '/calendar', label: '캘린더' },
+  { id: 'tasks', to: '/tasks', label: '업무 보드' },
+  { id: 'operations', to: '/operations', label: '운영 허브' },
+  { id: 'templates', to: '/templates', label: '템플릿' },
+  { id: 'reports', to: '/reports', label: '리포트' },
+]
+
+const reportsDropdown = [
+  { label: '템플릿 생성하기', to: '/templates' },
+  { label: '레퍼런스 생성하기', to: '/reports' },
+]
+
+const appMenuItems = [
   {
-    to: '/dashboard',
-    label: '대시보드',
-    icon: 'M4 4h7v7H4V4Zm9 0h7v5h-7V4ZM4 13h7v7H4v-7Zm9 7v-8h7v8h-7Z',
+    key: 'account',
+    label: '내 계정',
+    kind: 'route',
+    to: { name: 'mypage' },
+    icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>`,
   },
   {
-    to: '/calendar',
-    label: '캘린더',
-    icon: 'M7 2v3M17 2v3M4 8h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z',
+    key: 'theme',
+    label: '다크 테마',
+    kind: 'action',
+    action: 'theme',
+    icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>`,
   },
   {
-    to: '/tasks',
-    label: '업무 보드',
-    icon: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm3 4h8M8 12h8M8 16h5M8 8l1.25 1.25L11 7.5',
+    key: 'team-management',
+    label: '팀관리',
+    kind: 'action',
+    action: 'teamManagement',
+    icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20a5 5 0 00-10 0m10 0H7m10 0h3a2 2 0 002-2v-1a4 4 0 00-4-4h-1m-6 7H4a2 2 0 01-2-2v-1a4 4 0 014-4h1m0 0a4 4 0 100-8 4 4 0 000 8zm10-4a3 3 0 11-6 0 3 3 0 016 0z" /></svg>`,
   },
   {
-    to: '/operations',
-    label: '운영허브',
-    icon: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2Zm3 4h8M8 11h8M8 15h5',
+    key: 'notifications',
+    label: '알림 센터',
+    kind: 'action',
+    action: 'notifications',
+    icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>`,
   },
   {
-    to: '/templates',
-    label: '템플릿',
-    icon: 'M4 4h16v4H4V4Zm0 6h16v10H4V10Zm4 3h4m-4 3h8',
+    key: 'logout',
+    label: '로그아웃',
+    kind: 'route',
+    to: { name: 'login' },
+    danger: true,
+    icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>`,
   },
   {
-    to: '/reports',
-    label: '리포트',
-    icon: 'M4 19h16M7 16V8m5 8V5m5 11v-6',
+    key: 'settings',
+    label: '환경설정',
+    kind: 'route',
+    to: { name: 'settings' },
+    icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>`,
   },
 ]
 
@@ -50,414 +81,334 @@ const activeNav = computed(
 function isActive(item) {
   return route.path === item.to || route.path.startsWith(`${item.to}/`)
 }
+
+function clearReportsMenuTimer() {
+  if (reportsMenuTimer !== null) {
+    window.clearTimeout(reportsMenuTimer)
+    reportsMenuTimer = null
+  }
+}
+
+function openReportsMenu() {
+  clearReportsMenuTimer()
+  reportsMenuOpen.value = true
+}
+
+function scheduleCloseReportsMenu() {
+  clearReportsMenuTimer()
+  reportsMenuTimer = window.setTimeout(() => {
+    reportsMenuOpen.value = false
+  }, 140)
+}
+
+function closeFloatingMenus() {
+  clearReportsMenuTimer()
+  reportsMenuOpen.value = false
+  notificationsOpen.value = false
+  appsMenuOpen.value = false
+}
+
+function toggleNotifications() {
+  notificationsOpen.value = !notificationsOpen.value
+  appsMenuOpen.value = false
+  reportsMenuOpen.value = false
+  clearReportsMenuTimer()
+}
+
+function toggleAppsMenu() {
+  appsMenuOpen.value = !appsMenuOpen.value
+  notificationsOpen.value = false
+  reportsMenuOpen.value = false
+  clearReportsMenuTimer()
+}
+
+function handleSearchInput(event) {
+  store.setSearchQuery(event.target.value)
+}
+
+function openNotificationsCenter() {
+  closeFloatingMenus()
+  notificationsOpen.value = true
+}
+
+function handleAppMenuItem(item) {
+  closeFloatingMenus()
+
+  if (item.kind === 'action') {
+    if (item.action === 'theme') {
+      store.toggleTheme()
+      return
+    }
+
+    if (item.action === 'teamManagement') {
+      return
+    }
+
+    if (item.action === 'notifications') {
+      openNotificationsCenter()
+    }
+
+    return
+  }
+
+  router.push(item.to)
+}
+
+function handleDocumentClick(event) {
+  const path = typeof event.composedPath === 'function' ? event.composedPath() : []
+  const clickedInsideHeader = path.some(
+    (node) => node instanceof HTMLElement && node.dataset?.headerRoot === 'true',
+  )
+
+  if (!clickedInsideHeader) {
+    closeFloatingMenus()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('click', handleDocumentClick)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', handleDocumentClick)
+  clearReportsMenuTimer()
+})
 </script>
 
 <template>
-  <header class="header-shell">
-    <div class="header-shell__bar">
-      <div class="header-shell__brand-group">
-        <RouterLink class="header-shell__brand" to="/dashboard" aria-label="대시보드로 이동">
-          <span class="header-shell__logo">M</span>
-        </RouterLink>
-
-        <button
-          class="header-shell__rail-toggle"
-          type="button"
-          :aria-label="navCompact ? '메뉴 펼치기' : '메뉴 줄이기'"
-          @click="navCompact = !navCompact"
+  <header data-header-root="true" class="sticky top-4 z-40 overflow-visible px-4 sm:px-6">
+    <div
+      class="mx-auto flex min-h-[72px] w-full flex-col gap-4 overflow-visible rounded-[24px] border border-[var(--border-color)] bg-[var(--panel-color)] px-4 py-3 shadow-[0_4px_15px_rgba(0,0,0,0.03)] backdrop-blur-xl lg:flex-row lg:items-center lg:gap-2.5 lg:px-6"
+    >
+      <div class="flex min-w-0 items-center gap-3">
+        <RouterLink
+          to="/dashboard"
+          class="flex min-w-0 items-center gap-3 text-[var(--text-primary)] no-underline"
+          aria-label="대시보드로 이동"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M10 6l6 6-6 6" />
-          </svg>
-        </button>
+          <span
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,var(--accent-color),var(--purple-color))] text-base font-extrabold text-white shadow-[0_8px_18px_rgba(79,70,229,0.2)]"
+          >
+            M
+          </span>
 
-        <div class="header-shell__page">
-          <p class="header-shell__eyebrow">운영 플래너</p>
-          <h1>{{ activeNav.label }}</h1>
-        </div>
+          <div class="min-w-0">
+            <p class="mb-1 text-[10px] font-bold leading-none text-[var(--muted-text)]">
+              운영 플래너
+            </p>
+            <h1 class="truncate text-sm font-bold leading-none text-[var(--text-primary)]">
+              {{ activeNav.label }}
+            </h1>
+          </div>
+        </RouterLink>
       </div>
 
       <nav
-        class="header-shell__nav"
-        :class="{ 'header-shell__nav--compact': navCompact }"
+        class="flex min-w-0 flex-1 items-center gap-0.5 overflow-visible lg:justify-start lg:pl-1.5"
         aria-label="섹션 이동"
       >
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.to"
-          :to="item.to"
-          class="header-shell__nav-link"
-          :class="{ 'header-shell__nav-link--active': isActive(item) }"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path :d="item.icon" />
-          </svg>
-          <span>{{ item.label }}</span>
-        </RouterLink>
+        <template v-for="item in navItems" :key="item.id">
+          <div
+            v-if="item.id === 'templates'"
+            class="relative mt-1 pb-1"
+            @mouseenter="openReportsMenu"
+            @mouseleave="scheduleCloseReportsMenu"
+          >
+            <RouterLink
+              :to="item.to"
+              class="relative flex flex-col items-center whitespace-nowrap rounded-2xl px-3.5 py-2 text-sm font-semibold transition-all duration-200 after:absolute after:-bottom-2 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-[var(--text-primary)] after:content-['']"
+              :class="
+                isActive(item)
+                  ? 'bg-[var(--accent-soft)] text-[var(--text-primary)] shadow-[0_10px_20px_rgba(0,0,0,0.04)] after:opacity-100'
+                  : 'text-[var(--muted-text)] after:opacity-0 hover:bg-[var(--panel-muted)] hover:text-[var(--text-primary)]'
+              "
+              @click="closeFloatingMenus"
+            >
+              {{ item.label }}
+            </RouterLink>
+
+            <Transition
+              enter-active-class="transition duration-200 ease-out"
+              enter-from-class="opacity-0 translate-y-2 scale-[0.98]"
+              enter-to-class="opacity-100 translate-y-0 scale-100"
+              leave-active-class="transition duration-150 ease-in"
+              leave-from-class="opacity-100 translate-y-0 scale-100"
+              leave-to-class="opacity-0 translate-y-2 scale-[0.98]"
+            >
+              <div
+                v-if="reportsMenuOpen"
+                class="absolute left-1/2 top-full z-50 mt-2 w-56 -translate-x-1/2 rounded-2xl border border-[var(--border-color)] bg-[var(--panel-color)] p-2 shadow-[0_10px_25px_rgba(0,0,0,0.1)]"
+                @mouseenter="openReportsMenu"
+                @mouseleave="scheduleCloseReportsMenu"
+              >
+                <RouterLink
+                  v-for="action in reportsDropdown"
+                  :key="action.label"
+                  :to="action.to"
+                  class="block rounded-xl px-3.5 py-2.5 text-left text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--panel-muted)] hover:text-[var(--accent-color)]"
+                  @click="closeFloatingMenus"
+                >
+                  {{ action.label }}
+                </RouterLink>
+              </div>
+            </Transition>
+          </div>
+
+          <RouterLink
+            v-else
+            :to="item.to"
+            class="relative flex flex-col items-center whitespace-nowrap rounded-2xl px-3.5 py-2 text-sm font-semibold transition-all duration-200 after:absolute after:-bottom-2 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-[var(--text-primary)] after:content-['']"
+            :class="
+                isActive(item)
+                  ? 'bg-[var(--accent-soft)] text-[var(--text-primary)] shadow-[0_10px_20px_rgba(0,0,0,0.04)] after:opacity-100'
+                  : 'text-[var(--muted-text)] after:opacity-0 hover:bg-[var(--panel-muted)] hover:text-[var(--text-primary)]'
+            "
+            @click="closeFloatingMenus"
+          >
+            {{ item.label }}
+          </RouterLink>
+        </template>
       </nav>
 
-      <div class="header-shell__actions">
-        <label class="header-shell__search" aria-label="검색">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M21 21l-4.25-4.25M10.75 18a7.25 7.25 0 1 1 0-14.5 7.25 7.25 0 0 1 0 14.5Z" />
-          </svg>
+      <div class="flex items-center justify-end gap-2">
+        <label
+          class="group relative w-40 shrink-0 transition-all duration-300 focus-within:w-56"
+          aria-label="검색"
+        >
+          <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted-text)]">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </span>
           <input
             :value="store.searchQuery"
             type="search"
             placeholder="검색"
-            @input="store.setSearchQuery($event.target.value)"
+            class="h-10 w-full rounded-2xl border border-[var(--border-color)] bg-[var(--panel-muted)] pl-10 pr-4 text-sm text-[var(--text-primary)] outline-none transition-all duration-300 placeholder:text-[var(--muted-text)] focus:border-[var(--border-strong)] focus:bg-[var(--panel-color)]"
+            @input="handleSearchInput"
           />
         </label>
 
-        <button class="header-shell__action-button" type="button" aria-label="알림">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M12 4a5 5 0 0 0-5 5v2.2c0 .55-.22 1.08-.6 1.47L5 13.07V15h14v-1.93l-1.4-1.4A2.1 2.1 0 0 1 17 11.2V9a5 5 0 0 0-5-5Zm0 16a2.4 2.4 0 0 0 2.35-2h-4.7A2.4 2.4 0 0 0 12 20Z"
-            />
-          </svg>
-          <span class="header-shell__dot" />
-        </button>
+        <div class="relative">
+          <button
+            type="button"
+            class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-color)] bg-[var(--panel-muted)] text-[var(--text-secondary)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
+            aria-label="알림"
+            :aria-expanded="notificationsOpen"
+            @click.stop="toggleNotifications"
+          >
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+              />
+            </svg>
+            <span class="absolute right-[10px] top-[10px] h-1.5 w-1.5 rounded-full bg-[#fa5252] ring-2 ring-[var(--panel-color)]" />
+          </button>
 
-        <button class="header-shell__profile" type="button" aria-label="프로필">
-          {{ profile?.initials ?? 'U1' }}
-        </button>
+          <Transition
+            enter-active-class="transition duration-200 ease-out"
+            enter-from-class="opacity-0 translate-y-2 scale-[0.98]"
+            enter-to-class="opacity-100 translate-y-0 scale-100"
+            leave-active-class="transition duration-150 ease-in"
+            leave-from-class="opacity-100 translate-y-0 scale-100"
+            leave-to-class="opacity-0 translate-y-2 scale-[0.98]"
+          >
+            <div
+              v-if="notificationsOpen"
+              class="absolute right-0 top-full z-50 mt-3 w-80 rounded-2xl border border-[var(--border-color)] bg-[var(--panel-color)] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.14)]"
+            >
+              <div class="mb-3 flex items-center justify-between">
+                <strong class="text-sm font-bold text-[var(--text-primary)]">알림 센터</strong>
+                <span class="text-[11px] font-semibold text-[var(--muted-text)]">새 알림 3</span>
+              </div>
+              <div class="space-y-2">
+                <div class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3">
+                  <p class="text-sm font-semibold text-[var(--text-primary)]">검토 요청이 도착했습니다</p>
+                  <p class="mt-1 text-xs text-[var(--muted-text)]">방금 전 · 콘텐츠 편집 워크스페이스</p>
+                </div>
+                <div class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3">
+                  <p class="text-sm font-semibold text-[var(--text-primary)]">마감 임박 작업이 있습니다</p>
+                  <p class="mt-1 text-xs text-[var(--muted-text)]">오늘 · 2건 남음</p>
+                </div>
+                <div class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3">
+                  <p class="text-sm font-semibold text-[var(--text-primary)]">새 댓글 1개</p>
+                  <p class="mt-1 text-xs text-[var(--muted-text)]">10분 전 · 변경 이력 확인</p>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        </div>
 
-        <button
-          class="header-shell__action-button"
-          type="button"
-          aria-label="설정"
-          @click="store.toggleTheme"
+        <RouterLink
+          to="/mypage"
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/80 bg-[var(--panel-muted)] text-sm font-bold text-[var(--text-secondary)] shadow-[0_2px_4px_rgba(0,0,0,0.05)] no-underline transition hover:-translate-y-0.5 hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
+          aria-label="프로필"
+          @click="closeFloatingMenus"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 1 0 12 8.5Zm8 3-.88-.52a7.8 7.8 0 0 0-.35-.84l.5-.9a1 1 0 0 0-.14-1.2l-1.67-1.67a1 1 0 0 0-1.2-.14l-.9.5c-.27-.13-.55-.25-.84-.35L14.5 3.9a1 1 0 0 0-.98-.65h-2.04a1 1 0 0 0-.98.65l-.27 1.03c-.29.1-.57.22-.84.35l-.9-.5a1 1 0 0 0-1.2.14L4.62 6.59a1 1 0 0 0-.14 1.2l.5.9c-.13.27-.25.55-.35.84L3.9 10.5a1 1 0 0 0-.65.98v2.04a1 1 0 0 0 .65.98l1.03.27c.1.29.22.57.35.84l-.5.9a1 1 0 0 0 .14 1.2l1.67 1.67a1 1 0 0 0 1.2.14l.9-.5c.27.13.55.25.84.35l.27 1.03a1 1 0 0 0 .98.65h2.04a1 1 0 0 0 .98-.65l.27-1.03c.29-.1.57-.22.84-.35l.9.5a1 1 0 0 0 1.2-.14l1.67-1.67a1 1 0 0 0 .14-1.2l-.5-.9c.13-.27.25-.55.35-.84l1.03-.27a1 1 0 0 0 .65-.98v-2.04a1 1 0 0 0-.65-.98l-1.03-.27c-.1-.29-.22-.57-.35-.84l.5-.9a1 1 0 0 0-.14-1.2l-1.67-1.67a1 1 0 0 0-1.2-.14l-.9.5c-.27-.13-.55-.25-.84-.35L14.5 3.9a1 1 0 0 0-.98-.65h-2.04a1 1 0 0 0-.98.65l-.27 1.03c-.29.1-.57.22-.84.35l-.9-.5a1 1 0 0 0-1.2.14L4.62 6.59a1 1 0 0 0-.14 1.2l.5.9c-.13.27-.25.55-.35.84L3.9 10.5a1 1 0 0 0-.65.98v2.04a1 1 0 0 0 .65.98l1.03.27c.1.29.22.57.35.84l-.5.9a1 1 0 0 0 .14 1.2l1.67 1.67a1 1 0 0 0 1.2.14l.9-.5c.27.13.55.25.84.35l.27 1.03a1 1 0 0 0 .98.65h2.04a1 1 0 0 0 .98-.65l.27-1.03c.29-.1.57-.22.84-.35l.9.5a1 1 0 0 0 1.2-.14l1.67-1.67a1 1 0 0 0 .14-1.2l-.5-.9c.13-.27.25-.55.35-.84l1.03-.27a1 1 0 0 0 .65-.98v-2.04a1 1 0 0 0-.65-.98Z"
-            />
-          </svg>
-        </button>
+          {{ profile?.initials ?? 'U1' }}
+        </RouterLink>
+
+        <div class="relative">
+          <button
+            type="button"
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-color)] bg-[var(--panel-muted)] text-[var(--text-secondary)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
+            aria-label="전체 메뉴"
+            :aria-expanded="appsMenuOpen"
+            @click.stop="toggleAppsMenu"
+          >
+            <div class="grid h-4 w-4 grid-cols-3 gap-[2px]">
+              <span v-for="dot in 9" :key="dot" class="h-1 w-1 rounded-sm bg-current" />
+            </div>
+          </button>
+
+          <Transition
+            enter-active-class="transition duration-200 ease-out"
+            enter-from-class="opacity-0 translate-y-2 scale-[0.98]"
+            enter-to-class="opacity-100 translate-y-0 scale-100"
+            leave-active-class="transition duration-150 ease-in"
+            leave-from-class="opacity-100 translate-y-0 scale-100"
+            leave-to-class="opacity-0 translate-y-2 scale-[0.98]"
+          >
+            <div
+              v-if="appsMenuOpen"
+              class="absolute right-0 top-full z-50 mt-3 w-[310px] rounded-[24px] border border-[var(--border-color)] bg-[var(--panel-color)] p-4 shadow-[0_20px_50px_rgba(0,0,0,0.12)]"
+            >
+              <div class="mb-4 flex items-center justify-between px-2">
+                <strong class="text-sm font-bold text-[var(--muted-text)]">전체 메뉴</strong>
+                <span class="h-1.5 w-1.5 rounded-full bg-[var(--accent-color)]"></span>
+              </div>
+              <div class="grid grid-cols-2 gap-x-2 gap-y-1.5">
+                <button
+                  v-for="item in appMenuItems"
+                  :key="item.key"
+                  type="button"
+                  class="group flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-[15px] font-semibold transition-all duration-200"
+                  :class="
+                    item.danger
+                      ? 'text-red-500 hover:bg-red-50 hover:text-red-600'
+                      : 'text-slate-600 hover:bg-blue-50 hover:text-blue-600'
+                  "
+                  @click="handleAppMenuItem(item)"
+                >
+                  <span
+                    class="flex h-5 w-5 shrink-0 items-center justify-center transition-colors"
+                    :class="
+                      item.danger
+                        ? 'text-red-400 group-hover:text-red-500'
+                        : 'text-slate-400 group-hover:text-blue-500'
+                    "
+                    v-html="item.icon"
+                  ></span>
+                  <span class="truncate">{{ item.label }}</span>
+                </button>
+              </div>
+            </div>
+          </Transition>
+        </div>
       </div>
     </div>
   </header>
 </template>
-
-<style scoped>
-.header-shell {
-  position: sticky;
-  top: 0.75rem;
-  z-index: 40;
-  padding: 0.05rem;
-}
-
-.header-shell__bar {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.85rem 0.95rem;
-  border: 1px solid var(--border-color);
-  border-radius: 28px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--panel-color) 98%, var(--panel-muted)),
-      var(--panel-color)
-    ),
-    var(--panel-color);
-  box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(20px);
-}
-
-.header-shell__brand-group {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.header-shell__brand {
-  display: inline-grid;
-  place-items: center;
-  text-decoration: none;
-  flex-shrink: 0;
-}
-
-.header-shell__logo {
-  width: 2.8rem;
-  height: 2.8rem;
-  border-radius: 1rem;
-  background: linear-gradient(135deg, var(--accent-color), var(--purple-color));
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  box-shadow: 0 14px 30px color-mix(in srgb, var(--accent-color) 18%, transparent);
-}
-
-.header-shell__rail-toggle {
-  width: 1.9rem;
-  height: 1.9rem;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--panel-muted);
-  color: var(--muted-text);
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    background-color 0.18s ease,
-    border-color 0.18s ease;
-}
-
-.header-shell__rail-toggle:hover {
-  transform: translateY(-1px);
-  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-muted));
-  border-color: color-mix(in srgb, var(--accent-color) 24%, var(--border-color));
-}
-
-.header-shell__rail-toggle svg {
-  width: 0.95rem;
-  height: 0.95rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.header-shell__page {
-  min-width: 0;
-}
-
-.header-shell__eyebrow {
-  color: var(--muted-text);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.header-shell__page h1 {
-  margin-top: 0.1rem;
-  font-size: 1.18rem;
-  line-height: 1.1;
-  font-weight: 800;
-}
-
-.header-shell__nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.55rem;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.header-shell__nav::-webkit-scrollbar {
-  display: none;
-}
-
-.header-shell__nav-link {
-  min-height: 2.55rem;
-  padding: 0 0.95rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: var(--panel-muted);
-  color: var(--muted-text);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.42rem;
-  text-decoration: none;
-  white-space: nowrap;
-  transition:
-    transform 0.18s ease,
-    border-color 0.18s ease,
-    background-color 0.18s ease,
-    color 0.18s ease,
-    box-shadow 0.18s ease;
-}
-
-.header-shell__nav-link:hover,
-.header-shell__nav-link--active {
-  transform: translateY(-1px);
-  color: var(--text-primary);
-  border-color: color-mix(in srgb, var(--accent-color) 28%, var(--border-color));
-  background: color-mix(in srgb, var(--accent-color) 8%, var(--panel-muted));
-  box-shadow: 0 10px 20px color-mix(in srgb, var(--accent-color) 10%, transparent);
-}
-
-.header-shell__nav-link svg {
-  width: 0.95rem;
-  height: 0.95rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  flex-shrink: 0;
-}
-
-.header-shell__actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-shrink: 0;
-}
-
-.header-shell__search {
-  width: min(18rem, 24vw);
-  min-width: 12.5rem;
-  height: 2.65rem;
-  padding: 0 0.95rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: var(--panel-muted);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.header-shell__search svg {
-  width: 1rem;
-  height: 1rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  color: var(--muted-text);
-  flex-shrink: 0;
-}
-
-.header-shell__search input {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: var(--text-primary);
-}
-
-.header-shell__search input::placeholder {
-  color: var(--muted-text);
-}
-
-.header-shell__action-button,
-.header-shell__profile {
-  width: 2.65rem;
-  height: 2.65rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: var(--panel-muted);
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-
-.header-shell__action-button {
-  position: relative;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    background-color 0.18s ease,
-    border-color 0.18s ease;
-}
-
-.header-shell__action-button:hover {
-  transform: translateY(-1px);
-  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-muted));
-  border-color: color-mix(in srgb, var(--accent-color) 24%, var(--border-color));
-}
-
-.header-shell__action-button svg {
-  width: 1rem;
-  height: 1rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.header-shell__action-button svg path[fill] {
-  fill: currentColor;
-  stroke: none;
-}
-
-.header-shell__dot {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  width: 0.46rem;
-  height: 0.46rem;
-  border-radius: 999px;
-  background: #ff5a5f;
-  box-shadow: 0 0 0 2px var(--panel-color);
-}
-
-.header-shell__profile {
-  color: #fff;
-  font-weight: 800;
-  background: linear-gradient(135deg, var(--accent-color), var(--purple-color));
-}
-
-.header-shell__nav--compact .header-shell__nav-link {
-  width: 2.65rem;
-  padding: 0;
-  justify-content: center;
-}
-
-.header-shell__nav--compact .header-shell__nav-link span {
-  display: none;
-}
-
-@media (max-width: 1200px) {
-  .header-shell__bar {
-    grid-template-columns: 1fr;
-    justify-items: stretch;
-  }
-
-  .header-shell__nav {
-    justify-content: flex-start;
-    overflow-x: auto;
-  }
-
-  .header-shell__actions {
-    justify-self: end;
-    flex-wrap: wrap;
-  }
-
-  .header-shell__search {
-    width: min(20rem, 100%);
-  }
-}
-
-@media (max-width: 760px) {
-  .header-shell {
-    top: 0.5rem;
-  }
-
-  .header-shell__bar {
-    padding: 0.8rem;
-    gap: 0.8rem;
-  }
-
-  .header-shell__brand-group {
-    gap: 0.6rem;
-  }
-
-  .header-shell__search {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .header-shell__actions {
-    width: 100%;
-  }
-
-  .header-shell__profile,
-  .header-shell__action-button {
-    width: 2.5rem;
-    height: 2.5rem;
-  }
-}
-</style>
