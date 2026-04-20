@@ -2,10 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 const route = useRoute()
 const router = useRouter()
 const store = usePlannerStore()
+const authStore = useAuthStore()
 const reportsMenuOpen = ref(false)
 const notificationsOpen = ref(false)
 const appsMenuOpen = ref(false)
@@ -131,8 +133,14 @@ function openNotificationsCenter() {
   notificationsOpen.value = true
 }
 
-function handleAppMenuItem(item) {
+async function handleAppMenuItem(item) {
   closeFloatingMenus()
+
+  if (item.key === 'logout') {
+    await authStore.logout()
+    router.push({ name: 'login' })
+    return
+  }
 
   if (item.kind === 'action') {
     if (item.action === 'theme') {
@@ -146,6 +154,7 @@ function handleAppMenuItem(item) {
 
     if (item.action === 'notifications') {
       openNotificationsCenter()
+      return
     }
 
     return
@@ -322,7 +331,7 @@ onBeforeUnmount(() => {
             >
               <div class="mb-3 flex items-center justify-between">
                 <strong class="text-sm font-bold text-[var(--text-primary)]">알림 센터</strong>
-                <span class="text-[11px] font-semibold text-[var(--muted-text)]">새 알림 3</span>
+                <span class="text-[11px] font-semibold text-[var(--muted-text)]">새 알림</span>
               </div>
               <div class="space-y-2">
                 <div class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3">
