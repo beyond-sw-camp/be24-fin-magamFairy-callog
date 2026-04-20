@@ -77,6 +77,11 @@ const routes = [
         },
       },
       {
+        path: '/reference',
+        name: 'reference',
+        component: () => import('@/views/Reference.vue'),
+      },
+      {
         path: 'reports',
         name: 'reports',
         component: () => import('@/views/ReportsView.vue'),
