@@ -331,7 +331,7 @@ onBeforeUnmount(() => {
             >
               <div class="mb-3 flex items-center justify-between">
                 <strong class="text-sm font-bold text-[var(--text-primary)]">알림 센터</strong>
-                <span class="text-[11px] font-semibold text-[var(--muted-text)]">새 알림 3</span>
+                <span class="text-[11px] font-semibold text-[var(--muted-text)]">새 알림</span>
               </div>
               <div class="space-y-2">
                 <div class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3">
