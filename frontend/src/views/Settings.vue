@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, onMounted } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
+import { getSettings, updateSettings } from '@/api/settings/index.js'
 
 const store = usePlannerStore()
 
@@ -14,25 +15,29 @@ const settings = reactive({
   darkMode: false, // 다크 모드 상태 추가
   notifications: {
     task: true,
-    qa: false,
+    qa: true,
     ai: true,
     critical: true
   }
 })
+
 
 if (store.theme=='dark'){
   settings.darkMode = true;
 }
 
 // 다크 모드 토글 함수
-const toggleDarkMode = () => {
+const toggleDarkMode = async () => {
   settings.darkMode = !settings.darkMode
   store.toggleTheme()
+  await updateSettings({darkMode: settings.darkMode})
   syncSettingToServer('darkMode', settings.darkMode)
 }
 
 onMounted(async () => {
   try {
+    const res = await getSettings()
+    settings.value = res
     console.log('설정 정보를 불러왔습니다.')
   } catch (error) {
     console.error('설정 정보를 불러오는데 실패했습니다.', error)
@@ -46,7 +51,12 @@ const updateNotification = async (type) => {
 }
 
 const syncSettingToServer = async (key, value) => {
+  key = key.split('.').pop();
+  const body = {
+    [key]:value
+  }
   try {
+    updateSettings(body)
     console.log(`[API Call] 설정 업데이트 됨 - ${key}: ${value}`)
   } catch (error) {
     console.error('설정 저장 실패:', error)
