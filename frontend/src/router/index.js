@@ -110,7 +110,7 @@ const router = createRouter({
     {
       path: '/user',
       component: FirstLayout,
-      redirect:'/login',
+      redirect:'user/login',
       children: [
         {
       path: 'login',
