@@ -65,7 +65,7 @@ const router = createRouter({
         section: '실행 보드',
       },
     },
-    {
+    { //ss
       path: 'templates',
       name: 'templates',
       component: () => import('@/views/TemplatesView.vue'),
