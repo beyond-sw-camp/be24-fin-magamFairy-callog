@@ -1,13 +1,11 @@
 <script setup>
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useOperationsStore } from '@/stores/operations'
 import { usePlannerStore } from '@/stores/planner'
 import { formatShortDate } from '@/utils/calendar'
 
 const store = useOperationsStore()
 const planner = usePlannerStore()
-const router = useRouter()
 
 const panelClass =
   'grid gap-[0.75rem] rounded-[24px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-[0.95rem] py-[0.95rem] shadow-[var(--shadow-soft)]'
@@ -42,7 +40,6 @@ function openPlannerTask(taskId) {
   }
 
   planner.openTask(taskId)
-  router.push('/calendar')
 }
 
 function chipStyle(tone = 'neutral') {

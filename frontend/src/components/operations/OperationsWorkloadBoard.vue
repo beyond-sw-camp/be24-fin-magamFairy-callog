@@ -1,12 +1,10 @@
 <script setup>
-import { useRouter } from 'vue-router'
 import { useOperationsStore } from '@/stores/operations'
 import { usePlannerStore } from '@/stores/planner'
 import { formatLongDate, formatShortDate } from '@/utils/calendar'
 
 const store = useOperationsStore()
 const planner = usePlannerStore()
-const router = useRouter()
 
 const workItemStateLabel = {
   draft: '초안',
@@ -90,7 +88,6 @@ function openPlannerTask(taskId) {
   }
 
   planner.openTask(taskId)
-  router.push('/calendar')
 }
 
 function currentAction() {
