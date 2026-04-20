@@ -92,6 +92,15 @@ const router = createRouter({
         section: '내 정보',
       },
     },
+    {
+      path: 'references',
+      name: 'references',
+      component: () => import('@/views/ReferencesView.vue'),
+      meta: {
+        title: '레퍼런스',
+        section: '레퍼런스',
+      },
+    },
       ]
     },
     {
