@@ -2,7 +2,6 @@
 import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import Header from '@/components/Header.vue'
-import Sidebar from '@/components/Sidebar.vue'
 import TaskModal from '@/components/common/TaskModal.vue'
 import { usePlannerStore } from '@/stores/planner'
 
