@@ -1,7 +1,7 @@
 <script setup>
 import { reactive, onMounted } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
-import { getSettings } from '@/api/settings/index.js'
+import { getSettings, updateSettings } from '@/api/settings/index.js'
 
 const store = usePlannerStore()
 
@@ -50,7 +50,12 @@ const updateNotification = async (type) => {
 }
 
 const syncSettingToServer = async (key, value) => {
+  key = key.split('.').pop();
+  const body = {
+    [key]:value
+  }
   try {
+    updateSettings(body)
     console.log(`[API Call] 설정 업데이트 됨 - ${key}: ${value}`)
   } catch (error) {
     console.error('설정 저장 실패:', error)
