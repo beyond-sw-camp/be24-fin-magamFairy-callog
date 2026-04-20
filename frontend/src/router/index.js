@@ -68,7 +68,7 @@ const router = createRouter({
     {
       path: 'templates',
       name: 'templates',
-      component: () => import('@/views/ReportsView.vue'),
+      component: () => import('@/views/TemplatesView.vue'),
       meta: {
         title: '템플릿',
         section: '콘텐츠 라이브러리',
