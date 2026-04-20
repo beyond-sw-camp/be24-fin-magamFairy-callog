@@ -61,7 +61,7 @@ const syncSettingToServer = async (key, value) => {
           type="button" 
           @click="toggleDarkMode"
           class="relative inline-flex h-[30px] w-[54px] shrink-0 cursor-pointer rounded-full border-4 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-          :style="{ backgroundColor: settings.darkMode ? '#334155' : '#e2e8f0' }"
+          :style="{ backgroundColor: settings.darkMode ? '#59c36d' : '#e2e8f0' }"
         >
           <span 
             :class="[settings.darkMode ? 'translate-x-6' : 'translate-x-0', 'pointer-events-none flex items-center justify-center h-[22px] w-[22px] transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out mt-[0px]']"
