@@ -2,10 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 const route = useRoute()
 const router = useRouter()
 const store = usePlannerStore()
+const authStore = useAuthStore()
 const reportsMenuOpen = ref(false)
 const notificationsOpen = ref(false)
 const appsMenuOpen = ref(false)
@@ -131,8 +133,14 @@ function openNotificationsCenter() {
   notificationsOpen.value = true
 }
 
-function handleAppMenuItem(item) {
+async function handleAppMenuItem(item) {
   closeFloatingMenus()
+
+  if (item.key === 'logout') {
+    await authStore.logout()
+    router.push({ name: 'login' })
+    return
+  }
 
   if (item.kind === 'action') {
     if (item.action === 'theme') {
@@ -146,6 +154,7 @@ function handleAppMenuItem(item) {
 
     if (item.action === 'notifications') {
       openNotificationsCenter()
+      return
     }
 
     return
@@ -180,10 +189,10 @@ onBeforeUnmount(() => {
     <div
       class="mx-auto flex min-h-[72px] w-full flex-col gap-4 overflow-visible rounded-[24px] border border-[var(--border-color)] bg-[var(--panel-color)] px-4 py-3 shadow-[0_4px_15px_rgba(0,0,0,0.03)] backdrop-blur-xl lg:flex-row lg:items-center lg:gap-2.5 lg:px-6"
     >
-      <div class="flex min-w-0 items-center gap-3">
+      <div class="flex w-[176px] shrink-0 items-center gap-3 lg:w-[190px]">
         <RouterLink
           to="/dashboard"
-          class="flex min-w-0 items-center gap-3 text-[var(--text-primary)] no-underline"
+          class="flex w-full min-w-0 items-center gap-3 text-[var(--text-primary)] no-underline"
           aria-label="대시보드로 이동"
         >
           <span
@@ -192,7 +201,7 @@ onBeforeUnmount(() => {
             M
           </span>
 
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <p class="mb-1 text-[10px] font-bold leading-none text-[var(--muted-text)]">
               운영 플래너
             </p>
