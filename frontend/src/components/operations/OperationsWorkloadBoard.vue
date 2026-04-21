@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue'
 import { useOperationsStore } from '@/stores/operations'
 import { usePlannerStore } from '@/stores/planner'
 import { formatLongDate, formatShortDate } from '@/utils/calendar'
@@ -26,37 +27,143 @@ const workItemStateTone = {
   watch: 'risk',
 }
 
-const panelClass =
-  'grid gap-[0.9rem] rounded-[24px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-4 py-4 shadow-[var(--shadow-soft)]'
-const headerClass =
-  'flex items-start justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start'
-const itemCardClass =
-  'flex items-start justify-between gap-[0.75rem] rounded-[20px] border border-[color:var(--border-color)] px-[0.95rem] py-[0.95rem] text-left transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)] max-[980px]:flex-col max-[980px]:items-start'
-const infoCardClass =
-  'grid gap-[0.4rem] rounded-[20px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_74%,white)] px-[0.95rem] py-[0.95rem]'
-const mutedPanelClass =
-  'grid gap-[0.8rem] rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-[0.95rem] py-[0.95rem]'
-const emptyCardClass =
-  'rounded-[20px] border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 py-4 text-sm text-[color:var(--muted-text)]'
+const selectedItem = computed(() => store.selectedWorkItemDetail ?? null)
+
+const queueStats = computed(() => {
+  const items = store.workInboxItems
+
+  return [
+    { id: 'queue-total', label: '대기 업무', value: `${items.length}건`, tone: 'neutral' },
+    {
+      id: 'queue-qa',
+      label: 'QA 요청',
+      value: `${items.filter((item) => item.type === 'qa').length}건`,
+      tone: 'risk',
+    },
+    {
+      id: 'queue-meeting',
+      label: '회의 정리',
+      value: `${items.filter((item) => item.type === 'meeting').length}건`,
+      tone: 'watch',
+    },
+    {
+      id: 'queue-generator',
+      label: '기본 생성',
+      value: `${items.filter((item) => item.type === 'generator').length}건`,
+      tone: 'healthy',
+    },
+  ]
+})
+
+const detailEyebrow = computed(() => {
+  if (selectedItem.value?.type === 'qa') return 'QA Intake'
+  if (selectedItem.value?.type === 'meeting') return 'Meeting Alignment'
+  if (selectedItem.value?.type === 'generator') return 'Content Generator'
+  return 'Operations Hub'
+})
+
+const detailTitle = computed(() => {
+  if (selectedItem.value?.type === 'qa') return selectedItem.value.title ?? 'QA 요청'
+  if (selectedItem.value?.type === 'meeting') return '내부 회의 승인 흐름'
+  if (selectedItem.value?.type === 'generator') return '기본 콘텐츠 생성'
+  return '업무를 선택해 세부 내용을 확인하세요'
+})
+
+const detailDescription = computed(() => {
+  if (selectedItem.value?.type === 'qa') {
+    return '카카오톡 요청 원문과 AI 브리프를 함께 확인하면서 수정 범위를 빠르게 정리합니다.'
+  }
+
+  if (selectedItem.value?.type === 'meeting') {
+    return '회의록, 참석자 승인, 후속 카드 생성 요청까지 한 흐름에서 관리합니다.'
+  }
+
+  if (selectedItem.value?.type === 'generator') {
+    return '주간 균형과 요일 분배 규칙을 보면서 기본 콘텐츠 배치를 운영 보드 기준으로 검토합니다.'
+  }
+
+  return '업무 큐에서 항목을 선택하면 세부 정보와 실행 액션이 이 영역에 표시됩니다.'
+})
+
+const pipelineSteps = computed(() => {
+  if (selectedItem.value?.type !== 'meeting') {
+    return []
+  }
+
+  return [
+    { id: 'meeting-note', label: '회의록 작성', active: true },
+    { id: 'meeting-approve', label: '참석자 승인', active: true },
+    { id: 'meeting-ai', label: 'AI 정리 완료', active: selectedItem.value.approvalsCompleted },
+    { id: 'meeting-task', label: '카드 추가 요청', active: selectedItem.value.approvalsCompleted },
+  ]
+})
+
+const actionSummaryRows = computed(() => {
+  if (!selectedItem.value) {
+    return []
+  }
+
+  if (selectedItem.value.type === 'qa') {
+    return [
+      { id: 'summary-date', label: '마감일', value: safeDate(resolveItemDate(selectedItem.value)) },
+      {
+        id: 'summary-assignee',
+        label: '추천 담당자',
+        value: selectedItem.value.recommendedAssignee?.name ?? '-',
+      },
+      { id: 'summary-task', label: '대상 카드', value: selectedItem.value.targetTaskLabel ?? '-' },
+    ]
+  }
+
+  if (selectedItem.value.type === 'meeting') {
+    return [
+      { id: 'summary-date', label: '회의일', value: safeLongDate(selectedItem.value.meetingDate) },
+      { id: 'summary-progress', label: '승인 현황', value: meetingProgress(selectedItem.value) },
+      { id: 'summary-customer', label: '고객', value: resolveCustomerName(selectedItem.value) },
+    ]
+  }
+
+  return [
+    {
+      id: 'summary-date',
+      label: '첫 배치일',
+      value: safeDate(resolveItemDate(selectedItem.value)),
+    },
+    { id: 'summary-count', label: '생성 건수', value: `${store.generatorPreview.items.length}건` },
+    { id: 'summary-spread', label: '편차', value: String(store.generatorPreview.spread) },
+  ]
+})
+
+const boardShellClass =
+  'grid items-start gap-4 [grid-template-columns:minmax(300px,340px)_minmax(0,1fr)_minmax(290px,320px)] max-[1440px]:grid-cols-1'
+const railClass =
+  'grid gap-4 rounded-[8px] border border-[color:var(--border-strong)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--panel-color)_96%,white),var(--panel-color))] px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(15,23,42,0.05)]'
+const sectionCardClass =
+  'grid gap-3 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_92%,white)] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]'
+const sectionSoftCardClass =
+  'grid gap-3 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_78%,white)] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]'
+const summaryCardClass =
+  'grid gap-1 rounded-[6px] border border-[color:var(--border-strong)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]'
+const queueItemClass =
+  'grid gap-3 rounded-[6px] border border-[color:var(--border-strong)] px-4 py-4 text-left transition duration-200 hover:-translate-y-px hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]'
 const badgeBaseClass =
-  'inline-flex min-h-8 items-center justify-center rounded-full border border-[color:var(--border-color)] px-3 text-[0.78rem] font-bold'
-const chipClass =
-  'inline-flex min-h-8 items-center justify-center rounded-full border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-3 text-[0.78rem] font-bold text-[color:var(--muted-text)]'
+  'inline-flex min-h-7 items-center justify-center rounded-[4px] border px-2.5 text-[0.72rem] font-semibold tracking-[0.01em]'
+const pillClass =
+  'inline-flex min-h-7 items-center justify-center rounded-[4px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_82%,white)] px-2.5 text-[0.72rem] font-semibold text-[color:var(--muted-text)]'
+const ghostButtonClass =
+  'inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-3.5 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_22px_rgba(15,23,42,0.08)]'
 const primaryButtonClass =
-  'inline-flex min-h-[2.6rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--accent-color)] bg-[var(--accent-color)] px-4 text-sm font-semibold text-white transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0'
-const softButtonClass =
-  'inline-flex min-h-[2.45rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]'
-const iconButtonClass =
-  'inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--border-color)] bg-[var(--panel-muted)] text-base font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]'
-const linkButtonClass =
-  'text-sm font-semibold text-[color:var(--accent-color)] transition duration-200 hover:opacity-80'
+  'inline-flex min-h-[2.8rem] items-center justify-center gap-2 rounded-[6px] border border-[color:color-mix(in_srgb,var(--accent-color)_50%,var(--border-strong))] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--accent-color)_88%,white),var(--accent-color))] px-4 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.16)] transition duration-200 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0'
+const inlineControlButtonClass =
+  'inline-flex h-10 w-10 items-center justify-center rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_92%,white)] text-base font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)]'
+const emptyStateClass =
+  'grid gap-2 rounded-[6px] border border-dashed border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_66%,white)] px-5 py-6 text-sm text-[color:var(--muted-text)]'
+const metaRowClass =
+  'flex items-start justify-between gap-4 border-b border-[color:var(--border-color)] py-3 last:border-b-0 last:pb-0 first:pt-0'
+
 const focusStyle = {
-  borderColor: 'color-mix(in srgb, var(--accent-color) 30%, var(--border-color))',
+  borderColor: 'color-mix(in srgb, var(--accent-color) 32%, var(--border-color))',
   boxShadow: '0 0 0 3px color-mix(in srgb, var(--accent-color) 10%, transparent)',
-}
-const activeItemStyle = {
-  borderColor: 'color-mix(in srgb, var(--accent-color) 30%, var(--border-color))',
-  background: 'color-mix(in srgb, var(--accent-color) 10%, var(--panel-color))',
 }
 
 function workItemTone(status) {
@@ -65,6 +172,13 @@ function workItemTone(status) {
 
 function workItemLabel(status) {
   return workItemStateLabel[status] ?? status
+}
+
+function workTypeLabel(type) {
+  if (type === 'qa') return 'QA'
+  if (type === 'meeting') return '회의'
+  if (type === 'generator') return '생성'
+  return '업무'
 }
 
 function isWorkItemActive(item) {
@@ -76,6 +190,28 @@ function selectWorkItem(item) {
     type: item.type,
     id: item.id,
   })
+}
+
+function resolveItemDate(item) {
+  if (!item) return null
+  if (item.type === 'meeting') return item.meetingDate
+  if (item.type === 'generator') return store.generatorPreview.items[0]?.dueDate ?? null
+  return item.dueDate ?? null
+}
+
+function resolveCustomerName(item) {
+  if (!item) return '-'
+  if (typeof item.customer === 'string') return item.customer
+  if (item.customer?.name) return item.customer.name
+  return item.subtitle ?? '내부 보드'
+}
+
+function safeDate(value) {
+  return value ? formatShortDate(value) : '-'
+}
+
+function safeLongDate(value) {
+  return value ? formatLongDate(value) : '-'
 }
 
 function meetingProgress(note) {
@@ -91,7 +227,7 @@ function openPlannerTask(taskId) {
 }
 
 function currentAction() {
-  const item = store.selectedWorkItemDetail
+  const item = selectedItem.value
 
   if (!item) {
     return
@@ -120,12 +256,12 @@ function currentAction() {
 }
 
 function actionLabel() {
-  const item = store.selectedWorkItemDetail
+  const item = selectedItem.value
 
   if (!item) return '대기 업무 없음'
 
   if (item.type === 'generator') {
-    return store.activeRole === 'admin' ? '캘린더에 기본 패널 생성' : '기본 생성은 관리자 전용'
+    return store.activeRole === 'admin' ? '기본 콘텐츠 생성 실행' : '기본 생성은 관리자 전용'
   }
 
   if (item.type === 'qa') {
@@ -136,7 +272,7 @@ function actionLabel() {
 }
 
 function actionDisabled() {
-  const item = store.selectedWorkItemDetail
+  const item = selectedItem.value
 
   if (!item) return true
   if (item.type === 'generator') return store.activeRole !== 'admin'
@@ -144,19 +280,51 @@ function actionDisabled() {
   return store.activeRole !== 'admin' || !item.approvalsCompleted
 }
 
+function toneSurfaceStyle(tone) {
+  if (tone === 'healthy') {
+    return {
+      borderColor: 'color-mix(in srgb, var(--success-color) 28%, var(--border-color))',
+      background:
+        'linear-gradient(180deg, color-mix(in srgb, var(--success-color) 14%, white), color-mix(in srgb, var(--success-color) 6%, var(--panel-color)))',
+    }
+  }
+
+  if (tone === 'watch') {
+    return {
+      borderColor: 'color-mix(in srgb, var(--warning-color) 28%, var(--border-color))',
+      background:
+        'linear-gradient(180deg, color-mix(in srgb, var(--warning-color) 15%, white), color-mix(in srgb, var(--warning-color) 7%, var(--panel-color)))',
+    }
+  }
+
+  if (tone === 'risk') {
+    return {
+      borderColor: 'color-mix(in srgb, var(--danger-color) 28%, var(--border-color))',
+      background:
+        'linear-gradient(180deg, color-mix(in srgb, var(--danger-color) 12%, white), color-mix(in srgb, var(--danger-color) 5%, var(--panel-color)))',
+    }
+  }
+
+  return {
+    borderColor: 'var(--border-color)',
+    background:
+      'linear-gradient(180deg, color-mix(in srgb, var(--panel-muted) 72%, white), var(--panel-color))',
+  }
+}
+
 function badgeStyle(tone) {
   if (tone === 'healthy') {
     return {
       background: 'color-mix(in srgb, var(--success-color) 12%, white)',
-      borderColor: 'color-mix(in srgb, var(--success-color) 30%, var(--border-color))',
+      borderColor: 'color-mix(in srgb, var(--success-color) 28%, var(--border-color))',
       color: '#287b47',
     }
   }
 
   if (tone === 'watch') {
     return {
-      background: 'color-mix(in srgb, var(--warning-color) 16%, white)',
-      borderColor: 'color-mix(in srgb, var(--warning-color) 30%, var(--border-color))',
+      background: 'color-mix(in srgb, var(--warning-color) 15%, white)',
+      borderColor: 'color-mix(in srgb, var(--warning-color) 28%, var(--border-color))',
       color: '#9a6c0d',
     }
   }
@@ -171,30 +339,51 @@ function badgeStyle(tone) {
 
   return {
     background: 'var(--panel-muted)',
+    borderColor: 'var(--border-color)',
     color: 'var(--muted-text)',
   }
 }
 
 function generatorCardStyle(item) {
+  const accent = item.palette?.accent ?? 'var(--accent-color)'
+
   return {
-    background: `linear-gradient(180deg, color-mix(in srgb, ${item.palette.accent} 10%, white), var(--panel-color)), var(--panel-color)`,
-    borderColor: `color-mix(in srgb, ${item.palette.accent} 20%, var(--border-color))`,
+    borderColor: `color-mix(in srgb, ${accent} 24%, var(--border-color))`,
+    background: `linear-gradient(180deg, color-mix(in srgb, ${accent} 12%, white), color-mix(in srgb, ${accent} 5%, var(--panel-color)))`,
+  }
+}
+
+function generatorBarStyle(count, index) {
+  const maxCount = Math.max(...store.generatorPreview.counts, 1)
+  const height = 22 + Math.round((count / maxCount) * 74)
+  const palette = ['#0f62fe', '#4589ff', '#525252', '#24a148', '#8a3ffc']
+
+  return {
+    height: `${height}px`,
+    background: `linear-gradient(180deg, ${palette[index] ?? 'var(--accent-color)'}, color-mix(in srgb, ${palette[index] ?? 'var(--accent-color)'} 78%, black))`,
   }
 }
 
 function pipelineStepStyle(active) {
-  if (!active) return null
+  if (!active) {
+    return {
+      borderColor: 'var(--border-color)',
+      background: 'color-mix(in srgb, var(--panel-muted) 74%, white)',
+      color: 'var(--muted-text)',
+    }
+  }
 
   return {
-    borderStyle: 'solid',
     borderColor: 'color-mix(in srgb, var(--accent-color) 24%, var(--border-color))',
-    background: 'color-mix(in srgb, var(--accent-color) 10%, var(--panel-color))',
+    background: 'color-mix(in srgb, var(--accent-color) 10%, white)',
     color: 'var(--text-primary)',
   }
 }
 
 function attendeeCardStyle(active) {
-  if (!active) return null
+  if (!active) {
+    return null
+  }
 
   return {
     borderColor: 'color-mix(in srgb, var(--success-color) 30%, var(--border-color))',
@@ -204,334 +393,556 @@ function attendeeCardStyle(active) {
 </script>
 
 <template>
-  <section class="grid items-start gap-4 [grid-template-columns:minmax(280px,320px)_minmax(0,1.2fr)_minmax(280px,320px)] max-[1380px]:grid-cols-1">
+  <section :class="boardShellClass">
     <aside
-      :class="[panelClass, 'sticky top-[7.1rem] max-[1380px]:static']"
+      :class="[railClass, 'sticky top-[7.1rem] max-[1440px]:static']"
       :style="store.focusTarget === 'workload-inbox' ? focusStyle : null"
     >
-      <header :class="headerClass">
-        <h3 class="text-base font-semibold text-[color:var(--text-primary)]">업무 인박스</h3>
+      <header class="flex items-start justify-between gap-4">
+        <div class="grid gap-1">
+          <p
+            class="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--accent-color)]"
+          >
+            Operations Hub
+          </p>
+          <h3 class="text-[1.05rem] font-semibold text-[color:var(--text-primary)]">업무 큐</h3>
+          <p class="text-sm leading-6 text-[color:var(--muted-text)]">
+            대기 업무를 유형별로 정리하고 현재 처리 대상을 빠르게 전환합니다.
+          </p>
+        </div>
 
-        <span :class="chipClass">{{ store.workInboxItems.length }}건</span>
+        <span :class="pillClass">{{ store.workInboxItems.length }} items</span>
       </header>
 
-      <div class="grid gap-[0.75rem]">
-        <div class="grid gap-[0.8rem]">
-          <button
-            v-for="item in store.workInboxItems"
-            :key="`${item.type}-${item.id}`"
-            type="button"
-            :class="itemCardClass"
-            :style="isWorkItemActive(item) ? activeItemStyle : { background: 'color-mix(in srgb, var(--panel-muted) 74%, white)' }"
-            @click="selectWorkItem(item)"
+      <div class="grid grid-cols-2 gap-3">
+        <article
+          v-for="stat in queueStats"
+          :key="stat.id"
+          :class="summaryCardClass"
+          :style="toneSurfaceStyle(stat.tone)"
+        >
+          <span
+            class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+            >{{ stat.label }}</span
           >
-            <div class="grid gap-1">
-              <small class="font-bold text-[color:var(--accent-color)]">{{ item.section }}</small>
-              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ item.title }}</strong>
-              <p class="text-sm text-[color:var(--muted-text)]">{{ item.customer ?? item.subtitle }}</p>
+          <strong class="text-lg font-semibold text-[color:var(--text-primary)]">{{
+            stat.value
+          }}</strong>
+        </article>
+      </div>
+
+      <div class="grid gap-2">
+        <button
+          v-for="item in store.workInboxItems"
+          :key="`${item.type}-${item.id}`"
+          type="button"
+          :class="queueItemClass"
+          :style="
+            isWorkItemActive(item)
+              ? {
+                  borderColor: 'color-mix(in srgb, var(--accent-color) 32%, var(--border-color))',
+                  background:
+                    'linear-gradient(180deg, color-mix(in srgb, var(--accent-color) 12%, white), color-mix(in srgb, var(--accent-color) 5%, var(--panel-color)))',
+                  boxShadow: '0 12px 26px rgba(15, 23, 42, 0.09)',
+                }
+              : {
+                  borderColor: 'var(--border-color)',
+                  background: 'color-mix(in srgb, var(--panel-muted) 74%, white)',
+                }
+          "
+          @click="selectWorkItem(item)"
+        >
+          <div class="flex items-start justify-between gap-4">
+            <div class="grid gap-1.5">
+              <div class="flex flex-wrap items-center gap-2">
+                <span
+                  class="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-color)]"
+                  >{{ item.section }}</span
+                >
+                <span :class="pillClass">{{ workTypeLabel(item.type) }}</span>
+              </div>
+              <strong class="text-sm font-semibold leading-6 text-[color:var(--text-primary)]">{{
+                item.title
+              }}</strong>
+              <p class="text-sm text-[color:var(--muted-text)]">{{ resolveCustomerName(item) }}</p>
             </div>
 
-            <div class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
-              <span :class="badgeBaseClass" :style="badgeStyle(workItemTone(item.status))">
-                {{ workItemLabel(item.status) }}
-              </span>
-              <small class="text-xs text-[color:var(--muted-text)]">{{ formatShortDate(item.dueDate) }}</small>
-            </div>
-          </button>
-
-          <div v-if="!store.workInboxItems.length" :class="emptyCardClass">
-            현재 필터에 맞는 업무 인박스가 없습니다.
+            <small class="text-xs font-medium text-[color:var(--muted-text)]">{{
+              safeDate(resolveItemDate(item))
+            }}</small>
           </div>
+
+          <div class="flex items-center justify-between gap-3">
+            <span :class="badgeBaseClass" :style="badgeStyle(workItemTone(item.status))">
+              {{ workItemLabel(item.status) }}
+            </span>
+            <span class="text-xs text-[color:var(--muted-text)]">{{
+              item.subtitle ?? '운영 대기열'
+            }}</span>
+          </div>
+        </button>
+
+        <div v-if="!store.workInboxItems.length" :class="emptyStateClass">
+          <strong class="text-sm font-semibold text-[color:var(--text-primary)]"
+            >대기 업무가 없습니다.</strong
+          >
+          <p>현재 필터 기준으로 표시할 인박스 항목이 없습니다.</p>
         </div>
       </div>
     </aside>
 
-    <article :class="panelClass">
-      <header :class="headerClass">
-        <h3 class="text-base font-semibold text-[color:var(--text-primary)]">
-          {{
-            store.selectedWorkItemDetail?.type === 'qa'
-              ? 'QA 요청'
-              : store.selectedWorkItemDetail?.type === 'meeting'
-                ? '내부 회의'
-                : '기본 생성'
-          }}
-        </h3>
-      </header>
-
-      <div v-if="store.selectedWorkItemDetail?.type === 'qa'" class="grid gap-[0.8rem]">
-        <section :class="[mutedPanelClass]" :style="store.focusTarget === 'workload-meeting' ? focusStyle : null">
-          <div :class="headerClass">
-            <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">카카오톡 요청 원문</h4>
-            <span :class="chipClass">{{ store.selectedWorkItemDetail.source }}</span>
-          </div>
-          <div class="rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-4 py-4">
-            <p class="text-sm leading-6 text-[color:var(--text-secondary)]">{{ store.selectedWorkItemDetail.sourceMessage }}</p>
-          </div>
-        </section>
-
-        <section :class="[mutedPanelClass]" :style="store.focusTarget === 'workload-generator' ? focusStyle : null">
-          <div :class="headerClass">
-            <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">AI 요약</h4>
-            <span :class="badgeBaseClass" :style="badgeStyle(workItemTone(store.selectedWorkItemDetail.status))">
-              {{ workItemLabel(store.selectedWorkItemDetail.status) }}
-            </span>
-          </div>
-          <div class="rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-4 py-4">
-            <p class="text-sm leading-6 text-[color:var(--text-secondary)]">{{ store.selectedWorkItemDetail.aiSummary }}</p>
-          </div>
-        </section>
-
-        <div class="grid grid-cols-2 gap-3 max-[980px]:grid-cols-1">
-          <article :class="infoCardClass">
-            <small class="text-xs text-[color:var(--muted-text)]">수정 대상</small>
-            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ store.selectedWorkItemDetail.targetTaskLabel }}</strong>
-            <p class="text-sm text-[color:var(--muted-text)]">{{ store.selectedWorkItemDetail.targetTaskId }}</p>
-          </article>
-
-          <article :class="infoCardClass">
-            <small class="text-xs text-[color:var(--muted-text)]">추천 담당자</small>
-            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ store.selectedWorkItemDetail.recommendedAssignee?.name }}</strong>
-            <p class="text-sm text-[color:var(--muted-text)]">{{ store.selectedWorkItemDetail.recommendedAssignee?.role }}</p>
-          </article>
+    <article :class="railClass">
+      <header
+        class="flex items-start justify-between gap-4 max-[980px]:flex-col max-[980px]:items-start"
+      >
+        <div class="grid gap-2">
+          <p
+            class="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--accent-color)]"
+          >
+            {{ detailEyebrow }}
+          </p>
+          <h3 class="text-[1.18rem] font-semibold text-[color:var(--text-primary)]">
+            {{ detailTitle }}
+          </h3>
+          <p class="max-w-[62ch] text-sm leading-6 text-[color:var(--muted-text)]">
+            {{ detailDescription }}
+          </p>
         </div>
 
-        <section :class="mutedPanelClass">
-          <div :class="headerClass">
+        <div v-if="selectedItem" class="flex flex-wrap items-center gap-2">
+          <span :class="pillClass">{{ safeDate(resolveItemDate(selectedItem)) }}</span>
+          <span :class="pillClass">{{ resolveCustomerName(selectedItem) }}</span>
+          <span
+            :class="badgeBaseClass"
+            :style="badgeStyle(workItemTone(selectedItem.status ?? 'ready'))"
+          >
+            {{ workItemLabel(selectedItem.status ?? 'ready') }}
+          </span>
+        </div>
+      </header>
+
+      <template v-if="selectedItem?.type === 'qa'">
+        <section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <article
+            :class="sectionCardClass"
+            :style="store.focusTarget === 'workload-meeting' ? focusStyle : null"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">요청 원문</h4>
+              <span :class="pillClass">{{ selectedItem.source }}</span>
+            </div>
+            <p
+              class="rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
+            >
+              {{ selectedItem.sourceMessage }}
+            </p>
+          </article>
+
+          <article
+            :class="sectionCardClass"
+            :style="store.focusTarget === 'workload-generator' ? focusStyle : null"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">AI 브리프</h4>
+              <span :class="badgeBaseClass" :style="badgeStyle(workItemTone(selectedItem.status))">
+                {{ workItemLabel(selectedItem.status) }}
+              </span>
+            </div>
+            <p
+              class="rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
+            >
+              {{ selectedItem.aiSummary }}
+            </p>
+          </article>
+        </section>
+
+        <section class="grid gap-4 lg:grid-cols-2">
+          <article :class="sectionSoftCardClass">
+            <span
+              class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+              >수정 대상</span
+            >
+            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
+              selectedItem.targetTaskLabel
+            }}</strong>
+            <p class="text-sm text-[color:var(--muted-text)]">{{ selectedItem.targetTaskId }}</p>
+          </article>
+
+          <article :class="sectionSoftCardClass">
+            <span
+              class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+              >추천 담당자</span
+            >
+            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
+              selectedItem.recommendedAssignee?.name ?? '-'
+            }}</strong>
+            <p class="text-sm text-[color:var(--muted-text)]">
+              {{ selectedItem.recommendedAssignee?.role ?? '배정 전' }}
+            </p>
+          </article>
+        </section>
+
+        <article :class="sectionCardClass">
+          <div class="flex items-center justify-between gap-3">
             <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">추출 요청사항</h4>
+            <span :class="pillClass">{{ selectedItem.requestedChanges.length }} items</span>
           </div>
-          <ul class="grid gap-2 pl-5 text-sm text-[color:var(--text-secondary)]">
-            <li v-for="change in store.selectedWorkItemDetail.requestedChanges" :key="change" class="list-disc">
+          <ul class="grid gap-2 text-sm leading-6 text-[color:var(--text-secondary)]">
+            <li
+              v-for="change in selectedItem.requestedChanges"
+              :key="change"
+              class="rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_72%,white)] px-3 py-3"
+            >
               {{ change }}
             </li>
           </ul>
+        </article>
+      </template>
+
+      <template v-else-if="selectedItem?.type === 'meeting'">
+        <section class="grid gap-4 lg:grid-cols-2">
+          <article :class="sectionSoftCardClass">
+            <span
+              class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+              >회의일</span
+            >
+            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
+              safeLongDate(selectedItem.meetingDate)
+            }}</strong>
+            <p class="text-sm text-[color:var(--muted-text)]">
+              {{ resolveCustomerName(selectedItem) }}
+            </p>
+          </article>
+
+          <article :class="sectionSoftCardClass">
+            <span
+              class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+              >진행 상태</span
+            >
+            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
+              meetingProgress(selectedItem)
+            }}</strong>
+            <p class="text-sm text-[color:var(--muted-text)]">
+              {{ selectedItem.approvalsCompleted ? '카드 생성 가능' : '승인 수집 중' }}
+            </p>
+          </article>
         </section>
-      </div>
 
-      <div v-else-if="store.selectedWorkItemDetail?.type === 'meeting'" class="grid gap-[0.8rem]">
-        <div class="grid grid-cols-2 gap-3 max-[980px]:grid-cols-1">
-          <article :class="infoCardClass">
-            <small class="text-xs text-[color:var(--muted-text)]">회의일</small>
-            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ formatLongDate(store.selectedWorkItemDetail.meetingDate) }}</strong>
-            <p class="text-sm text-[color:var(--muted-text)]">{{ store.selectedWorkItemDetail.customer }}</p>
-          </article>
-
-          <article :class="infoCardClass">
-            <small class="text-xs text-[color:var(--muted-text)]">진행 상태</small>
-            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ meetingProgress(store.selectedWorkItemDetail) }}</strong>
-            <p class="text-sm text-[color:var(--muted-text)]">{{ store.selectedWorkItemDetail.approvalsCompleted ? '카드 생성 가능' : '승인 수집 중' }}</p>
-          </article>
-        </div>
-
-        <section :class="mutedPanelClass">
-          <div :class="headerClass">
+        <section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <article :class="sectionCardClass">
             <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">회의록 원문</h4>
-          </div>
-          <div class="rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-4 py-4">
-            <p class="text-sm leading-6 text-[color:var(--text-secondary)]">{{ store.selectedWorkItemDetail.transcript }}</p>
-          </div>
-        </section>
+            <p
+              class="rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
+            >
+              {{ selectedItem.transcript }}
+            </p>
+          </article>
 
-        <section :class="mutedPanelClass">
-          <div :class="headerClass">
+          <article :class="sectionCardClass">
             <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">AI 정리 결과</h4>
-          </div>
-          <div class="rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-4 py-4">
-            <p class="text-sm leading-6 text-[color:var(--text-secondary)]">{{ store.selectedWorkItemDetail.aiSummary }}</p>
-          </div>
+            <p
+              class="rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
+            >
+              {{ selectedItem.aiSummary }}
+            </p>
+          </article>
         </section>
 
-        <section :class="mutedPanelClass">
-          <div :class="headerClass">
+        <article :class="sectionCardClass">
+          <div class="flex items-center justify-between gap-3">
             <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">승인 파이프라인</h4>
+            <span :class="pillClass">{{
+              selectedItem.approvalsCompleted ? '완료 가능' : '수집 중'
+            }}</span>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <div
-              class="grid min-h-11 place-items-center rounded-2xl border border-dashed border-[color:var(--border-color)] px-4 text-[0.82rem] font-bold text-[color:var(--muted-text)]"
-              :style="pipelineStepStyle(true)"
-            >
-              회의록 작성
-            </div>
-            <div
-              class="grid min-h-11 place-items-center rounded-2xl border border-dashed border-[color:var(--border-color)] px-4 text-[0.82rem] font-bold text-[color:var(--muted-text)]"
-              :style="pipelineStepStyle(true)"
-            >
-              참석자 승인
-            </div>
-            <div
-              class="grid min-h-11 place-items-center rounded-2xl border border-dashed border-[color:var(--border-color)] px-4 text-[0.82rem] font-bold text-[color:var(--muted-text)]"
-              :style="pipelineStepStyle(store.selectedWorkItemDetail.approvalsCompleted)"
-            >
-              AI 정리 완료
-            </div>
-            <div
-              class="grid min-h-11 place-items-center rounded-2xl border border-dashed border-[color:var(--border-color)] px-4 text-[0.82rem] font-bold text-[color:var(--muted-text)]"
-              :style="pipelineStepStyle(store.selectedWorkItemDetail.approvalsCompleted)"
-            >
-              카드 추가 요청
-            </div>
-          </div>
-        </section>
 
-        <section :class="mutedPanelClass">
-          <div :class="headerClass">
-            <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">참석자 승인</h4>
+          <div class="grid gap-3 lg:grid-cols-4">
+            <div
+              v-for="step in pipelineSteps"
+              :key="step.id"
+              class="grid min-h-[74px] content-center gap-1 rounded-[6px] border border-[color:var(--border-strong)] px-4 py-3 text-left"
+              :style="pipelineStepStyle(step.active)"
+            >
+              <span class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] opacity-70"
+                >Step</span
+              >
+              <strong class="text-sm font-semibold">{{ step.label }}</strong>
+            </div>
           </div>
-          <div class="flex flex-wrap gap-2">
+        </article>
+
+        <article :class="sectionCardClass">
+          <div class="flex items-center justify-between gap-3">
+            <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">참석자 승인</h4>
+            <span :class="pillClass">{{ meetingProgress(selectedItem) }}</span>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <button
-              v-for="attendee in store.selectedWorkItemDetail.attendees"
+              v-for="attendee in selectedItem.attendees"
               :key="attendee.memberId"
               type="button"
-              class="grid min-w-32 justify-items-center gap-1 rounded-[20px] border border-[color:var(--border-color)] bg-white/70 px-4 py-4 text-center transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]"
+              class="grid gap-1 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-4 py-4 text-left transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
               :style="attendeeCardStyle(attendee.approved)"
-              @click="store.toggleMeetingApproval(store.selectedWorkItemDetail.id, attendee.memberId)"
+              @click="store.toggleMeetingApproval(selectedItem.id, attendee.memberId)"
             >
-              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ store.findMember(attendee.memberId)?.initials }}</strong>
-              <span class="text-sm text-[color:var(--text-secondary)]">{{ store.findMember(attendee.memberId)?.name }}</span>
+              <div class="flex items-center justify-between gap-3">
+                <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
+                  store.findMember(attendee.memberId)?.name
+                }}</strong>
+                <span
+                  :class="badgeBaseClass"
+                  :style="badgeStyle(attendee.approved ? 'healthy' : 'watch')"
+                >
+                  {{ attendee.approved ? '승인' : '대기' }}
+                </span>
+              </div>
+              <span class="text-sm text-[color:var(--muted-text)]">{{
+                store.findMember(attendee.memberId)?.role ??
+                store.findMember(attendee.memberId)?.initials
+              }}</span>
             </button>
           </div>
-        </section>
-      </div>
+        </article>
+      </template>
 
-      <div v-else class="grid gap-[0.8rem]">
-        <section :class="mutedPanelClass">
-          <div :class="headerClass">
-            <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">요일 분배 규칙</h4>
-            <div class="inline-flex items-center gap-2">
-              <button :class="iconButtonClass" type="button" @click="store.setGeneratedBatchSize(store.generatedBatchSize - 1)">-</button>
-              <strong class="min-w-8 text-center text-sm font-semibold text-[color:var(--text-primary)]">{{ store.generatedBatchSize }}</strong>
-              <button :class="iconButtonClass" type="button" @click="store.setGeneratedBatchSize(store.generatedBatchSize + 1)">+</button>
+      <template v-else-if="selectedItem?.type === 'generator'">
+        <section class="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <article :class="sectionCardClass">
+            <div class="flex items-center justify-between gap-3">
+              <div class="grid gap-1">
+                <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">배치 설정</h4>
+                <p class="text-sm text-[color:var(--muted-text)]">
+                  운영 허브 기준으로 생성 건수를 조절합니다.
+                </p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button
+                  :class="inlineControlButtonClass"
+                  type="button"
+                  @click="store.setGeneratedBatchSize(store.generatedBatchSize - 1)"
+                >
+                  -
+                </button>
+                <strong
+                  class="min-w-8 text-center text-base font-semibold text-[color:var(--text-primary)]"
+                  >{{ store.generatedBatchSize }}</strong
+                >
+                <button
+                  :class="inlineControlButtonClass"
+                  type="button"
+                  @click="store.setGeneratedBatchSize(store.generatedBatchSize + 1)"
+                >
+                  +
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div class="rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-4 py-4">
-            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">월 → 수 → 금 → 화 → 목</strong>
-          </div>
+            <div
+              class="grid gap-3 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_78%,white)] px-4 py-4"
+            >
+              <span
+                class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+                >요일 분배 규칙</span
+              >
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]"
+                >월 → 수 → 금 → 화 → 목</strong
+              >
+              <p class="text-sm leading-6 text-[color:var(--muted-text)]">
+                주간 편차를 낮추기 위해 분산 순서를 고정해 기본 콘텐츠를 생성합니다.
+              </p>
+            </div>
+          </article>
+
+          <article
+            :class="[sectionCardClass]"
+            :style="store.focusTarget === 'workload-balance' ? focusStyle : null"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div class="grid gap-1">
+                <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">생성 개요</h4>
+                <p class="text-sm text-[color:var(--muted-text)]">
+                  실행 전에 생성 볼륨과 분산 상태를 먼저 확인합니다.
+                </p>
+              </div>
+              <span :class="pillClass">편차 {{ store.generatorPreview.spread }}</span>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-3">
+              <article :class="sectionSoftCardClass">
+                <span
+                  class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+                  >생성 건수</span
+                >
+                <strong class="text-base font-semibold text-[color:var(--text-primary)]"
+                  >{{ store.generatorPreview.items.length }}건</strong
+                >
+              </article>
+              <article :class="sectionSoftCardClass">
+                <span
+                  class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+                  >첫 배치일</span
+                >
+                <strong class="text-base font-semibold text-[color:var(--text-primary)]">{{
+                  safeDate(store.generatorPreview.items[0]?.dueDate)
+                }}</strong>
+              </article>
+              <article :class="sectionSoftCardClass">
+                <span
+                  class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+                  >현재 역할</span
+                >
+                <strong class="text-base font-semibold text-[color:var(--text-primary)]">{{
+                  store.activeRole === 'admin' ? '관리자' : '실무자'
+                }}</strong>
+              </article>
+            </div>
+          </article>
         </section>
 
-        <section :class="mutedPanelClass" :style="store.focusTarget === 'workload-balance' ? focusStyle : null">
-          <div :class="headerClass">
+        <article
+          :class="[sectionCardClass]"
+          :style="store.focusTarget === 'workload-generator' ? focusStyle : null"
+        >
+          <div class="flex items-center justify-between gap-3">
             <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">생성 미리보기</h4>
+            <span :class="pillClass">{{ store.generatorPreview.items.length }} items</span>
           </div>
-          <div class="grid grid-cols-2 gap-3 max-[980px]:grid-cols-1">
+
+          <div class="grid gap-3 lg:grid-cols-2">
             <article
               v-for="item in store.generatorPreview.items"
               :key="item.previewId"
-              class="grid gap-2 rounded-[20px] border px-4 py-4"
+              class="grid gap-3 rounded-[6px] border border-[color:var(--border-strong)] px-4 py-4"
               :style="generatorCardStyle(item)"
             >
-              <small class="text-xs text-[color:var(--muted-text)]">{{ item.customer }}</small>
-              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ item.title }}</strong>
-              <p class="text-sm text-[color:var(--muted-text)]">{{ item.summary }}</p>
-              <div class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
-                <span class="text-sm text-[color:var(--muted-text)]">{{ item.weekdayLabel }}요일 배정</span>
-                <small class="text-xs text-[color:var(--muted-text)]">{{ formatShortDate(item.dueDate) }}</small>
+              <div class="flex items-start justify-between gap-3">
+                <div class="grid gap-1">
+                  <span
+                    class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+                    >{{ item.customer }}</span
+                  >
+                  <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
+                    item.title
+                  }}</strong>
+                </div>
+                <span :class="pillClass">{{ item.weekdayLabel }}요일</span>
+              </div>
+              <p class="text-sm leading-6 text-[color:var(--muted-text)]">{{ item.summary }}</p>
+              <div
+                class="flex items-center justify-between gap-3 text-xs text-[color:var(--muted-text)]"
+              >
+                <span>{{ safeDate(item.dueDate) }}</span>
+                <span>{{ item.weekdayLabel }} 분배</span>
               </div>
             </article>
           </div>
-        </section>
+        </article>
 
-        <section :class="mutedPanelClass">
-          <div :class="headerClass">
+        <article :class="sectionCardClass">
+          <div class="flex items-center justify-between gap-3">
             <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">주간 균형</h4>
-            <span :class="chipClass">편차 {{ store.generatorPreview.spread }}</span>
+            <span :class="pillClass">Mon-Fri Balance</span>
           </div>
-          <div class="grid grid-cols-5 gap-3 max-[980px]:grid-cols-1">
+
+          <div class="grid gap-3 sm:grid-cols-5">
             <div
               v-for="(count, index) in store.generatorPreview.counts"
               :key="index"
-              class="grid justify-items-center gap-2"
+              class="grid justify-items-center gap-2 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_76%,white)] px-3 py-4"
             >
-              <small class="text-xs text-[color:var(--muted-text)]">{{ ['월', '화', '수', '목', '금'][index] }}</small>
-              <div class="flex min-h-[84px] w-full items-end rounded-2xl bg-[var(--panel-muted)] p-2.5">
-                <span
-                  class="w-full rounded-xl bg-[linear-gradient(180deg,var(--accent-color),var(--accent-strong))]"
-                  :style="{ height: `${Math.max(18, count * 12)}px` }"
-                />
+              <small
+                class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+              >
+                {{ ['월', '화', '수', '목', '금'][index] }}
+              </small>
+              <div
+                class="flex h-[118px] w-full items-end rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_92%,white)] px-2 py-2"
+              >
+                <span class="w-full rounded-[4px]" :style="generatorBarStyle(count, index)" />
               </div>
-              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ count }}</strong>
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
+                count
+              }}</strong>
             </div>
           </div>
-        </section>
+        </article>
+      </template>
+
+      <div v-else :class="emptyStateClass">
+        <strong class="text-sm font-semibold text-[color:var(--text-primary)]"
+          >선택된 업무가 없습니다.</strong
+        >
+        <p>좌측 업무 큐에서 항목을 선택하면 세부 정보와 실행 액션을 확인할 수 있습니다.</p>
       </div>
     </article>
 
-    <aside :class="[panelClass, 'sticky top-[7.1rem] max-[1380px]:static']">
-      <header :class="headerClass">
-        <h3 class="text-base font-semibold text-[color:var(--text-primary)]">최종 액션</h3>
+    <aside :class="[railClass, 'sticky top-[7.1rem] max-[1440px]:static']">
+      <header class="flex items-start justify-between gap-3">
+        <div class="grid gap-1">
+          <p
+            class="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--accent-color)]"
+          >
+            Decision Panel
+          </p>
+          <h3 class="text-[1.05rem] font-semibold text-[color:var(--text-primary)]">실행 컨트롤</h3>
+        </div>
 
         <button
-          v-if="store.selectedWorkItemDetail?.linkedTaskId"
-          :class="linkButtonClass"
+          v-if="selectedItem?.linkedTaskId"
+          :class="ghostButtonClass"
           type="button"
-          @click="openPlannerTask(store.selectedWorkItemDetail.linkedTaskId)"
+          @click="openPlannerTask(selectedItem.linkedTaskId)"
         >
           연결 카드 보기
         </button>
       </header>
 
-      <div v-if="store.selectedWorkItemDetail" class="grid gap-[0.8rem]">
-        <article :class="infoCardClass">
-          <small class="text-xs text-[color:var(--muted-text)]">현재 항목</small>
-          <strong class="text-sm font-semibold text-[color:var(--text-primary)]">
-            {{
-              store.selectedWorkItemDetail.type === 'generator'
-                ? '기본 콘텐츠 생성'
-                : store.selectedWorkItemDetail.title
-            }}
+      <div v-if="selectedItem" class="grid gap-4">
+        <article :class="sectionSoftCardClass">
+          <span
+            class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
+            >현재 항목</span
+          >
+          <strong class="text-base font-semibold leading-6 text-[color:var(--text-primary)]">
+            {{ selectedItem.type === 'generator' ? '기본 콘텐츠 생성' : selectedItem.title }}
           </strong>
-          <p class="text-sm text-[color:var(--muted-text)]">
+          <p class="text-sm leading-6 text-[color:var(--muted-text)]">
             {{
-              store.selectedWorkItemDetail.type === 'generator'
+              selectedItem.type === 'generator'
                 ? '자동 배분 규칙을 적용한 생성 배치'
-                : store.selectedWorkItemDetail.customer?.name ??
-                  store.selectedWorkItemDetail.customer ??
-                  '내부 보드'
+                : resolveCustomerName(selectedItem)
             }}
           </p>
+          <span
+            :class="badgeBaseClass"
+            :style="badgeStyle(workItemTone(selectedItem.status ?? 'ready'))"
+          >
+            {{ workItemLabel(selectedItem.status ?? 'ready') }}
+          </span>
         </article>
 
-        <article :class="mutedPanelClass">
-          <div :class="headerClass">
-            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">관련 정보</strong>
-          </div>
-          <div class="grid gap-3">
-            <div :class="headerClass">
-              <span class="text-sm text-[color:var(--muted-text)]">마감일</span>
-              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">
-                {{
-                  formatShortDate(
-                    store.selectedWorkItemDetail.type === 'meeting'
-                      ? store.selectedWorkItemDetail.meetingDate
-                      : store.selectedWorkItemDetail.type === 'generator'
-                        ? store.generatorPreview.items[0]?.dueDate
-                        : store.selectedWorkItemDetail.dueDate,
-                  )
-                }}
-              </strong>
-            </div>
-
-            <div v-if="store.selectedWorkItemDetail.type === 'qa'" :class="headerClass">
-              <span class="text-sm text-[color:var(--muted-text)]">추천 담당자</span>
-              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ store.selectedWorkItemDetail.recommendedAssignee?.name }}</strong>
-            </div>
-
-            <div v-if="store.selectedWorkItemDetail.type === 'meeting'" :class="headerClass">
-              <span class="text-sm text-[color:var(--muted-text)]">승인 현황</span>
-              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ meetingProgress(store.selectedWorkItemDetail) }}</strong>
-            </div>
-
-            <div v-if="store.selectedWorkItemDetail.type === 'generator'" :class="headerClass">
-              <span class="text-sm text-[color:var(--muted-text)]">생성 건수</span>
-              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ store.generatorPreview.items.length }}건</strong>
+        <article :class="sectionCardClass">
+          <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">실행 전 체크</h4>
+          <div class="grid gap-1">
+            <div v-for="row in actionSummaryRows" :key="row.id" :class="metaRowClass">
+              <span class="text-sm text-[color:var(--muted-text)]">{{ row.label }}</span>
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
+                row.value
+              }}</strong>
             </div>
           </div>
         </article>
 
-        <article :class="mutedPanelClass">
-          <div :class="headerClass">
-            <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ actionLabel() }}</strong>
+        <article :class="sectionCardClass">
+          <div class="grid gap-2">
+            <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">Primary Action</h4>
+            <p class="text-sm leading-6 text-[color:var(--muted-text)]">
+              현재 선택된 업무 기준으로 다음 실행 단계를 즉시 반영합니다.
+            </p>
           </div>
+
           <button
             :class="[primaryButtonClass, 'w-full']"
             type="button"
@@ -543,7 +954,10 @@ function attendeeCardStyle(active) {
         </article>
       </div>
 
-      <div v-else :class="emptyCardClass">선택한 업무가 없습니다.</div>
+      <div v-else :class="emptyStateClass">
+        <strong class="text-sm font-semibold text-[color:var(--text-primary)]">실행 대기 중</strong>
+        <p>업무 큐에서 항목을 선택하면 여기에서 관련 액션을 실행할 수 있습니다.</p>
+      </div>
     </aside>
   </section>
 </template>
