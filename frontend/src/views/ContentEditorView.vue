@@ -61,6 +61,7 @@ const referenceLibrary = [
 const route = useRoute()
 const router = useRouter()
 const store = usePlannerStore()
+const isDarkTheme = computed(() => store.theme === 'dark')
 
 function getRouteParam(value) {
   if (Array.isArray(value)) {
@@ -183,6 +184,8 @@ const {
   taskPriorityLabel,
   isSaving,
   saveContent,
+  deleteContent,
+  isDeleting,
 } = useContentEditor({
   store,
   router,
@@ -605,6 +608,14 @@ function selectDetailCustomer(customerName) {
   closeModal()
 }
 
+async function handleDeleteContent() {
+  try {
+    await deleteContent()
+  } catch (error) {
+    console.error('handleDeleteContent failed', error)
+  }
+}
+
 function toggleDueDateEditor() {
   if (activeModal.value) {
     return
@@ -775,7 +786,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="content-editor-shell relative min-h-screen bg-[#f7f9fc] text-slate-900">
+<main
+  class="content-editor-shell relative min-h-screen bg-transparent text-[var(--text-primary)]"
+  :class="{ 'is-dark-theme': isDarkTheme }"
+>
     <div class="mx-auto max-w-[1600px] px-6 py-6 transition-all duration-300" :style="{ paddingRight: workspaceRightInset }">
       <div class="space-y-6">
         <header class="sticky top-4 z-20 border border-slate-200 bg-white px-6 py-5 shadow-none">
@@ -813,11 +827,11 @@ onBeforeUnmount(() => {
             <div class="flex shrink-0 items-center gap-3">
               <button
                 type="button"
-                class="inline-flex items-center gap-2 border border-slate-200 bg-slate-950 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-slate-800"
+                class="content-save-button inline-flex items-center gap-2.5 rounded-full border border-[color:var(--accent-strong)] bg-[var(--accent-color)] px-5 py-3.5 text-[15px] font-black text-white transition-all duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
                 :disabled="isSaving"
                 @click="saveContent"
               >
-                <span class="material-symbols-outlined text-[18px]">save</span>
+                <span class="material-symbols-outlined text-[20px]">save</span>
                 {{ isSaving ? '저장 중' : '저장' }}
               </button>
             </div>
@@ -855,7 +869,7 @@ onBeforeUnmount(() => {
 
     <nav
       v-if="ENABLE_CONTENT_RAIL"
-      class="fixed right-0 top-[88px] z-50 h-[calc(100vh-88px)] w-16 border-l border-slate-200 bg-white shadow-none"
+      class="fixed right-0 top-[88px] z-30 h-[calc(100vh-88px)] w-16 border-l border-slate-200 bg-white shadow-none"
     >
       <div class="flex h-full flex-col items-center gap-2 py-6">
         <button
@@ -908,7 +922,7 @@ onBeforeUnmount(() => {
 
     <aside
       v-if="ENABLE_CONTENT_RAIL"
-      class="fixed z-40 h-[calc(100vh-88px)] border-l border-slate-200 bg-white shadow-none transition-all duration-300"
+      class="fixed z-20 h-[calc(100vh-88px)] border-l border-slate-200 bg-white shadow-none transition-all duration-300"
       :class="activePanel ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'"
       :style="{ top: `${HEADER_OFFSET}px`, right: `${RAIL_WIDTH}px`, width: `${panelWidth}px` }"
     >
@@ -967,7 +981,7 @@ onBeforeUnmount(() => {
                   <Transition name="fade-scale">
                     <div
                       v-if="isStatusListOpen"
-                      class="absolute left-2 right-2 top-full z-20 mt-2 overflow-hidden rounded-[12px] border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.14)]"
+                      class="absolute left-2 right-2 top-full z-30 mt-2 overflow-hidden rounded-[12px] border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.14)]"
                     >
                       <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 px-3 py-2.5">
                         <div>
@@ -1101,7 +1115,7 @@ onBeforeUnmount(() => {
 
                   <div
                     v-if="isDueDateEditorOpen"
-                    class="absolute left-4 right-4 top-full z-20 mt-3 overflow-hidden border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.12)]"
+                    class="absolute left-4 right-4 top-full z-30 mt-3 overflow-hidden border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.12)]"
                   >
                     <div class="flex items-center justify-between border-b border-slate-100 px-3 py-3">
                       <button
@@ -1202,6 +1216,19 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </section>
+
+            <div class="flex justify-end px-1 pb-2 pt-6">
+              <button
+                v-if="!isCreateMode"
+                type="button"
+                class="content-delete-button inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-sm font-black shadow-sm transition-transform transition-shadow duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="isSaving || isDeleting"
+                @click="handleDeleteContent"
+              >
+                <span class="material-symbols-outlined text-[18px]">delete</span>
+                {{ isDeleting ? '삭제 중' : '컨텐츠 카드 삭제' }}
+              </button>
+            </div>
           </div>
 
           <div v-else-if="activePanel === 'gpt'" class="flex h-full flex-col">
@@ -1822,9 +1849,12 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .content-editor-shell {
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), transparent 38%),
-    linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%);
+  background: var(--app-bg);
+  color: var(--text-primary);
+}
+
+.content-editor-shell.is-dark-theme {
+  color-scheme: dark;
 }
 
 .content-editor-shell :deep([class*='rounded-']) {
@@ -1875,7 +1905,7 @@ onBeforeUnmount(() => {
   font-size: clamp(2rem, 3vw, 3.1rem);
   line-height: 1.08;
   font-weight: 800;
-  color: rgb(15 23 42);
+  color: var(--text-primary);
 }
 
 .body-editor :deep(.codex-editor__redactor) {
@@ -1889,7 +1919,7 @@ onBeforeUnmount(() => {
 .body-editor :deep(.ce-paragraph) {
   font-size: 15px;
   line-height: 1.9;
-  color: rgb(51 65 85);
+  color: var(--text-secondary);
 }
 
 .no-scrollbar {
@@ -1910,5 +1940,160 @@ onBeforeUnmount(() => {
 .fade-scale-leave-to {
   opacity: 0;
   transform: translateY(8px) scale(0.98);
+}
+
+.content-save-button {
+  min-height: 52px;
+  padding-inline: 1.35rem !important;
+  background: color-mix(in srgb, var(--accent-color) 88%, white 12%) !important;
+  color: #ffffff !important;
+  border-color: color-mix(in srgb, var(--accent-strong) 68%, white 8%) !important;
+  box-shadow:
+    0 10px 24px rgba(16, 24, 40, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+.content-save-button:hover {
+  background: color-mix(in srgb, var(--accent-strong) 82%, white 10%) !important;
+  border-color: color-mix(in srgb, var(--accent-strong) 78%, white 6%) !important;
+  box-shadow:
+    0 14px 28px rgba(16, 24, 40, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+}
+
+.content-save-button .material-symbols-outlined {
+  color: inherit !important;
+}
+
+.content-editor-shell.is-dark-theme .content-save-button {
+  background: color-mix(in srgb, var(--accent-color) 78%, #0f172a 22%) !important;
+  border-color: color-mix(in srgb, var(--accent-color) 62%, white 10%) !important;
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+
+.content-editor-shell.is-dark-theme .content-save-button:hover {
+  background: color-mix(in srgb, var(--accent-strong) 84%, #0f172a 16%) !important;
+}
+
+.content-delete-button {
+  color: #dc2626 !important;
+  border-color: #dc2626 !important;
+  background-color: #ffffff !important;
+}
+
+.content-delete-button:hover {
+  color: #dc2626 !important;
+  border-color: #dc2626 !important;
+  background-color: #ffffff !important;
+}
+
+.content-delete-button .material-symbols-outlined {
+  color: inherit !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='bg-white'] {
+  background-color: var(--panel-color) !important;
+  background-image: none !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='bg-slate-50'],
+.content-editor-shell.is-dark-theme [class*='bg-slate-100'] {
+  background-color: var(--panel-muted) !important;
+  background-image: none !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='border-slate-100'],
+.content-editor-shell.is-dark-theme [class*='border-slate-200'],
+.content-editor-shell.is-dark-theme [class*='border-slate-300'] {
+  border-color: var(--border-color) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='divide-slate-100'] > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--border-color) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='text-slate-950'],
+.content-editor-shell.is-dark-theme [class*='text-slate-900'],
+.content-editor-shell.is-dark-theme [class*='text-slate-800'] {
+  color: var(--text-primary) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='text-slate-700'],
+.content-editor-shell.is-dark-theme [class*='text-slate-600'] {
+  color: var(--text-secondary) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='text-slate-500'],
+.content-editor-shell.is-dark-theme [class*='text-slate-400'] {
+  color: var(--muted-text) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='text-slate-300'] {
+  color: color-mix(in srgb, var(--muted-text) 72%, white) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='bg-blue-50'] {
+  background-color: color-mix(in srgb, var(--accent-color) 16%, var(--panel-color)) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='border-blue-100'],
+.content-editor-shell.is-dark-theme [class*='border-blue-200'] {
+  border-color: color-mix(in srgb, var(--accent-color) 40%, var(--border-color)) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='text-blue-600'],
+.content-editor-shell.is-dark-theme [class*='text-blue-700'] {
+  color: color-mix(in srgb, var(--accent-color) 84%, white) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='ring-blue-100'] {
+  --tw-ring-color: color-mix(in srgb, var(--accent-color) 28%, transparent) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='placeholder:text-slate-300']::placeholder,
+.content-editor-shell.is-dark-theme [class*='placeholder:text-slate-400']::placeholder {
+  color: color-mix(in srgb, var(--muted-text) 88%, white) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='focus:bg-white']:focus {
+  background-color: var(--panel-color) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='focus:border-blue-200']:focus {
+  border-color: color-mix(in srgb, var(--accent-color) 58%, white) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='focus:ring-blue-50']:focus {
+  --tw-ring-color: color-mix(in srgb, var(--accent-color) 18%, transparent) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='hover:bg-slate-50']:hover,
+.content-editor-shell.is-dark-theme [class*='hover:bg-slate-100']:hover {
+  background-color: color-mix(in srgb, var(--panel-muted) 92%, white 8%) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='hover:text-slate-900']:hover,
+.content-editor-shell.is-dark-theme [class*='hover:text-slate-800']:hover {
+  color: var(--text-primary) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='hover:text-slate-600']:hover,
+.content-editor-shell.is-dark-theme [class*='hover:text-slate-500']:hover {
+  color: var(--text-secondary) !important;
+}
+
+.content-editor-shell.is-dark-theme [class*='shadow-[0_1px_2px_rgba(15,23,42,0.04)]'],
+.content-editor-shell.is-dark-theme [class*='shadow-sm'],
+.content-editor-shell.is-dark-theme [class*='shadow-md'],
+.content-editor-shell.is-dark-theme [class*='shadow-lg'],
+.content-editor-shell.is-dark-theme [class*='shadow-xl'],
+.content-editor-shell.is-dark-theme [class*='shadow-2xl'] {
+  box-shadow: var(--shadow-soft) !important;
+}
+
+.content-editor-shell.is-dark-theme .content-delete-button {
+  background-color: var(--panel-color) !important;
 }
 </style>
