@@ -105,15 +105,13 @@ const routes = [
     path: '/user',
     component: FirstLayout,
     redirect: { name: 'login' },
-    meta: {
-      guestOnly: true,
-    },
     children: [
       {
         path: 'login',
         name: 'login',
         component: () => import('@/views/Login.vue'),
         meta: {
+          guestOnly: true,
           title: '로그인',
           section: '로그인',
         },
@@ -123,8 +121,9 @@ const routes = [
         name: 'signup',
         component: () => import('@/views/Signup.vue'),
         meta: {
+          requiresAuth: true,
           title: '회원가입',
-          section: '회원가입',
+          section: '회원 생성',
         },
       },
     ],
