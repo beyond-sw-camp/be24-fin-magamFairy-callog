@@ -11,7 +11,7 @@ const notifications = ref({})
 const getNotifications = async () => {
   try{
     const res = getNoti(3)
-    notifications.value = res;
+    notifications.value = res.data;
   }
   catch(e){
     console.error(e);
@@ -50,7 +50,6 @@ const getNotifications = async () => {
       ]
     }
     notifications.value = res.data;
-    console.log(notifications.value)
   }
 }
 
@@ -395,12 +394,14 @@ onBeforeUnmount(() => {
                     최근 알림
                   </strong>
                 </div>
-                <button class="group flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-[var(--muted-text)] transition-all hover:bg-[var(--panel-hover)] hover:text-[var(--text-primary)]">
+                <router-link
+                :to="`/notifications`"
+                class="group flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-[var(--muted-text)] transition-all hover:bg-[var(--panel-hover)] hover:text-[var(--text-primary)]">
                   <span>알림 센터</span>
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                   </svg>
-                </button>
+                </router-link>
               </div>
 
               <div class="max-h-[60vh] overflow-y-auto p-4 pt-2 md:max-h-[450px] custom-scrollbar">

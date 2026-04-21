@@ -1,7 +1,16 @@
 import api from '/plugins/interceptor.js'
 
 export const getNoti = async (count) => {
-  return res = await api.get(`/notifications/list?count=${count}`)
+  if(count){
+    return res = await api.get(`/notifications/list?count=${count}`)
+  }
+  else{
+    return res = await api.get(`/notifications/list`)
+  }
+}
+
+export const confirm = async (idx) => {
+  return res = await api.patch(`/notifications/confirm?idx=${idx}`)
 }
 
 export const sendNoti = async (body) => {
@@ -10,5 +19,6 @@ export const sendNoti = async (body) => {
 
 export default {
   getNoti,
+  confirm,
   sendNoti
 }

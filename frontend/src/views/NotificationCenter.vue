@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { getNoti } from '@/api/notifications/index.js'
+import { getNoti, confirm } from '@/api/notifications/index.js'
 import { formatRelativeTime } from '@/utils/datechange.js'
 
 // 1. 알림 데이터 (시스템 로그 및 팀 활동)
@@ -41,8 +41,8 @@ const notifications = ref([
 
 const getNotifications = async () => {
   try{
-    const res = getNoti(3)
-    notifications.value = res;
+    const res = getNoti()
+    notifications.value = res.data;
   }
   catch(e){
     console.error(e);
@@ -55,32 +55,32 @@ const getNotifications = async () => {
       data:
       [
         {
-        id: 34897,
-        kind: "qa",
+        idx: 34897,
+        type: "qa",
         created_at: "2026-04-21T10:04:13Z",
         title: "알림 제목 1",
         message: "알림 내용 1",
         isRead: false
         },
         {
-        id: 78354,
-        kind: "ai",
+        idx: 78354,
+        type: "ai",
         created_at: "2026-04-12T12:04:13Z",
         title: "알림 제목2",
         message: "알림 내용 2",
         isRead: false
         },
         {
-        id: 54876,
-        kind: "task",
+        idx: 54876,
+        type: "task",
         created_at: "2026-04-05T12:04:13Z",
         title: "알림 제목 3",
         message: "알림 내용 3",
         isRead: false
         },
         {
-        id: 45453,
-        kind: "task",
+        idx: 45453,
+        type: "task",
         created_at: "2026-03-20T12:04:13Z",
         title: "알림 제목 4",
         message: "알림 내용 4",
@@ -89,7 +89,6 @@ const getNotifications = async () => {
       ]
     }
     notifications.value = res.data;
-    console.log(notifications.value)
   }
 }
 
@@ -99,12 +98,18 @@ const filter = ref('전체') // '전체' | '미확인' | '시스템' | '팀 활�
 const filteredNotifications = computed(() => {
   let list = notifications.value
   if (filter.value === '미확인') list = list.filter(n => !n.isRead)
-  else if (filter.value !== '전체') list = list.filter(n => n.category === filter.value)
+  else if (filter.value !== '전체') list = list.filter(n => n.type === filter.value)
   return list
 })
 
-const markAsRead = (id) => {
+const markAsRead = async (id) => {
   const target = notifications.value.find(n => n.id === id)
+  try{
+    await confirm(notifications.value[id].idx);
+  }
+  catch(e){
+    console.error(e)
+  }
   if (target) target.isRead = true
 }
 
@@ -112,7 +117,15 @@ const deleteNotification = (id) => {
   notifications.value = notifications.value.filter(n => n.id !== id)
 }
 
-const markAllAsRead = () => {
+const markAllAsRead = async () => {
+  for(let i = 0 ; i < notifications.value.length ; i++){
+    try {
+        await confirm(notifications.value[i].idx);
+    }
+    catch(e){
+        console.error(e)
+    }
+  }
   notifications.value.forEach(n => n.isRead = true)
 }
 
@@ -152,7 +165,7 @@ onMounted(() => {
 
       <div class="flex gap-2 mt-6">
         <button 
-          v-for="tab in ['전체', '미확인', '시스템', '팀 활동']" 
+          v-for="tab in ['전체', '미확인', 'AI', 'QA', 'TASK']" 
           :key="tab"
           @click="filter = tab"
           class="px-4 py-1.5 rounded-full text-xs font-bold transition-all border"
@@ -181,8 +194,8 @@ onMounted(() => {
 
           <div class="p-5 flex-1 flex items-start gap-4">
             <div class="p-2 rounded-xl bg-slate-50 text-slate-400 shrink-0">
-              <svg v-if="n.category === '시스템'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-              <svg v-else-if="n.category === 'AI 도우미'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              <svg v-if="n.type === '시스템'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+              <svg v-else-if="n.type === 'AI 도우미'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
             </div>
 
@@ -193,7 +206,7 @@ onMounted(() => {
               </div>
               <p class="text-sm text-slate-600 leading-relaxed">{{ n.message }}</p>
               <div class="flex items-center gap-3 mt-3">
-                <span class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">{{ n.category }}</span>
+                <span class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">{{ n.type }}</span>
                 <span class="text-[11px] font-medium text-slate-300">{{ formatRelativeTime(n.created_at) }}</span>
               </div>
             </div>
