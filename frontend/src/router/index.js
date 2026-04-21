@@ -22,7 +22,13 @@ const routes = [
         },
       },
       {
-        path: 'content/editor/:contentId?',
+        path: 'content/new',
+        name: 'content-create',
+        component: () => import('@/views/ContentEditorView.vue'),
+        meta: { title: '새 콘텐츠 작성' }
+      },
+      {
+        path: 'content/:contentId?',
         alias: 'content-editor',
         name: 'content-editor',
         component: () => import('@/views/ContentEditorView.vue'),
