@@ -89,17 +89,17 @@ const activeMetrics = computed(() => {
 })
 
 const panelClass =
-  'rounded-[24px] border border-[color:var(--border-color)] bg-[var(--panel-color)] shadow-[var(--shadow-soft)]'
+  'rounded-[10px] border border-[color:var(--border-color)] bg-[var(--panel-color)] shadow-[var(--shadow-soft)]'
 const compactPanelClass =
-  'rounded-[24px] border border-[color:var(--border-color)] bg-[var(--panel-color)] shadow-[var(--shadow-soft)]'
+  'rounded-[10px] border border-[color:var(--border-color)] bg-[var(--panel-color)] shadow-[var(--shadow-soft)]'
 const primaryButtonClass =
-  'inline-flex min-h-[2.7rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--accent-color)] bg-[var(--accent-color)] px-4 text-sm font-semibold text-white shadow-[var(--shadow-soft)] transition duration-200 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0'
+  'inline-flex min-h-[2.7rem] items-center justify-center gap-2 rounded-[8px] border border-[color:var(--accent-color)] bg-[var(--accent-color)] px-4 text-sm font-semibold text-white shadow-[var(--shadow-soft)] transition duration-200 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0'
 const segmentedButtonClass =
-  'min-h-[2.15rem] rounded-full px-4 text-sm font-bold text-[color:var(--muted-text)] transition duration-200'
+  'min-h-[2.15rem] rounded-[8px] px-4 text-sm font-bold text-[color:var(--muted-text)] transition duration-200'
 const filterChipClass =
-  'inline-flex min-h-[1.95rem] items-center justify-center rounded-full border border-[color:var(--border-color)] px-3 text-[0.78rem] font-bold text-[color:var(--muted-text)] transition duration-200'
+  'inline-flex min-h-[1.95rem] items-center justify-center rounded-[8px] border border-[color:var(--border-color)] px-3 text-[0.78rem] font-bold text-[color:var(--muted-text)] transition duration-200'
 const metricCardClass =
-  'relative z-0 flex min-h-[66px] cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-[14px] border border-[color:var(--border-color)] px-3 py-2.5 text-center shadow-[0_2px_8px_rgba(19,35,68,0.03)] transition duration-200 hover:shadow-[0_4px_12px_rgba(19,35,68,0.05)] focus-visible:shadow-[0_4px_12px_rgba(19,35,68,0.05)]'
+  'relative z-0 flex min-h-[66px] cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-[8px] border border-[color:var(--border-color)] px-3 py-2.5 text-center shadow-[0_2px_8px_rgba(19,35,68,0.03)] transition duration-200 hover:shadow-[0_4px_12px_rgba(19,35,68,0.05)] focus-visible:shadow-[0_4px_12px_rgba(19,35,68,0.05)]'
 
 const pendingPersonalTask = computed(() => {
   return (
@@ -276,7 +276,7 @@ function metricValueStyle(metric) {
           class="flex w-full flex-wrap items-center justify-between gap-[0.65rem] min-[1081px]:w-auto min-[1081px]:justify-end"
         >
           <div
-            class="inline-flex items-center gap-1 rounded-full border border-[color:var(--border-color)] bg-[var(--panel-muted)] p-1"
+            class="inline-flex items-center gap-1 rounded-[10px] border border-[color:var(--border-color)] bg-[var(--panel-muted)] p-1"
             role="tablist"
             aria-label="역할 전환"
           >
@@ -399,7 +399,7 @@ function metricValueStyle(metric) {
     <div
       :class="[
         compactPanelClass,
-        'fixed bottom-4 left-4 right-4 z-30 hidden items-center justify-between gap-3 rounded-[22px] bg-[color:color-mix(in_srgb,var(--panel-color)_92%,white)] px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur-[16px] max-[820px]:flex',
+        'fixed bottom-4 left-4 right-4 z-30 hidden items-center justify-between gap-3 rounded-[10px] bg-[color:color-mix(in_srgb,var(--panel-color)_92%,white)] px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur-[16px] max-[820px]:flex',
       ]"
     >
       <strong class="text-[color:var(--text-primary)]">{{ headerPrimaryAction.label }}</strong>
