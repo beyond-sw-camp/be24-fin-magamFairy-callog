@@ -99,6 +99,15 @@ const routes = [
           section: '내 정보',
         },
       },
+      {
+        path: 'notifications',
+        name: 'notifications',
+        component: () => import('@/views/NotificationCenter.vue'),
+        meta: {
+          title: '알림 센터',
+          section: '알림 전체를 확인하고 관리하는 곳',
+        },
+      },
     ],
   },
   {
