@@ -1,66 +1,120 @@
 <script setup>
-import { reactive, ref } from 'vue';
+import { reactive, ref } from 'vue'
+import { createUserRequest } from '@/authApi'
 
-const fixedCompany = 'CALLOG';
-const isSubmitting = ref(false);
-const showResultModal = ref(false);
-const copySuccess = ref(false);
-const resultData = ref({ id: '', password: '' });
+const fixedCompany = 'CALLOG'
+//백엔드 개발시 삭제
+const canUseMockCreateUser =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_SIGNUP_MOCK === 'true'
+//백엔드 개발시 삭제
+const isSubmitting = ref(false)
+const showResultModal = ref(false)
+const copySuccess = ref(false)
+const errorMessage = ref('')
+const resultData = ref({ id: '', password: '' })
 
 const newUser = reactive({
   teamCode: 'team1',
   name: '',
-});
+})
 
-const generateId = () => `${fixedCompany}_${newUser.teamCode.trim()}_${newUser.name.trim()}`;
+function getPreviewId() {
+  return `${fixedCompany}_${newUser.teamCode.trim()}_${newUser.name.trim()}`
+}
+// 백엔드 개발시 백엔드로 로직 변경 -----------------------------
+function generateDevelopmentPassword() {
+  const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$'
+  let password = ''
 
-const generatePassword = () => {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$';
-  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-};
+  for (let index = 0; index < 10; index += 1) {
+    const randomIndex = Math.floor(Math.random() * characters.length)
+    password += characters[randomIndex]
+  }
+
+  return password
+}
+// 백엔드 개발시 백엔드로 로직 변경 -----------------------------
+
+function openResultModal(id, password) {
+  resultData.value = { id, password }
+  copySuccess.value = false
+  showResultModal.value = true
+}
 
 const handleCreateUser = async () => {
-  if (!newUser.teamCode || !newUser.name) return;
+  if (!newUser.teamCode.trim() || !newUser.name.trim() || isSubmitting.value) {
+    return
+  }
 
-  isSubmitting.value = true;
-  await new Promise((resolve) => setTimeout(resolve, 700));
-
-  resultData.value = {
-    id: generateId(),
-    password: generatePassword(),
-  };
-
-  isSubmitting.value = false;
-  showResultModal.value = true;
-};
-
-const resetForm = () => {
-  newUser.teamCode = 'team1';
-  newUser.name = '';
-  showResultModal.value = false;
-  copySuccess.value = false;
-};
-
-const copyAllToClipboard = async () => {
-  const textToCopy = `계정 정보\n아이디: ${resultData.value.id}\n비밀번호: ${resultData.value.password}`;
+  isSubmitting.value = true
+  errorMessage.value = ''
 
   try {
-    await navigator.clipboard.writeText(textToCopy);
-    copySuccess.value = true;
-    window.setTimeout(() => {
-      copySuccess.value = false;
-    }, 2000);
+    const payload = {
+      teamCode: newUser.teamCode.trim(),
+      name: newUser.name.trim(),
+    }
+
+    const createdUser = await createUserRequest(payload)
+    const loginId = createdUser.id
+    const temporaryPassword = createdUser.password
+
+    if (!loginId || !temporaryPassword) {
+      throw new Error('계정 생성 응답에서 id 또는 password를 찾지 못했습니다.')
+    }
+
+    openResultModal(loginId, temporaryPassword)
   } catch (error) {
-    copySuccess.value = false;
+    // 백엔드 개발시 삭제 -------------------------------------------------
+    const shouldUseDevelopmentFallback =
+      canUseMockCreateUser && (!error?.response || error?.response?.status === 404)
+
+    if (shouldUseDevelopmentFallback) {
+      openResultModal(getPreviewId(), generateDevelopmentPassword())
+      return
+    }
+    // 백엔드 개발시 삭제 -------------------------------------------------
+    errorMessage.value =
+      error?.response?.data?.message ??
+      error?.message ??
+      '계정 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    isSubmitting.value = false
   }
-};
+}
+
+const resetForm = () => {
+  newUser.teamCode = 'team1'
+  newUser.name = ''
+  showResultModal.value = false
+  copySuccess.value = false
+  errorMessage.value = ''
+}
+
+const copyAllToClipboard = async () => {
+  const textToCopy = `계정 정보\n아이디: ${resultData.value.id}\n비밀번호: ${resultData.value.password}`
+
+  try {
+    await navigator.clipboard.writeText(textToCopy)
+    copySuccess.value = true
+    window.setTimeout(() => {
+      copySuccess.value = false
+    }, 2000)
+  } catch {
+    copySuccess.value = false
+  }
+}
 </script>
 
 <template>
   <section class="signup-view min-h-screen px-6 py-10">
-    <div class="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl flex-col items-center justify-center">
+    <div
+      class="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl flex-col items-center justify-center"
+    >
       <div class="mb-10 flex flex-col items-center fade-in">
-        <div class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
+        <div
+          class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm"
+        >
           <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
@@ -79,16 +133,31 @@ const copyAllToClipboard = async () => {
       <div class="slide-up w-full max-w-2xl">
         <div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <div class="mb-6">
-            <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Account setup</p>
-            <h2 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">새 계정 발급</h2>
+            <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+              Account setup
+            </p>
+            <h2 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+              계정 발급
+            </h2>
             <p class="mt-2 text-sm text-slate-500">
-              생성자 권한에 따라 발급 가능한 계정 권한이 달라집니다.
+              관리자 또는 매니저가 팀 계정을 생성하고 임시 비밀번호를 전달하는 화면입니다.
             </p>
           </div>
 
+          <p
+            v-if="errorMessage"
+            class="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600"
+          >
+            {{ errorMessage }}
+          </p>
+
           <form class="grid gap-4" @submit.prevent="handleCreateUser">
             <label class="grid gap-2">
-              <span class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">팀 코드</span>
+              <span
+                class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400"
+              >
+                팀 코드
+              </span>
               <input
                 v-model="newUser.teamCode"
                 type="text"
@@ -99,7 +168,11 @@ const copyAllToClipboard = async () => {
             </label>
 
             <label class="grid gap-2">
-              <span class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">이름</span>
+              <span
+                class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400"
+              >
+                이름
+              </span>
               <input
                 v-model="newUser.name"
                 type="text"
@@ -110,7 +183,10 @@ const copyAllToClipboard = async () => {
             </label>
 
             <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-              발급 아이디 형식: <strong class="font-semibold text-slate-900">{{ fixedCompany }}_{{ newUser.teamCode || 'team1' }}_{{ newUser.name || '홍길동' }}</strong>
+              발급 아이디 예시:
+              <strong class="font-semibold text-slate-900">
+                {{ getPreviewId() || `${fixedCompany}_team1_홍길동` }}
+              </strong>
             </div>
 
             <button
@@ -122,7 +198,9 @@ const copyAllToClipboard = async () => {
                 <span>계정 생성</span>
               </template>
               <template v-else>
-                <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                <span
+                  class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+                ></span>
                 <span>생성 중</span>
               </template>
             </button>
@@ -131,22 +209,37 @@ const copyAllToClipboard = async () => {
       </div>
     </div>
 
-    <div v-if="showResultModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
+    <div
+      v-if="showResultModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm"
+    >
       <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <div class="border-b border-slate-200 pb-5">
-          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Provisioning complete</p>
-          <h3 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">계정 발급 완료</h3>
-          <p class="mt-2 text-sm text-slate-500">발급된 아이디와 12자리 난수 비밀번호를 복사해서 전달하세요.</p>
+          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+            Provisioning complete
+          </p>
+          <h3 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+            계정 발급 완료
+          </h3>
+          <p class="mt-2 text-sm text-slate-500">
+            발급된 아이디와 임시 비밀번호를 복사해서 사용자에게 전달해 주세요.
+          </p>
         </div>
 
         <div class="mt-5 grid gap-3">
           <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">ID</p>
-            <strong class="mt-2 block break-all font-mono text-sm font-semibold text-slate-900">{{ resultData.id }}</strong>
+            <strong class="mt-2 block break-all font-mono text-sm font-semibold text-slate-900">
+              {{ resultData.id }}
+            </strong>
           </div>
           <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Password</p>
-            <strong class="mt-2 block break-all font-mono text-sm font-semibold text-slate-900">{{ resultData.password }}</strong>
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+              Password
+            </p>
+            <strong class="mt-2 block break-all font-mono text-sm font-semibold text-slate-900">
+              {{ resultData.password }}
+            </strong>
           </div>
         </div>
 
@@ -154,10 +247,20 @@ const copyAllToClipboard = async () => {
           <button
             type="button"
             class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition"
-            :class="copySuccess ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'bg-slate-900 text-white hover:bg-slate-800'"
+            :class="
+              copySuccess
+                ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'bg-slate-900 text-white hover:bg-slate-800'
+            "
             @click="copyAllToClipboard"
           >
-            <span>{{ copySuccess ? '아이디와 비밀번호가 복사되었습니다' : '아이디와 비밀번호 복사' }}</span>
+            <span>
+              {{
+                copySuccess
+                  ? '아이디와 비밀번호가 복사되었습니다.'
+                  : '아이디와 비밀번호 복사'
+              }}
+            </span>
           </button>
           <button
             type="button"
