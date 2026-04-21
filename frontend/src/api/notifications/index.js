@@ -4,11 +4,11 @@ export const getNoti = async (count) => {
   return res = await api.get(`/notifications/list?count=${count}`)
 }
 
-export const updateSettings = async (body) => {
-  return res = await api.patch("/update", body)
+export const sendNoti = async (body) => {
+  return res = await api.patch("/notifications/", body)
 }
 
 export default {
   getNoti,
-  updateSettings
+  sendNoti
 }

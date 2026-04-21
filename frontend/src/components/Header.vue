@@ -3,6 +3,51 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { getNoti, sendNoti } from '@/api/notifications/index.js'
+import { formatRelativeTime } from '@/utils/datechange.js'
+
+const notifications = ref({
+  data: []
+})
+
+const getNotifications = async () => {
+  try{
+    const res = getNoti(3)
+    notifications.value = res;
+  }
+  catch(e){
+    console.error(e);
+  }
+  finally{
+    const res = {
+      success:"true",
+      status:2000,
+      message:"통신 성공",
+      data:
+      [
+        {
+        kind: 1,
+        created_at: "2026-04-21T10:04:13Z",
+        title: "알림 제목 1",
+        comment: "알림 내용 1"
+        },
+        {
+        kind: 1,
+        created_at: "2026-04-12T12:04:13Z",
+        title: "알림 제목2",
+        comment: "알림 내용 2"
+        },
+        {
+        kind: 1,
+        created_at: "2026-04-05T12:04:13Z",
+        title: "알림 제목 3",
+        comment: "알림 내용 3"
+        }
+      ]
+    }
+    notifications.value = res;
+  }
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -176,6 +221,7 @@ function handleDocumentClick(event) {
 
 onMounted(() => {
   window.addEventListener('click', handleDocumentClick)
+  getNotifications();
 })
 
 onBeforeUnmount(() => {
@@ -331,20 +377,20 @@ onBeforeUnmount(() => {
             >
               <div class="mb-3 flex items-center justify-between">
                 <strong class="text-sm font-bold text-[var(--text-primary)]">알림 센터</strong>
-                <span class="text-[11px] font-semibold text-[var(--muted-text)]">새 알림</span>
               </div>
               <div class="space-y-2">
-                <div class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3">
-                  <p class="text-sm font-semibold text-[var(--text-primary)]">검토 요청이 도착했습니다</p>
-                  <p class="mt-1 text-xs text-[var(--muted-text)]">방금 전 · 콘텐츠 편집 워크스페이스</p>
-                </div>
-                <div class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3">
-                  <p class="text-sm font-semibold text-[var(--text-primary)]">마감 임박 작업이 있습니다</p>
-                  <p class="mt-1 text-xs text-[var(--muted-text)]">오늘 · 2건 남음</p>
-                </div>
-                <div class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3">
-                  <p class="text-sm font-semibold text-[var(--text-primary)]">새 댓글 1개</p>
-                  <p class="mt-1 text-xs text-[var(--muted-text)]">10분 전 · 변경 이력 확인</p>
+                <div 
+                  v-for="(item, index) in notifications.data" 
+                  :key="index"
+                  class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3"
+                >
+                  <p class="text-sm font-semibold text-[var(--text-primary)]">
+                    {{ item.title }}
+                  </p>
+                  
+                  <p class="mt-1 text-xs text-[var(--muted-text)]">
+                    {{ formatRelativeTime(item.created_at) }} · {{ item.comment }}
+                  </p>
                 </div>
               </div>
             </div>
