@@ -144,7 +144,7 @@ onMounted(() => {
 
 <template>
   <div class="p-6 bg-slate-50 min-h-screen font-sans text-slate-800">
-    <header class="max-w-4xl mx-auto mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+    <header class="max-w-4xl mx-auto mb-6 bg-white p-6 rounded-sm shadow-sm border border-slate-200">
       <div class="flex items-center justify-between">
         <div>
           <div class="flex items-center gap-2 mb-1">
@@ -157,7 +157,7 @@ onMounted(() => {
         </div>
         <button 
           @click="markAllAsRead"
-          class="text-xs font-bold text-cyan-600 hover:bg-cyan-50 px-3 py-2 rounded-lg transition-colors"
+          class="text-xs font-bold text-cyan-600 hover:bg-cyan-50 px-3 py-2 rounded-sm transition-colors"
         >
           모두 읽음 처리
         </button>
@@ -168,7 +168,7 @@ onMounted(() => {
           v-for="tab in ['전체', '미확인', 'ai', 'qa', 'task']" 
           :key="tab"
           @click="filter = tab"
-          class="px-4 py-1.5 rounded-full text-xs font-bold transition-all border"
+          class="px-4 py-1.5 rounded-sm text-xs font-bold transition-all border"
           :class="filter === tab ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'"
         >
           {{ tab.toUpperCase() }}
@@ -187,13 +187,13 @@ onMounted(() => {
         <article 
           v-for="n in filteredNotifications" 
           :key="n.id"
-          class="relative bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex"
+          class="relative bg-white rounded-sm border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex"
           :class="{'opacity-70': n.isRead}"
         >
           <div :class="typeStyles[n.type]" class="w-1.5 shrink-0"></div>
 
           <div class="p-5 flex-1 flex items-start gap-4">
-            <div class="p-2 rounded-xl bg-slate-50 text-slate-400 shrink-0">
+            <div class="p-2 rounded-sm bg-slate-50 text-slate-400 shrink-0">
               <svg v-if="n.type === '시스템'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
               <svg v-else-if="n.type === 'AI 도우미'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
@@ -202,7 +202,7 @@ onMounted(() => {
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
                 <h4 class="font-bold text-slate-900 truncate">{{ n.title }}</h4>
-                <span v-if="!n.isRead" class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+                <span v-if="!n.isRead" class="w-1.5 h-1.5 rounded-sm bg-cyan-500"></span>
               </div>
               <p class="text-sm text-slate-600 leading-relaxed">{{ n.message }}</p>
               <div class="flex items-center gap-3 mt-3">
@@ -233,7 +233,7 @@ onMounted(() => {
       </transition-group>
 
       <div v-if="filteredNotifications.length === 0" class="py-20 text-center">
-        <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+        <div class="w-16 h-16 bg-slate-100 rounded-sm flex items-center justify-center mx-auto mb-4 text-slate-300">
           <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
         </div>
         <p class="text-slate-500 font-bold">표시할 알림이 없습니다.</p>
