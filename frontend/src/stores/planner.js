@@ -17,6 +17,7 @@ import {
   teamMembers,
   templateLibrary,
 } from '@/data/scheduleSeed'
+import editorApi from '@/api/editor/editorApi'
 
 const themeStorageKey = 'kellog-theme'
 const tasksStorageKey = 'kellog-tasks'
@@ -289,10 +290,25 @@ export const usePlannerStore = defineStore('planner', () => {
         : addMonths(currentDate.value, step)
   }
 
-  function openTask(taskId) {
+  async function openTask(taskId) {
+    if (!taskId) {
+      return
+    }
+
     selectedTaskId.value = taskId
     modalMode.value = 'view'
-    taskOpenToken.value += 1
+
+    try {
+      const loadedTask = await editorApi.loadContent(taskId)
+
+      if (loadedTask && typeof loadedTask === 'object' && !Array.isArray(loadedTask)) {
+        updateTask(taskId, { ...loadedTask, id: taskId })
+      }
+    } catch (error) {
+      console.warn('loadContent failed', error)
+    } finally {
+      taskOpenToken.value += 1
+    }
   }
 
   function closeTask() {
