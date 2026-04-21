@@ -89,17 +89,17 @@ const activeMetrics = computed(() => {
 })
 
 const panelClass =
-  'rounded-[10px] border border-[color:var(--border-color)] bg-[var(--panel-color)] shadow-[var(--shadow-soft)]'
+  'rounded-[8px] border border-[color:var(--border-strong)] bg-[var(--panel-color)] shadow-[0_8px_24px_rgba(19,35,68,0.05)]'
 const compactPanelClass =
-  'rounded-[10px] border border-[color:var(--border-color)] bg-[var(--panel-color)] shadow-[var(--shadow-soft)]'
+  'rounded-[8px] border border-[color:var(--border-strong)] bg-[var(--panel-color)] shadow-[0_8px_24px_rgba(19,35,68,0.05)]'
 const primaryButtonClass =
-  'inline-flex min-h-[2.7rem] items-center justify-center gap-2 rounded-[8px] border border-[color:var(--accent-color)] bg-[var(--accent-color)] px-4 text-sm font-semibold text-white shadow-[var(--shadow-soft)] transition duration-200 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0'
+  'inline-flex min-h-[2.7rem] items-center justify-center gap-2 rounded-[6px] border border-[color:color-mix(in_srgb,var(--accent-color)_50%,var(--border-strong))] bg-[var(--accent-color)] px-4 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(19,35,68,0.1)] transition duration-200 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0'
 const segmentedButtonClass =
-  'min-h-[2.15rem] rounded-[8px] px-4 text-sm font-bold text-[color:var(--muted-text)] transition duration-200'
+  'min-h-[2.15rem] rounded-[6px] border border-transparent px-4 text-sm font-bold text-[color:var(--muted-text)] transition duration-200'
 const filterChipClass =
-  'inline-flex min-h-[1.95rem] items-center justify-center rounded-[8px] border border-[color:var(--border-color)] px-3 text-[0.78rem] font-bold text-[color:var(--muted-text)] transition duration-200'
+  'inline-flex min-h-[1.95rem] items-center justify-center rounded-[6px] border border-[color:var(--border-strong)] px-3 text-[0.78rem] font-bold text-[color:var(--muted-text)] transition duration-200'
 const metricCardClass =
-  'relative z-0 flex min-h-[66px] cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-[8px] border border-[color:var(--border-color)] px-3 py-2.5 text-center shadow-[0_2px_8px_rgba(19,35,68,0.03)] transition duration-200 hover:shadow-[0_4px_12px_rgba(19,35,68,0.05)] focus-visible:shadow-[0_4px_12px_rgba(19,35,68,0.05)]'
+  'relative z-0 flex min-h-[66px] cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-[6px] border border-[color:var(--border-strong)] px-3 py-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_2px_8px_rgba(19,35,68,0.03)] transition duration-200 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_12px_rgba(19,35,68,0.05)] focus-visible:shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_12px_rgba(19,35,68,0.05)]'
 
 const pendingPersonalTask = computed(() => {
   return (
@@ -211,16 +211,16 @@ function handleMetricClick(metricId) {
 function metricCardStyle(metric) {
   if (store.activeMetricKey === metric.id) {
     return {
-      borderColor: `color-mix(in srgb, ${metric.accent} 18%, var(--border-color))`,
-      background: `linear-gradient(180deg, color-mix(in srgb, ${metric.accent} 8%, white), color-mix(in srgb, ${metric.accent} 3%, var(--panel-color)))`,
-      boxShadow: `0 4px 12px rgba(15, 23, 42, 0.05), 0 0 0 1px color-mix(in srgb, ${metric.accent} 8%, white)`,
+      borderColor: `color-mix(in srgb, ${metric.accent} 22%, var(--border-strong))`,
+      background: `linear-gradient(180deg, color-mix(in srgb, ${metric.accent} 7%, white), color-mix(in srgb, ${metric.accent} 2%, var(--panel-color)))`,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.75), 0 4px 12px rgba(15, 23, 42, 0.05), 0 0 0 1px color-mix(in srgb, ${metric.accent} 10%, white)`,
     }
   }
 
   return {
-    borderColor: `color-mix(in srgb, ${metric.accent} 10%, var(--border-color))`,
-    background: `linear-gradient(180deg, color-mix(in srgb, ${metric.accent} 6%, white), color-mix(in srgb, ${metric.accent} 2%, var(--panel-color)))`,
-    boxShadow: '0 2px 8px rgba(19, 35, 68, 0.03)',
+    borderColor: `color-mix(in srgb, ${metric.accent} 12%, var(--border-strong))`,
+    background: `linear-gradient(180deg, color-mix(in srgb, ${metric.accent} 4%, white), color-mix(in srgb, ${metric.accent} 1%, var(--panel-color)))`,
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7), 0 2px 8px rgba(19, 35, 68, 0.03)',
   }
 }
 
@@ -276,7 +276,7 @@ function metricValueStyle(metric) {
           class="flex w-full flex-wrap items-center justify-between gap-[0.65rem] min-[1081px]:w-auto min-[1081px]:justify-end"
         >
           <div
-            class="inline-flex items-center gap-1 rounded-[10px] border border-[color:var(--border-color)] bg-[var(--panel-muted)] p-1"
+            class="inline-flex items-center gap-1 rounded-[8px] border border-[color:var(--border-strong)] bg-[var(--panel-muted)] p-1"
             role="tablist"
             aria-label="역할 전환"
           >
@@ -287,7 +287,7 @@ function metricValueStyle(metric) {
               :class="[
                 segmentedButtonClass,
                 store.activeRole === role.value
-                  ? 'bg-[var(--panel-color)] text-[color:var(--text-primary)] shadow-[var(--shadow-soft)]'
+                  ? 'border-[color:var(--border-strong)] bg-[var(--panel-color)] text-[color:var(--text-primary)] shadow-[0_4px_10px_rgba(19,35,68,0.05)]'
                   : '',
               ]"
               @click="store.setActiveRole(role.value)"
@@ -324,7 +324,7 @@ function metricValueStyle(metric) {
             :class="[
               filterChipClass,
               store.customerHealthFilter === option.value
-                ? 'border-[color:var(--accent-color)] bg-[var(--panel-muted)] text-[color:var(--text-primary)]'
+                ? 'border-[color:var(--border-strong)] bg-[var(--panel-muted)] text-[color:var(--text-primary)]'
                 : '',
             ]"
             @click="store.setCustomerHealthFilter(option.value)"
@@ -341,7 +341,7 @@ function metricValueStyle(metric) {
             :class="[
               filterChipClass,
               store.workInboxFilter === option.value
-                ? 'border-[color:var(--accent-color)] bg-[var(--panel-muted)] text-[color:var(--text-primary)]'
+                ? 'border-[color:var(--border-strong)] bg-[var(--panel-muted)] text-[color:var(--text-primary)]'
                 : '',
             ]"
             @click="store.setWorkInboxFilter(option.value)"
@@ -399,7 +399,7 @@ function metricValueStyle(metric) {
     <div
       :class="[
         compactPanelClass,
-        'fixed bottom-4 left-4 right-4 z-30 hidden items-center justify-between gap-3 rounded-[10px] bg-[color:color-mix(in_srgb,var(--panel-color)_92%,white)] px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur-[16px] max-[820px]:flex',
+        'fixed bottom-4 left-4 right-4 z-30 hidden items-center justify-between gap-3 rounded-[8px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_92%,white)] px-4 py-3 shadow-[0_10px_24px_rgba(19,35,68,0.08)] backdrop-blur-[16px] max-[820px]:flex',
       ]"
     >
       <strong class="text-[color:var(--text-primary)]">{{ headerPrimaryAction.label }}</strong>

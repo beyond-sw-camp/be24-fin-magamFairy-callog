@@ -137,27 +137,27 @@ const actionSummaryRows = computed(() => {
 const boardShellClass =
   'grid items-start gap-4 [grid-template-columns:minmax(300px,340px)_minmax(0,1fr)_minmax(290px,320px)] max-[1440px]:grid-cols-1'
 const railClass =
-  'grid gap-4 rounded-[10px] border border-[color:var(--border-color)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--panel-color)_94%,white),var(--panel-color))] px-5 py-5 shadow-[0_14px_34px_rgba(15,23,42,0.07)]'
+  'grid gap-4 rounded-[8px] border border-[color:var(--border-strong)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--panel-color)_96%,white),var(--panel-color))] px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_10px_24px_rgba(15,23,42,0.05)]'
 const sectionCardClass =
-  'grid gap-3 rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-color)_86%,white)] px-4 py-4'
+  'grid gap-3 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_92%,white)] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]'
 const sectionSoftCardClass =
-  'grid gap-3 rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_72%,white)] px-4 py-4'
+  'grid gap-3 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_78%,white)] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]'
 const summaryCardClass =
-  'grid gap-1 rounded-[8px] border px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]'
+  'grid gap-1 rounded-[6px] border border-[color:var(--border-strong)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]'
 const queueItemClass =
-  'grid gap-3 rounded-[8px] border px-4 py-4 text-left transition duration-200 hover:-translate-y-px hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]'
+  'grid gap-3 rounded-[6px] border border-[color:var(--border-strong)] px-4 py-4 text-left transition duration-200 hover:-translate-y-px hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]'
 const badgeBaseClass =
-  'inline-flex min-h-7 items-center justify-center rounded-[6px] border px-2.5 text-[0.72rem] font-semibold tracking-[0.01em]'
+  'inline-flex min-h-7 items-center justify-center rounded-[4px] border px-2.5 text-[0.72rem] font-semibold tracking-[0.01em]'
 const pillClass =
-  'inline-flex min-h-7 items-center justify-center rounded-[6px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_80%,white)] px-2.5 text-[0.72rem] font-semibold text-[color:var(--muted-text)]'
+  'inline-flex min-h-7 items-center justify-center rounded-[4px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_82%,white)] px-2.5 text-[0.72rem] font-semibold text-[color:var(--muted-text)]'
 const ghostButtonClass =
-  'inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-color)_90%,white)] px-3.5 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_22px_rgba(15,23,42,0.08)]'
+  'inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-3.5 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_22px_rgba(15,23,42,0.08)]'
 const primaryButtonClass =
-  'inline-flex min-h-[2.8rem] items-center justify-center gap-2 rounded-[8px] border border-[color:var(--accent-color)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--accent-color)_88%,white),var(--accent-color))] px-4 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.16)] transition duration-200 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0'
+  'inline-flex min-h-[2.8rem] items-center justify-center gap-2 rounded-[6px] border border-[color:color-mix(in_srgb,var(--accent-color)_50%,var(--border-strong))] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--accent-color)_88%,white),var(--accent-color))] px-4 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.16)] transition duration-200 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0'
 const inlineControlButtonClass =
-  'inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-color)_88%,white)] text-base font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)]'
+  'inline-flex h-10 w-10 items-center justify-center rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_92%,white)] text-base font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)]'
 const emptyStateClass =
-  'grid gap-2 rounded-[8px] border border-dashed border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_60%,white)] px-5 py-6 text-sm text-[color:var(--muted-text)]'
+  'grid gap-2 rounded-[6px] border border-dashed border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_66%,white)] px-5 py-6 text-sm text-[color:var(--muted-text)]'
 const metaRowClass =
   'flex items-start justify-between gap-4 border-b border-[color:var(--border-color)] py-3 last:border-b-0 last:pb-0 first:pt-0'
 
@@ -532,7 +532,7 @@ function attendeeCardStyle(active) {
               <span :class="pillClass">{{ selectedItem.source }}</span>
             </div>
             <p
-              class="rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-color)_90%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
+              class="rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
             >
               {{ selectedItem.sourceMessage }}
             </p>
@@ -549,7 +549,7 @@ function attendeeCardStyle(active) {
               </span>
             </div>
             <p
-              class="rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-color)_90%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
+              class="rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
             >
               {{ selectedItem.aiSummary }}
             </p>
@@ -591,7 +591,7 @@ function attendeeCardStyle(active) {
             <li
               v-for="change in selectedItem.requestedChanges"
               :key="change"
-              class="rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_68%,white)] px-3 py-3"
+              class="rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_72%,white)] px-3 py-3"
             >
               {{ change }}
             </li>
@@ -632,7 +632,7 @@ function attendeeCardStyle(active) {
           <article :class="sectionCardClass">
             <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">회의록 원문</h4>
             <p
-              class="rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-color)_90%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
+              class="rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
             >
               {{ selectedItem.transcript }}
             </p>
@@ -641,7 +641,7 @@ function attendeeCardStyle(active) {
           <article :class="sectionCardClass">
             <h4 class="text-sm font-semibold text-[color:var(--text-primary)]">AI 정리 결과</h4>
             <p
-              class="rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-color)_90%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
+              class="rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-4 py-4 text-sm leading-7 text-[color:var(--text-secondary)]"
             >
               {{ selectedItem.aiSummary }}
             </p>
@@ -660,7 +660,7 @@ function attendeeCardStyle(active) {
             <div
               v-for="step in pipelineSteps"
               :key="step.id"
-              class="grid min-h-[74px] content-center gap-1 rounded-[8px] border px-4 py-3 text-left"
+              class="grid min-h-[74px] content-center gap-1 rounded-[6px] border border-[color:var(--border-strong)] px-4 py-3 text-left"
               :style="pipelineStepStyle(step.active)"
             >
               <span class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] opacity-70"
@@ -682,7 +682,7 @@ function attendeeCardStyle(active) {
               v-for="attendee in selectedItem.attendees"
               :key="attendee.memberId"
               type="button"
-              class="grid gap-1 rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-color)_90%,white)] px-4 py-4 text-left transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
+              class="grid gap-1 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-4 py-4 text-left transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
               :style="attendeeCardStyle(attendee.approved)"
               @click="store.toggleMeetingApproval(selectedItem.id, attendee.memberId)"
             >
@@ -740,7 +740,7 @@ function attendeeCardStyle(active) {
             </div>
 
             <div
-              class="grid gap-3 rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_72%,white)] px-4 py-4"
+              class="grid gap-3 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_78%,white)] px-4 py-4"
             >
               <span
                 class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
@@ -814,7 +814,7 @@ function attendeeCardStyle(active) {
             <article
               v-for="item in store.generatorPreview.items"
               :key="item.previewId"
-              class="grid gap-3 rounded-[8px] border px-4 py-4"
+              class="grid gap-3 rounded-[6px] border border-[color:var(--border-strong)] px-4 py-4"
               :style="generatorCardStyle(item)"
             >
               <div class="flex items-start justify-between gap-3">
@@ -850,7 +850,7 @@ function attendeeCardStyle(active) {
             <div
               v-for="(count, index) in store.generatorPreview.counts"
               :key="index"
-              class="grid justify-items-center gap-2 rounded-[8px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_70%,white)] px-3 py-4"
+              class="grid justify-items-center gap-2 rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_76%,white)] px-3 py-4"
             >
               <small
                 class="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[color:var(--muted-text)]"
@@ -858,9 +858,9 @@ function attendeeCardStyle(active) {
                 {{ ['월', '화', '수', '목', '금'][index] }}
               </small>
               <div
-                class="flex h-[118px] w-full items-end rounded-[8px] bg-[color:color-mix(in_srgb,var(--panel-color)_88%,white)] px-2 py-2"
+                class="flex h-[118px] w-full items-end rounded-[6px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_92%,white)] px-2 py-2"
               >
-                <span class="w-full rounded-[6px]" :style="generatorBarStyle(count, index)" />
+                <span class="w-full rounded-[4px]" :style="generatorBarStyle(count, index)" />
               </div>
               <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
                 count
