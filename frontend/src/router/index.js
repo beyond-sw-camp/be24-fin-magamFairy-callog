@@ -105,21 +105,28 @@ const routes = [
           section: '내 정보',
         },
       },
+      {
+        path: 'notifications',
+        name: 'notifications',
+        component: () => import('@/views/NotificationCenter.vue'),
+        meta: {
+          title: '알림 센터',
+          section: '알림 전체를 확인하고 관리하는 곳',
+        },
+      },
     ],
   },
   {
     path: '/user',
     component: FirstLayout,
     redirect: { name: 'login' },
-    meta: {
-      guestOnly: true,
-    },
     children: [
       {
         path: 'login',
         name: 'login',
         component: () => import('@/views/Login.vue'),
         meta: {
+          guestOnly: true,
           title: '로그인',
           section: '로그인',
         },
@@ -129,8 +136,9 @@ const routes = [
         name: 'signup',
         component: () => import('@/views/Signup.vue'),
         meta: {
+          requiresAuth: true,
           title: '회원가입',
-          section: '회원가입',
+          section: '회원 생성',
         },
       },
     ],
