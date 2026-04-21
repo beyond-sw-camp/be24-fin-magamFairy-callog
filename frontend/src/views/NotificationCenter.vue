@@ -165,13 +165,13 @@ onMounted(() => {
 
       <div class="flex gap-2 mt-6">
         <button 
-          v-for="tab in ['전체', '미확인', 'AI', 'QA', 'TASK']" 
+          v-for="tab in ['전체', '미확인', 'ai', 'qa', 'task']" 
           :key="tab"
           @click="filter = tab"
           class="px-4 py-1.5 rounded-full text-xs font-bold transition-all border"
           :class="filter === tab ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'"
         >
-          {{ tab }}
+          {{ tab.toUpperCase() }}
           <span v-if="tab === '미확인'" class="ml-1 text-cyan-400">{{ notifications.filter(n => !n.isRead).length }}</span>
         </button>
       </div>
