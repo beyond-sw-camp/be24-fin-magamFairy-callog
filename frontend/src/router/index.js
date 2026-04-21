@@ -77,8 +77,8 @@ const routes = [
         },
       },
       {
-        path: '/reference',
-        name: 'reference',
+        path: '/references',
+        name: 'references',
         component: () => import('@/views/ReferencesView.vue'),
       },
       {
