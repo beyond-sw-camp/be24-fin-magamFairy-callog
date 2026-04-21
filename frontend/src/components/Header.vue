@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
-import { getNoti, sendNoti } from '@/api/notifications/index.js'
+import { getNoti } from '@/api/notifications/index.js'
 import { formatRelativeTime } from '@/utils/datechange.js'
 
 const notifications = ref({
@@ -46,6 +46,7 @@ const getNotifications = async () => {
       ]
     }
     notifications.value = res;
+    console.log(notifications.value)
   }
 }
 
@@ -384,10 +385,18 @@ onBeforeUnmount(() => {
                   :key="index"
                   class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3"
                 >
-                  <p class="text-sm font-semibold text-[var(--text-primary)]">
-                    {{ item.title }}
-                  </p>
-                  
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-semibold text-[var(--text-primary)] truncate">
+                        {{ item.title }}
+                      </p>
+                    </div>
+                    <div class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--panel-muted)] border border-[var(--border-subtle)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--panel-hover)] cursor-pointer">
+                      <span>자세히 보기</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    </div>
+                  </div>
+
                   <p class="mt-1 text-xs text-[var(--muted-text)]">
                     {{ formatRelativeTime(item.created_at) }} · {{ item.comment }}
                   </p>
