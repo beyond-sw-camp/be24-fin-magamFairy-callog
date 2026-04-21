@@ -88,34 +88,6 @@ const activeMetrics = computed(() => {
   return store.workloadMetrics
 })
 
-const hoveredMetric = computed(() => {
-  return activeMetrics.value.find((metric) => metric.id === store.hoverMetricKey) ?? null
-})
-
-const pinnedMetric = computed(() => {
-  return activeMetrics.value.find((metric) => metric.id === store.activeMetricKey) ?? null
-})
-
-const previewMetric = computed(() => {
-  return pinnedMetric.value ?? hoveredMetric.value ?? null
-})
-
-const previewMetricItems = computed(() => {
-  return previewMetric.value ? store.getMetricPreview(previewMetric.value.id) : []
-})
-
-const previewGridStyle = computed(() => {
-  if (previewMetric.value?.id === 'metric-balance') {
-    return {
-      gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-    }
-  }
-
-  return {
-    gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-  }
-})
-
 const panelClass =
   'rounded-[24px] border border-[color:var(--border-color)] bg-[var(--panel-color)] shadow-[var(--shadow-soft)]'
 const compactPanelClass =
@@ -127,11 +99,7 @@ const segmentedButtonClass =
 const filterChipClass =
   'inline-flex min-h-[1.95rem] items-center justify-center rounded-full border border-[color:var(--border-color)] px-3 text-[0.78rem] font-bold text-[color:var(--muted-text)] transition duration-200'
 const metricCardClass =
-  'relative z-0 flex min-h-[74px] cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-[16px] border border-[color:var(--border-color)] px-3.5 py-3 text-center shadow-[0_4px_14px_rgba(19,35,68,0.04)] transition duration-200 hover:-translate-y-px hover:shadow-[0_10px_22px_rgba(19,35,68,0.08)] focus-visible:-translate-y-px focus-visible:shadow-[0_10px_22px_rgba(19,35,68,0.08)]'
-const hoverPreviewActionClass =
-  'inline-flex min-h-8 items-center justify-center rounded-full border border-[color:var(--border-color)] bg-white/80 px-3 text-xs font-bold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]'
-const metricPreviewItemClass =
-  'grid min-w-0 min-h-[92px] content-start gap-2 overflow-hidden rounded-[18px] border border-[color:var(--border-color)] px-4 py-3.5 text-left shadow-[0_8px_18px_rgba(19,35,68,0.05)] transition duration-200 hover:-translate-y-px hover:shadow-[0_14px_28px_rgba(19,35,68,0.10)] focus-visible:-translate-y-px focus-visible:shadow-[0_14px_28px_rgba(19,35,68,0.10)]'
+  'relative z-0 flex min-h-[66px] cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-[14px] border border-[color:var(--border-color)] px-3 py-2.5 text-center shadow-[0_2px_8px_rgba(19,35,68,0.03)] transition duration-200 hover:shadow-[0_4px_12px_rgba(19,35,68,0.05)] focus-visible:shadow-[0_4px_12px_rgba(19,35,68,0.05)]'
 
 const pendingPersonalTask = computed(() => {
   return (
@@ -236,51 +204,23 @@ function handleHeaderPrimaryAction() {
   }
 }
 
-function clearMetricPreview() {
-  store.setHoverMetricKey(null)
-}
-
-function handleMetricGroupFocusOut(event) {
-  const nextTarget = event.relatedTarget
-  const currentTarget = event.currentTarget
-
-  if (
-    currentTarget instanceof HTMLElement &&
-    nextTarget instanceof Node &&
-    currentTarget.contains(nextTarget)
-  ) {
-    return
-  }
-
-  clearMetricPreview()
-}
-
 function handleMetricClick(metricId) {
-  clearMetricPreview()
   store.activateMetric(metricId)
-}
-
-function applyMetric(metricId) {
-  clearMetricPreview()
-
-  if (store.activeMetricKey !== metricId) {
-    store.activateMetric(metricId)
-  }
 }
 
 function metricCardStyle(metric) {
   if (store.activeMetricKey === metric.id) {
     return {
-      borderColor: `color-mix(in srgb, ${metric.accent} 22%, var(--border-color))`,
-      background: `linear-gradient(180deg, color-mix(in srgb, ${metric.accent} 10%, white), color-mix(in srgb, ${metric.accent} 3%, var(--panel-color)))`,
-      boxShadow: `0 10px 24px rgba(15, 23, 42, 0.07), 0 0 0 1px color-mix(in srgb, ${metric.accent} 10%, white)`,
+      borderColor: `color-mix(in srgb, ${metric.accent} 18%, var(--border-color))`,
+      background: `linear-gradient(180deg, color-mix(in srgb, ${metric.accent} 8%, white), color-mix(in srgb, ${metric.accent} 3%, var(--panel-color)))`,
+      boxShadow: `0 4px 12px rgba(15, 23, 42, 0.05), 0 0 0 1px color-mix(in srgb, ${metric.accent} 8%, white)`,
     }
   }
 
   return {
-    borderColor: `color-mix(in srgb, ${metric.accent} 12%, var(--border-color))`,
+    borderColor: `color-mix(in srgb, ${metric.accent} 10%, var(--border-color))`,
     background: `linear-gradient(180deg, color-mix(in srgb, ${metric.accent} 6%, white), color-mix(in srgb, ${metric.accent} 2%, var(--panel-color)))`,
-    boxShadow: '0 4px 14px rgba(19, 35, 68, 0.04)',
+    boxShadow: '0 2px 8px rgba(19, 35, 68, 0.03)',
   }
 }
 
@@ -303,76 +243,6 @@ function metricValueStyle(metric) {
       store.activeMetricKey === metric.id
         ? `color-mix(in srgb, ${metric.accent} 52%, var(--text-primary))`
         : `color-mix(in srgb, ${metric.accent} 44%, var(--text-primary))`,
-  }
-}
-
-function previewItemAccent(metric, item, index) {
-  if (metric.id === 'metric-balance') {
-    const weekdayPalette = {
-      월: '#2f80ed',
-      화: '#28b57a',
-      수: '#7c4dff',
-      목: '#f5b64e',
-      금: '#df5f75',
-    }
-
-    return weekdayPalette[item.title] ?? metric.accent
-  }
-
-  const palette = ['#2f80ed', '#59c36d', '#f5b64e', '#7c4dff', '#df5f75']
-  return palette[index % palette.length] ?? metric.accent
-}
-
-function previewPanelStyle(metric) {
-  if (!metric) return null
-
-  return {
-    borderColor: `color-mix(in srgb, ${metric.accent} 28%, var(--border-color))`,
-    background: `linear-gradient(180deg, color-mix(in srgb, ${metric.accent} 12%, white), color-mix(in srgb, ${metric.accent} 4%, var(--panel-color)))`,
-    boxShadow: `0 18px 36px rgba(19, 35, 68, 0.08)`,
-  }
-}
-
-function previewItemStyle(metric, item, index) {
-  if (!metric) return null
-
-  const accent = previewItemAccent(metric, item, index)
-
-  return {
-    borderColor: `color-mix(in srgb, ${accent} 26%, var(--border-color))`,
-    background: `linear-gradient(180deg, color-mix(in srgb, ${accent} 16%, white), color-mix(in srgb, ${accent} 8%, var(--panel-muted)))`,
-    boxShadow: `0 10px 20px color-mix(in srgb, ${accent} 12%, rgba(19, 35, 68, 0.06))`,
-  }
-}
-
-function previewItemMarkerStyle(metric, item, index) {
-  if (!metric) return null
-
-  const accent = previewItemAccent(metric, item, index)
-
-  return {
-    background: accent,
-    boxShadow: `0 0 0 4px color-mix(in srgb, ${accent} 16%, white)`,
-  }
-}
-
-function previewItemTitleStyle(metric, item, index) {
-  if (!metric) return null
-
-  const accent = previewItemAccent(metric, item, index)
-
-  return {
-    color: `color-mix(in srgb, ${accent} 78%, var(--text-primary))`,
-  }
-}
-
-function previewItemMetaStyle(metric, item, index) {
-  if (!metric) return null
-
-  const accent = previewItemAccent(metric, item, index)
-
-  return {
-    color: `color-mix(in srgb, ${accent} 58%, var(--muted-text))`,
   }
 }
 </script>
@@ -482,12 +352,8 @@ function previewItemMetaStyle(metric, item, index) {
       </div>
     </header>
 
-    <div
-      class="grid gap-[0.55rem]"
-      @mouseleave="clearMetricPreview"
-      @focusout="handleMetricGroupFocusOut"
-    >
-      <div class="grid grid-cols-4 gap-[0.75rem] max-[1080px]:grid-cols-2 max-[820px]:grid-cols-1">
+    <div class="grid gap-[0.45rem]">
+      <div class="grid grid-cols-4 gap-[0.65rem] max-[1080px]:grid-cols-2 max-[820px]:grid-cols-1">
         <button
           v-for="metric in activeMetrics"
           :key="metric.id"
@@ -495,94 +361,34 @@ function previewItemMetaStyle(metric, item, index) {
           :class="metricCardClass"
           :style="metricCardStyle(metric)"
           :aria-pressed="store.activeMetricKey === metric.id"
-          @mouseenter="store.setHoverMetricKey(metric.id)"
-          @focus="store.setHoverMetricKey(metric.id)"
           @click="handleMetricClick(metric.id)"
         >
-          <div class="flex min-w-0 items-center justify-center gap-2">
+          <div class="flex min-w-0 items-center justify-center gap-1.5">
             <span
-              class="inline-block h-2 w-2 shrink-0 rounded-full"
+              class="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
               :style="metricDotStyle(metric)"
             />
             <small
-              class="min-w-0 break-keep whitespace-normal text-[0.78rem] font-semibold leading-[1.2] [overflow-wrap:anywhere]"
+              class="min-w-0 break-keep whitespace-normal text-[0.72rem] font-semibold leading-[1.15] [overflow-wrap:anywhere]"
               :style="metricLabelStyle(metric)"
             >
               {{ metric.label }}
             </small>
           </div>
 
-          <div class="grid min-w-0 justify-items-center gap-1">
+          <div class="grid min-w-0 justify-items-center gap-0.5">
             <strong
-              class="break-words text-[1.28rem] leading-none tracking-[-0.02em]"
+              class="break-words text-[1.12rem] leading-none tracking-[-0.01em]"
               :style="metricValueStyle(metric)"
             >
               {{ metric.value }}
             </strong>
 
-            <span class="text-[0.66rem] font-medium leading-4 text-[color:var(--muted-text)]">
+            <span class="text-[0.62rem] font-medium leading-4 text-[color:var(--muted-text)]">
               {{ store.activeMetricKey === metric.id ? '적용 중' : '클릭해 보기' }}
             </span>
           </div>
         </button>
-      </div>
-
-      <div
-        v-if="previewMetric && previewMetricItems.length"
-        :class="[compactPanelClass, 'grid gap-[0.9rem] px-4 py-4 max-[820px]:hidden']"
-        :style="previewPanelStyle(previewMetric)"
-      >
-        <div class="flex items-center justify-between gap-[0.85rem]">
-          <div class="grid gap-[0.18rem]">
-            <small class="text-[0.76rem] text-[color:var(--muted-text)]">{{
-              previewMetric.label
-            }}</small>
-            <strong class="text-[1.05rem] leading-tight text-[color:var(--text-primary)]">{{
-              previewMetric.value
-            }}</strong>
-          </div>
-
-          <button
-            type="button"
-            :class="hoverPreviewActionClass"
-            @click="applyMetric(previewMetric.id)"
-          >
-            보기 적용
-          </button>
-        </div>
-
-        <div class="grid gap-[0.75rem]" :style="previewGridStyle">
-          <button
-            v-for="(item, index) in previewMetricItems"
-            :key="`${previewMetric.id}-${item.title}`"
-            type="button"
-            :class="metricPreviewItemClass"
-            :style="previewItemStyle(previewMetric, item, index)"
-            @click="applyMetric(previewMetric.id)"
-          >
-            <div class="flex min-w-0 items-start gap-3">
-              <span
-                class="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                :style="previewItemMarkerStyle(previewMetric, item, index)"
-              />
-
-              <div class="grid min-w-0 gap-1.5">
-                <span
-                  class="break-keep whitespace-normal text-[0.92rem] font-bold leading-[1.35] [overflow-wrap:anywhere]"
-                  :style="previewItemTitleStyle(previewMetric, item, index)"
-                >
-                  {{ item.title }}
-                </span>
-                <small
-                  class="break-words text-[0.74rem] leading-5"
-                  :style="previewItemMetaStyle(previewMetric, item, index)"
-                >
-                  {{ item.meta }}
-                </small>
-              </div>
-            </div>
-          </button>
-        </div>
       </div>
     </div>
 
