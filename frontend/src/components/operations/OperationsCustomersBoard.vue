@@ -18,36 +18,36 @@ const suggestionStateLabel = {
 }
 
 const panelClass =
-  'grid gap-[0.9rem] rounded-[24px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-4 py-4 shadow-[var(--shadow-soft)]'
+  'grid gap-[0.9rem] rounded-[6px] border border-[color:var(--border-strong)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--panel-color)_96%,white),var(--panel-color))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_8px_20px_rgba(15,23,42,0.05)]'
 const headerClass =
   'flex items-start justify-between gap-[0.75rem] max-[980px]:flex-col max-[980px]:items-start'
 const fieldClass = 'grid gap-[0.8rem]'
 const fieldLabelClass = 'text-[0.82rem] font-bold text-[color:var(--text-primary)]'
 const inputClass =
-  'w-full rounded-2xl border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 py-3 text-sm text-[color:var(--text-primary)] outline-none transition duration-200 placeholder:text-[color:var(--muted-text)] focus:border-[color:var(--accent-color)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--accent-color)_12%,transparent)]'
+  'w-full rounded-[5px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_82%,white)] px-4 py-3 text-sm text-[color:var(--text-primary)] outline-none transition duration-200 placeholder:text-[color:var(--muted-text)] focus:border-[color:color-mix(in_srgb,var(--accent-color)_50%,var(--border-strong))] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--accent-color)_12%,transparent)]'
 const itemCardClass =
-  'flex items-start justify-between gap-[0.75rem] rounded-[20px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_74%,white)] px-[0.95rem] py-[0.95rem] text-left transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)] max-[980px]:flex-col max-[980px]:items-start'
+  'flex items-start justify-between gap-[0.75rem] rounded-[5px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_76%,white)] px-[0.95rem] py-[0.95rem] text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.58)] transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)] max-[980px]:flex-col max-[980px]:items-start'
 const mutedCardClass =
-  'grid gap-2 rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-color)] px-4 py-4'
+  'grid gap-2 rounded-[5px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-color)_94%,white)] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.58)]'
 const emptyCardClass =
-  'rounded-[18px] border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 py-4 text-sm text-[color:var(--muted-text)]'
+  'rounded-[5px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_78%,white)] px-4 py-4 text-sm text-[color:var(--muted-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.52)]'
 const badgeBaseClass =
-  'inline-flex min-h-8 items-center justify-center rounded-full border border-[color:var(--border-color)] px-3 text-[0.78rem] font-bold'
+  'inline-flex min-h-8 items-center justify-center rounded-[4px] border border-[color:var(--border-strong)] px-3 text-[0.78rem] font-bold'
 const softButtonClass =
-  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--border-color)] bg-[var(--panel-muted)] px-4 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]'
+  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-[5px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_80%,white)] px-4 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)]'
 const ghostButtonClass =
-  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--border-color)] bg-transparent px-4 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:bg-[var(--panel-muted)]'
+  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-[5px] border border-[color:var(--border-strong)] bg-transparent px-4 text-sm font-semibold text-[color:var(--text-primary)] transition duration-200 hover:-translate-y-px hover:bg-[color:color-mix(in_srgb,var(--panel-muted)_76%,white)]'
 const dangerButtonClass =
-  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--danger-color)] bg-transparent px-4 text-sm font-semibold text-[color:var(--danger-color)] transition duration-200 hover:-translate-y-px hover:bg-[color:color-mix(in_srgb,var(--danger-color)_10%,white)]'
+  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-[5px] border border-[color:color-mix(in_srgb,var(--danger-color)_52%,var(--border-strong))] bg-transparent px-4 text-sm font-semibold text-[color:var(--danger-color)] transition duration-200 hover:-translate-y-px hover:bg-[color:color-mix(in_srgb,var(--danger-color)_10%,white)]'
 const primaryButtonClass =
-  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-xl border border-[color:var(--accent-color)] bg-[var(--accent-color)] px-4 text-sm font-semibold text-white transition duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-soft)]'
+  'inline-flex min-h-[2.4rem] items-center justify-center gap-2 rounded-[5px] border border-[color:color-mix(in_srgb,var(--accent-color)_50%,var(--border-strong))] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--accent-color)_88%,white),var(--accent-color))] px-4 text-sm font-semibold text-white transition duration-200 hover:-translate-y-px hover:shadow-[0_10px_22px_rgba(15,23,42,0.14)]'
 const timelineDotClass = 'mt-1.5 h-3 w-3 rounded-full'
 const focusPanelStyle = {
-  borderColor: 'color-mix(in srgb, var(--accent-color) 30%, var(--border-color))',
+  borderColor: 'color-mix(in srgb, var(--accent-color) 34%, var(--border-strong))',
   boxShadow: '0 0 0 3px color-mix(in srgb, var(--accent-color) 10%, transparent)',
 }
 const activeItemStyle = {
-  borderColor: 'color-mix(in srgb, var(--accent-color) 30%, var(--border-color))',
+  borderColor: 'color-mix(in srgb, var(--accent-color) 34%, var(--border-strong))',
   background: 'color-mix(in srgb, var(--accent-color) 10%, var(--panel-color))',
 }
 
@@ -95,7 +95,7 @@ function badgeStyle(tone) {
   if (tone === 'healthy') {
     return {
       background: 'color-mix(in srgb, var(--success-color) 12%, white)',
-      borderColor: 'color-mix(in srgb, var(--success-color) 30%, var(--border-color))',
+      borderColor: 'color-mix(in srgb, var(--success-color) 30%, var(--border-strong))',
       color: '#287b47',
     }
   }
@@ -103,7 +103,7 @@ function badgeStyle(tone) {
   if (tone === 'watch') {
     return {
       background: 'color-mix(in srgb, var(--warning-color) 16%, white)',
-      borderColor: 'color-mix(in srgb, var(--warning-color) 30%, var(--border-color))',
+      borderColor: 'color-mix(in srgb, var(--warning-color) 30%, var(--border-strong))',
       color: '#9a6c0d',
     }
   }
@@ -111,20 +111,23 @@ function badgeStyle(tone) {
   if (tone === 'risk') {
     return {
       background: 'color-mix(in srgb, var(--danger-color) 12%, white)',
-      borderColor: 'color-mix(in srgb, var(--danger-color) 28%, var(--border-color))',
+      borderColor: 'color-mix(in srgb, var(--danger-color) 28%, var(--border-strong))',
       color: '#b2455f',
     }
   }
 
   return {
     background: 'var(--panel-muted)',
+    borderColor: 'var(--border-strong)',
     color: 'var(--muted-text)',
   }
 }
 </script>
 
 <template>
-  <section class="grid items-start gap-4 [grid-template-columns:minmax(280px,320px)_minmax(0,1.15fr)_minmax(300px,360px)] max-[1380px]:grid-cols-1">
+  <section
+    class="grid items-start gap-4 [grid-template-columns:minmax(280px,320px)_minmax(0,1.15fr)_minmax(300px,360px)] max-[1380px]:grid-cols-1"
+  >
     <aside
       :class="[panelClass, 'sticky top-[7.1rem] max-[1380px]:static']"
       :style="store.focusTarget === 'customers-list' ? focusPanelStyle : null"
@@ -132,7 +135,9 @@ function badgeStyle(tone) {
       <header :class="headerClass">
         <h3 class="text-base font-semibold text-[color:var(--text-primary)]">고객 목록</h3>
 
-        <button :class="softButtonClass" type="button" @click="store.createCustomer()">신규 고객</button>
+        <button :class="softButtonClass" type="button" @click="store.createCustomer()">
+          신규 고객
+        </button>
       </header>
 
       <div class="grid gap-3">
@@ -157,18 +162,24 @@ function badgeStyle(tone) {
             @click="store.setSelectedCustomer(customer.id)"
           >
             <div class="grid gap-1">
-              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ customer.name }}</strong>
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
+                customer.name
+              }}</strong>
               <p class="text-sm text-[color:var(--muted-text)]">{{ customer.segment }}</p>
             </div>
 
-            <div class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
+            <div
+              class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start"
+            >
               <span
                 :class="badgeBaseClass"
                 :style="badgeStyle(customerHealthTone(customer.health))"
               >
                 {{ customerHealthLabel(customer.health) }}
               </span>
-              <small class="text-xs text-[color:var(--muted-text)]">{{ formatShortDate(customer.lastQaUpdate) }}</small>
+              <small class="text-xs text-[color:var(--muted-text)]">{{
+                formatShortDate(customer.lastQaUpdate)
+              }}</small>
             </div>
           </button>
 
@@ -299,11 +310,13 @@ function badgeStyle(tone) {
           <article
             v-for="suggestion in store.customerSuggestionsForSelected"
             :key="suggestion.id"
-            class="grid gap-3 rounded-[20px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_74%,white)] px-4 py-4"
+            class="grid gap-3 rounded-[5px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_76%,white)] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.56)]"
           >
             <div :class="headerClass">
               <div class="grid gap-1">
-                <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ suggestion.title }}</strong>
+                <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
+                  suggestion.title
+                }}</strong>
                 <p class="text-sm text-[color:var(--muted-text)]">{{ suggestion.source }}</p>
               </div>
               <span
@@ -325,23 +338,39 @@ function badgeStyle(tone) {
             <p class="text-sm text-[color:var(--muted-text)]">{{ suggestion.summary }}</p>
 
             <div :class="mutedCardClass">
-              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">제안 메모</strong>
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]"
+                >제안 메모</strong
+              >
               <p class="text-sm text-[color:var(--muted-text)]">{{ suggestion.suggestedMemo }}</p>
             </div>
 
-            <div class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start">
-              <span class="text-sm text-[color:var(--muted-text)]">{{ suggestion.suggestedTags.join(', ') }}</span>
-              <small class="text-xs text-[color:var(--muted-text)]">{{ suggestion.createdAt }}</small>
+            <div
+              class="flex items-center justify-between gap-3 max-[980px]:flex-col max-[980px]:items-start"
+            >
+              <span class="text-sm text-[color:var(--muted-text)]">{{
+                suggestion.suggestedTags.join(', ')
+              }}</span>
+              <small class="text-xs text-[color:var(--muted-text)]">{{
+                suggestion.createdAt
+              }}</small>
             </div>
 
             <div
               v-if="store.activeRole === 'admin' && suggestion.status === 'pending'"
               class="flex items-center justify-end gap-3 max-[980px]:flex-col max-[980px]:items-stretch"
             >
-              <button :class="ghostButtonClass" type="button" @click="store.rejectSuggestion(suggestion.id)">
+              <button
+                :class="ghostButtonClass"
+                type="button"
+                @click="store.rejectSuggestion(suggestion.id)"
+              >
                 보류
               </button>
-              <button :class="primaryButtonClass" type="button" @click="store.approveSuggestion(suggestion.id)">
+              <button
+                :class="primaryButtonClass"
+                type="button"
+                @click="store.approveSuggestion(suggestion.id)"
+              >
                 반영
               </button>
             </div>
@@ -362,14 +391,19 @@ function badgeStyle(tone) {
           <div
             v-for="history in store.selectedCustomerHistory"
             :key="history.id"
-            class="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-[20px] border border-[color:var(--border-color)] bg-[color:color-mix(in_srgb,var(--panel-muted)_74%,white)] px-4 py-4"
+            class="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-[5px] border border-[color:var(--border-strong)] bg-[color:color-mix(in_srgb,var(--panel-muted)_76%,white)] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.56)]"
           >
             <span
               :class="timelineDotClass"
-              style="background: var(--accent-color); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-color) 14%, transparent);"
+              style="
+                background: var(--accent-color);
+                box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-color) 14%, transparent);
+              "
             />
             <div class="grid gap-1">
-              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{ history.title }}</strong>
+              <strong class="text-sm font-semibold text-[color:var(--text-primary)]">{{
+                history.title
+              }}</strong>
               <p class="text-sm text-[color:var(--muted-text)]">{{ history.detail }}</p>
               <small class="text-xs text-[color:var(--muted-text)]">{{ history.createdAt }}</small>
             </div>

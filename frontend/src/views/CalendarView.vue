@@ -1,8 +1,9 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import CalendarBoard from '@/components/calendar/CalendarBoard.vue'
 import GanttChart from '@/components/calendar/GanttChart.vue'
 import TableBoard from '@/components/calendar/TableBoard.vue'
+import editorApi from '@/api/editor/editorApi'
 import { usePlannerStore } from '@/stores/planner'
 import { formatLongDate, formatMonthLabel, todayKey } from '@/utils/calendar'
 
@@ -69,6 +70,44 @@ const scopeModes = [
 function moveTask(payload) {
   store.moveTask(payload.taskId, payload.dateKey)
 }
+
+function extractCalendarTasks(payload) {
+  if (Array.isArray(payload)) {
+    return payload
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return null
+  }
+
+  const candidates = [
+    payload.tasks,
+    payload.items,
+    payload.list,
+    payload.data,
+    payload.result?.body,
+    payload.result?.data,
+  ]
+
+  return candidates.find((item) => Array.isArray(item)) ?? null
+}
+
+async function loadCalendarTasks() {
+  try {
+    const response = await editorApi.listContent()
+    const nextTasks = extractCalendarTasks(response)
+
+    if (nextTasks) {
+      store.tasks = [...nextTasks]
+    }
+  } catch (error) {
+    console.warn('listContent failed', error)
+  }
+}
+
+onMounted(() => {
+  void loadCalendarTasks()
+})
 </script>
 
 <template>

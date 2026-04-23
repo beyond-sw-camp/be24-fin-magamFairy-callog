@@ -14,7 +14,7 @@ import Marker from '@editorjs/marker'
 import Warning from '@editorjs/warning'
 import RawTool from '@editorjs/raw'
 import AlignmentTuneTool from 'editorjs-text-alignment-blocktune'
-import { saveEditorContent } from '@/api/editor/index'
+import editorApi from '@/api/editor/editorApi'
 
 export const ENABLE_EDITOR_JS = true
 
@@ -247,6 +247,7 @@ export function useContentEditor({ store, router, routeContentId, routeSeedDate,
 
   const editorReady = ref(false)
   const isSaving = ref(false)
+  const isDeleting = ref(false)
   const isBlockPaletteOpen = ref(false)
 
   const currentPlanner = computed(() =>
@@ -455,57 +456,102 @@ export function useContentEditor({ store, router, routeContentId, routeSeedDate,
         designerId: currentDesigner.value?.id ?? 'sumin',
         supervisorId: currentSupervisor.value?.id ?? 'taeyoung',
       }
+      const requestedContentId = isCreateMode
+        ? `CONTENT_CUSTOM_${String(store.tasks.length + 1).padStart(3, '0')}`
+        : unref(routeContentId) || null
 
       try {
-        await saveEditorContent({
-          contentId: unref(routeContentId) || null,
+        const savedContent = await editorApi.saveEditorContent({
+          contentId: requestedContentId,
           mode: isCreateMode ? 'create' : 'update',
           ...patch,
         })
+
+        const savedContentId =
+          typeof savedContent === 'object' && savedContent
+            ? savedContent.id ?? savedContent.contentId ?? savedContent.requirementId ?? null
+            : null
+
+        if (isCreateMode) {
+          const nextId = savedContentId || requestedContentId
+
+          store.createTask({
+            id: nextId,
+            requirementId: nextId,
+            title: nextTitle,
+            category: DEFAULT_EDITOR_TEXTS.createTaskCategory,
+            summary: patch.summary,
+            description: patch.description,
+            editorTitle: nextTitle,
+            editorBody: patch.editorBody,
+            assigneeId: patch.assigneeId,
+            plannerId: patch.plannerId,
+            designerId: patch.designerId,
+            supervisorId: patch.supervisorId,
+            startDate: unref(routeSeedDate),
+            dueDate: patch.dueDate,
+            status: patch.status,
+            priority: patch.priority,
+            customer: patch.customer,
+            contentType: patch.contentType,
+            visibility: 'personal',
+            timeRange: '10:00 - 18:00',
+            tags: patch.tags,
+            attachments: patch.attachments,
+            history: [DEFAULT_EDITOR_TEXTS.createHistoryMessage],
+            progress: 0,
+            palette: patch.palette,
+          })
+
+          await router.replace({ name: 'content-editor', params: { contentId: nextId } })
+        } else if (unref(activeTask)) {
+          store.updateTask(unref(activeTask).id, patch)
+        }
       } catch (apiError) {
         console.error('editor save api failed', apiError)
-      }
-
-      if (isCreateMode) {
-        const nextIndex = String(store.tasks.length + 1).padStart(3, '0')
-        const nextId = `CONTENT_CUSTOM_${nextIndex}`
-
-        store.createTask({
-          id: nextId,
-          requirementId: nextId,
-          title: nextTitle,
-          category: DEFAULT_EDITOR_TEXTS.createTaskCategory,
-          summary: patch.summary,
-          description: patch.description,
-          editorTitle: nextTitle,
-          editorBody: patch.editorBody,
-          assigneeId: patch.assigneeId,
-          plannerId: patch.plannerId,
-          designerId: patch.designerId,
-          supervisorId: patch.supervisorId,
-          startDate: unref(routeSeedDate),
-          dueDate: patch.dueDate,
-          status: patch.status,
-          priority: patch.priority,
-          customer: patch.customer,
-          contentType: patch.contentType,
-          visibility: 'personal',
-          timeRange: '10:00 - 18:00',
-          tags: patch.tags,
-          attachments: patch.attachments,
-          history: [DEFAULT_EDITOR_TEXTS.createHistoryMessage],
-          progress: 0,
-          palette: patch.palette,
-        })
-
-        await router.replace({ name: 'content-editor', params: { contentId: nextId } })
-      } else if (unref(activeTask)) {
-        store.updateTask(unref(activeTask).id, patch)
       }
     } catch (error) {
       console.error('saveContent failed', error)
     } finally {
       isSaving.value = false
+    }
+  }
+
+  async function deleteContent() {
+    if (isDeleting.value) {
+      return false
+    }
+
+    const currentContentId =
+      unref(activeTask)?.id ??
+      (unref(routeContentId) && unref(routeContentId) !== 'new' ? unref(routeContentId) : null)
+
+    if (!currentContentId) {
+      return false
+    }
+
+    if (typeof window !== 'undefined' && !window.confirm('이 컨텐츠 카드를 삭제할까요?')) {
+      return false
+    }
+
+    isDeleting.value = true
+
+    try {
+      await editorApi.deleteContent(currentContentId)
+      store.deleteTask(currentContentId)
+
+      if (typeof window !== 'undefined' && window.history.length > 1) {
+        router.back()
+      } else {
+        await router.push({ name: 'calendar' })
+      }
+
+      return true
+    } catch (error) {
+      console.error('editor delete api failed', error)
+      throw error
+    } finally {
+      isDeleting.value = false
     }
   }
 
@@ -551,6 +597,7 @@ export function useContentEditor({ store, router, routeContentId, routeSeedDate,
     taskPriorityLabel,
     editorReady,
     isSaving,
+    isDeleting,
     isBlockPaletteOpen,
     openBlockPalette,
     closeBlockPalette,
@@ -558,6 +605,7 @@ export function useContentEditor({ store, router, routeContentId, routeSeedDate,
     initializeEditors,
     destroyEditors,
     saveContent,
+    deleteContent,
     seedDraftFromTask,
   }
 }
