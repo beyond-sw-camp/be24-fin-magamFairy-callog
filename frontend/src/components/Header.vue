@@ -3,6 +3,55 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { getNoti } from '@/api/notifications/index.js'
+import { formatRelativeTime } from '@/utils/datechange.js'
+
+const notifications = ref({})
+
+const getNotifications = async () => {
+  try{
+    const res = getNoti(3)
+    notifications.value = res.data;
+  }
+  catch(e){
+    console.error(e);
+  }
+  finally{
+    const res = {
+      success:"true",
+      status:2000,
+      message:"통신 성공",
+      data:
+      [
+        {
+        id: 34897,
+        type: "qa",
+        created_at: "2026-04-21T10:04:13Z",
+        title: "알림 제목 1",
+        message: "알림 내용 1",
+        isRead: false
+        },
+        {
+        id: 78354,
+        type: "ai",
+        created_at: "2026-04-12T12:04:13Z",
+        title: "알림 제목2",
+        message: "알림 내용 2",
+        isRead: false
+        },
+        {
+        id: 54876,
+        type: "task",
+        created_at: "2026-04-05T12:04:13Z",
+        title: "알림 제목 3",
+        message: "알림 내용 3",
+        isRead: false
+        }
+      ]
+    }
+    notifications.value = res.data;
+  }
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -51,7 +100,7 @@ const appMenuItems = [
   },
   {
     key: 'notifications',
-    label: '알림 센터',
+    label: '최근 알림',
     kind: 'action',
     action: 'notifications',
     icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>`,
@@ -176,6 +225,7 @@ function handleDocumentClick(event) {
 
 onMounted(() => {
   window.addEventListener('click', handleDocumentClick)
+  getNotifications();
 })
 
 onBeforeUnmount(() => {
@@ -327,24 +377,60 @@ onBeforeUnmount(() => {
           >
             <div
               v-if="notificationsOpen"
-              class="absolute right-0 top-full z-50 mt-3 w-80 rounded-2xl border border-[var(--border-color)] bg-[var(--panel-color)] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.14)]"
+              class="
+                /* 공통 스타일 */
+                fixed z-50 mt-3 flex flex-col border border-[var(--border-color)] bg-[var(--panel-color)] shadow-[0_18px_40px_rgba(0,0,0,0.14)]
+                
+                /* 모바일: 화면 하단 고정 또는 중앙 배치 */
+                bottom-4 left-4 right-4 w-auto rounded-3xl 
+                
+                /* 데스크톱: 버튼 아래 우측 정렬 */
+                md:absolute md:bottom-auto md:left-auto md:right-0 md:top-full md:w-96 md:rounded-2xl
+              "
             >
-              <div class="mb-3 flex items-center justify-between">
-                <strong class="text-sm font-bold text-[var(--text-primary)]">알림 센터</strong>
-                <span class="text-[11px] font-semibold text-[var(--muted-text)]">새 알림</span>
+              <div class="flex items-center justify-between p-4 pb-2">
+                <div class="flex items-center gap-2 px-1">
+                  <strong class="text-base font-bold tracking-tight text-[var(--text-primary)]">
+                    최근 알림
+                  </strong>
+                </div>
+                <router-link
+                :to="`/notifications`"
+                class="group flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-[var(--muted-text)] transition-all hover:bg-[var(--panel-hover)] hover:text-[var(--text-primary)]">
+                  <span>알림 센터</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </router-link>
               </div>
-              <div class="space-y-2">
-                <div class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3">
-                  <p class="text-sm font-semibold text-[var(--text-primary)]">검토 요청이 도착했습니다</p>
-                  <p class="mt-1 text-xs text-[var(--muted-text)]">방금 전 · 콘텐츠 편집 워크스페이스</p>
+
+              <div class="max-h-[60vh] overflow-y-auto p-4 pt-2 md:max-h-[450px] custom-scrollbar">
+                <div v-if="notifications.length" class="space-y-2">
+                  <div 
+                    v-for="(item, index) in notifications" 
+                    :key="index"
+                    class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3 transition-transform active:scale-[0.98] md:active:scale-100"
+                  >
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold text-[var(--text-primary)] truncate">
+                          {{ item.title }}
+                        </p>
+                      </div>
+                      <div class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--panel-muted)] border border-[var(--border-subtle)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--panel-hover)] cursor-pointer">
+                        <span>자세히 보기</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                      </div>
+                    </div>
+
+                    <p class="mt-1 text-xs leading-relaxed text-[var(--muted-text)] line-clamp-2">
+                      {{ formatRelativeTime(item.created_at) }} · {{ item.message }}
+                    </p>
+                  </div>
                 </div>
-                <div class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3">
-                  <p class="text-sm font-semibold text-[var(--text-primary)]">마감 임박 작업이 있습니다</p>
-                  <p class="mt-1 text-xs text-[var(--muted-text)]">오늘 · 2건 남음</p>
-                </div>
-                <div class="rounded-2xl bg-[var(--panel-muted)] px-4 py-3">
-                  <p class="text-sm font-semibold text-[var(--text-primary)]">새 댓글 1개</p>
-                  <p class="mt-1 text-xs text-[var(--muted-text)]">10분 전 · 변경 이력 확인</p>
+
+                <div v-else class="py-10 text-center">
+                  <p class="text-sm text-[var(--muted-text)]">새로운 알림이 없습니다.</p>
                 </div>
               </div>
             </div>

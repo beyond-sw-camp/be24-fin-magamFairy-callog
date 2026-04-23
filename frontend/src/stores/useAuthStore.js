@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { logoutRequest } from '@/authApi'
 import {
   clearStoredAuth,
   persistAccessToken,
@@ -166,9 +167,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
+  try {
+    await logoutRequest()
+  } catch (error) {
+    console.warn('Logout request failed.', error)
+  } finally {
     clearAuthState()
     isHydrated.value = true
   }
+}
+
 
   return {
     isAuthenticated,
