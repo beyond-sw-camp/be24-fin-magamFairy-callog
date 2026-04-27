@@ -11,8 +11,15 @@ jdbc:
       logging: true
 
 jwt:
+  key: ${JWT_SECRET}
   secret: ${JWT_SECRET}
   expire: ${JWT_EXPIRE}
+project:
+  aes:
+    key: aessecretkey01234567891011121314
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  secure-cookie: ${SECURE_COOKIE:false}
 
 spring:
   application:
