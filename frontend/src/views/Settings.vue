@@ -37,7 +37,7 @@ const toggleDarkMode = async () => {
 onMounted(async () => {
   try {
     const res = await getSettings()
-    settings.value = res
+    settings.value = res.data
     console.log('설정 정보를 불러왔습니다.')
   } catch (error) {
     console.error('설정 정보를 불러오는데 실패했습니다.', error)

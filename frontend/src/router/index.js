@@ -40,10 +40,19 @@ const routes = [
       {
         path: 'calendar',
         name: 'calendar',
-        component: () => import('@/views/CalendarView.vue'),
+        component: () => import('@/views/OverView.vue'),
         meta: {
           title: '캘린더',
           section: '운영 플래너',
+        },
+      },
+      {
+        path: 'overview',
+        name: 'overview',
+        component: () => import('@/views/OverView.vue'),
+        meta: {
+          title: '오버뷰',
+          section: '전체 일정 톺아보기',
         },
       },
       {
