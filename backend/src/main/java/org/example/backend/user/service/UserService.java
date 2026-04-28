@@ -8,6 +8,7 @@ import org.example.backend.user.model.User;
 import org.example.backend.user.model.UserAccountStatus;
 import org.example.backend.user.model.UserDto;
 import org.example.backend.user.repository.UserRepository;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -22,7 +23,9 @@ import java.util.Locale;
 @Service
 public class UserService implements UserDetailsService {
     private static final String LOGIN_ID_PREFIX = "CALLOG";
-    private static final String DEFAULT_ROLE = "ROLE_USER";
+    private static final String ADMIN_ROLE = "ROLE_ADMIN";
+    private static final String MANAGER_ROLE = "ROLE_MANAGER";
+    private static final String USER_ROLE = "ROLE_USER";
     private static final String PASSWORD_CHARACTERS =
             "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$";
     private static final int TEMPORARY_PASSWORD_LENGTH = 10;
@@ -32,11 +35,13 @@ public class UserService implements UserDetailsService {
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
-    public UserDto.CreateUserRes createUserByAdmin(UserDto.CreateUserReq dto) {
+    public UserDto.CreateUserRes createUser(UserDto.CreateUserReq dto, Authentication authentication) {
         if (dto == null) {
             throw new IllegalArgumentException("request body is required.");
         }
 
+        String creatorRole = resolveCreatorRole(authentication);
+        String targetRole = resolveCreatableRole(dto.role(), creatorRole);
         String teamCode = requireText(dto.teamCode(), "teamCode");
         String name = requireText(dto.name(), "name");
         String loginId = createUniqueLoginId(teamCode, name);
@@ -53,7 +58,7 @@ public class UserService implements UserDetailsService {
                 .name(name)
                 .password(passwordEncoder.encode(temporaryPassword))
                 .enable(true)
-                .role(resolveRole(dto.role()))
+                .role(targetRole)
                 .passwordResetRequired(true)
                 .accountStatus(UserAccountStatus.ACTIVE)
                 .build();
@@ -97,24 +102,62 @@ public class UserService implements UserDetailsService {
         return password.toString();
     }
 
-    private String resolveRole(String role) {
+    private String resolveCreatorRole(Authentication authentication) {
+        if (authentication == null) {
+            throw new IllegalArgumentException("creator authentication is required.");
+        }
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(authority -> ADMIN_ROLE.equals(authority.getAuthority()));
+        if (isAdmin) {
+            return ADMIN_ROLE;
+        }
+
+        boolean isManager = authentication.getAuthorities().stream()
+                .anyMatch(authority -> MANAGER_ROLE.equals(authority.getAuthority()));
+        if (isManager) {
+            return MANAGER_ROLE;
+        }
+
+        throw new IllegalArgumentException("계정을 생성할 권한이 없습니다.");
+    }
+
+    private String resolveCreatableRole(String requestedRole, String creatorRole) {
+        String targetRole = normalizeRole(requestedRole);
+
+        if (targetRole == null) {
+            targetRole = USER_ROLE;
+        }
+
+        if (ADMIN_ROLE.equals(creatorRole) && (MANAGER_ROLE.equals(targetRole) || USER_ROLE.equals(targetRole))) {
+            return targetRole;
+        }
+
+        if (MANAGER_ROLE.equals(creatorRole) && USER_ROLE.equals(targetRole)) {
+            return USER_ROLE;
+        }
+
+        throw new IllegalArgumentException("생성할 수 없는 권한입니다.");
+    }
+
+    private String normalizeRole(String role) {
         String normalizedRole = normalizeOptional(role);
         if (normalizedRole == null) {
-            return DEFAULT_ROLE;
+            return null;
         }
 
         String upperRole = normalizedRole.toUpperCase(Locale.ROOT);
-        if ("ADMIN".equals(upperRole)) {
-            return "ROLE_ADMIN";
+        if ("ADMIN".equals(upperRole) || ADMIN_ROLE.equals(upperRole)) {
+            return ADMIN_ROLE;
         }
-        if ("USER".equals(upperRole)) {
-            return DEFAULT_ROLE;
+        if ("MANAGER".equals(upperRole) || MANAGER_ROLE.equals(upperRole)) {
+            return MANAGER_ROLE;
         }
-        if ("ROLE_ADMIN".equals(upperRole) || "ROLE_USER".equals(upperRole)) {
-            return upperRole;
+        if ("USER".equals(upperRole) || USER_ROLE.equals(upperRole)) {
+            return USER_ROLE;
         }
 
-        return DEFAULT_ROLE;
+        throw new IllegalArgumentException("지원하지 않는 권한입니다.");
     }
 
     private String normalizeIdentifier(String value) {
