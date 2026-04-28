@@ -129,11 +129,11 @@ export const useAuthStore = defineStore('auth', () => {
         return user.value
       }
 
-      const loginId = credentialsOrToken?.loginId?.trim?.()
+      const id = credentialsOrToken?.id?.trim?.()
       const password = credentialsOrToken?.password
 
       const loginResult = await loginRequest({
-        loginId,
+        id,
         password,
       })
 

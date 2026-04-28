@@ -78,7 +78,7 @@ const profile = computed(() => store.findMember(store.currentUserId))
 
 const userInitials = computed(() => {
   if (profile.value?.initials) return profile.value.initials
-  const name = authStore.user?.name ?? authStore.user?.loginId ?? ''
+  const name = authStore.user?.name ?? authStore.user?.id ?? ''
   return name.charAt(0).toUpperCase() || 'U'
 })
 

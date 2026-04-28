@@ -72,14 +72,14 @@ async function handleCreateUser() {
     }
 
     const createdUser = await createUserRequest(payload)
-    const loginId = createdUser.id ?? createdUser.loginId
+    const id = createdUser.id
     const temporaryPassword = createdUser.password
 
-    if (!loginId || !temporaryPassword) {
+    if (!id || !temporaryPassword) {
       throw new Error('계정 생성 응답에서 아이디 또는 임시 비밀번호를 찾지 못했습니다.')
     }
 
-    openResultModal(loginId, temporaryPassword, createdUser.role ?? newUser.role)
+    openResultModal(id, temporaryPassword, createdUser.role ?? newUser.role)
   } catch (error) {
     errorMessage.value =
       error?.response?.data?.message ??
