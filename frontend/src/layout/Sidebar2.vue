@@ -78,7 +78,7 @@ const profile = computed(() => store.findMember(store.currentUserId))
 
 const userInitials = computed(() => {
   if (profile.value?.initials) return profile.value.initials
-  const name = authStore.user?.name ?? authStore.user?.loginId ?? ''
+  const name = authStore.user?.name ?? authStore.user?.id ?? ''
   return name.charAt(0).toUpperCase() || 'U'
 })
 
@@ -224,10 +224,9 @@ onBeforeUnmount(() => {
         >
           <span class="sidebar2__item-icon" v-html="item.icon" />
           <span class="sidebar2__item-label">{{ item.label }}</span>
-          <span
-            v-if="item.badgeKey && badges[item.badgeKey]"
-            class="sidebar2__item-badge"
-          >{{ badges[item.badgeKey] }}</span>
+          <span v-if="item.badgeKey && badges[item.badgeKey]" class="sidebar2__item-badge">{{
+            badges[item.badgeKey]
+          }}</span>
         </RouterLink>
       </nav>
 
@@ -260,16 +259,44 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .sidebar2 {
+  --sidebar2-surface: var(--sidebar-color);
+  --sidebar2-panel: color-mix(in srgb, var(--panel-muted) 82%, var(--panel-color));
+  --sidebar2-hover: color-mix(in srgb, var(--panel-muted) 90%, var(--panel-color));
+  --sidebar2-menu-color: #6b7280;
+  --sidebar2-menu-color-strong: #111827;
+  --sidebar2-menu-hover-bg: #f9fafb;
+  --sidebar2-menu-active-bg: #f3e8ff;
+  --sidebar2-menu-active-ink: #5b21b6;
+  --sidebar2-menu-indicator: #5b21b6;
+  --sidebar2-menu-badge-bg: #f3e8ff;
+  --sidebar2-menu-badge-text: #6d28d9;
+  --sidebar2-active-shadow: color-mix(in srgb, var(--accent-color) 24%, transparent);
   width: var(--sidebar2-width, var(--sidebar-width));
   flex-shrink: 0;
-  background: #ffffff;
-  border-right: 1px solid var(--color-gray-200);
+  background: var(--sidebar2-surface);
+  border-right: 1px solid var(--border-color);
   overflow: hidden;
-  transition: width var(--transition-normal);
+  color: var(--text-primary);
+  transition:
+    width var(--transition-normal),
+    background var(--transition-normal),
+    border-color var(--transition-normal),
+    color var(--transition-normal);
   height: 100vh;
   position: sticky;
   top: 0;
   z-index: 15;
+}
+
+[data-theme='dark'] .sidebar2 {
+  --sidebar2-menu-color: #a7a0bb;
+  --sidebar2-menu-color-strong: #ffffff;
+  --sidebar2-menu-hover-bg: #171421;
+  --sidebar2-menu-active-bg: #2a2140;
+  --sidebar2-menu-active-ink: #ddd6fe;
+  --sidebar2-menu-indicator: #c4b5fd;
+  --sidebar2-menu-badge-bg: #2a2140;
+  --sidebar2-menu-badge-text: #c4b5fd;
 }
 
 .sidebar2--resizing {
@@ -317,8 +344,8 @@ onBeforeUnmount(() => {
 .sidebar2__resize-handle:hover::before,
 .sidebar2__resize-handle:focus-visible::before,
 .sidebar2--resizing .sidebar2__resize-handle::before {
-  background: var(--color-primary-300);
-  box-shadow: -4px 0 14px rgba(139, 92, 246, 0.18);
+  background: var(--accent-color);
+  box-shadow: -4px 0 14px var(--sidebar2-active-shadow);
 }
 
 .sidebar2__resize-handle:focus-visible {
@@ -339,7 +366,7 @@ onBeforeUnmount(() => {
 .sidebar2__logo {
   font-size: 18px;
   font-weight: 700;
-  color: var(--color-gray-900);
+  color: var(--text-primary);
   text-decoration: none;
   letter-spacing: -0.02em;
 }
@@ -347,8 +374,8 @@ onBeforeUnmount(() => {
 /* Active Campaign */
 .sidebar2__campaign {
   margin: 8px 12px 0;
-  background: var(--color-gray-50);
-  border: 1px solid var(--color-gray-200);
+  background: var(--sidebar2-panel);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 12px 14px;
   flex-shrink: 0;
@@ -356,7 +383,7 @@ onBeforeUnmount(() => {
 
 .sidebar2__campaign-label {
   font-size: 11px;
-  color: var(--color-gray-400);
+  color: var(--subtle-text);
   margin-bottom: 4px;
   font-weight: 500;
   white-space: nowrap;
@@ -365,7 +392,7 @@ onBeforeUnmount(() => {
 .sidebar2__campaign-name {
   font-size: 14px;
   font-weight: 700;
-  color: var(--color-gray-900);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -373,7 +400,7 @@ onBeforeUnmount(() => {
 
 .sidebar2__campaign-period {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--muted-text);
   margin-top: 4px;
   white-space: nowrap;
 }
@@ -381,7 +408,7 @@ onBeforeUnmount(() => {
 /* 구분선 */
 .sidebar2__divider {
   height: 1px;
-  background: var(--color-gray-200);
+  background: var(--border-color);
   margin: 16px 12px 8px;
   flex-shrink: 0;
 }
@@ -390,8 +417,8 @@ onBeforeUnmount(() => {
 .sidebar2__nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0 8px;
+  gap: 4px;
+  padding: 8px 12px 16px;
   flex: 1;
 }
 
@@ -399,24 +426,36 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  min-height: 38px;
+  padding: 8px 12px;
   border-radius: var(--radius-md);
   font-size: 14px;
-  color: var(--color-gray-600);
+  color: var(--sidebar2-menu-color);
+  background: transparent;
   text-decoration: none;
-  transition: all var(--transition-fast);
-  position: relative;
+  font-weight: 500;
+  text-align: left;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
   white-space: nowrap;
 }
 
 .sidebar2__item:hover {
-  background: var(--color-gray-50);
-  color: var(--color-gray-900);
+  background: var(--sidebar2-menu-hover-bg);
+  color: var(--sidebar2-menu-color-strong);
 }
 
 .sidebar2__item.active {
-  background: var(--color-primary-500);
-  color: white;
+  background: var(--sidebar2-menu-active-bg);
+  box-shadow: inset 4px 0 0 var(--sidebar2-menu-indicator);
+  color: var(--sidebar2-menu-active-ink);
+}
+
+.sidebar2__item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary-300) 88%, transparent);
+  outline-offset: 2px;
 }
 
 .sidebar2__item-icon {
@@ -435,25 +474,22 @@ onBeforeUnmount(() => {
 }
 
 .sidebar2__item-badge {
+  min-width: 22px;
   margin-left: auto;
-  background: var(--color-primary-100);
-  color: var(--color-primary-700);
-  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--sidebar2-menu-badge-bg);
+  color: var(--sidebar2-menu-badge-text);
+  font-size: 12px;
   font-weight: 600;
-  padding: 1px 7px;
-  border-radius: var(--radius-full);
   flex-shrink: 0;
-}
-
-.sidebar2__item.active .sidebar2__item-badge {
-  background: rgba(255, 255, 255, 0.25);
-  color: white;
+  text-align: center;
 }
 
 /* 하단 프로필 */
 .sidebar2__profile {
   padding: 12px 8px;
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
@@ -468,15 +504,15 @@ onBeforeUnmount(() => {
 }
 
 .sidebar2__profile-link:hover {
-  background: var(--color-gray-50);
+  background: var(--sidebar2-hover);
 }
 
 .sidebar2__profile-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--color-primary-100);
-  color: var(--color-primary-700);
+  background: var(--badge-bg);
+  color: var(--badge-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -492,7 +528,7 @@ onBeforeUnmount(() => {
 .sidebar2__profile-name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -500,7 +536,7 @@ onBeforeUnmount(() => {
 
 .sidebar2__profile-role {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--muted-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

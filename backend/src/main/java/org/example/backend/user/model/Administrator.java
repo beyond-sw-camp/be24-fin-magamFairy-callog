@@ -2,6 +2,8 @@ package org.example.backend.user.model;
 
 
 import lombok.RequiredArgsConstructor;
+import org.example.backend.organization.model.Organization;
+import org.example.backend.organization.service.OrganizationService;
 import org.example.backend.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -13,7 +15,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class Administrator implements ApplicationRunner {
 
-    @Value("${admin.login-id}") private String ADMIN_LOGIN_ID;
+    @Value("${admin.id}") private String ADMIN_ID;
     @Value("${admin.email}") private String ADMIN_EMAIL;
     @Value("${admin.name}") private String ADMIN_NAME;
     @Value("${admin.role}") private String ADMIN_ROLE;
@@ -21,27 +23,29 @@ public class Administrator implements ApplicationRunner {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final OrganizationService organizationService;
 
     @Override
     public void run(ApplicationArguments args) {
-        User admin = userRepository.findByLoginId(ADMIN_LOGIN_ID)
+        Organization headquarters = organizationService.ensureHeadquarters();
+        User admin = userRepository.findUserById(ADMIN_ID)
                 .or(() -> userRepository.findByEmail(ADMIN_EMAIL))
                 .orElseGet(() -> User.builder()
-                        .loginId(ADMIN_LOGIN_ID)
+                        .id(ADMIN_ID)
                         .email(ADMIN_EMAIL)
                         .name(ADMIN_NAME)
                         .enable(true)
                         .role(ADMIN_ROLE)
-                        .passwordResetRequired(false)
                         .accountStatus(UserAccountStatus.ACTIVE)
+                        .organization(headquarters)
                         .build());
 
-        admin.setLoginId(ADMIN_LOGIN_ID);
+        admin.setId(ADMIN_ID);
         admin.setEmail(ADMIN_EMAIL);
         admin.setName(ADMIN_NAME);
         admin.setEnable(true);
         admin.setRole(ADMIN_ROLE);
-        admin.setPasswordResetRequired(false);
+        admin.setOrganization(headquarters);
         admin.setAccountStatus(UserAccountStatus.ACTIVE);
 
         if (shouldResetPassword(admin.getPassword())) {

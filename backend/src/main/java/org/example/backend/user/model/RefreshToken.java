@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @Table(indexes = {
-        @Index(name = "idx_refresh_token_login_id", columnList = "loginId"),
+        @Index(name = "idx_refresh_token_user_id", columnList = "userId"),
         @Index(name = "idx_refresh_token_token", columnList = "token"),
         @Index(name = "idx_refresh_token_expiry", columnList = "expiryDate")
 })
@@ -31,7 +31,7 @@ public class RefreshToken {
     private Long id;
 
     @Column(nullable = false, unique = true)
-    private String loginId;
+    private String userId;
 
     @Column(nullable = false, length = 512)
     private String token;

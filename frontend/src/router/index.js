@@ -22,6 +22,15 @@ const routes = [
         },
       },
       {
+        path: 'campaign-folder',
+        name: 'campaign-folder',
+        component: () => import('@/views/CampaignFolderView.vue'),
+        meta: {
+          title: '캠페인 보관함',
+          section: '완료 캠페인 보관함',
+        },
+      },
+      {
         path: 'content/new',
         name: 'content-create',
         component: () => import('@/views/ContentEditorView.vue'),
@@ -40,10 +49,19 @@ const routes = [
       {
         path: 'calendar',
         name: 'calendar',
-        component: () => import('@/views/CalendarView.vue'),
+        component: () => import('@/views/OverView.vue'),
         meta: {
           title: '캘린더',
           section: '운영 플래너',
+        },
+      },
+      {
+        path: 'overview',
+        name: 'overview',
+        component: () => import('@/views/OverView.vue'),
+        meta: {
+          title: '오버뷰',
+          section: '전체 일정 톺아보기',
         },
       },
       {
@@ -53,6 +71,16 @@ const routes = [
         meta: {
           title: '설정',
           section: '설정',
+        },
+      },
+      {
+        path: 'admin/user',
+        name: 'user-provisioning',
+        component: () => import('@/views/UserProvisioningView.vue'),
+        meta: {
+          requiresAccountCreator: true,
+          title: 'USER 계정 발급',
+          section: '관리자',
         },
       },
       {
@@ -132,16 +160,6 @@ const routes = [
           section: '로그인',
         },
       },
-      {
-        path: 'signup',
-        name: 'signup',
-        component: () => import('@/views/Signup.vue'),
-        meta: {
-          requiresAuth: true,
-          title: '회원가입',
-          section: '회원 생성',
-        },
-      },
     ],
   },
 ]
@@ -159,15 +177,20 @@ router.beforeEach((to) => {
   }
 
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
+  const requiresAccountCreator = to.matched.some((record) => record.meta.requiresAccountCreator)
   const guestOnly = to.matched.some((record) => record.meta.guestOnly)
 
-  if (requiresAuth && !authStore.isAuthenticated) {
+  if ((requiresAuth || requiresAccountCreator) && !authStore.isAuthenticated) {
     return {
       name: 'login',
       query: {
         redirect: to.fullPath,
       },
     }
+  }
+
+  if (requiresAccountCreator && !authStore.canCreateUsers) {
+    return { name: 'dashboard' }
   }
 
   if (guestOnly && authStore.isAuthenticated) {

@@ -15,30 +15,26 @@ public class UserDto {
     public record CreateUserRes(
             Long idx,
             String id,
-            String loginId,
             String email,
             String name,
             String role,
-            String password,
-            boolean passwordResetRequired
+            String password
     ) {
         public static CreateUserRes from(User entity, String temporaryPassword) {
             return CreateUserRes.builder()
                     .idx(entity.getIdx())
-                    .id(entity.getLoginId())
-                    .loginId(entity.getLoginId())
+                    .id(entity.getId())
                     .email(entity.getEmail())
                     .name(entity.getName())
                     .role(entity.getRole())
                     .password(temporaryPassword)
-                    .passwordResetRequired(Boolean.TRUE.equals(entity.getPasswordResetRequired()))
                     .build();
         }
     }
 
-    public record LoginReq(String email, String loginId, String password) {
+    public record LoginReq(String email, String id, String password) {
         public String username() {
-            return loginId != null && !loginId.isBlank() ? loginId : email;
+            return id != null && !id.isBlank() ? id : email;
         }
     }
 }
