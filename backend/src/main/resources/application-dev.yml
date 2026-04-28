@@ -1,0 +1,54 @@
+server:
+  port: 8080
+  error:
+    whitelabel:
+      enabled: false  # 기본 whitelabel 에러 페이지 비활성화
+    path: /error
+
+jdbc:
+  datasource:
+    proxy:
+      logging: true
+
+jwt:
+  key: ${JWT_SECRET}
+  secret: ${JWT_SECRET}
+  expire: ${JWT_EXPIRE}
+project:
+  aes:
+    key: aessecretkey01234567891011121314
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  secure-cookie: ${SECURE_COOKIE:false}
+admin:
+  login-id: ${ADMIN_LOGIN_ID}
+  email: ${ADMIN_EMAIL}
+  name: ${ADMIN_NAME}
+  role: ${ADMIN_ROLE}
+  password: ${ADMIN_PASSWORD}
+spring:
+  application:
+    name: callog
+  datasource:
+    driver-class-name: org.mariadb.jdbc.Driver
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASS}
+    hikari:
+      initialization-fail-timeout: 120000 # 120초 동안은 실패해도 포기하지 않고 재시도
+      connection-timeout: 15000 # 15초마다 재시도, 총 4회까지 연결 시도
+
+  jpa:
+    database-platform: org.hibernate.dialect.MariaDBDialect
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
+    org.example: debug
+    net.ttddyy.observation: DEBUG

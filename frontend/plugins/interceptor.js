@@ -45,7 +45,7 @@ api.interceptors.response.use(
     const isAuthRequest =
       requestUrl.includes('/auth/login') ||
       requestUrl.includes('/auth/logout') ||
-      requestUrl.includes('/auth/refresh')
+      requestUrl.includes('/auth/reissue')
 
     if (status === 401 && !isAuthRequest) {
       clearStoredAuth()

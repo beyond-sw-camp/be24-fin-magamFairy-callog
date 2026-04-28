@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { logoutRequest } from '@/authApi'
+import { loginRequest, logoutRequest } from '@/authApi'
 import {
   clearStoredAuth,
   persistAccessToken,
@@ -8,17 +8,6 @@ import {
   readStoredToken,
   readStoredUser,
 } from '@/authStorage'
-
-function createMockAuthUser(loginId = 'dev-user') {
-  return {
-    id: 'dev-user',
-    loginId,
-    name: 'Dev User',
-    nickname: 'DEV',
-    role: 'ADMIN',
-    teamId: 'dev-team',
-  }
-}
 
 function decodeJwtPayload(accessToken) {
   if (!accessToken) {
@@ -133,14 +122,20 @@ export const useAuthStore = defineStore('auth', () => {
         return user.value
       }
 
-      // Temporary mock auth flow until the backend login API is ready.
-      const loginId = credentialsOrToken?.loginId?.trim?.() || 'dev-user'
+      const loginId = credentialsOrToken?.loginId?.trim?.()
+      const password = credentialsOrToken?.password
 
-      applyAuth('mock.pending-backend-token', createMockAuthUser(loginId))
+      const loginResult = await loginRequest({
+        loginId,
+        password,
+      })
+
+      applyAuth(loginResult.accessToken, loginResult)
       isHydrated.value = true
 
       return user.value
-    } catch {
+    } catch (error) {
+      console.warn('Login request failed.', error)
       clearAuthState()
       isHydrated.value = true
 
@@ -158,7 +153,7 @@ export const useAuthStore = defineStore('auth', () => {
       return null
     }
 
-    const nextUser = user.value ?? createMockAuthUser()
+    const nextUser = user.value ?? normalizeUserInfo(null, token.value)
 
     user.value = nextUser
     persistUserInfo(nextUser)
@@ -167,15 +162,15 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
-  try {
-    await logoutRequest()
-  } catch (error) {
-    console.warn('Logout request failed.', error)
-  } finally {
-    clearAuthState()
-    isHydrated.value = true
+    try {
+      await logoutRequest()
+    } catch (error) {
+      console.warn('Logout request failed.', error)
+    } finally {
+      clearAuthState()
+      isHydrated.value = true
+    }
   }
-}
 
 
   return {
