@@ -1,4 +1,10 @@
 <script setup>
+import { computed } from 'vue'
+import { usePlannerStore } from '@/stores/planner'
+
+const store = usePlannerStore()
+const activeCampaign = computed(() => store.activeCampaign)
+
 const stats = [
   { label: '전체 진행률', value: '68%', caption: '+12% this week', positive: true },
   { label: '검토 대기', value: '3', caption: '초청장, 배너, SNS' },
@@ -58,9 +64,12 @@ const reviews = [
     <header class="hq-dashboard__hero">
       <div>
         <p class="hq-dashboard__eyebrow">본사 통합 대시보드</p>
-        <h2>Campaign Dashboard</h2>
+        <h2>{{ activeCampaign?.name ?? 'Campaign Dashboard' }}</h2>
+        <span v-if="activeCampaign?.purpose" class="hq-dashboard__summary">
+          {{ activeCampaign.purpose }}
+        </span>
       </div>
-      <span class="hq-dashboard__status">Live</span>
+      <span class="hq-dashboard__status">{{ activeCampaign?.status ?? 'Live' }}</span>
     </header>
 
     <section class="hq-dashboard__stats" aria-label="핵심 지표">
@@ -193,6 +202,13 @@ const reviews = [
   color: var(--text-primary);
   font-size: 24px;
   font-weight: 700;
+}
+
+.hq-dashboard__summary {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted-text);
+  font-size: 13px;
 }
 
 .hq-dashboard__status,

@@ -22,6 +22,15 @@ const routes = [
         },
       },
       {
+        path: 'campaign-folder',
+        name: 'campaign-folder',
+        component: () => import('@/views/CampaignFolderView.vue'),
+        meta: {
+          title: '캠페인 보관함',
+          section: '완료 캠페인 보관함',
+        },
+      },
+      {
         path: 'content/new',
         name: 'content-create',
         component: () => import('@/views/ContentEditorView.vue'),
@@ -160,14 +169,14 @@ router.beforeEach((to) => {
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
   const guestOnly = to.matched.some((record) => record.meta.guestOnly)
 
-  if (requiresAuth && !authStore.isAuthenticated) {
-    return {
-      name: 'login',
-      query: {
-        redirect: to.fullPath,
-      },
-    }
-  }
+  // if (requiresAuth && !authStore.isAuthenticated) {
+  //   return {
+  //     name: 'login',
+  //     query: {
+  //       redirect: to.fullPath,
+  //     },
+  //   }
+  // }
 
   if (guestOnly && authStore.isAuthenticated) {
     return { name: 'dashboard' }
