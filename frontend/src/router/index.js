@@ -61,7 +61,7 @@ const routes = [
         component: () => import('@/views/OverView.vue'),
         meta: {
           title: '오버뷰',
-          section: '전체 일정 톺아보기',
+          section: '전체 일정 모아보기',
         },
       },
       {
@@ -106,7 +106,7 @@ const routes = [
         name: 'frames',
         component: () => import('@/views/FramesView.vue'),
         meta: {
-          title: '??? ???',
+          title: '캠페인 프레임',
           section: '??? ?? ??',
         
         },
@@ -141,6 +141,15 @@ const routes = [
         meta: {
           title: '알림 센터',
           section: '알림 전체를 확인하고 관리하는 곳',
+        },
+      },
+      {
+        path: 'matching',
+        name: 'matching',
+        component: () => import('@/views/MatchOverview.vue'),
+        meta: {
+          title: '매칭',
+          section: '매치 엔진',
         },
       },
     ],
