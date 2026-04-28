@@ -22,7 +22,7 @@ import java.util.Locale;
 @RequiredArgsConstructor
 @Service
 public class UserService implements UserDetailsService {
-    private static final String LOGIN_ID_PREFIX = "CALLOG";
+    private static final String ID_PREFIX = "CALLOG";
     private static final String ADMIN_ROLE = "ROLE_ADMIN";
     private static final String MANAGER_ROLE = "ROLE_MANAGER";
     private static final String USER_ROLE = "ROLE_USER";
@@ -44,7 +44,7 @@ public class UserService implements UserDetailsService {
         String targetRole = resolveCreatableRole(dto.role(), creatorRole);
         String teamCode = requireText(dto.teamCode(), "teamCode");
         String name = requireText(dto.name(), "name");
-        String loginId = createUniqueLoginId(teamCode, name);
+        String id = createUniqueId(teamCode, name);
         String email = normalizeOptional(dto.email());
 
         if (email != null && userRepository.existsByEmail(email)) {
@@ -53,13 +53,12 @@ public class UserService implements UserDetailsService {
 
         String temporaryPassword = generateTemporaryPassword();
         User user = User.builder()
-                .loginId(loginId)
+                .id(id)
                 .email(email)
                 .name(name)
                 .password(passwordEncoder.encode(temporaryPassword))
                 .enable(true)
                 .role(targetRole)
-                .passwordResetRequired(true)
                 .accountStatus(UserAccountStatus.ACTIVE)
                 .build();
 
@@ -73,20 +72,20 @@ public class UserService implements UserDetailsService {
             throw new UsernameNotFoundException("user not found");
         }
 
-        User user = userRepository.findByLoginId(normalizedUsername)
+        User user = userRepository.findUserById(normalizedUsername)
                 .or(() -> userRepository.findByEmail(normalizedUsername))
                 .orElseThrow(() -> new UsernameNotFoundException("user not found"));
 
         return AuthUserDetails.from(user);
     }
 
-    private String createUniqueLoginId(String teamCode, String name) {
-        String baseLoginId = String.join("_", LOGIN_ID_PREFIX, normalizeIdentifier(teamCode), normalizeIdentifier(name));
-        String candidate = baseLoginId;
+    private String createUniqueId(String teamCode, String name) {
+        String baseId = String.join("_", ID_PREFIX, normalizeIdentifier(teamCode), normalizeIdentifier(name));
+        String candidate = baseId;
         int suffix = 2;
 
-        while (userRepository.existsByLoginId(candidate)) {
-            candidate = baseLoginId + suffix;
+        while (userRepository.existsUserById(candidate)) {
+            candidate = baseId + suffix;
             suffix += 1;
         }
 

@@ -70,7 +70,6 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("accessToken", tokens.accessToken());
         body.put("id", user.getId());
-        body.put("loginId", user.getId());
         body.put("email", user.getEmail());
         body.put("name", user.getName());
         body.put("role", user.getRole());
@@ -87,7 +86,7 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
         response.setContentType("application/json;charset=UTF-8");
         new ObjectMapper().writeValue(response.getWriter(), Map.of(
                 "error", "login failed",
-                "message", "Login ID or password is invalid."
+                "message", "ID or password is invalid."
         ));
     }
 
