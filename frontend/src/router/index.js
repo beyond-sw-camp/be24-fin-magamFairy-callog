@@ -15,10 +15,10 @@ const routes = [
       {
         path: 'dashboard',
         name: 'dashboard',
-        component: () => import('@/views/DashboardView.vue'),
+        component: () => import('@/views/HqDashboardView.vue'),
         meta: {
-          title: '대시보드',
-          section: '운영 플래너',
+          title: '메인',
+          section: '본사 통합 대시보드',
         },
       },
       {
