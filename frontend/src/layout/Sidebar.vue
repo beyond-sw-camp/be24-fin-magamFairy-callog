@@ -5,6 +5,11 @@ import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
 import CampaignCreateModal from '@/components/campaign/CampaignCreateModal.vue'
 import { campaignLabels, campaignSidebarText, campaignStatusMeta } from '@/constants/campaignText'
+import {
+  CreateCampaign,
+  UpdateCampaign,
+  UpdateCampaignStatus,
+} from '@/api/campaigns'
 
 const route = useRoute()
 const router = useRouter()
@@ -188,6 +193,10 @@ const contextMenuActions = computed(() => {
 
 let previewHideTimer = null
 
+function isServerCampaignId(campaignId) {
+  return /^\d+$/.test(String(campaignId))
+}
+
 function getCampaignStatusMeta(status) {
   return campaignStatusMeta[status] ?? { label: campaignStatusMeta.draft.label, tone: 'draft' }
 }
@@ -320,20 +329,38 @@ function openFolderPage() {
   router.push({ name: 'campaign-folder' })
 }
 
-function handleCampaignSubmit(payload) {
-  const campaign =
-    campaignModalMode.value === 'edit' && editingCampaignId.value
-      ? store.updateCampaign(editingCampaignId.value, payload)
-      : store.createCampaign(payload)
+async function handleCampaignSubmit(payload) {
+  try {
+    const campaign =
+      campaignModalMode.value === 'edit' && editingCampaignId.value
+        ? await saveExistingCampaign(editingCampaignId.value, payload)
+        : await saveNewCampaign(payload)
 
-  closeCreateModal()
+    closeCreateModal()
 
-  if (campaign?.id) {
-    selectCampaign(campaign.id)
+    if (campaign?.id) {
+      selectCampaign(campaign.id)
+    }
+  } catch (error) {
+    console.warn('Campaign save failed', error)
   }
 }
 
-function handleContextMenuAction(action) {
+async function saveNewCampaign(payload) {
+  const savedCampaign = await CreateCampaign(payload)
+  return store.createCampaign(savedCampaign)
+}
+
+async function saveExistingCampaign(campaignId, payload) {
+  if (!isServerCampaignId(campaignId)) {
+    return store.updateCampaign(campaignId, payload)
+  }
+
+  const savedCampaign = await UpdateCampaign(campaignId, payload)
+  return store.updateCampaign(campaignId, savedCampaign)
+}
+
+async function handleContextMenuAction(action) {
   const campaign = contextCampaign.value
 
   if (!campaign) {
@@ -346,7 +373,17 @@ function handleContextMenuAction(action) {
   }
 
   if (action.nextStatus) {
-    store.updateCampaignStatus(campaign.id, action.nextStatus)
+    try {
+      if (isServerCampaignId(campaign.id)) {
+        const savedCampaign = await UpdateCampaignStatus(campaign.id, action.nextStatus)
+        store.updateCampaign(campaign.id, savedCampaign)
+      } else {
+        store.updateCampaignStatus(campaign.id, action.nextStatus)
+      }
+    } catch (error) {
+      console.warn('Campaign status update failed', error)
+      return
+    }
   }
 
   closeCampaignMenu()

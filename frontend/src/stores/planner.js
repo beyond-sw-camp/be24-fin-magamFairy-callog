@@ -18,6 +18,8 @@ import {
   templateLibrary,
 } from '@/data/scheduleSeed'
 import editorApi from '@/api/editor/editorApi'
+import { ListCampaign } from '@/api/campaigns'
+import { readStoredToken } from '@/authStorage'
 
 const themeStorageKey = 'kellog-theme'
 const tasksStorageKey = 'kellog-tasks'
@@ -138,6 +140,36 @@ function createCampaignInitials(name) {
   return initials.toUpperCase()
 }
 
+function normalizeCampaignRecord(source, fallback = {}) {
+  const merged = {
+    ...fallback,
+    ...(source ?? {}),
+  }
+  const name = merged.name?.trim?.() || fallback.name || ''
+  const startDate = merged.startDate || ''
+  const endDate = merged.endDate || ''
+  const id = merged.id ?? merged.idx ?? fallback.id ?? `campaign-${Date.now()}`
+
+  return {
+    id: String(id),
+    idx: merged.idx ?? null,
+    name,
+    purpose: merged.purpose?.trim?.() || '',
+    tags: Array.isArray(merged.tags) ? merged.tags : [],
+    startDate,
+    endDate,
+    period: merged.period || formatCampaignPeriod(startDate, endDate),
+    partners: Array.isArray(merged.partners) ? merged.partners : [],
+    goals: merged.goals?.trim?.() || '',
+    mainMessage: merged.mainMessage?.trim?.() || '',
+    status: merged.status || fallback.status || 'draft',
+    initials: merged.initials || createCampaignInitials(name),
+    color: merged.color || fallback.color || '#8B5CF6',
+    createdAt: merged.createdAt ?? fallback.createdAt,
+    updatedAt: merged.updatedAt ?? fallback.updatedAt,
+  }
+}
+
 export const usePlannerStore = defineStore('planner', () => {
   const sidebarCollapsed = ref(true)
   const campaigns = ref(cloneValue(defaultCampaigns))
@@ -145,6 +177,8 @@ export const usePlannerStore = defineStore('planner', () => {
   const campaignUiOwnerKey = ref(currentUserId)
   const campaignOrder = ref(defaultCampaigns.map((campaign) => campaign.id))
   const campaignFolderIds = ref([])
+  const campaignServerHydrated = ref(false)
+  const campaignServerLoadPending = ref(false)
   const legacyActiveCampaign = ref({
     name: '프리미엄 라이프스타일',
     period: '2026.05.01 - 2026.06.15',
@@ -277,6 +311,37 @@ export const usePlannerStore = defineStore('planner', () => {
     syncCampaignUiState()
   }
 
+  async function loadCampaignsFromServer() {
+    if (!readStoredToken() || campaignServerLoadPending.value) {
+      return campaigns.value
+    }
+
+    campaignServerLoadPending.value = true
+
+    try {
+      const loadedCampaigns = await ListCampaign()
+
+      if (Array.isArray(loadedCampaigns)) {
+        const nextCampaigns = loadedCampaigns.map((campaign) => normalizeCampaignRecord(campaign))
+
+        campaigns.value = nextCampaigns
+        campaignOrder.value = nextCampaigns.map((campaign) => campaign.id)
+        activeCampaignId.value = nextCampaigns.some((campaign) => campaign.id === activeCampaignId.value)
+          ? activeCampaignId.value
+          : nextCampaigns[0]?.id ?? null
+        campaignServerHydrated.value = true
+        syncCampaignUiState()
+      }
+
+      return campaigns.value
+    } catch (error) {
+      console.warn('loadCampaignsFromServer failed', error)
+      return campaigns.value
+    } finally {
+      campaignServerLoadPending.value = false
+    }
+  }
+
   function applyTheme(nextTheme) {
     if (typeof document === 'undefined') {
       return
@@ -326,6 +391,10 @@ export const usePlannerStore = defineStore('planner', () => {
 
     applyTheme(theme.value)
     hydrateCampaignUiState()
+
+    if (!campaignServerHydrated.value && readStoredToken()) {
+      void loadCampaignsFromServer()
+    }
   }
 
   watch(
@@ -525,7 +594,8 @@ export const usePlannerStore = defineStore('planner', () => {
     const startDate = payload.startDate || ''
     const endDate = payload.endDate || ''
     const nextCampaign = {
-      id: `campaign-${Date.now()}`,
+      id: String(payload.id ?? payload.idx ?? `campaign-${Date.now()}`),
+      idx: payload.idx ?? null,
       name,
       purpose: payload.purpose?.trim() || '',
       tags: Array.isArray(payload.tags) ? payload.tags : [],
@@ -535,10 +605,11 @@ export const usePlannerStore = defineStore('planner', () => {
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
       mainMessage: payload.mainMessage?.trim() || '',
-      status: 'draft',
-      initials: createCampaignInitials(name),
+      status: payload.status || 'draft',
+      initials: payload.initials || createCampaignInitials(name),
       color: payload.color || '#8B5CF6',
-      createdAt: new Date().toISOString(),
+      createdAt: payload.createdAt ?? new Date().toISOString(),
+      updatedAt: payload.updatedAt,
     }
 
     campaigns.value.unshift(nextCampaign)
@@ -562,17 +633,21 @@ export const usePlannerStore = defineStore('planner', () => {
 
     const nextCampaign = {
       ...currentCampaign,
+      idx: payload.idx ?? currentCampaign.idx ?? null,
       name,
       purpose: payload.purpose?.trim() || '',
       tags: Array.isArray(payload.tags) ? payload.tags : [],
       startDate,
       endDate,
-      period: formatCampaignPeriod(startDate, endDate),
+      period: payload.period || formatCampaignPeriod(startDate, endDate),
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
       mainMessage: payload.mainMessage?.trim() || '',
-      initials: createCampaignInitials(name),
-      updatedAt: new Date().toISOString(),
+      status: payload.status || currentCampaign.status,
+      initials: payload.initials || createCampaignInitials(name),
+      color: payload.color || currentCampaign.color,
+      createdAt: payload.createdAt ?? currentCampaign.createdAt,
+      updatedAt: payload.updatedAt ?? new Date().toISOString(),
     }
 
     campaigns.value[index] = nextCampaign
