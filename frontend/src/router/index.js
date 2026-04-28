@@ -22,6 +22,15 @@ const routes = [
         },
       },
       {
+        path: 'campaign-folder',
+        name: 'campaign-folder',
+        component: () => import('@/views/CampaignFolderView.vue'),
+        meta: {
+          title: '캠페인 보관함',
+          section: '완료 캠페인 보관함',
+        },
+      },
+      {
         path: 'content/new',
         name: 'content-create',
         component: () => import('@/views/ContentEditorView.vue'),
