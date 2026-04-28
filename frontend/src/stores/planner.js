@@ -17,6 +17,7 @@ import {
   teamMembers,
   templateLibrary,
 } from '@/data/scheduleSeed'
+import editorApi from '@/api/editor/editorApi'
 
 const themeStorageKey = 'kellog-theme'
 const tasksStorageKey = 'kellog-tasks'
@@ -68,6 +69,11 @@ function safeParseTasks(value) {
 
 export const usePlannerStore = defineStore('planner', () => {
   const sidebarCollapsed = ref(true)
+  const activeCampaign = ref({
+    name: '프리미엄 라이프스타일',
+    period: '2026.05.01 - 2026.06.15',
+    status: 'live',
+  })
   const theme = ref('light')
   const activeMode = ref('personal')
   const calendarView = ref('month')
@@ -289,10 +295,25 @@ export const usePlannerStore = defineStore('planner', () => {
         : addMonths(currentDate.value, step)
   }
 
-  function openTask(taskId) {
+  async function openTask(taskId) {
+    if (!taskId) {
+      return
+    }
+
     selectedTaskId.value = taskId
     modalMode.value = 'view'
-    taskOpenToken.value += 1
+
+    try {
+      const loadedTask = await editorApi.loadContent(taskId)
+
+      if (loadedTask && typeof loadedTask === 'object' && !Array.isArray(loadedTask)) {
+        updateTask(taskId, { ...loadedTask, id: taskId })
+      }
+    } catch (error) {
+      console.warn('loadContent failed', error)
+    } finally {
+      taskOpenToken.value += 1
+    }
   }
 
   function closeTask() {
@@ -377,6 +398,7 @@ export const usePlannerStore = defineStore('planner', () => {
   }
 
   return {
+    activeCampaign,
     activeMode,
     calendarTab,
     calendarView,

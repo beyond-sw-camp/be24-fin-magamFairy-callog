@@ -1,7 +1,9 @@
 <script setup>
 import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
-import Header from '@/components/Header.vue'
+import AppHeader from '@/components/Header.vue'
+import AppSidebar from '@/layout/Sidebar.vue'
+import AppSidebar2 from '@/layout/Sidebar2.vue'
 import TaskModal from '@/components/common/TaskModal.vue'
 import { usePlannerStore } from '@/stores/planner'
 
@@ -13,11 +15,15 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="app-shell__main">
-      <Header />
-      <main class="app-shell__content">
+  <div class="callog-layout">
+    <AppSidebar />
+    <AppSidebar2 />
+    <div class="callog-main">
+      <AppHeader />
+      <main class="callog-content">
         <RouterView />
       </main>
     </div>
-    <TaskModal />
+  </div>
+  <TaskModal />
 </template>

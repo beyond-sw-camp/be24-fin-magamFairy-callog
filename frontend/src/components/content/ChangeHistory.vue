@@ -1,21 +1,51 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   historyData: {
     type: Array,
     required: true,
   },
+  initialVersion: {
+    type: String,
+    default: '',
+  },
+  startInDiff: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['close'])
 
-const selectedHistory = ref(props.historyData[0])
+const selectedHistory = ref(null)
 const showDiff = ref(false)
 
 const selectedDiff = computed(() => selectedHistory.value?.diff ?? null)
 
+watch(
+  () => [props.historyData, props.initialVersion, props.startInDiff],
+  () => {
+    if (!props.historyData.length) {
+      selectedHistory.value = null
+      showDiff.value = false
+      return
+    }
+
+    const nextSelection =
+      props.historyData.find((log) => log.version === props.initialVersion) ?? props.historyData[0]
+
+    selectedHistory.value = nextSelection
+    showDiff.value = props.startInDiff || Boolean(props.initialVersion)
+  },
+  { immediate: true, deep: true },
+)
+
 const previousVersionLabel = computed(() => {
+  if (!selectedHistory.value) {
+    return '초안'
+  }
+
   const currentIndex = props.historyData.findIndex(
     (log) => log.version === selectedHistory.value?.version,
   )
@@ -23,6 +53,10 @@ const previousVersionLabel = computed(() => {
 })
 
 const previousVersionDate = computed(() => {
+  if (!selectedHistory.value) {
+    return '기록 없음'
+  }
+
   const currentIndex = props.historyData.findIndex(
     (log) => log.version === selectedHistory.value?.version,
   )
@@ -30,7 +64,9 @@ const previousVersionDate = computed(() => {
 })
 
 const diffDetailRows = computed(() => {
-  if (!selectedDiff.value) return []
+  if (!selectedDiff.value) {
+    return []
+  }
 
   return Object.keys(selectedDiff.value.details.current).map((label) => ({
     label,
@@ -58,6 +94,7 @@ function diffDetailValueClass(row, side) {
   if (!row.changed) {
     return 'text-slate-600'
   }
+
   return side === 'previous' ? 'text-red-500' : 'text-blue-600'
 }
 
@@ -77,102 +114,115 @@ function diffLineMark(line, side) {
   if (side === 'previous') {
     return line.kind === 'changed' || line.kind === 'removed' ? '-' : ' '
   }
+
   return line.kind === 'changed' || line.kind === 'added' ? '+' : ' '
 }
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-white rounded-[2rem] overflow-hidden shadow-2xl border border-slate-100">
-    <!-- Header -->
-    <header class="px-8 py-6 border-b border-slate-50 flex justify-between items-center bg-white/50 backdrop-blur-md">
+  <div class="flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-[0_20px_50px_rgba(15,23,42,0.12)]">
+    <header class="flex items-center justify-between border-b border-slate-50 bg-white/50 px-6 py-5 backdrop-blur-md">
       <div class="flex items-center gap-4">
-        <div class="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-500">
+        <div class="flex h-12 w-12 items-center justify-center rounded-[18px] bg-blue-50 text-blue-500">
           <span class="material-symbols-outlined text-2xl">history</span>
         </div>
         <div>
-          <h3 class="text-xl font-extrabold text-slate-900 tracking-tight">컨텐츠 변경 이력</h3>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">Version History & Diff</p>
+          <h3 class="text-xl font-extrabold tracking-tight text-slate-900">컨텐츠 변경 이력</h3>
+          <p class="mt-0.5 text-xs font-bold uppercase tracking-widest text-slate-400">
+            Version History & Diff
+          </p>
         </div>
       </div>
-      <button 
-        @click="emit('close')" 
-        class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-900 transition-all"
+
+      <button
+        type="button"
+        class="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-900"
+        @click="emit('close')"
       >
         <span class="material-symbols-outlined">close</span>
       </button>
     </header>
 
-    <!-- Content Area -->
-    <div class="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50/30">
-      <!-- List View -->
-      <div v-if="!showDiff" class="flex-1 overflow-y-auto p-8">
-        <div class="max-w-4xl mx-auto space-y-3">
-          <div 
-            v-for="log in historyData" 
+    <div class="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-50/30">
+      <div v-if="!showDiff" class="flex-1 overflow-y-auto p-6">
+        <div class="mx-auto max-w-4xl space-y-3">
+          <button
+            v-for="log in historyData"
             :key="log.version"
+            type="button"
+            class="group flex w-full cursor-pointer items-center justify-between rounded-[18px] border border-slate-100 bg-white p-5 text-left transition-all hover:border-blue-200 hover:shadow-md"
             @click="openDiff(log)"
-            class="group flex items-center justify-between p-5 bg-white border border-slate-100 rounded-2xl hover:border-blue-200 hover:shadow-md transition-all cursor-pointer"
           >
-            <div class="flex items-center gap-6">
-              <span class="px-3 py-1 bg-slate-100 group-hover:bg-blue-50 text-slate-600 group-hover:text-blue-600 text-xs font-black rounded-lg transition-colors">
+            <div class="flex min-w-0 items-center gap-4">
+              <span
+                class="rounded-lg bg-slate-100 px-3 py-1 text-xs font-black text-slate-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600"
+              >
                 {{ log.version }}
               </span>
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500">
+
+              <div class="flex min-w-0 items-center gap-3">
+                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-black text-slate-500">
                   {{ log.workerInitials }}
                 </div>
-                <div class="flex flex-col">
-                  <span class="text-sm font-bold text-slate-900">{{ log.worker }}</span>
-                  <span class="text-xs font-medium text-slate-400">{{ log.date }}</span>
+                <div class="min-w-0">
+                  <span class="block truncate text-sm font-bold text-slate-900">{{ log.worker }}</span>
+                  <span class="block truncate text-xs font-medium text-slate-400">{{ log.date }}</span>
                 </div>
               </div>
-              <p class="text-sm font-bold text-slate-600 group-hover:text-slate-900 transition-colors ml-4">
+
+              <p class="ml-2 truncate text-sm font-bold text-slate-600 transition-colors group-hover:text-slate-900">
                 {{ log.change }}
               </p>
             </div>
-            <span class="material-symbols-outlined text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all">
+
+            <span class="material-symbols-outlined text-slate-300 transition-all group-hover:translate-x-1 group-hover:text-blue-500">
               arrow_forward_ios
             </span>
-          </div>
+          </button>
         </div>
       </div>
 
-      <!-- Diff View -->
-      <div v-else class="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <div class="px-8 py-4 bg-white border-b border-slate-100 flex items-center justify-between">
-          <button 
-            @click="showDiff = false" 
-            class="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
+      <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div class="flex items-center justify-between border-b border-slate-100 bg-white px-6 py-4">
+          <button
+            type="button"
+            class="flex items-center gap-2 text-sm font-bold text-slate-500 transition-colors hover:text-slate-900"
+            @click="showDiff = false"
           >
             <span class="material-symbols-outlined text-lg">arrow_back</span>
             목록으로 돌아가기
           </button>
+
           <div class="text-center">
-            <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-md">
-              Comparing {{ selectedHistory.version }}
+            <span class="rounded-md bg-blue-50 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-blue-500">
+              Comparing {{ selectedHistory?.version ?? 'v1.0' }}
             </span>
           </div>
+
           <div class="w-32"></div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-8">
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
-            <!-- Left Side: Previous -->
+        <div class="flex-1 overflow-y-auto p-6">
+          <div class="mx-auto grid max-w-7xl grid-cols-1 gap-8 lg:grid-cols-2">
             <div class="space-y-4">
-              <div class="flex justify-between items-center px-2">
-                <span class="text-[11px] font-black text-slate-400 uppercase tracking-widest">이전 버전: {{ previousVersionLabel }}</span>
+              <div class="flex items-center justify-between px-1">
+                <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  이전 버전: {{ previousVersionLabel }}
+                </span>
                 <span class="text-[11px] font-medium text-slate-400">{{ previousVersionDate }}</span>
               </div>
-              <div class="bg-white border border-slate-100 rounded-3xl p-6 space-y-6 shadow-sm">
+
+              <div class="space-y-6 rounded-[20px] border border-slate-100 bg-white p-6 shadow-sm">
                 <div>
-                  <p class="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-wider">제목 (Title)</p>
+                  <p class="mb-3 text-[10px] font-black uppercase tracking-wider text-slate-400">제목 (Title)</p>
                   <h4 class="text-lg font-extrabold text-slate-400 line-through decoration-slate-200">
-                    {{ selectedDiff.title.previous }}
+                    {{ selectedDiff?.title.previous }}
                   </h4>
                 </div>
-                <div class="space-y-4 pt-6 border-t border-slate-50">
-                  <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">속성 상세 (Attributes)</p>
-                  <div v-for="row in diffDetailRows" :key="row.label" class="flex justify-between items-center">
+
+                <div class="space-y-4 border-t border-slate-50 pt-6">
+                  <p class="text-[10px] font-black uppercase tracking-wider text-slate-400">속성 상세 (Attributes)</p>
+                  <div v-for="row in diffDetailRows" :key="row.label" class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-400">{{ row.label }}</span>
                     <span class="text-xs font-bold" :class="diffDetailValueClass(row, 'previous')">
                       {{ row.previous }}
@@ -182,22 +232,25 @@ function diffLineMark(line, side) {
               </div>
             </div>
 
-            <!-- Right Side: Selected -->
             <div class="space-y-4">
-              <div class="flex justify-between items-center px-2">
-                <span class="text-[11px] font-black text-blue-500 uppercase tracking-widest">선택 버전: {{ selectedHistory.version }}</span>
+              <div class="flex items-center justify-between px-1">
+                <span class="text-[11px] font-black uppercase tracking-widest text-blue-500">
+                  선택 버전: {{ selectedHistory?.version ?? 'v1.0' }}
+                </span>
                 <span class="text-[11px] font-bold text-blue-400">CURRENT VIEW</span>
               </div>
-              <div class="bg-white border border-blue-100 rounded-3xl p-6 space-y-6 shadow-lg shadow-blue-500/5 ring-1 ring-blue-50">
+
+              <div class="space-y-6 rounded-[20px] border border-blue-100 bg-white p-6 shadow-lg shadow-blue-500/5 ring-1 ring-blue-50">
                 <div>
-                  <p class="text-[10px] font-black text-blue-500 uppercase mb-3 tracking-wider">제목 (Title)</p>
+                  <p class="mb-3 text-[10px] font-black uppercase tracking-wider text-blue-500">제목 (Title)</p>
                   <h4 class="text-lg font-extrabold text-slate-900">
-                    {{ selectedDiff.title.current }}
+                    {{ selectedDiff?.title.current }}
                   </h4>
                 </div>
-                <div class="space-y-4 pt-6 border-t border-blue-50">
-                  <p class="text-[10px] font-black text-blue-500 uppercase tracking-wider">속성 상세 (Attributes)</p>
-                  <div v-for="row in diffDetailRows" :key="row.label" class="flex justify-between items-center">
+
+                <div class="space-y-4 border-t border-blue-50 pt-6">
+                  <p class="text-[10px] font-black uppercase tracking-wider text-blue-500">속성 상세 (Attributes)</p>
+                  <div v-for="row in diffDetailRows" :key="row.label" class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-400">{{ row.label }}</span>
                     <span class="text-xs font-bold" :class="diffDetailValueClass(row, 'current')">
                       {{ row.current }}
@@ -208,26 +261,33 @@ function diffLineMark(line, side) {
             </div>
           </div>
 
-          <!-- Content Diff (Source Code Style) -->
-          <div class="mt-8 max-w-7xl mx-auto space-y-4">
-            <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest px-2">컨텐츠 변경 세부 사항 (Content Diff)</p>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-slate-200 border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-              <!-- Left Content -->
-              <div class="bg-white p-6 space-y-2">
-                <div v-for="line in previousContentLines" :key="'prev-' + line.number" 
-                     class="flex gap-4 font-mono text-[13px] leading-relaxed p-2 rounded-lg border"
-                     :class="diffLineClass(line, 'previous')">
-                  <span class="w-6 text-right text-slate-300 select-none">{{ line.number }}</span>
+          <div class="mx-auto mt-8 max-w-7xl space-y-4">
+            <p class="px-1 text-[11px] font-black uppercase tracking-widest text-slate-400">
+              컨텐츠 변경 항목 (Content Diff)
+            </p>
+
+            <div class="grid grid-cols-1 overflow-hidden rounded-[20px] border border-slate-200 bg-slate-200 shadow-sm lg:grid-cols-2">
+              <div class="space-y-2 bg-white p-6">
+                <div
+                  v-for="line in previousContentLines"
+                  :key="`prev-${line.number}`"
+                  class="flex gap-4 rounded-lg border p-2 font-mono text-[13px] leading-relaxed"
+                  :class="diffLineClass(line, 'previous')"
+                >
+                  <span class="w-6 select-none text-right text-slate-300">{{ line.number }}</span>
                   <span class="w-4 text-center font-bold">{{ diffLineMark(line, 'previous') }}</span>
                   <code class="flex-1 whitespace-pre-wrap">{{ line.text || ' ' }}</code>
                 </div>
               </div>
-              <!-- Right Content -->
-              <div class="bg-white p-6 space-y-2">
-                <div v-for="line in currentContentLines" :key="'curr-' + line.number" 
-                     class="flex gap-4 font-mono text-[13px] leading-relaxed p-2 rounded-lg border"
-                     :class="diffLineClass(line, 'current')">
-                  <span class="w-6 text-right text-slate-300 select-none">{{ line.number }}</span>
+
+              <div class="space-y-2 bg-white p-6">
+                <div
+                  v-for="line in currentContentLines"
+                  :key="`curr-${line.number}`"
+                  class="flex gap-4 rounded-lg border p-2 font-mono text-[13px] leading-relaxed"
+                  :class="diffLineClass(line, 'current')"
+                >
+                  <span class="w-6 select-none text-right text-slate-300">{{ line.number }}</span>
                   <span class="w-4 text-center font-bold">{{ diffLineMark(line, 'current') }}</span>
                   <code class="flex-1 whitespace-pre-wrap">{{ line.text || ' ' }}</code>
                 </div>
@@ -238,33 +298,14 @@ function diffLineMark(line, side) {
       </div>
     </div>
 
-    <!-- Footer -->
-    <footer class="px-8 py-6 border-t border-slate-50 bg-white flex justify-end gap-3">
-      <button 
-        @click="emit('close')" 
-        class="px-8 py-3 bg-slate-900 text-white text-sm font-bold rounded-2xl hover:bg-slate-800 active:scale-95 transition-all"
+    <footer class="flex justify-end gap-3 border-t border-slate-50 bg-white px-6 py-5">
+      <button
+        type="button"
+        class="rounded-[18px] bg-slate-900 px-6 py-3 text-sm font-bold text-white transition-all hover:bg-slate-800 active:scale-95"
+        @click="emit('close')"
       >
         닫기
       </button>
     </footer>
   </div>
 </template>
-
-<style scoped>
-.material-symbols-outlined {
-  font-family: 'Material Symbols Outlined';
-  font-weight: normal;
-  font-style: normal;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-  direction: ltr;
-  -webkit-font-smoothing: antialiased;
-  font-feature-settings: 'liga';
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-}
-</style>
