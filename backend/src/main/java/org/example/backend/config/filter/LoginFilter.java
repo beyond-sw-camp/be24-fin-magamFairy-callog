@@ -83,7 +83,12 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
             HttpServletResponse response,
             AuthenticationException failed) throws IOException, ServletException {
 
-        response.getWriter().write("로그인 실패");
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json;charset=UTF-8");
+        new ObjectMapper().writeValue(response.getWriter(), Map.of(
+                "error", "login failed",
+                "message", "Login ID or password is invalid."
+        ));
     }
 
     @Override
