@@ -42,46 +42,46 @@ const allowedSizes = {
 
 const tileMeta = {
   calendar: {
-    eyebrow: '캘린더',
-    title: '일정 그리드',
-    accent: '#2563eb',
-    description: '오늘, 주간, 월간 흐름을 크기에 따라 다르게 보여줍니다.',
+    eyebrow: 'Calendar',
+    title: '캘린더',
+    accent: '#5e6ad2',
+    description: '',
   },
   performance: {
-    eyebrow: '성과 분석',
-    title: '사람별 성과',
-    accent: '#ef4444',
-    description: '평균, 완료율, 리스크를 보드 크기에 맞춰 압축합니다.',
+    eyebrow: 'Performance',
+    title: '성과',
+    accent: '#23836d',
+    description: '',
   },
   notes: {
-    eyebrow: '업무일지',
-    title: '오늘과 다음 업무',
-    accent: '#0ea5e9',
-    description: '오늘 요약과 다음 액션을 짧고 길게 바꿔 보여줍니다.',
+    eyebrow: 'Tasks',
+    title: '업무',
+    accent: '#2d74da',
+    description: '',
   },
   table: {
-    eyebrow: '메인 테이블',
-    title: '요약과 상세',
-    accent: '#f59e0b',
-    description: '작업과 담당자 요약을 타일 크기에 맞게 정리합니다.',
+    eyebrow: 'Table',
+    title: '메인 테이블',
+    accent: '#c9851d',
+    description: '',
   },
   meetings: {
-    eyebrow: '회의',
-    title: '회의와 메모',
-    accent: '#8b5cf6',
-    description: '회의 일정과 메모를 간단한 보드로 묶어 보여줍니다.',
+    eyebrow: 'Meetings',
+    title: '회의',
+    accent: '#7b6cf6',
+    description: '',
   },
   aiBrief: {
-    eyebrow: 'AI 브리핑',
-    title: 'AI 브리핑',
-    accent: '#ec4899',
-    description: '위험 신호와 다음 액션을 자동으로 묶어 보여줍니다.',
+    eyebrow: 'Brief',
+    title: '브리프',
+    accent: '#9b5de5',
+    description: '',
   },
   riskAlert: {
-    eyebrow: '리스크 알림',
-    title: '리스크 알림',
-    accent: '#f97316',
-    description: '마감 임박, 지연, 병목을 빠르게 확인합니다.',
+    eyebrow: 'Risk',
+    title: '리스크',
+    accent: '#cf5f6a',
+    description: '',
   },
 }
 
@@ -382,58 +382,31 @@ function occupy(grid, id, col, row, width, height) {
   }
 }
 
-function findNearestPlacement(size, grid, preferred = null, maxRows = grid.length) {
-  const candidates = []
-  for (let row = 1; row <= maxRows - size.height + 1; row += 1) {
-    for (let col = 1; col <= BOARD_COLS - size.width + 1; col += 1) {
-      if (!canPlace(grid, col, row, size.width, size.height)) {
-        continue
+function findFirstPlacement(size, grid, maxRows = grid.length) {
+  for (let col = 1; col <= BOARD_COLS - size.width + 1; col += 1) {
+    for (let row = 1; row <= maxRows - size.height + 1; row += 1) {
+      if (canPlace(grid, col, row, size.width, size.height)) {
+        return { col, row }
       }
-
-      const distance = preferred
-        ? Math.abs(col - preferred.col) + Math.abs(row - preferred.row)
-        : (row - 1) * BOARD_COLS + col
-
-      candidates.push({ col, row, distance })
-    }
-  }
-
-  candidates.sort((left, right) => left.distance - right.distance || left.row - right.row || left.col - right.col)
-  return candidates[0] ?? null
-}
-
-function findColumnPlacement(size, grid, preferredCol, maxRows = grid.length) {
-  const col = clamp(preferredCol ?? 1, 1, BOARD_COLS - size.width + 1)
-
-  for (let row = 1; row <= maxRows - size.height + 1; row += 1) {
-    if (canPlace(grid, col, row, size.width, size.height)) {
-      return { col, row }
     }
   }
 
   return null
 }
 
-function findCompactPlacement(size, grid, preferred = null, maxRows = grid.length) {
-  if (preferred) {
-    const verticalPlacement = findColumnPlacement(size, grid, preferred.col, maxRows)
-    if (verticalPlacement) {
-      return verticalPlacement
-    }
-  }
+function sortResolvedOrder(order, tiles) {
+  const orderIndex = new Map(order.map((tileId, index) => [tileId, index]))
 
-  return findNearestPlacement(size, grid, preferred, maxRows)
-}
+  return Object.keys(tiles).sort((left, right) => {
+    const leftPlacement = tiles[left]
+    const rightPlacement = tiles[right]
 
-function findPreviewPlacement(size, grid, preferred = null, maxRows = grid.length) {
-  if (preferred) {
-    const exactPlacement = clampPlacement(preferred.col, preferred.row, size, maxRows)
-    if (canPlace(grid, exactPlacement.col, exactPlacement.row, size.width, size.height)) {
-      return exactPlacement
-    }
-  }
-
-  return findNearestPlacement(size, grid, preferred, maxRows)
+    return (
+      leftPlacement.col - rightPlacement.col ||
+      leftPlacement.row - rightPlacement.row ||
+      (orderIndex.get(left) ?? 0) - (orderIndex.get(right) ?? 0)
+    )
+  })
 }
 
 function buildBoardLayout(order, sourceTiles, fixedTileId = null, fixedOverride = null) {
@@ -463,7 +436,7 @@ function buildBoardLayout(order, sourceTiles, fixedTileId = null, fixedOverride 
   if (fixedId) {
     const fixedTile = desiredTiles[fixedId]
     const fixedSize = parseSpan(fixedTile.size)
-    const placement = findCompactPlacement(fixedSize, grid, { col: fixedTile.col, row: fixedTile.row }, searchRows)
+    const placement = clampPlacement(fixedTile.col, fixedTile.row, fixedSize, searchRows)
     if (!placement) {
       return null
     }
@@ -477,7 +450,7 @@ function buildBoardLayout(order, sourceTiles, fixedTileId = null, fixedOverride 
 
     const tile = desiredTiles[id]
     const size = parseSpan(tile.size)
-    const placement = findCompactPlacement(size, grid, { col: tile.col, row: tile.row }, searchRows)
+    const placement = findFirstPlacement(size, grid, searchRows)
     if (!placement) {
       return null
     }
@@ -485,63 +458,13 @@ function buildBoardLayout(order, sourceTiles, fixedTileId = null, fixedOverride 
   }
 
   return {
-    order: resolvedOrder,
+    order: sortResolvedOrder(order, resolved),
     tiles: resolved,
   }
 }
 
 function buildPreviewLayout(order, sourceTiles, fixedTileId = null, fixedOverride = null) {
-  const desiredTiles = cloneBoardState(sourceTiles)
-  if (fixedTileId && fixedOverride) {
-    desiredTiles[fixedTileId] = { ...desiredTiles[fixedTileId], ...fixedOverride }
-  }
-
-  const searchRows = getPlacementSearchRows(desiredTiles)
-  const grid = createGrid(searchRows)
-  const resolved = {}
-  const resolvedOrder = []
-
-  const placeTile = (id, placement, size) => {
-    occupy(grid, id, placement.col, placement.row, size.width, size.height)
-    resolved[id] = {
-      col: placement.col,
-      row: placement.row,
-      size: spanToken(size.width, size.height),
-      width: size.width,
-      height: size.height,
-    }
-    resolvedOrder.push(id)
-  }
-
-  const fixedId = fixedTileId && desiredTiles[fixedTileId] ? fixedTileId : null
-  if (fixedId) {
-    const fixedTile = desiredTiles[fixedId]
-    const fixedSize = parseSpan(fixedTile.size)
-    const placement = findPreviewPlacement(fixedSize, grid, { col: fixedTile.col, row: fixedTile.row }, searchRows)
-    if (!placement) {
-      return null
-    }
-    placeTile(fixedId, placement, fixedSize)
-  }
-
-  for (const id of order) {
-    if (id === fixedId || !desiredTiles[id]) {
-      continue
-    }
-
-    const tile = desiredTiles[id]
-    const size = parseSpan(tile.size)
-    const placement = findNearestPlacement(size, grid, { col: tile.col, row: tile.row }, searchRows)
-    if (!placement) {
-      return null
-    }
-    placeTile(id, placement, size)
-  }
-
-  return {
-    order: resolvedOrder,
-    tiles: resolved,
-  }
+  return buildBoardLayout(order, sourceTiles, fixedTileId, fixedOverride)
 }
 
 const activeTileOrder = computed(() => tileOrder.value.filter((tileId) => !hiddenTileIds.value.includes(tileId)))
@@ -994,12 +917,8 @@ function finishDrag() {
   }
 
   const previewLayout = dragPreview.value.layout ?? settledLayout.value
-  const finalLayout = previewLayout
-    ? buildBoardLayout(activeTileOrder.value, layoutToBoardState(previewLayout)) ?? previewLayout
-    : null
-
-  if (finalLayout) {
-    applyResolvedLayout(finalLayout)
+  if (previewLayout) {
+    applyResolvedLayout(previewLayout)
     persistBoardLayout()
   }
 
@@ -1204,29 +1123,32 @@ watch(taskNoteDraft, saveTaskNote)
 
 <template>
   <section class="dashboard-page">
-    <header class="dashboard-hero">
-      <div class="dashboard-hero__copy">
-        <p class="section-eyebrow">MARKETING B2B DASHBOARD</p>
-        <h2>마케팅 운영을 한 화면에서 관리합니다</h2>
-        <p class="dashboard-hero__desc">
-          칸의 테두리에서 드래그하면 이동하고, 오른쪽 위 메뉴에서 숨기기와 크기 변경을 할 수 있습니다. 모든 요약 기능은 6열 3행 보드 안에서만 움직입니다.
-        </p>
-      </div>
-
-      <div class="dashboard-hero__meta">
-        <span>{{ formatLongDate(selectedDate) }}</span>
-        <button class="dashboard-hero__meta-menu" type="button" aria-label="보드 관리" @click="openBoardManager">
-          ...
-        </button>
-      </div>
-    </header>
-
     <section class="dashboard-board-shell surface-card" @pointerdown="closeTileMenu">
       <div class="dashboard-board-toolbar">
-        <span class="dashboard-board-toolbar__date">{{ formatLongDate(selectedDate) }}</span>
-        <button class="dashboard-board-toolbar__menu" type="button" aria-label="Board manager" @click="openBoardManager">
-          ...
-        </button>
+        <div class="dashboard-board-toolbar__identity">
+          <p class="dashboard-board-toolbar__eyebrow">Workspace</p>
+          <div class="dashboard-board-toolbar__title-row">
+            <h2 class="dashboard-board-toolbar__title">대시보드</h2>
+            <span class="dashboard-board-toolbar__chip">{{ activeTileOrder.length }} 패널</span>
+            <span
+              v-if="hiddenTileIds.length"
+              class="dashboard-board-toolbar__chip dashboard-board-toolbar__chip--muted"
+            >
+              {{ hiddenTileIds.length }} 숨김
+            </span>
+          </div>
+        </div>
+
+        <div class="dashboard-board-toolbar__actions">
+          <div class="dashboard-board-toolbar__status">
+            <span>{{ formatMonthLabel(selectedDate) }}</span>
+            <strong>{{ formatLongDate(selectedDate) }}</strong>
+          </div>
+
+          <button class="dashboard-board-toolbar__menu" type="button" aria-label="Board manager" @click="openBoardManager">
+            보드 편집
+          </button>
+        </div>
       </div>
 
       <div class="dashboard-board" ref="boardRef" :style="boardCanvasStyle">
@@ -1287,7 +1209,9 @@ watch(taskNoteDraft, saveTaskNote)
                 {{ tileMeta[tileId].eyebrow }}
               </p>
               <h3>{{ tileMeta[tileId].title }}</h3>
-              <p class="dashboard-tile__desc">{{ tileMeta[tileId].description }}</p>
+              <p v-if="tileMeta[tileId].description" class="dashboard-tile__desc">
+                {{ tileMeta[tileId].description }}
+              </p>
             </div>
             <div
               v-if="tileMenuState.open && tileMenuState.tileId === tileId"
@@ -1303,7 +1227,7 @@ watch(taskNoteDraft, saveTaskNote)
             </div>
           </header>
 
-          <div class="dashboard-tile__body dashboard-scrollbar-hidden">
+          <div class="dashboard-tile__body dashboard-scrollbar-hidden" :class="`dashboard-tile__body--${tileId}`">
             <template v-if="tileId === 'calendar'">
               <template v-if="tileBodyMode('calendar') === '1x1'">
                 <div class="dashboard-stack">
@@ -2571,8 +2495,8 @@ watch(taskNoteDraft, saveTaskNote)
           <header class="size-modal__head">
             <div>
               <p class="section-eyebrow">크기 변경</p>
-              <h3>{{ tileMeta[sizeModalState.tileId]?.title ?? '요약 기능' }}</h3>
-              <p class="size-modal__desc">크기를 선택하면 바로 해당 칸이 바뀝니다.</p>
+              <h3>{{ tileMeta[sizeModalState.tileId]?.title ?? '패널' }}</h3>
+              <p class="size-modal__desc">현재 패널에서 사용할 수 있는 크기만 표시합니다.</p>
             </div>
             <button class="size-modal__close" type="button" aria-label="닫기" @click="closeSizeModal">
               <span v-html="svgIcons.close" />
@@ -2604,8 +2528,8 @@ watch(taskNoteDraft, saveTaskNote)
           <header class="manager-modal__head">
             <div>
               <p class="section-eyebrow">보드 관리</p>
-              <h3>숨김과 표시를 조절합니다</h3>
-              <p class="manager-modal__desc">보드에서 사라진 기능은 다시 켤 수 있고, 현재 요약 기능만 이곳에서 조절할 수 있습니다.</p>
+              <h3>패널 표시</h3>
+              <p class="manager-modal__desc">패널을 다시 켜거나 현재 보드 구성을 정리합니다.</p>
             </div>
             <button class="manager-modal__close" type="button" aria-label="닫기" @click="closeBoardManager">
               <span v-html="svgIcons.close" />
@@ -2613,7 +2537,7 @@ watch(taskNoteDraft, saveTaskNote)
           </header>
 
           <div class="manager-modal__section">
-            <p class="manager-modal__section-title">현재 요약 기능</p>
+            <p class="manager-modal__section-title">현재 패널</p>
             <div class="manager-modal__grid">
               <button
                 v-for="tileId in currentManagedTileIds"
@@ -2637,113 +2561,130 @@ watch(taskNoteDraft, saveTaskNote)
 
 <style>
 .dashboard-page {
+  --dashboard-bg: color-mix(in srgb, var(--panel-muted) 82%, var(--panel-color));
+  --dashboard-panel: color-mix(in srgb, var(--panel-color) 96%, var(--panel-muted));
+  --dashboard-raised: color-mix(in srgb, var(--panel-muted) 78%, var(--panel-color));
+  --dashboard-elevated: color-mix(in srgb, var(--panel-color) 88%, var(--panel-muted));
+  --dashboard-line: color-mix(in srgb, var(--border-color) 88%, transparent);
+  --dashboard-line-strong: color-mix(in srgb, var(--border-strong) 96%, var(--border-color));
+  --dashboard-ink-soft: color-mix(in srgb, var(--text-secondary) 74%, var(--muted-text));
+  --dashboard-accent: #5e6ad2;
   display: grid;
-  gap: 1rem;
-  padding-bottom: 5rem;
-}
-
-.dashboard-hero {
-  display: none;
+  gap: 0.95rem;
+  padding-bottom: 4.5rem;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--dashboard-accent) 8%, transparent), transparent 32%),
+    linear-gradient(180deg, color-mix(in srgb, var(--dashboard-bg) 96%, transparent), transparent 42%);
+  border-radius: 24px;
 }
 
 .dashboard-board-toolbar {
-  padding: 0.05rem 0.15rem 0.45rem;
+  padding: 0 0 0.6rem;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.45rem;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--dashboard-line-strong);
 }
 
-.dashboard-board-toolbar__date {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  font-weight: 600;
+.dashboard-board-toolbar__identity {
+  display: none;
+}
+
+.dashboard-board-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: 0;
+}
+
+.dashboard-board-toolbar__status {
+  min-width: 9rem;
+  padding: 0.28rem 0.56rem;
+  border: 1px solid var(--dashboard-line-strong);
+  border-radius: 8px;
+  background: var(--dashboard-panel);
+  display: grid;
+  gap: 0.02rem;
+  text-align: right;
+}
+
+.dashboard-board-toolbar__status span {
+  color: var(--dashboard-ink-soft);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.dashboard-board-toolbar__status strong {
+  font-size: 0.76rem;
+  font-weight: 720;
+  letter-spacing: -0.01em;
 }
 
 .dashboard-board-toolbar__menu {
-  width: 3.35rem;
-  height: 3.35rem;
-  border: 1px solid var(--border-color);
-  border-radius: 1rem;
-  background: var(--panel-muted);
-  color: var(--accent-strong);
-  font-size: 1.45rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  display: grid;
-  place-items: center;
-  line-height: 1;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
-  cursor: pointer;
-}
-
-.dashboard-hero__copy h2 {
-  margin-top: 0.4rem;
-  font-size: clamp(1.7rem, 2.3vw, 2.45rem);
-  line-height: 1.08;
-  letter-spacing: -0.05em;
-}
-
-.dashboard-hero__desc {
-  margin-top: 0.55rem;
-  max-width: 58rem;
-  color: var(--text-secondary);
-}
-
-.dashboard-hero__meta {
-  display: flex;
-  flex-wrap: wrap;
+  min-height: 2.05rem;
+  padding: 0 0.72rem;
+  border: 1px solid var(--dashboard-line-strong);
+  border-radius: 8px;
+  background: var(--dashboard-panel);
+  color: var(--text-primary);
+  font-size: 0.69rem;
+  font-weight: 760;
+  letter-spacing: 0.02em;
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 0.45rem;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  font-weight: 600;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
-.dashboard-hero__meta-menu {
-  width: 3.35rem;
-  height: 3.35rem;
-  border: 1px solid var(--border-color);
-  border-radius: 1rem;
-  background: var(--panel-muted);
-  color: var(--accent-strong);
-  font-size: 1.45rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  display: grid;
-  place-items: center;
-  line-height: 1;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
-  cursor: pointer;
+.dashboard-board-toolbar__menu:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--dashboard-accent) 24%, var(--dashboard-line-strong));
+  background: color-mix(in srgb, var(--dashboard-accent) 4%, var(--dashboard-panel));
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
 }
 
 .dashboard-board-shell {
   padding: 0.85rem;
+  border: 1px solid var(--dashboard-line-strong);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--dashboard-panel) 98%, var(--dashboard-bg));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--panel-color) 40%, transparent),
+    0 12px 28px rgba(15, 23, 42, 0.04);
   overflow: visible;
 }
 
 .dashboard-board {
   position: relative;
-  border-radius: 28px;
-  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  border: 1px solid var(--dashboard-line-strong);
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--panel-color) 98%, var(--panel-muted)), var(--panel-color)),
+    linear-gradient(180deg, color-mix(in srgb, var(--dashboard-panel) 99%, var(--dashboard-bg)), var(--dashboard-panel)),
     repeating-linear-gradient(
       to right,
       transparent 0,
       transparent calc(var(--board-pitch-x) - 1px),
-      rgba(148, 163, 184, 0.07) calc(var(--board-pitch-x) - 1px),
-      rgba(148, 163, 184, 0.07) var(--board-pitch-x)
+      color-mix(in srgb, var(--dashboard-line-strong) 84%, transparent) calc(var(--board-pitch-x) - 1px),
+      color-mix(in srgb, var(--dashboard-line-strong) 84%, transparent) var(--board-pitch-x)
     ),
     repeating-linear-gradient(
       to bottom,
       transparent 0,
       transparent calc(var(--board-pitch-y) - 1px),
-      rgba(148, 163, 184, 0.07) calc(var(--board-pitch-y) - 1px),
-      rgba(148, 163, 184, 0.07) var(--board-pitch-y)
+      color-mix(in srgb, var(--dashboard-line-strong) 84%, transparent) calc(var(--board-pitch-y) - 1px),
+      color-mix(in srgb, var(--dashboard-line-strong) 84%, transparent) var(--board-pitch-y)
     );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--panel-color) 48%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--dashboard-line) 74%, transparent);
   overflow: visible;
 }
 
@@ -2756,17 +2697,17 @@ watch(taskNoteDraft, saveTaskNote)
 
 .dashboard-board__path {
   fill: none;
-  stroke: color-mix(in srgb, var(--accent-color) 60%, white);
-  stroke-width: 2;
-  stroke-dasharray: 7 8;
-  opacity: 0.8;
+  stroke: color-mix(in srgb, var(--dashboard-accent) 54%, var(--dashboard-line-strong));
+  stroke-width: 1.2;
+  stroke-dasharray: 4 8;
+  opacity: 0.66;
 }
 
 .dashboard-tile {
   position: absolute;
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.72rem;
   min-width: 0;
   min-height: 0;
   left: 0;
@@ -2774,38 +2715,57 @@ watch(taskNoteDraft, saveTaskNote)
   width: var(--tile-width);
   height: var(--tile-height);
   overflow: visible;
-  border: 1px solid var(--border-color);
-  border-radius: 24px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--panel-color) 98%, var(--panel-muted)), var(--panel-color)),
-    var(--panel-color);
-  box-shadow: var(--shadow-soft);
-  padding: 0.95rem;
+  border: 1px solid var(--dashboard-line-strong);
+  border-radius: 8px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--dashboard-panel) 98%, transparent), var(--dashboard-panel));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--panel-color) 52%, transparent),
+    0 10px 20px rgba(15, 23, 42, 0.04);
+  padding: 0.78rem;
   transform: translate(var(--tile-x), var(--tile-y)) scale(var(--tile-scale, 1));
   transform-origin: center;
   will-change: transform, width, height, opacity, box-shadow;
+  cursor: grab;
   transition:
     transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
     width 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
     height 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 220ms ease,
-    opacity 220ms ease;
+    opacity 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease;
+}
+
+.dashboard-tile::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--tile-accent) 92%, transparent);
+  pointer-events: none;
 }
 
 .dashboard-tile:hover {
-  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.08);
+  border-color: color-mix(in srgb, var(--tile-accent) 16%, var(--dashboard-line-strong));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--panel-color) 52%, transparent),
+    0 18px 34px rgba(15, 23, 42, 0.07);
 }
 
 .dashboard-tile--dragging {
-  box-shadow: 0 26px 55px rgba(15, 23, 42, 0.18);
+  cursor: grabbing;
+  border-color: color-mix(in srgb, var(--tile-accent) 34%, var(--dashboard-line-strong));
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.16);
 }
 
 .dashboard-tile--ghost {
   pointer-events: none;
-  opacity: 0.22;
-  border-style: dashed;
+  opacity: 0.16;
   box-shadow: none;
-  background: color-mix(in srgb, var(--panel-color) 90%, var(--accent-color));
+  background: color-mix(in srgb, var(--tile-accent) 8%, var(--dashboard-panel));
   z-index: 2;
 }
 
@@ -2814,21 +2774,41 @@ watch(taskNoteDraft, saveTaskNote)
   z-index: 3;
   display: grid;
   place-items: center;
-  border: 2px dashed color-mix(in srgb, var(--accent-color) 80%, white);
-  background: color-mix(in srgb, var(--accent-color) 7%, transparent);
-  color: var(--accent-color);
+  border: 1.5px dashed color-mix(in srgb, var(--dashboard-accent) 52%, var(--dashboard-line-strong));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dashboard-accent) 6%, var(--dashboard-panel));
+  color: var(--dashboard-accent);
+  font-size: 0.69rem;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .dashboard-tile__head {
   position: relative;
   display: grid;
-  gap: 0.65rem;
+  gap: 0.62rem;
+  padding-bottom: 0.58rem;
+  border-bottom: 1px solid var(--dashboard-line-strong);
 }
 
 .dashboard-tile__head-copy {
   min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+  padding-left: 0.72rem;
+  position: relative;
+}
+
+.dashboard-tile__head-copy::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.12rem;
+  bottom: 0.14rem;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tile-accent) 88%, transparent);
 }
 
 .dashboard-tile__head-top {
@@ -2839,23 +2819,23 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .dashboard-tile__eyebrow {
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
 .dashboard-tile__head h3 {
-  margin-top: 0.25rem;
-  font-size: 1.02rem;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-  font-weight: 800;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+  font-weight: 780;
 }
 
 .dashboard-tile__desc {
   margin-top: 0.35rem;
-  color: var(--muted-text);
+  color: var(--dashboard-ink-soft);
   font-size: 0.83rem;
   line-height: 1.4;
 }
@@ -2864,56 +2844,79 @@ watch(taskNoteDraft, saveTaskNote)
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  height: 1.8rem;
-  padding: 0 0.72rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: var(--panel-muted);
-  color: var(--text-primary);
-  font-size: 0.75rem;
-  font-weight: 800;
+  min-height: 1.45rem;
+  padding: 0 0.52rem;
+  border-radius: 6px;
+  border: 1px solid var(--dashboard-line);
+  background: var(--dashboard-raised);
+  color: var(--dashboard-ink-soft);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .dashboard-tile__menu {
-  width: 2.1rem;
-  height: 2.1rem;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--panel-muted);
-  color: var(--muted-text);
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid var(--dashboard-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dashboard-ink-soft);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.82rem;
   font-weight: 900;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   display: grid;
   place-items: center;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.dashboard-tile__menu:hover {
+  background: var(--dashboard-raised);
+  border-color: color-mix(in srgb, var(--tile-accent) 20%, var(--dashboard-line-strong));
+  color: var(--text-primary);
 }
 
 .dashboard-tile__menu-panel {
   position: absolute;
-  top: 2.9rem;
-  right: 0.75rem;
-  min-width: 8.5rem;
-  padding: 0.4rem;
+  top: 2.55rem;
+  right: 0.1rem;
+  min-width: 9rem;
+  padding: 0.38rem;
   display: grid;
-  gap: 0.35rem;
+  gap: 0.2rem;
   z-index: 15;
+  border: 1px solid var(--dashboard-line-strong);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--dashboard-panel) 98%, var(--dashboard-bg));
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.14);
+  backdrop-filter: none;
 }
 
 .dashboard-tile__menu-item {
   border: 0;
-  border-radius: 14px;
-  background: var(--panel-muted);
-  padding: 0.72rem 0.8rem;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0.62rem 0.72rem;
   text-align: left;
   font-weight: 700;
   cursor: pointer;
+  color: var(--text-primary);
+}
+
+.dashboard-tile__menu-item:hover {
+  background: var(--dashboard-raised);
 }
 
 .dashboard-tile__body {
   min-height: 0;
   flex: 1;
   overflow: auto;
+  padding-top: 0.05rem;
 }
 
 .dashboard-scrollbar-hidden {
@@ -2939,11 +2942,16 @@ watch(taskNoteDraft, saveTaskNote)
 .table-row,
 .meeting-card {
   width: 100%;
-  border: 1px solid var(--border-color);
-  border-radius: 18px;
-  background: var(--panel-muted);
+  border: 1px solid var(--dashboard-line);
+  border-radius: 6px;
+  background: var(--dashboard-raised);
   color: var(--text-primary);
   text-align: left;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .summary-line,
@@ -2958,8 +2966,8 @@ watch(taskNoteDraft, saveTaskNote)
 .summary-line {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0.75rem 0.85rem;
+  gap: 0.65rem;
+  padding: 0.72rem 0.78rem;
 }
 
 .summary-line__dot {
@@ -2975,13 +2983,13 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .summary-line__copy strong {
-  font-size: 0.92rem;
+  font-size: 0.88rem;
 }
 
 .summary-line__copy span,
 .summary-line__meta {
-  font-size: 0.78rem;
-  color: var(--muted-text);
+  font-size: 0.74rem;
+  color: var(--dashboard-ink-soft);
 }
 
 .summary-line__meta {
@@ -2991,13 +2999,14 @@ watch(taskNoteDraft, saveTaskNote)
 .calendar-row {
   grid-template-columns: minmax(4rem, auto) minmax(0, 1fr);
   align-items: center;
-  gap: 0.8rem;
-  padding: 0.82rem 0.88rem;
+  gap: 0.72rem;
+  padding: 0.78rem 0.82rem;
 }
 
 .calendar-row--active {
-  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-muted));
-  border-color: color-mix(in srgb, var(--accent-color) 28%, var(--border-color));
+  background: color-mix(in srgb, var(--tile-accent) 8%, var(--dashboard-raised));
+  border-color: color-mix(in srgb, var(--tile-accent) 28%, var(--dashboard-line-strong));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tile-accent) 10%, transparent);
 }
 
 .calendar-row__date {
@@ -3012,8 +3021,8 @@ watch(taskNoteDraft, saveTaskNote)
 
 .calendar-row__date span,
 .calendar-row__meta span {
-  font-size: 0.7rem;
-  color: var(--muted-text);
+  font-size: 0.68rem;
+  color: var(--dashboard-ink-soft);
   font-weight: 700;
 }
 
@@ -3024,13 +3033,13 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .calendar-row__meta strong {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 800;
 }
 
 .mini-month {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.38rem;
 }
 
 .mini-month__weekdays,
@@ -3041,17 +3050,17 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .mini-month__weekdays span {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 800;
-  color: var(--muted-text);
+  color: var(--dashboard-ink-soft);
   text-align: center;
 }
 
 .mini-month__day {
   min-height: 2.7rem;
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  background: var(--panel-muted);
+  border: 1px solid var(--dashboard-line);
+  border-radius: 6px;
+  background: var(--dashboard-raised);
   display: grid;
   gap: 0.22rem;
   justify-items: center;
@@ -3070,8 +3079,8 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .mini-month__day--active {
-  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-muted));
-  border-color: color-mix(in srgb, var(--accent-color) 26%, var(--border-color));
+  background: color-mix(in srgb, var(--tile-accent) 8%, var(--dashboard-raised));
+  border-color: color-mix(in srgb, var(--tile-accent) 26%, var(--dashboard-line-strong));
 }
 
 .mini-month__day--muted {
@@ -3331,10 +3340,10 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .metric-box {
-  border: 1px solid var(--border-color);
-  border-radius: 18px;
-  background: var(--panel-muted);
-  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--dashboard-line);
+  border-radius: 6px;
+  background: var(--dashboard-raised);
+  padding: 0.72rem 0.78rem;
 }
 
 .metric-box--small {
@@ -3342,16 +3351,19 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .metric-box p {
-  font-size: 0.68rem;
-  color: var(--muted-text);
+  font-size: 0.64rem;
+  color: var(--dashboard-ink-soft);
   font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .metric-box strong {
   display: block;
-  margin-top: 0.35rem;
-  font-size: 1.65rem;
+  margin-top: 0.4rem;
+  font-size: 1.48rem;
   line-height: 1;
+  letter-spacing: -0.05em;
 }
 
 .performance-list,
@@ -3363,14 +3375,15 @@ watch(taskNoteDraft, saveTaskNote)
 
 .performance-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
 }
 
 .performance-card,
 .person-row,
 .table-row,
 .scoreboard-chip {
-  padding: 0.72rem 0.8rem;
-  gap: 0.55rem;
+  padding: 0.72rem 0.78rem;
+  gap: 0.5rem;
 }
 
 .person-row,
@@ -3386,11 +3399,11 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .person-row__avatar {
-  width: 2rem;
-  height: 2rem;
+  width: 1.92rem;
+  height: 1.92rem;
   border-radius: 999px;
   color: #fff;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 800;
   display: grid;
   place-items: center;
@@ -3398,24 +3411,24 @@ watch(taskNoteDraft, saveTaskNote)
 
 .person-row__head strong {
   display: block;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
 }
 
 .person-row__head p {
   margin-top: 0.1rem;
-  font-size: 0.72rem;
-  color: var(--muted-text);
+  font-size: 0.71rem;
+  color: var(--dashboard-ink-soft);
 }
 
 .person-row__head > span {
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   font-weight: 800;
 }
 
 .person-row__bar {
-  height: 0.4rem;
+  height: 0.34rem;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.16);
+  background: color-mix(in srgb, var(--dashboard-line-strong) 32%, transparent);
   overflow: hidden;
 }
 
@@ -3434,14 +3447,14 @@ watch(taskNoteDraft, saveTaskNote)
 .performance-card__tags span {
   display: inline-flex;
   align-items: center;
-  min-height: 1.55rem;
+  min-height: 1.42rem;
   padding: 0 0.5rem;
   border-radius: 999px;
-  background: #fff;
-  border: 1px solid var(--border-color);
-  font-size: 0.68rem;
+  background: transparent;
+  border: 1px solid var(--dashboard-line);
+  font-size: 0.64rem;
   font-weight: 800;
-  color: var(--text-secondary);
+  color: var(--dashboard-ink-soft);
 }
 
 .scoreboard-row {
@@ -3458,18 +3471,18 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .scoreboard-chip span {
-  width: 1.8rem;
-  height: 1.8rem;
+  width: 1.7rem;
+  height: 1.7rem;
   border-radius: 999px;
   color: #fff;
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 800;
   display: grid;
   place-items: center;
 }
 
 .scoreboard-chip strong {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3477,7 +3490,7 @@ watch(taskNoteDraft, saveTaskNote)
 
 .scoreboard-chip em {
   font-style: normal;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 800;
   color: var(--text-primary);
 }
@@ -3489,31 +3502,34 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .note-card {
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  background: var(--panel-muted);
-  padding: 0.8rem 0.85rem;
+  border: 1px solid var(--dashboard-line);
+  border-radius: 6px;
+  background: var(--dashboard-raised);
+  padding: 0.78rem 0.82rem;
   display: grid;
-  gap: 0.24rem;
+  gap: 0.22rem;
 }
 
 .note-card p,
 .meeting-card p,
 .meeting-note p {
-  font-size: 0.7rem;
-  color: var(--muted-text);
+  font-size: 0.65rem;
+  color: var(--dashboard-ink-soft);
   font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .note-card strong {
-  font-size: 1.05rem;
+  font-size: 1rem;
+  letter-spacing: -0.03em;
 }
 
 .note-card span,
 .meeting-card span,
 .meeting-note span {
-  color: var(--muted-text);
-  font-size: 0.8rem;
+  color: var(--dashboard-ink-soft);
+  font-size: 0.77rem;
   line-height: 1.4;
 }
 
@@ -3630,10 +3646,10 @@ watch(taskNoteDraft, saveTaskNote)
 .dashboard-table-entry,
 .dashboard-table-board__row {
   width: 100%;
-  border: 1px solid var(--border-color);
-  border-radius: 18px;
-  background: var(--panel-muted);
-  padding: 0.78rem 0.88rem;
+  border: 1px solid var(--dashboard-line);
+  border-radius: 6px;
+  background: var(--dashboard-raised);
+  padding: 0.72rem 0.78rem;
   text-align: left;
   color: var(--text-primary);
 }
@@ -3661,11 +3677,14 @@ watch(taskNoteDraft, saveTaskNote)
   display: grid;
   align-items: center;
   gap: 0.55rem;
-  padding: 0 0.2rem;
-  color: var(--muted-text);
-  font-size: 0.68rem;
+  padding: 0 0.1rem 0.4rem;
+  color: var(--dashboard-ink-soft);
+  font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.64rem;
   font-weight: 800;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--dashboard-line);
 }
 
 .dashboard-table-mini-head {
@@ -3685,8 +3704,8 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .dashboard-table-entry__indicator {
-  width: 4px;
-  min-height: 40px;
+  width: 3px;
+  min-height: 36px;
   border-radius: 999px;
   flex-shrink: 0;
 }
@@ -3699,15 +3718,15 @@ watch(taskNoteDraft, saveTaskNote)
 
 .dashboard-table-entry__primary strong {
   display: block;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .dashboard-table-entry__primary small {
-  color: var(--muted-text);
-  font-size: 0.72rem;
+  color: var(--dashboard-ink-soft);
+  font-size: 0.7rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3719,29 +3738,29 @@ watch(taskNoteDraft, saveTaskNote)
   justify-content: center;
   justify-self: start;
   min-width: 64px;
-  min-height: 1.9rem;
+  min-height: 1.62rem;
   padding: 0 0.55rem;
-  border-radius: 9px;
-  font-size: 0.72rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
   font-weight: 800;
   white-space: nowrap;
 }
 
 .dashboard-table-avatar {
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 1.6rem;
+  height: 1.6rem;
   border-radius: 999px;
   color: #fff;
   display: grid;
   place-items: center;
-  font-size: 0.64rem;
+  font-size: 0.6rem;
   font-weight: 800;
   flex-shrink: 0;
 }
 
 .dashboard-table-owner span:last-child,
 .dashboard-table-date {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -3765,11 +3784,11 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .dashboard-table-progress {
-  width: 70px;
-  height: 1.2rem;
-  border: 1px solid color-mix(in srgb, var(--success-color) 40%, var(--border-color));
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--success-color) 7%, white);
+  width: 72px;
+  height: 0.72rem;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--success-color) 12%, var(--dashboard-raised));
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -3777,11 +3796,11 @@ watch(taskNoteDraft, saveTaskNote)
 .dashboard-table-progress span {
   display: block;
   height: 100%;
-  background: #478f55;
+  background: color-mix(in srgb, var(--success-color) 88%, var(--dashboard-accent));
 }
 
 .dashboard-table-progress-shell strong {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 800;
 }
 
@@ -3793,20 +3812,23 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .dashboard-table-detail__summary p {
-  font-size: 0.72rem;
-  color: var(--muted-text);
+  font-size: 0.66rem;
+  color: var(--dashboard-ink-soft);
   font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .dashboard-table-detail__summary strong {
   display: block;
   margin-top: 0.2rem;
-  font-size: 1.05rem;
+  font-size: 1rem;
+  letter-spacing: -0.03em;
 }
 
 .dashboard-table-detail__summary span {
-  font-size: 0.78rem;
-  color: var(--muted-text);
+  font-size: 0.74rem;
+  color: var(--dashboard-ink-soft);
   font-weight: 700;
 }
 
@@ -3833,6 +3855,11 @@ watch(taskNoteDraft, saveTaskNote)
 
 .dashboard-table-board__head {
   min-width: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--dashboard-panel) 94%, transparent), var(--dashboard-panel));
+  backdrop-filter: blur(10px);
 }
 
 .dashboard-table-board__row {
@@ -3855,21 +3882,23 @@ watch(taskNoteDraft, saveTaskNote)
 
 .dashboard-table-entry:hover,
 .dashboard-table-board__row:hover {
-  background: color-mix(in srgb, var(--panel-muted) 62%, var(--panel-color));
+  background: var(--dashboard-elevated);
+  border-color: var(--dashboard-line-strong);
 }
 
 .meeting-card,
 .meeting-note {
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  background: var(--panel-muted);
-  padding: 0.82rem 0.88rem;
+  border: 1px solid var(--dashboard-line);
+  border-radius: 6px;
+  background: var(--dashboard-raised);
+  padding: 0.78rem 0.82rem;
   display: grid;
   gap: 0.24rem;
 }
 
 .meeting-card strong {
-  font-size: 0.98rem;
+  font-size: 0.94rem;
+  letter-spacing: -0.03em;
 }
 
 .meeting-card__head {
@@ -3880,20 +3909,20 @@ watch(taskNoteDraft, saveTaskNote)
 
 .meeting-card__head span,
 .meeting-card span {
-  font-size: 0.76rem;
-  color: var(--muted-text);
+  font-size: 0.73rem;
+  color: var(--dashboard-ink-soft);
 }
 
 .dashboard-dock {
   position: fixed;
   right: 1rem;
   bottom: 1rem;
-  width: 3.1rem;
-  height: 3.1rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: var(--panel-color);
-  box-shadow: var(--shadow-soft);
+  width: 2.95rem;
+  height: 2.95rem;
+  border-radius: 8px;
+  border: 1px solid var(--dashboard-line);
+  background: var(--dashboard-elevated);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.08);
   display: grid;
   place-items: center;
   gap: 0.15rem;
@@ -3906,7 +3935,7 @@ watch(taskNoteDraft, saveTaskNote)
 
 .dashboard-dock:hover {
   transform: translateY(-2px);
-  box-shadow: 0 18px 35px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 22px 40px rgba(15, 23, 42, 0.14);
 }
 
 .dashboard-dock span {
@@ -3932,7 +3961,8 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .dashboard-dock--active {
-  box-shadow: 0 18px 35px rgba(15, 23, 42, 0.24);
+  border-color: color-mix(in srgb, currentColor 26%, var(--dashboard-line-strong));
+  box-shadow: 0 22px 44px rgba(15, 23, 42, 0.18);
 }
 
 .dashboard-dock:nth-of-type(2) {
@@ -3955,17 +3985,22 @@ watch(taskNoteDraft, saveTaskNote)
 .tool-modal__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.28);
-  backdrop-filter: blur(8px);
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: none;
 }
 
 .tool-modal__dialog {
   position: relative;
   z-index: 1;
-  width: min(34rem, calc(100vw - 2rem));
-  max-height: min(80vh, 44rem);
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: min(76vh, 40rem);
   overflow: auto;
-  padding: 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--dashboard-line-strong);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dashboard-panel) 98%, var(--dashboard-bg));
+  box-shadow: 0 24px 56px rgba(15, 23, 42, 0.22);
+  backdrop-filter: none;
 }
 
 .tool-modal__head {
@@ -3977,16 +4012,17 @@ watch(taskNoteDraft, saveTaskNote)
 
 .tool-modal__head h3 {
   margin-top: 0.15rem;
-  font-size: 1.35rem;
+  font-size: 1.14rem;
   line-height: 1.1;
+  letter-spacing: -0.04em;
 }
 
 .tool-modal__close {
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: var(--panel-muted);
+  border-radius: 6px;
+  border: 1px solid var(--dashboard-line-strong);
+  background: var(--dashboard-raised);
   display: grid;
   place-items: center;
 }
@@ -4003,17 +4039,22 @@ watch(taskNoteDraft, saveTaskNote)
 .size-modal__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.28);
-  backdrop-filter: blur(8px);
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: none;
 }
 
 .size-modal__dialog {
   position: relative;
   z-index: 1;
-  width: min(28rem, calc(100vw - 2rem));
-  max-height: min(78vh, 36rem);
+  width: min(22rem, calc(100vw - 2rem));
+  max-height: min(70vh, 30rem);
   overflow: auto;
-  padding: 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--dashboard-line-strong);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dashboard-panel) 98%, var(--dashboard-bg));
+  box-shadow: 0 24px 56px rgba(15, 23, 42, 0.22);
+  backdrop-filter: none;
 }
 
 .size-modal__head {
@@ -4025,22 +4066,23 @@ watch(taskNoteDraft, saveTaskNote)
 
 .size-modal__head h3 {
   margin-top: 0.15rem;
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   line-height: 1.1;
+  letter-spacing: -0.04em;
 }
 
 .size-modal__desc {
   margin-top: 0.35rem;
-  color: var(--muted-text);
-  font-size: 0.85rem;
+  color: var(--dashboard-ink-soft);
+  font-size: 0.8rem;
 }
 
 .size-modal__close {
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: var(--panel-muted);
+  border-radius: 6px;
+  border: 1px solid var(--dashboard-line-strong);
+  background: var(--dashboard-raised);
   display: grid;
   place-items: center;
 }
@@ -4053,9 +4095,9 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .size-modal__chip {
-  border: 1px solid var(--border-color);
-  border-radius: 18px;
-  background: var(--panel-muted);
+  border: 1px solid var(--dashboard-line);
+  border-radius: 6px;
+  background: var(--dashboard-raised);
   padding: 0.85rem 0.75rem;
   text-align: left;
   display: grid;
@@ -4070,7 +4112,7 @@ watch(taskNoteDraft, saveTaskNote)
 
 .size-modal__chip:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 28px rgba(15, 23, 42, 0.08);
 }
 
 .size-modal__chip strong {
@@ -4078,14 +4120,14 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .size-modal__chip small {
-  color: var(--muted-text);
+  color: var(--dashboard-ink-soft);
   font-size: 0.74rem;
 }
 
 .size-modal__chip--active {
-  border-color: color-mix(in srgb, var(--accent-color) 48%, var(--border-color));
-  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-muted));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 22%, transparent);
+  border-color: color-mix(in srgb, var(--dashboard-accent) 48%, var(--dashboard-line-strong));
+  background: color-mix(in srgb, var(--dashboard-accent) 8%, var(--dashboard-raised));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dashboard-accent) 18%, transparent);
 }
 
 .size-modal__chip--disabled {
@@ -4105,17 +4147,22 @@ watch(taskNoteDraft, saveTaskNote)
 .manager-modal__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.3);
-  backdrop-filter: blur(8px);
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: none;
 }
 
 .manager-modal__dialog {
   position: relative;
   z-index: 1;
-  width: min(42rem, calc(100vw - 2rem));
-  max-height: min(84vh, 48rem);
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: min(72vh, 34rem);
   overflow: auto;
-  padding: 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--dashboard-line-strong);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dashboard-panel) 98%, var(--dashboard-bg));
+  box-shadow: 0 24px 56px rgba(15, 23, 42, 0.22);
+  backdrop-filter: none;
 }
 
 .manager-modal__head {
@@ -4127,22 +4174,23 @@ watch(taskNoteDraft, saveTaskNote)
 
 .manager-modal__head h3 {
   margin-top: 0.15rem;
-  font-size: 1.35rem;
+  font-size: 1.12rem;
   line-height: 1.1;
+  letter-spacing: -0.04em;
 }
 
 .manager-modal__desc {
   margin-top: 0.35rem;
-  color: var(--muted-text);
-  font-size: 0.85rem;
+  color: var(--dashboard-ink-soft);
+  font-size: 0.8rem;
 }
 
 .manager-modal__close {
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: var(--panel-muted);
+  border-radius: 6px;
+  border: 1px solid var(--dashboard-line-strong);
+  background: var(--dashboard-raised);
   display: grid;
   place-items: center;
 }
@@ -4162,15 +4210,15 @@ watch(taskNoteDraft, saveTaskNote)
 
 .manager-modal__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.65rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
 .manager-toggle {
-  border: 1px solid var(--border-color);
-  border-radius: 18px;
-  background: var(--panel-muted);
-  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--dashboard-line);
+  border-radius: 6px;
+  background: var(--dashboard-raised);
+  padding: 0.72rem 0.75rem;
   text-align: left;
   display: grid;
   gap: 0.2rem;
@@ -4183,8 +4231,9 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .manager-toggle:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.08);
+  transform: none;
+  border-color: var(--dashboard-line-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dashboard-accent) 10%, transparent);
 }
 
 .manager-toggle strong {
@@ -4192,42 +4241,58 @@ watch(taskNoteDraft, saveTaskNote)
 }
 
 .manager-toggle small {
-  color: var(--muted-text);
+  color: var(--dashboard-ink-soft);
   font-size: 0.74rem;
 }
 
 .manager-toggle--off {
-  border-color: color-mix(in srgb, var(--border-color) 70%, var(--accent-color));
-  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-muted));
+  border-color: color-mix(in srgb, var(--dashboard-accent) 24%, var(--dashboard-line-strong));
+  background: color-mix(in srgb, var(--dashboard-accent) 6%, var(--dashboard-raised));
 }
 
 .tool-panel {
   margin-top: 1rem;
-  padding: 1rem;
-  border-radius: 22px;
+  padding: 0.95rem;
+  border-radius: 14px;
+  border: 1px solid var(--dashboard-line);
+  background: var(--dashboard-raised);
+  position: relative;
+  overflow: hidden;
+}
+
+.tool-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--tool-panel-tone, var(--dashboard-accent));
 }
 
 .tool-panel--pink {
-  background: #fff1f7;
+  --tool-panel-tone: #7b6cf6;
+  background: linear-gradient(180deg, color-mix(in srgb, #7b6cf6 7%, var(--dashboard-raised)), var(--dashboard-raised));
 }
 
 .tool-panel--amber {
-  background: #fff7ed;
+  --tool-panel-tone: #c9851d;
+  background: linear-gradient(180deg, color-mix(in srgb, #c9851d 8%, var(--dashboard-raised)), var(--dashboard-raised));
 }
 
 .tool-panel--sky {
-  background: #eff6ff;
+  --tool-panel-tone: #2d74da;
+  background: linear-gradient(180deg, color-mix(in srgb, #2d74da 8%, var(--dashboard-raised)), var(--dashboard-raised));
 }
 
 .tool-panel h4 {
   margin-top: 0.35rem;
-  font-size: 1.1rem;
+  font-size: 1rem;
   line-height: 1.25;
+  letter-spacing: -0.03em;
 }
 
 .tool-panel p {
   margin-top: 0.35rem;
-  color: var(--text-secondary);
+  color: var(--dashboard-ink-soft);
 }
 
 .tool-list {
@@ -4238,10 +4303,10 @@ watch(taskNoteDraft, saveTaskNote)
 
 .tool-list__item,
 .tool-meeting {
-  border: 1px solid var(--border-color);
-  border-radius: 18px;
-  background: var(--panel-muted);
-  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--dashboard-line);
+  border-radius: 12px;
+  background: var(--dashboard-elevated);
+  padding: 0.78rem 0.82rem;
 }
 
 .tool-meeting {
@@ -4262,20 +4327,83 @@ watch(taskNoteDraft, saveTaskNote)
 
 .tool-meeting__head span,
 .tool-meeting small {
-  color: var(--muted-text);
-  font-size: 0.76rem;
+  color: var(--dashboard-ink-soft);
+  font-size: 0.72rem;
 }
 
 .tool-textarea {
   margin-top: 0.85rem;
   width: 100%;
   min-height: 15rem;
-  border: 1px solid var(--border-color);
-  border-radius: 22px;
-  background: var(--panel-muted);
+  border: 1px solid var(--dashboard-line);
+  border-radius: 14px;
+  background: var(--dashboard-raised);
   padding: 0.95rem;
   resize: vertical;
   outline: none;
+}
+
+.dashboard-tile--calendar .summary-line,
+.dashboard-tile--calendar .calendar-row,
+.dashboard-tile--notes .summary-line,
+.dashboard-tile--meetings .meeting-card,
+.dashboard-tile--riskAlert .meeting-card,
+.dashboard-tile--riskAlert .meeting-note,
+.dashboard-tile--aiBrief .note-card,
+.dashboard-tile--notes .note-card {
+  border-left: 2px solid color-mix(in srgb, var(--tile-accent) 22%, var(--dashboard-line));
+}
+
+.dashboard-tile--calendar .calendar-agenda,
+.dashboard-tile--calendar .month-view,
+.dashboard-tile--table .dashboard-table-card,
+.dashboard-tile--table .dashboard-table-detail,
+.dashboard-tile--performance .performance-detail,
+.dashboard-tile--performance .performance-grid,
+.dashboard-tile--performance .performance-list--detailed {
+  padding: 0.05rem;
+}
+
+.dashboard-tile--calendar .calendar-agenda__head,
+.dashboard-tile--calendar .month-view__head {
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--dashboard-line);
+}
+
+.dashboard-tile--calendar .calendar-agenda__item,
+.dashboard-tile--calendar .week-lane__cell,
+.dashboard-tile--calendar .month-view__day {
+  border-radius: 6px;
+  border: 1px solid var(--dashboard-line);
+  background: var(--dashboard-raised);
+}
+
+.dashboard-tile--performance .metric-box,
+.dashboard-tile--riskAlert .metric-box {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tile-accent) 6%, var(--dashboard-raised)), var(--dashboard-raised));
+}
+
+.dashboard-tile--performance .person-row,
+.dashboard-tile--performance .performance-card,
+.dashboard-tile--performance .scoreboard-chip {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tile-accent) 4%, var(--dashboard-raised)), var(--dashboard-raised));
+}
+
+.dashboard-tile--table .dashboard-table-mini-head,
+.dashboard-tile--table .dashboard-table-board__head {
+  margin-bottom: 0.1rem;
+}
+
+.dashboard-tile--table .dashboard-table-list,
+.dashboard-tile--table .dashboard-table-board {
+  gap: 0.42rem;
+}
+
+.dashboard-tile--aiBrief .tool-list__item,
+.dashboard-tile--riskAlert .tool-meeting,
+.tool-modal .tool-list__item,
+.tool-modal .tool-meeting {
+  border-left: 2px solid color-mix(in srgb, var(--dashboard-accent) 18%, var(--dashboard-line));
 }
 
 @media (max-width: 1200px) {
@@ -4295,7 +4423,25 @@ watch(taskNoteDraft, saveTaskNote)
   }
 
   .dashboard-board-toolbar {
-    padding-bottom: 0.35rem;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 0.55rem;
+  }
+
+  .dashboard-board-toolbar__actions {
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .dashboard-board-toolbar__status {
+    min-width: 0;
+    flex: initial;
+    text-align: right;
+  }
+
+  .manager-modal__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .dashboard-dock {

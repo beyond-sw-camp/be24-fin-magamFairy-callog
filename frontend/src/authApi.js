@@ -1,7 +1,12 @@
 import api from '../plugins/interceptor'
 
 function isSuccessResponse(payload) {
-  return payload?.success === true || payload?.success === 'true'
+  return (
+    payload?.success === true ||
+    payload?.success === 'true' ||
+    payload?.isSuccess === true ||
+    payload?.isSuccess === 'true'
+  )
 }
 
 function unwrapResponse(response) {
@@ -20,7 +25,19 @@ function unwrapResponse(response) {
 
 export async function loginRequest(credentials) {
   const response = await api.post('/auth/login', credentials)
-  return unwrapResponse(response)
+  const payload = response?.data ?? {}
+  const responseBody = payload?.data && typeof payload.data === 'object'
+    ? payload.data
+    : payload
+  const authorization = response?.headers?.authorization ?? response?.headers?.Authorization
+  const headerAccessToken = authorization?.startsWith('Bearer ')
+    ? authorization.slice(7)
+    : null
+
+  return {
+    ...responseBody,
+    accessToken: responseBody.accessToken ?? headerAccessToken,
+  }
 }
 
 export async function fetchMyInfo() {
@@ -30,7 +47,7 @@ export async function fetchMyInfo() {
 
 export async function logoutRequest() {
   const response = await api.post('/auth/logout')
-  return unwrapResponse(response)
+  return response.data
 }
 
 export async function createUserRequest(payload) {
