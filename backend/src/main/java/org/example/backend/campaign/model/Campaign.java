@@ -25,7 +25,7 @@ import java.util.List;
 @Builder
 @Getter
 @Entity
-@Table(name = "campaign")
+@Table(name = "campaigns")
 public class Campaign extends BaseEntity {
 
     @Id
