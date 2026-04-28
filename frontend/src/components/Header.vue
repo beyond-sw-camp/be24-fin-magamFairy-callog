@@ -6,47 +6,30 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { getNoti } from '@/api/notifications/index.js'
 import { formatRelativeTime } from '@/utils/datechange.js'
 
-const notifications = ref([])
-
-const getNotifications = async () => {
-  try {
-    const res = getNoti(3)
-    notifications.value = res.data
-  } catch (e) {
-    console.error(e)
-  } finally {
-    notifications.value = [
-      { id: 34897, type: 'qa',   created_at: '2026-04-21T10:04:13Z', title: '알림 제목 1', message: '알림 내용 1', isRead: false },
-      { id: 78354, type: 'ai',   created_at: '2026-04-12T12:04:13Z', title: '알림 제목2',  message: '알림 내용 2', isRead: false },
-      { id: 54876, type: 'task', created_at: '2026-04-05T12:04:13Z', title: '알림 제목 3', message: '알림 내용 3', isRead: false },
-    ]
-  }
-}
-
 const route = useRoute()
 const router = useRouter()
 const store = usePlannerStore()
 const authStore = useAuthStore()
 
+const notifications = ref([])
 const notificationsOpen = ref(false)
 const appsMenuOpen = ref(false)
 
 const pageRoutes = [
-  { id: 'dashboard',  to: '/dashboard',  label: '메인',  section: '본사 통합 대시보드' },
-  { id: 'calendar',   to: '/calendar',   label: '캘린더',    section: '운영 플래너' },
-  { id: 'tasks',      to: '/tasks',      label: '업무 보드', section: '실행 보드' },
+  { id: 'dashboard', to: '/dashboard', label: '메인', section: '통합 대시보드' },
+  { id: 'calendar', to: '/calendar', label: '캘린더', section: '운영 플래너' },
+  { id: 'tasks', to: '/tasks', label: '업무 보드', section: '실행 보드' },
   { id: 'operations', to: '/operations', label: '운영 허브', section: '고객 및 업무 오케스트레이션' },
-  { id: 'templates',  to: '/templates',  label: '템플릿',    section: '콘텐츠 라이브러리' },
-  { id: 'reports',    to: '/reports',    label: '리포트',    section: '성과 리뷰' },
-  { id: 'references', to: '/references', label: '레퍼런스',  section: '콘텐츠 라이브러리' },
+  { id: 'templates', to: '/templates', label: '템플릿', section: '콘텐츠 라이브러리' },
+  { id: 'reports', to: '/reports', label: '리포트', section: '성과 리뷰' },
+  { id: 'references', to: '/references', label: '레퍼런스', section: '콘텐츠 라이브러리' },
 ]
 
 const activeRoute = computed(
-  () => pageRoutes.find((r) => route.path === r.to || route.path.startsWith(`${r.to}/`)) ?? pageRoutes[0],
+  () => pageRoutes.find((item) => route.path === item.to || route.path.startsWith(`${item.to}/`)) ?? pageRoutes[0],
 )
-const pageTitle   = computed(() => route.meta?.title   ?? activeRoute.value.label)
+const pageTitle = computed(() => route.meta?.title ?? activeRoute.value.label)
 const sectionTitle = computed(() => route.meta?.section ?? activeRoute.value.section)
-
 const profile = computed(() => store.findMember(store.currentUserId))
 
 const appMenuItems = computed(() => [
@@ -56,6 +39,14 @@ const appMenuItems = computed(() => [
     kind: 'route',
     to: { name: 'mypage' },
     icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>`,
+  },
+  {
+    key: 'provisioning',
+    label: '계정 발급',
+    kind: 'route',
+    to: { name: 'user-provisioning' },
+    creatorOnly: true,
+    icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20a5 5 0 00-10 0m10 0H7m10 0h3a2 2 0 002-2v-1a4 4 0 00-4-4h-1m-6 7H4a2 2 0 01-2-2v-1a4 4 0 014-4h1m0 0a4 4 0 100-8 4 4 0 000 8zm10-4a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`,
   },
   {
     key: 'notifications',
@@ -92,6 +83,24 @@ const appMenuItems = computed(() => [
   },
 ])
 
+const visibleAppMenuItems = computed(() =>
+  appMenuItems.value.filter((item) => !item.creatorOnly || authStore.canCreateUsers),
+)
+
+const getNotifications = async () => {
+  try {
+    const res = await getNoti(3)
+    notifications.value = res?.data ?? []
+  } catch (e) {
+    console.error(e)
+    notifications.value = [
+      { id: 34897, type: 'qa', created_at: '2026-04-21T10:04:13Z', title: '알림 제목 1', message: '알림 내용 1', isRead: false },
+      { id: 78354, type: 'ai', created_at: '2026-04-12T12:04:13Z', title: '알림 제목 2', message: '알림 내용 2', isRead: false },
+      { id: 54876, type: 'task', created_at: '2026-04-05T12:04:13Z', title: '알림 제목 3', message: '알림 내용 3', isRead: false },
+    ]
+  }
+}
+
 function closeFloatingMenus() {
   notificationsOpen.value = false
   appsMenuOpen.value = false
@@ -125,9 +134,9 @@ async function handleAppMenuItem(item) {
       store.toggleTheme()
       return
     }
+
     if (item.action === 'notifications') {
       notificationsOpen.value = true
-      return
     }
     return
   }
@@ -276,7 +285,7 @@ onBeforeUnmount(() => {
               </div>
               <div class="callog-appmenu-list">
                 <button
-                  v-for="item in appMenuItems"
+                  v-for="item in visibleAppMenuItems"
                   :key="item.key"
                   type="button"
                   class="callog-appmenu-item"
@@ -300,7 +309,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* ── Header 컨테이너 ───────────────────────────────────── */
 .callog-header {
   height: var(--header-height);
   background: var(--header-color);
@@ -325,7 +333,7 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
-/* ── 왼쪽 ─────────────────────────────────────────────── */
+
 .callog-header__left {
   display: flex;
   align-items: center;
@@ -378,7 +386,7 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
-/* ── 오른쪽 ───────────────────────────────────────────── */
+
 .callog-header__right {
   display: flex;
   align-items: center;
@@ -386,7 +394,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-/* 아이콘 버튼 공통 */
+
 .callog-header__icon-btn {
   display: flex;
   align-items: center;
@@ -408,7 +416,7 @@ onBeforeUnmount(() => {
   border-color: var(--border-strong);
 }
 
-/* 알림 버튼 빨간 점 */
+
 .callog-header__icon-btn--notif {
   position: relative;
 }
@@ -424,7 +432,7 @@ onBeforeUnmount(() => {
   border: 2px solid var(--header-color);
 }
 
-/* 검색 */
+
 .callog-header__search {
   position: relative;
   display: flex;
@@ -461,7 +469,7 @@ onBeforeUnmount(() => {
   width: 220px;
 }
 
-/* 프로필 아바타 */
+
 .callog-header__avatar {
   display: flex;
   align-items: center;
@@ -482,7 +490,7 @@ onBeforeUnmount(() => {
   background: var(--nav-icon-active-bg);
 }
 
-/* ── 드롭다운 공통 ─────────────────────────────────────── */
+
 .callog-header__dropdown-wrap {
   position: relative;
 }
@@ -603,7 +611,7 @@ onBeforeUnmount(() => {
   color: var(--subtle-text);
 }
 
-/* 전체 메뉴 목록 */
+
 .callog-appmenu-list {
   display: flex;
   flex-direction: column;
@@ -665,7 +673,7 @@ onBeforeUnmount(() => {
   color: #FCA5A5;
 }
 
-/* ── 드롭다운 트랜지션 ──────────────────────────────────── */
+
 .callog-dropdown-enter-active,
 .callog-dropdown-leave-active {
   transition: all var(--transition-fast);
