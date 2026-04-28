@@ -68,12 +68,19 @@ function normalizeUserInfo(rawUser, accessToken) {
   return sanitizeDecodedUser(decodeJwtPayload(accessToken))
 }
 
+function normalizeRole(role) {
+  return typeof role === 'string' ? role.trim().toUpperCase() : ''
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(null)
   const user = ref(null)
   const isLogin = ref(false)
   const isHydrated = ref(false)
   const isAuthenticated = computed(() => isLogin.value && Boolean(token.value))
+  const isAdmin = computed(() => normalizeRole(user.value?.role) === 'ROLE_ADMIN')
+  const isManager = computed(() => normalizeRole(user.value?.role) === 'ROLE_MANAGER')
+  const canCreateUsers = computed(() => isAdmin.value || isManager.value)
 
   function applyAuth(accessToken, rawUser = null) {
     if (!accessToken) {
@@ -122,11 +129,11 @@ export const useAuthStore = defineStore('auth', () => {
         return user.value
       }
 
-      const loginId = credentialsOrToken?.loginId?.trim?.()
+      const id = credentialsOrToken?.id?.trim?.()
       const password = credentialsOrToken?.password
 
       const loginResult = await loginRequest({
-        loginId,
+        id,
         password,
       })
 
@@ -175,6 +182,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     isAuthenticated,
+    isAdmin,
+    isManager,
+    canCreateUsers,
     isHydrated,
     isLogin,
     user,

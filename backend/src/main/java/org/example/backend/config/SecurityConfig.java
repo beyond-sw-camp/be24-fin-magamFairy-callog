@@ -42,6 +42,7 @@ public class SecurityConfig {
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/login", "/login", "/error").permitAll()
                 .requestMatchers("/auth/reissue", "/auth/logout").permitAll()
+                .requestMatchers("/administrator/users", "/admin/users").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
                 .requestMatchers("/administrator/**", "/admin/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers(
                         "/workspace/**",

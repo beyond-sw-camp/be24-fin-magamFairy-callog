@@ -8,8 +8,8 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
-    Optional<RefreshToken> findByLoginId(String loginId);
-    void deleteByLoginId(String loginId);
+    Optional<RefreshToken> findByUserId(String userId);
+    void deleteByUserId(String userId);
     void deleteByToken(String token);
     void deleteByExpiryDateBefore(LocalDateTime now);
 }

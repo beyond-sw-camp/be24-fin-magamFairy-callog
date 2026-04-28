@@ -69,6 +69,11 @@ function safeParseTasks(value) {
 
 export const usePlannerStore = defineStore('planner', () => {
   const sidebarCollapsed = ref(true)
+  const activeCampaign = ref({
+    name: '프리미엄 라이프스타일',
+    period: '2026.05.01 - 2026.06.15',
+    status: 'live',
+  })
   const theme = ref('light')
   const activeMode = ref('personal')
   const calendarView = ref('month')
@@ -393,6 +398,7 @@ export const usePlannerStore = defineStore('planner', () => {
   }
 
   return {
+    activeCampaign,
     activeMode,
     calendarTab,
     calendarView,
