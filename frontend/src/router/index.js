@@ -84,12 +84,13 @@ const routes = [
         },
       },
       {
-        path: 'templates',
-        name: 'templates',
-        component: () => import('@/views/TemplatesView.vue'),
+        path: 'frames',
+        name: 'frames',
+        component: () => import('@/views/FramesView.vue'),
         meta: {
-          title: '템플릿',
-          section: '콘텐츠 라이브러리',
+          title: '??? ???',
+          section: '??? ?? ??',
+        
         },
       },
       {
