@@ -18,9 +18,48 @@ import {
   templateLibrary,
 } from '@/data/scheduleSeed'
 import editorApi from '@/api/editor/editorApi'
+import { ListCampaign } from '@/api/campaigns'
+import { readStoredToken } from '@/authStorage'
 
 const themeStorageKey = 'kellog-theme'
 const tasksStorageKey = 'kellog-tasks'
+const campaignsStorageKey = 'callog-campaigns'
+const activeCampaignIdStorageKey = 'callog-active-campaign-id'
+const campaignOrderStorageKey = 'callog-campaign-order'
+const campaignFolderStorageKey = 'callog-campaign-folder'
+
+const defaultCampaigns = [
+  {
+    id: 'campaign-premium-lifestyle',
+    name: '프리미엄 라이프스타일',
+    purpose: 'VIP 고객 대상 공동 프로모션 운영',
+    tags: ['VIP', '라이프스타일', '공동 캠페인'],
+    startDate: '2026-05-01',
+    endDate: '2026-06-15',
+    period: '2026.05.01 - 2026.06.15',
+    partners: ['갤러리아', '호텔앤드리조트', '외부 대행사'],
+    goals: '캠페인 진행률 80% 달성, 검토 대기 3건 이하 유지',
+    mainMessage: '프리미엄 고객에게 한정 혜택과 고급스러운 경험을 전달합니다.',
+    status: 'live',
+    initials: 'PL',
+    color: '#8B5CF6',
+  },
+  {
+    id: 'campaign-spring-vip',
+    name: '봄 VIP 초청전',
+    purpose: '봄 시즌 우수 고객 초청 콘텐츠 운영',
+    tags: ['VIP', '봄 시즌'],
+    startDate: '2026-04-10',
+    endDate: '2026-05-20',
+    period: '2026.04.10 - 2026.05.20',
+    partners: ['갤러리아'],
+    goals: '초청장 승인 완료 및 SNS 카드뉴스 2안 발행',
+    mainMessage: '봄 시즌에 어울리는 우아한 초청 경험을 제공합니다.',
+    status: 'review',
+    initials: 'SV',
+    color: '#3B82F6',
+  },
+]
 
 function cloneValue(value) {
   return JSON.parse(JSON.stringify(value))
@@ -67,8 +106,84 @@ function safeParseTasks(value) {
   }
 }
 
+function safeParseCampaigns(value) {
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function formatCampaignPeriod(startDate, endDate) {
+  const normalize = (value) => String(value || '').replaceAll('-', '.')
+
+  if (!startDate && !endDate) {
+    return '기간 미정'
+  }
+
+  return `${normalize(startDate)} - ${normalize(endDate)}`
+}
+
+function createCampaignInitials(name) {
+  const cleanedName = String(name || '').trim()
+
+  if (!cleanedName) {
+    return 'CP'
+  }
+
+  const words = cleanedName.split(/\s+/).filter(Boolean)
+  const initials = words.length > 1
+    ? words.slice(0, 2).map((word) => word[0]).join('')
+    : cleanedName.slice(0, 2)
+
+  return initials.toUpperCase()
+}
+
+function normalizeCampaignRecord(source, fallback = {}) {
+  const merged = {
+    ...fallback,
+    ...(source ?? {}),
+  }
+  const name = merged.name?.trim?.() || fallback.name || ''
+  const startDate = merged.startDate || ''
+  const endDate = merged.endDate || ''
+  const id = merged.id ?? merged.idx ?? fallback.id ?? `campaign-${Date.now()}`
+
+  return {
+    id: String(id),
+    idx: merged.idx ?? null,
+    name,
+    purpose: merged.purpose?.trim?.() || '',
+    tags: Array.isArray(merged.tags) ? merged.tags : [],
+    startDate,
+    endDate,
+    period: merged.period || formatCampaignPeriod(startDate, endDate),
+    partners: Array.isArray(merged.partners) ? merged.partners : [],
+    goals: merged.goals?.trim?.() || '',
+    mainMessage: merged.mainMessage?.trim?.() || '',
+    status: merged.status || fallback.status || 'draft',
+    initials: merged.initials || createCampaignInitials(name),
+    color: merged.color || fallback.color || '#8B5CF6',
+    createdAt: merged.createdAt ?? fallback.createdAt,
+    updatedAt: merged.updatedAt ?? fallback.updatedAt,
+  }
+}
+
 export const usePlannerStore = defineStore('planner', () => {
   const sidebarCollapsed = ref(true)
+  const campaigns = ref(cloneValue(defaultCampaigns))
+  const activeCampaignId = ref(defaultCampaigns[0].id)
+  const campaignUiOwnerKey = ref(currentUserId)
+  const campaignOrder = ref(defaultCampaigns.map((campaign) => campaign.id))
+  const campaignFolderIds = ref([])
+  const campaignServerHydrated = ref(false)
+  const campaignServerLoadPending = ref(false)
+  const legacyActiveCampaign = ref({
+    name: '프리미엄 라이프스타일',
+    period: '2026.05.01 - 2026.06.15',
+    status: 'live',
+  })
   const theme = ref('light')
   const activeMode = ref('personal')
   const calendarView = ref('month')
@@ -85,12 +200,146 @@ export const usePlannerStore = defineStore('planner', () => {
   const createSeedDate = ref('2026-04-15')
   const tasks = ref(cloneValue(seedTasks))
 
+  const activeCampaign = computed(() => {
+    return campaigns.value.find((campaign) => campaign.id === activeCampaignId.value) ?? campaigns.value[0] ?? null
+  })
+
+  const orderedCampaigns = computed(() => {
+    const orderMap = new Map(campaignOrder.value.map((campaignId, index) => [campaignId, index]))
+
+    return [...campaigns.value].sort((left, right) => {
+      const leftIndex = orderMap.get(left.id) ?? Number.MAX_SAFE_INTEGER
+      const rightIndex = orderMap.get(right.id) ?? Number.MAX_SAFE_INTEGER
+
+      return leftIndex - rightIndex
+    })
+  })
+
+  const folderCampaignIdSet = computed(() => new Set(campaignFolderIds.value))
+
+  const sidebarCampaigns = computed(() =>
+    orderedCampaigns.value.filter((campaign) => !folderCampaignIdSet.value.has(campaign.id)),
+  )
+
+  const folderCampaigns = computed(() =>
+    orderedCampaigns.value.filter((campaign) => folderCampaignIdSet.value.has(campaign.id)),
+  )
+
+  const campaignFolderCount = computed(() => folderCampaigns.value.length)
+
   function persistTasks() {
     if (typeof window === 'undefined') {
       return
     }
 
     window.localStorage.setItem(tasksStorageKey, JSON.stringify(tasks.value))
+  }
+
+  function persistCampaigns() {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(campaignsStorageKey, JSON.stringify(campaigns.value))
+  }
+
+  function getCampaignUiStorageKey(baseKey) {
+    return `${baseKey}:${campaignUiOwnerKey.value || 'default'}`
+  }
+
+  function persistCampaignOrder() {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(getCampaignUiStorageKey(campaignOrderStorageKey), JSON.stringify(campaignOrder.value))
+  }
+
+  function persistCampaignFolderIds() {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(
+      getCampaignUiStorageKey(campaignFolderStorageKey),
+      JSON.stringify(campaignFolderIds.value),
+    )
+  }
+
+  function syncCampaignUiState() {
+    const existingIds = campaigns.value.map((campaign) => campaign.id)
+    const uniqueExistingIds = new Set(existingIds)
+
+    campaignOrder.value = [
+      ...campaignOrder.value.filter((campaignId, index, source) =>
+        uniqueExistingIds.has(campaignId) && source.indexOf(campaignId) === index,
+      ),
+      ...existingIds.filter((campaignId) => !campaignOrder.value.includes(campaignId)),
+    ]
+
+    const completedIds = new Set(
+      campaigns.value
+        .filter((campaign) => campaign.status === 'completed')
+        .map((campaign) => campaign.id),
+    )
+
+    campaignFolderIds.value = campaignFolderIds.value.filter((campaignId, index, source) =>
+      completedIds.has(campaignId) && source.indexOf(campaignId) === index,
+    )
+  }
+
+  function hydrateCampaignUiState() {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const storedOrder = safeParseCampaigns(
+      window.localStorage.getItem(getCampaignUiStorageKey(campaignOrderStorageKey)),
+    )
+    const storedFolderIds = safeParseCampaigns(
+      window.localStorage.getItem(getCampaignUiStorageKey(campaignFolderStorageKey)),
+    )
+
+    campaignOrder.value = Array.isArray(storedOrder)
+      ? storedOrder.filter((campaignId) => typeof campaignId === 'string')
+      : campaigns.value.map((campaign) => campaign.id)
+
+    campaignFolderIds.value = Array.isArray(storedFolderIds)
+      ? storedFolderIds.filter((campaignId) => typeof campaignId === 'string')
+      : []
+
+    syncCampaignUiState()
+  }
+
+  async function loadCampaignsFromServer() {
+    if (!readStoredToken() || campaignServerLoadPending.value) {
+      return campaigns.value
+    }
+
+    campaignServerLoadPending.value = true
+
+    try {
+      const loadedCampaigns = await ListCampaign()
+
+      if (Array.isArray(loadedCampaigns)) {
+        const nextCampaigns = loadedCampaigns.map((campaign) => normalizeCampaignRecord(campaign))
+
+        campaigns.value = nextCampaigns
+        campaignOrder.value = nextCampaigns.map((campaign) => campaign.id)
+        activeCampaignId.value = nextCampaigns.some((campaign) => campaign.id === activeCampaignId.value)
+          ? activeCampaignId.value
+          : nextCampaigns[0]?.id ?? null
+        campaignServerHydrated.value = true
+        syncCampaignUiState()
+      }
+
+      return campaigns.value
+    } catch (error) {
+      console.warn('loadCampaignsFromServer failed', error)
+      return campaigns.value
+    } finally {
+      campaignServerLoadPending.value = false
+    }
   }
 
   function applyTheme(nextTheme) {
@@ -108,6 +357,8 @@ export const usePlannerStore = defineStore('planner', () => {
 
     const storedTheme = window.localStorage.getItem(themeStorageKey)
     const storedTasks = window.localStorage.getItem(tasksStorageKey)
+    const storedCampaigns = window.localStorage.getItem(campaignsStorageKey)
+    const storedActiveCampaignId = window.localStorage.getItem(activeCampaignIdStorageKey)
 
     if (storedTheme === 'light' || storedTheme === 'dark') {
       theme.value = storedTheme
@@ -122,7 +373,28 @@ export const usePlannerStore = defineStore('planner', () => {
       }
     }
 
+    if (storedCampaigns) {
+      const parsedCampaigns = safeParseCampaigns(storedCampaigns)
+      if (parsedCampaigns?.length) {
+        campaigns.value = parsedCampaigns
+      }
+    }
+
+    if (
+      storedActiveCampaignId &&
+      campaigns.value.some((campaign) => campaign.id === storedActiveCampaignId)
+    ) {
+      activeCampaignId.value = storedActiveCampaignId
+    } else {
+      activeCampaignId.value = campaigns.value[0]?.id ?? null
+    }
+
     applyTheme(theme.value)
+    hydrateCampaignUiState()
+
+    if (!campaignServerHydrated.value && readStoredToken()) {
+      void loadCampaignsFromServer()
+    }
   }
 
   watch(
@@ -138,6 +410,21 @@ export const usePlannerStore = defineStore('planner', () => {
   )
 
   watch(tasks, persistTasks, { deep: true })
+  watch(
+    campaigns,
+    () => {
+      persistCampaigns()
+      syncCampaignUiState()
+    },
+    { deep: true },
+  )
+  watch(campaignOrder, persistCampaignOrder, { deep: true })
+  watch(campaignFolderIds, persistCampaignFolderIds, { deep: true })
+  watch(activeCampaignId, (nextCampaignId) => {
+    if (typeof window !== 'undefined' && nextCampaignId) {
+      window.localStorage.setItem(activeCampaignIdStorageKey, nextCampaignId)
+    }
+  })
 
   const members = computed(() => teamMembers)
   const templates = computed(() => templateLibrary)
@@ -237,6 +524,157 @@ export const usePlannerStore = defineStore('planner', () => {
 
   function setSearchQuery(value) {
     searchQuery.value = value
+  }
+
+  function setActiveCampaign(campaignId) {
+    if (!campaigns.value.some((campaign) => campaign.id === campaignId)) {
+      return
+    }
+
+    activeCampaignId.value = campaignId
+  }
+
+  function setCampaignUiOwnerKey(nextOwnerKey) {
+    const resolvedOwnerKey = String(nextOwnerKey || currentUserId)
+
+    if (campaignUiOwnerKey.value === resolvedOwnerKey) {
+      return
+    }
+
+    campaignUiOwnerKey.value = resolvedOwnerKey
+    hydrateCampaignUiState()
+  }
+
+  function reorderCampaign(sourceCampaignId, targetCampaignId, placement = 'before') {
+    if (!sourceCampaignId || !targetCampaignId || sourceCampaignId === targetCampaignId) {
+      return false
+    }
+
+    const nextOrder = campaignOrder.value.filter((campaignId) => campaignId !== sourceCampaignId)
+    const targetIndex = nextOrder.indexOf(targetCampaignId)
+
+    if (targetIndex === -1) {
+      return false
+    }
+
+    const insertIndex = placement === 'after' ? targetIndex + 1 : targetIndex
+    nextOrder.splice(insertIndex, 0, sourceCampaignId)
+    campaignOrder.value = nextOrder
+
+    return true
+  }
+
+  function moveCampaignToFolder(campaignId) {
+    const campaign = campaigns.value.find((item) => item.id === campaignId)
+
+    if (!campaign || campaign.status !== 'completed' || campaignFolderIds.value.includes(campaignId)) {
+      return false
+    }
+
+    campaignFolderIds.value = [...campaignFolderIds.value, campaignId]
+    return true
+  }
+
+  function restoreCampaignFromFolder(campaignId) {
+    if (!campaignFolderIds.value.includes(campaignId)) {
+      return false
+    }
+
+    campaignFolderIds.value = campaignFolderIds.value.filter((item) => item !== campaignId)
+    return true
+  }
+
+  function isCampaignInFolder(campaignId) {
+    return campaignFolderIds.value.includes(campaignId)
+  }
+
+  function createCampaign(payload) {
+    const nextIndex = campaigns.value.length + 1
+    const name = payload.name?.trim() || `새 캠페인 ${nextIndex}`
+    const startDate = payload.startDate || ''
+    const endDate = payload.endDate || ''
+    const nextCampaign = {
+      id: String(payload.id ?? payload.idx ?? `campaign-${Date.now()}`),
+      idx: payload.idx ?? null,
+      name,
+      purpose: payload.purpose?.trim() || '',
+      tags: Array.isArray(payload.tags) ? payload.tags : [],
+      startDate,
+      endDate,
+      period: formatCampaignPeriod(startDate, endDate),
+      partners: Array.isArray(payload.partners) ? payload.partners : [],
+      goals: payload.goals?.trim() || '',
+      mainMessage: payload.mainMessage?.trim() || '',
+      status: payload.status || 'draft',
+      initials: payload.initials || createCampaignInitials(name),
+      color: payload.color || '#8B5CF6',
+      createdAt: payload.createdAt ?? new Date().toISOString(),
+      updatedAt: payload.updatedAt,
+    }
+
+    campaigns.value.unshift(nextCampaign)
+    campaignOrder.value = [nextCampaign.id, ...campaignOrder.value.filter((campaignId) => campaignId !== nextCampaign.id)]
+    activeCampaignId.value = nextCampaign.id
+
+    return nextCampaign
+  }
+
+  function updateCampaign(campaignId, payload) {
+    const index = campaigns.value.findIndex((campaign) => campaign.id === campaignId)
+
+    if (index === -1) {
+      return null
+    }
+
+    const currentCampaign = campaigns.value[index]
+    const name = payload.name?.trim() || currentCampaign.name
+    const startDate = payload.startDate || currentCampaign.startDate || ''
+    const endDate = payload.endDate || currentCampaign.endDate || ''
+
+    const nextCampaign = {
+      ...currentCampaign,
+      idx: payload.idx ?? currentCampaign.idx ?? null,
+      name,
+      purpose: payload.purpose?.trim() || '',
+      tags: Array.isArray(payload.tags) ? payload.tags : [],
+      startDate,
+      endDate,
+      period: payload.period || formatCampaignPeriod(startDate, endDate),
+      partners: Array.isArray(payload.partners) ? payload.partners : [],
+      goals: payload.goals?.trim() || '',
+      mainMessage: payload.mainMessage?.trim() || '',
+      status: payload.status || currentCampaign.status,
+      initials: payload.initials || createCampaignInitials(name),
+      color: payload.color || currentCampaign.color,
+      createdAt: payload.createdAt ?? currentCampaign.createdAt,
+      updatedAt: payload.updatedAt ?? new Date().toISOString(),
+    }
+
+    campaigns.value[index] = nextCampaign
+
+    return nextCampaign
+  }
+
+  function updateCampaignStatus(campaignId, nextStatus) {
+    const index = campaigns.value.findIndex((campaign) => campaign.id === campaignId)
+
+    if (index === -1) {
+      return null
+    }
+
+    const nextCampaign = {
+      ...campaigns.value[index],
+      status: nextStatus,
+      updatedAt: new Date().toISOString(),
+    }
+
+    campaigns.value[index] = nextCampaign
+
+    if (nextStatus !== 'completed') {
+      campaignFolderIds.value = campaignFolderIds.value.filter((item) => item !== campaignId)
+    }
+
+    return nextCampaign
   }
 
   function cycleStatusFilter() {
@@ -393,10 +831,17 @@ export const usePlannerStore = defineStore('planner', () => {
   }
 
   return {
+    activeCampaign,
+    activeCampaignId,
     activeMode,
     calendarTab,
     calendarView,
+    campaignFolderCount,
+    campaignFolderIds,
+    campaigns,
+    folderCampaigns,
     closeTask,
+    createCampaign,
     createTask,
     currentDate,
     currentUserId,
@@ -409,23 +854,31 @@ export const usePlannerStore = defineStore('planner', () => {
     filteredTasks,
     findMember,
     initialize,
+    isCampaignInFolder,
     members,
     modalMode,
     modalTask,
+    moveCampaignToFolder,
     moveTask,
     openCreateModal,
     openTask,
+    orderedCampaigns,
     periodLabel,
     priorityLabels,
     reports,
+    reorderCampaign,
+    restoreCampaignFromFolder,
     searchQuery,
     selectedTask,
+    setActiveCampaign,
     setActiveMode,
+    setCampaignUiOwnerKey,
     setCalendarTab,
     setCalendarView,
     setSearchQuery,
     setToday,
     shiftPeriod,
+    sidebarCampaigns,
     sidebarCollapsed,
     sortMode,
     spanMode,
@@ -438,6 +891,8 @@ export const usePlannerStore = defineStore('planner', () => {
     toggleSidebar,
     toggleSpanMode,
     toggleTheme,
+    updateCampaign,
+    updateCampaignStatus,
     updateTask,
   }
 })
