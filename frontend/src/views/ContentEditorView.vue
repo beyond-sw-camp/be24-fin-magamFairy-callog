@@ -156,7 +156,7 @@ const activeTask = computed(() => {
   return store.tasks.find((task) => task.id === routeContentId.value) ?? null
 })
 
-const activePanel = ref(ENABLE_CONTENT_RAIL ? 'properties' : null)
+const activePanel = ref(ENABLE_CONTENT_RAIL ? null : 'properties')
 const activeModal = ref(null)
 const historyModalVersion = ref('')
 const panelWidth = ref(DEFAULT_PANEL_WIDTH)
