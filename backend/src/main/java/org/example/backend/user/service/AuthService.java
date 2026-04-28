@@ -23,18 +23,18 @@ public class AuthService {
     private final UserRepository userRepository;
 
     @Transactional
-    public TokenDto.AuthTokenResponse issueTokens(Long userIdx, String userId, String email, String name, String role) {
-        String loginId = requireLoginId(userId, email);
-        String access = jwtUtil.createToken("access", userIdx, loginId, email, name, role, 600000L);
-        String refresh = jwtUtil.createToken("refresh", userIdx, loginId, email, name, role, 1209600000L);
+    public TokenDto.AuthTokenResponse issueTokens(Long userIdx, String id, String email, String name, String role) {
+        String userId = requireId(id, email);
+        String access = jwtUtil.createToken("access", userIdx, userId, email, name, role, 600000L);
+        String refresh = jwtUtil.createToken("refresh", userIdx, userId, email, name, role, 1209600000L);
         LocalDateTime expiryDate = LocalDateTime.now().plusDays(14);
 
-        refreshTokenRepository.findByLoginId(loginId)
+        refreshTokenRepository.findByUserId(userId)
                 .ifPresentOrElse(
                         existingToken -> existingToken.updateToken(refresh, expiryDate),
                         () -> refreshTokenRepository.save(
                                 RefreshToken.builder()
-                                        .loginId(loginId)
+                                        .userId(userId)
                                         .token(refresh)
                                         .expiryDate(expiryDate)
                                         .build()
@@ -60,9 +60,9 @@ public class AuthService {
         Long userIdx = jwtUtil.getUserIdx(refreshToken);
         User user = userRepository.findById(userIdx)
                 .orElseThrow(() -> new IllegalArgumentException("User not found."));
-        String loginId = resolveLoginId(user, refreshToken);
+        String userId = resolveUserId(user, refreshToken);
 
-        RefreshToken dbToken = refreshTokenRepository.findByLoginId(loginId)
+        RefreshToken dbToken = refreshTokenRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Refresh token is not registered."));
 
         if (!dbToken.getToken().equals(refreshToken)) {
@@ -70,14 +70,14 @@ public class AuthService {
         }
 
         if (!Boolean.TRUE.equals(user.getEnable()) || resolveStatus(user) != UserAccountStatus.ACTIVE) {
-            refreshTokenRepository.deleteByLoginId(loginId);
+            refreshTokenRepository.deleteByUserId(userId);
             throw new IllegalArgumentException("User is not allowed to access.");
         }
 
         String newAccess = jwtUtil.createToken(
                 "access",
                 user.getIdx(),
-                loginId,
+                userId,
                 user.getEmail(),
                 user.getName(),
                 user.getRole(),
@@ -86,7 +86,7 @@ public class AuthService {
         String newRefresh = jwtUtil.createToken(
                 "refresh",
                 user.getIdx(),
-                loginId,
+                userId,
                 user.getEmail(),
                 user.getName(),
                 user.getRole(),
@@ -110,22 +110,22 @@ public class AuthService {
         return user.getAccountStatus() == null ? UserAccountStatus.ACTIVE : user.getAccountStatus();
     }
 
-    private String resolveLoginId(User user, String refreshToken) {
-        String tokenLoginId = jwtUtil.getId(refreshToken);
-        if (tokenLoginId != null && !tokenLoginId.isBlank()) {
-            return tokenLoginId;
+    private String resolveUserId(User user, String refreshToken) {
+        String tokenId = jwtUtil.getId(refreshToken);
+        if (tokenId != null && !tokenId.isBlank()) {
+            return tokenId;
         }
-        return requireLoginId(user.getLoginId(), user.getEmail());
+        return requireId(user.getId(), user.getEmail());
     }
 
-    private String requireLoginId(String loginId, String fallbackEmail) {
-        if (loginId != null && !loginId.isBlank()) {
-            return loginId;
+    private String requireId(String id, String fallbackEmail) {
+        if (id != null && !id.isBlank()) {
+            return id;
         }
         if (fallbackEmail != null && !fallbackEmail.isBlank()) {
             return fallbackEmail;
         }
-        throw new IllegalArgumentException("Login id is required.");
+        throw new IllegalArgumentException("ID is required.");
     }
 
     private void validateRefreshToken(String refreshToken) {
