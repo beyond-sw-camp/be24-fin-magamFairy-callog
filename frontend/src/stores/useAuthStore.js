@@ -1,7 +1,10 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { loginRequest, logoutRequest } from '@/authApi'
+import { loginRequest, logoutRequest, reissueRequest } from '@/authApi'
+import { AUTH_TOKEN_REFRESHED_EVENT } from '../../plugins/interceptor'
 import {
+  ACCESS_TOKEN_KEY,
+  USER_INFO_KEY,
   clearStoredAuth,
   persistAccessToken,
   persistUserInfo,
@@ -31,12 +34,6 @@ function decodeJwtPayload(accessToken) {
   } catch {
     return null
   }
-}
-
-function isTokenExpired(accessToken) {
-  const payload = decodeJwtPayload(accessToken)
-
-  return typeof payload?.exp === 'number' && payload.exp * 1000 <= Date.now()
 }
 
 function sanitizeDecodedUser(decodedUser) {
@@ -72,6 +69,27 @@ function normalizeRole(role) {
   return typeof role === 'string' ? role.trim().toUpperCase() : ''
 }
 
+const TOKEN_REFRESH_SKEW_MS = 30 * 1000
+
+function getAccessTokenExpiresAt(accessToken) {
+  const decodedToken = decodeJwtPayload(accessToken)
+  const expiresAtSeconds = decodedToken?.exp
+
+  return typeof expiresAtSeconds === 'number'
+    ? expiresAtSeconds * 1000
+    : null
+}
+
+function isAccessTokenExpired(accessToken, skewMs = TOKEN_REFRESH_SKEW_MS) {
+  const expiresAt = getAccessTokenExpiresAt(accessToken)
+
+  if (!expiresAt) {
+    return true
+  }
+
+  return Date.now() + skewMs >= expiresAt
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(null)
   const user = ref(null)
@@ -102,23 +120,65 @@ export const useAuthStore = defineStore('auth', () => {
     clearStoredAuth()
   }
 
+  function applyStoredAuth(accessToken) {
+    token.value = accessToken
+    user.value = readStoredUser() ?? normalizeUserInfo(null, accessToken)
+    isLogin.value = true
+
+    persistUserInfo(user.value)
+  }
+
   function restore() {
     const savedToken = readStoredToken()
 
-    if (!savedToken || isTokenExpired(savedToken)) {
-      clearAuthState()
+    if (!savedToken || isAccessTokenExpired(savedToken)) {
+      token.value = null
+      user.value = null
+      isLogin.value = false
+
+      if (savedToken) {
+        persistAccessToken(null)
+      }
+
       isHydrated.value = true
       return false
     }
 
-    token.value = savedToken
-    user.value = readStoredUser() ?? normalizeUserInfo(null, savedToken)
-    isLogin.value = true
+    applyStoredAuth(savedToken)
     isHydrated.value = true
 
-    persistUserInfo(user.value)
-
     return true
+  }
+
+  async function refreshSession() {
+    try {
+      const { accessToken } = await reissueRequest()
+
+      applyAuth(accessToken)
+      isHydrated.value = true
+      return true
+    } catch (error) {
+      console.warn('Token reissue failed.', error)
+      clearAuthState()
+      isHydrated.value = true
+      return false
+    }
+  }
+
+  function hasFreshAccessToken() {
+    return Boolean(token.value) && !isAccessTokenExpired(token.value)
+  }
+
+  async function ensureAuthenticated() {
+    if (!isHydrated.value) {
+      restore()
+    }
+
+    if (hasFreshAccessToken()) {
+      return true
+    }
+
+    return refreshSession()
   }
 
   async function login(credentialsOrToken) {
@@ -179,6 +239,47 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  if (typeof window !== 'undefined') {
+    window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT, (event) => {
+      const accessToken = event?.detail?.accessToken
+
+      if (!accessToken) {
+        return
+      }
+
+      token.value = accessToken
+      user.value = normalizeUserInfo(null, accessToken)
+      isLogin.value = true
+      isHydrated.value = true
+
+      persistUserInfo(user.value)
+    })
+
+    window.addEventListener('storage', (event) => {
+      const shouldSync =
+        event.key === null ||
+        event.key === ACCESS_TOKEN_KEY ||
+        event.key === USER_INFO_KEY
+
+      if (!shouldSync) {
+        return
+      }
+
+      const savedToken = readStoredToken()
+
+      if (!savedToken || isAccessTokenExpired(savedToken, 0)) {
+        token.value = null
+        user.value = null
+        isLogin.value = false
+        isHydrated.value = true
+        return
+      }
+
+      applyStoredAuth(savedToken)
+      isHydrated.value = true
+    })
+  }
+
 
   return {
     isAuthenticated,
@@ -192,6 +293,9 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     setToken,
     restore,
+    refreshSession,
+    ensureAuthenticated,
+    hasFreshAccessToken,
     checkLogin: restore,
     fetchMe,
     logout,

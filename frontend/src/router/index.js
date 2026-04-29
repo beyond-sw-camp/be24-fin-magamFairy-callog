@@ -31,6 +31,15 @@ const routes = [
         },
       },
       {
+        path: 'campaigns/:campaignId',
+        name: 'campaign-detail',
+        component: () => import('@/views/CampaignDetailView.vue'),
+        meta: {
+          title: '캠페인 상세',
+          section: '캠페인 운영 보드',
+        },
+      },
+      {
         path: 'content/new',
         name: 'content-create',
         component: () => import('@/views/ContentEditorView.vue'),
@@ -169,7 +178,7 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const authStore = useAuthStore()
 
   if (!authStore.isHydrated) {
@@ -179,6 +188,19 @@ router.beforeEach((to) => {
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
   const requiresAccountCreator = to.matched.some((record) => record.meta.requiresAccountCreator)
   const guestOnly = to.matched.some((record) => record.meta.guestOnly)
+
+  if (requiresAuth || requiresAccountCreator) {
+    const isAuthenticated = await authStore.ensureAuthenticated()
+
+    if (!isAuthenticated) {
+      return {
+        name: 'login',
+        query: {
+          redirect: to.fullPath,
+        },
+      }
+    }
+  }
 
   if ((requiresAuth || requiresAccountCreator) && !authStore.isAuthenticated) {
     return {
@@ -193,7 +215,7 @@ router.beforeEach((to) => {
     return { name: 'dashboard' }
   }
 
-  if (guestOnly && authStore.isAuthenticated) {
+  if (guestOnly && authStore.hasFreshAccessToken()) {
     return { name: 'dashboard' }
   }
 
