@@ -18,6 +18,24 @@ public class UserProfileService {
     private final UserProfileRepository userProfileRepository;
 
     @Transactional
+    public void ensureProfilesForExistingUsers() {
+        userRepository.findAll().forEach(this::ensureProfile);
+    }
+
+    @Transactional
+    public UserProfile ensureProfile(User user) {
+        if (user == null || user.getIdx() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "persisted user is required.");
+        }
+
+        return userProfileRepository.findByUserIdx(user.getIdx())
+                .orElseGet(() -> userProfileRepository.save(UserProfile.builder()
+                        .user(user)
+                        .email(user.getEmail())
+                        .build()));
+    }
+
+    @Transactional
     public UserProfileDto.Res getMyProfile(String userId) {
         return UserProfileDto.Res.from(getOrCreateProfile(userId));
     }
@@ -42,11 +60,7 @@ public class UserProfileService {
     private UserProfile getOrCreateProfile(String userId) {
         User user = findUser(userId);
 
-        return userProfileRepository.findByUserIdx(user.getIdx())
-                .orElseGet(() -> userProfileRepository.save(UserProfile.builder()
-                        .user(user)
-                        .email(user.getEmail())
-                        .build()));
+        return ensureProfile(user);
     }
 
     private User findUser(String userId) {
