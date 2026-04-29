@@ -8,6 +8,7 @@ import org.example.backend.user.model.User;
 import org.example.backend.user.model.UserAccountStatus;
 import org.example.backend.user.model.UserDto;
 import org.example.backend.user.repository.UserRepository;
+import org.example.backend.userInfo.userProfile.service.UserProfileService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -31,6 +32,7 @@ public class UserService implements UserDetailsService {
     private static final int TEMPORARY_PASSWORD_LENGTH = 10;
 
     private final UserRepository userRepository;
+    private final UserProfileService userProfileService;
     private final PasswordEncoder passwordEncoder;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -62,7 +64,10 @@ public class UserService implements UserDetailsService {
                 .accountStatus(UserAccountStatus.ACTIVE)
                 .build();
 
-        return UserDto.CreateUserRes.from(userRepository.save(user), temporaryPassword);
+        User savedUser = userRepository.save(user);
+        userProfileService.ensureProfile(savedUser);
+
+        return UserDto.CreateUserRes.from(savedUser, temporaryPassword);
     }
 
     @Override

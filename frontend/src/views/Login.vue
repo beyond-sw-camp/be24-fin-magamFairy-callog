@@ -20,9 +20,7 @@ function getRedirectTarget() {
     ? route.query.redirect[0]
     : route.query.redirect
 
-  return typeof redirect === 'string' && redirect.startsWith('/')
-    ? redirect
-    : '/dashboard'
+  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/dashboard'
 }
 
 const handleLogin = async () => {
@@ -54,7 +52,7 @@ const handleLogin = async () => {
     <div class="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center">
       <div class="mb-10 flex flex-col items-center fade-in">
         <div
-          class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm"
+          class="login-brand-mark mb-4 inline-flex h-16 w-16 items-center justify-center shadow-sm"
         >
           <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -65,23 +63,18 @@ const handleLogin = async () => {
             />
           </svg>
         </div>
-        <h1 class="text-4xl font-bold tracking-tight text-slate-900">CALLOG</h1>
+        <h1 class="login-brand-title text-4xl font-bold tracking-tight">CALLOG</h1>
       </div>
 
       <div class="slide-up w-full max-w-3xl">
-        <div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+        <div class="login-card p-6 shadow-sm md:p-8">
           <div class="mb-6">
-            <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-              Access
-            </p>
-            <h2 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">Sign in</h2>
-            <p class="mt-2 text-sm text-slate-500">Continue to your CALLOG workspace.</p>
+            <p class="login-eyebrow text-xs font-semibold uppercase tracking-[0.24em]">Access</p>
+            <h2 class="login-title mt-2 text-2xl font-bold tracking-tight">Sign in</h2>
+            <p class="login-description mt-2 text-sm">Continue to your CALLOG workspace.</p>
           </div>
 
-          <p
-            v-if="errorMessage"
-            class="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600"
-          >
+          <p v-if="errorMessage" class="login-error mb-4 px-4 py-3 text-sm font-medium">
             {{ errorMessage }}
           </p>
 
@@ -92,20 +85,15 @@ const handleLogin = async () => {
             <div class="flex-1 space-y-4">
               <label class="block space-y-1.5">
                 <span
-                  class="ml-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400"
+                  class="login-label ml-1 block text-[11px] font-semibold uppercase tracking-[0.22em]"
                 >
                   ID
                 </span>
                 <span class="relative block">
                   <span
-                    class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    class="login-input-icon pointer-events-none absolute left-4 top-1/2 -translate-y-1/2"
                   >
-                    <svg
-                      class="h-4.5 w-4.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
+                    <svg class="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <rect x="2" y="4" width="20" height="16" rx="2" stroke-width="2" />
                       <path
                         stroke-linecap="round"
@@ -120,27 +108,22 @@ const handleLogin = async () => {
                     type="text"
                     autocomplete="username"
                     placeholder="예: CALLOG_team1_admin"
-                    class="w-full rounded-xl border border-slate-200 bg-slate-50 py-4 pl-12 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-900/5"
+                    class="login-input w-full py-4 pl-12 pr-4 text-sm font-medium outline-none transition"
                   />
                 </span>
               </label>
 
               <label class="block space-y-1.5">
                 <span
-                  class="ml-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400"
+                  class="login-label ml-1 block text-[11px] font-semibold uppercase tracking-[0.22em]"
                 >
                   Password
                 </span>
                 <span class="relative block">
                   <span
-                    class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    class="login-input-icon pointer-events-none absolute left-4 top-1/2 -translate-y-1/2"
                   >
-                    <svg
-                      class="h-4.5 w-4.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
+                    <svg class="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <rect x="3" y="11" width="18" height="10" rx="2" stroke-width="2" />
                       <path
                         stroke-linecap="round"
@@ -155,7 +138,7 @@ const handleLogin = async () => {
                     type="password"
                     autocomplete="current-password"
                     placeholder="비밀번호를 입력하세요"
-                    class="w-full rounded-xl border border-slate-200 bg-slate-50 py-4 pl-12 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-900/5"
+                    class="login-input w-full py-4 pl-12 pr-4 text-sm font-medium outline-none transition"
                   />
                 </span>
               </label>
@@ -165,18 +148,11 @@ const handleLogin = async () => {
               <button
                 type="submit"
                 :disabled="isLoading"
-                class="flex min-h-[120px] w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 md:h-full md:min-h-0 md:flex-col"
+                class="login-submit flex min-h-[120px] w-full items-center justify-center gap-2 px-4 py-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 md:h-full md:min-h-0 md:flex-col"
               >
                 <template v-if="!isLoading">
-                  <span
-                    class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10"
-                  >
-                    <svg
-                      class="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
+                  <span class="login-submit-icon inline-flex h-10 w-10 items-center justify-center">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -188,9 +164,7 @@ const handleLogin = async () => {
                   <span>Log in</span>
                 </template>
                 <template v-else>
-                  <span
-                    class="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white"
-                  ></span>
+                  <span class="login-spinner h-5 w-5 animate-spin rounded-full border-2"></span>
                   <span>Signing in</span>
                 </template>
               </button>
@@ -204,11 +178,102 @@ const handleLogin = async () => {
 
 <style scoped>
 .login-view {
-  background:
-    linear-gradient(180deg, rgba(233, 243, 255, 0.95) 0%, rgba(244, 248, 255, 0.88) 26%, rgba(248, 250, 252, 0.92) 52%, #f8fafc 100%),
-    radial-gradient(circle at top left, rgba(47, 128, 237, 0.16), transparent 34%),
-    radial-gradient(circle at top right, rgba(124, 77, 255, 0.06), transparent 24%),
-    var(--app-bg);
+  background: var(--surface-page);
+  color: var(--text-body);
+  transition:
+    background var(--transition-normal),
+    color var(--transition-normal);
+}
+
+.login-brand-mark {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--accent-strong);
+  color: var(--toggle-thumb);
+  transition:
+    background var(--transition-normal),
+    border-color var(--transition-normal),
+    color var(--transition-normal);
+}
+
+.login-brand-title,
+.login-title {
+  color: var(--text-heading);
+  transition: color var(--transition-normal);
+}
+
+.login-card {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-body);
+  box-shadow: var(--shadow-soft);
+  transition:
+    background var(--transition-normal),
+    border-color var(--transition-normal),
+    color var(--transition-normal),
+    box-shadow var(--transition-normal);
+}
+
+.login-eyebrow,
+.login-label,
+.login-input-icon {
+  color: var(--text-muted);
+  transition: color var(--transition-normal);
+}
+
+.login-description {
+  color: var(--text-muted);
+  transition: color var(--transition-normal);
+}
+
+.login-error {
+  border: 1px solid color-mix(in srgb, var(--danger-color) 30%, var(--line-soft));
+  border-radius: var(--radius-md);
+  background: var(--danger-surface);
+  color: var(--danger-text-strong);
+}
+
+.login-input {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  color: var(--text-heading);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    color var(--transition-normal);
+}
+
+.login-input::placeholder {
+  color: var(--text-muted);
+}
+
+.login-input:focus {
+  border-color: var(--line-strong);
+  background: var(--control-focus-color);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-color) 14%, transparent);
+}
+
+.login-submit {
+  border-radius: var(--radius-md);
+  background: var(--accent-strong);
+  color: var(--toggle-thumb);
+}
+
+.login-submit:hover:not(:disabled) {
+  background: var(--accent-color);
+}
+
+.login-submit-icon {
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--toggle-thumb) 14%, transparent);
+}
+
+.login-spinner {
+  border-color: color-mix(in srgb, var(--toggle-thumb) 28%, transparent);
+  border-top-color: var(--toggle-thumb);
 }
 
 .fade-in {
