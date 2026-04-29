@@ -6,7 +6,6 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
@@ -23,9 +22,7 @@ import org.example.backend.user.model.User;
 @Builder
 @Getter
 @Entity
-@Table(name = "user_settings", indexes = {
-        @Index(name = "idx_user_settings_user_idx", columnList = "user_idx")
-})
+@Table(name = "user_settings")
 public class UserSetting extends BaseEntity {
     public static final String THEME_LIGHT = "light";
     public static final String DENSITY_COMFORTABLE = "comfortable";
