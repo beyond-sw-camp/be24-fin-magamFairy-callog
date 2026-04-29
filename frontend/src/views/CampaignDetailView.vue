@@ -8,7 +8,6 @@ const store = usePlannerStore()
 
 const activeTab = ref('overview')
 const currentBoardView = ref('swimlane')
-const selectedTeamId = ref(null)
 const metadataEditing = ref(false)
 const selectedMemberIds = ref([])
 
@@ -16,19 +15,16 @@ const metadataDraft = ref({
   name: '',
   startDate: '',
   endDate: '',
+  summary: '',
   partnersText: '',
 })
 
 const tabs = [
-  { id: 'metadata', label: '메타데이터', caption: 'CAMPAIGN_001' },
-  { id: 'overview', label: '오버뷰', caption: 'CAMPAIGN_002' },
-  { id: 'team-board', label: '팀 보드', caption: 'CAMPAIGN_003' },
-  { id: 'deliverables', label: '산출물 & 검수', caption: 'CAMPAIGN_007' },
-  { id: 'references', label: '레퍼런스', caption: 'CAMPAIGN_004' },
+  { id: 'overview', label: '캠페인 오버뷰', caption: 'CAMPAIGN_002' },
+  { id: 'team-board', label: '팀 보드 보기', caption: 'CAMPAIGN_003' },
+  { id: 'references', label: '레퍼런스탭', caption: 'CAMPAIGN_004' },
   { id: 'participants', label: '참여자 설정', caption: 'CAMPAIGN_005' },
-  { id: 'performance', label: '성과/KPI', caption: 'CAMPAIGN_006' },
-  { id: 'partner-contribution', label: '파트너 기여 현황', caption: 'CAMPAIGN_008' },
-  { id: 'channel-plan', label: '채널 플래너', caption: 'CAMPAIGN_009' },
+  { id: 'performance', label: '캠페인 성과/KPI', caption: 'CAMPAIGN_006' },
 ]
 
 const activeCampaign = computed(() => {
@@ -38,18 +34,20 @@ const activeCampaign = computed(() => {
   return routeCampaign ?? store.activeCampaign
 })
 
+const campaignMetaCode = computed(() => activeCampaign.value?.code ?? 'CAMPAIGN_001')
+
 const campaignStatusLabel = computed(() => {
   const labels = {
     draft: '기획 중',
     review: '검토 중',
     in_review: '검토 중',
-    live: '진행 중',
+    live: '진행중',
     partner_done: '파트너 완료',
     paused: '일시 중지',
     completed: '완료',
   }
 
-  return labels[activeCampaign.value?.status] ?? activeCampaign.value?.status ?? '진행 중'
+  return labels[activeCampaign.value?.status] ?? activeCampaign.value?.status ?? '진행중'
 })
 
 const partnerNames = computed(() => {
@@ -57,525 +55,340 @@ const partnerNames = computed(() => {
     return activeCampaign.value.partners
   }
 
-  return ['한화 본사', '한화갤러리아', '한화호텔앤드리조트', '대행사A']
+  return ['디자인 스튜디오 A', '미디어 랩 B', 'PR 에이전시 C']
 })
 
 const scheduleItems = ref([
   {
     id: 'schedule-kickoff',
-    title: '공동 캠페인 킥오프',
-    owner: '한화 본사',
-    date: '2026-05-01',
+    title: '캠페인 킥오프 미팅',
+    owner: '본사',
+    date: '2024.05.15',
     status: '확정',
   },
   {
-    id: 'schedule-review',
-    title: '1차 산출물 검수 마감',
-    owner: '한화갤러리아, 대행사A',
-    date: '2026-05-17',
+    id: 'schedule-draft',
+    title: '에셋 초안 제출 마감',
+    owner: '디자인협력사',
+    date: '2024.05.25',
     status: '진행 중',
   },
   {
-    id: 'schedule-launch',
-    title: '캠페인 라이브 QA',
-    owner: '전체 참여사',
-    date: '2026-05-25',
+    id: 'schedule-teaser',
+    title: '1차 티저 영상 오픈',
+    owner: '본사',
+    date: '2024.06.01',
+    status: '예정',
+  },
+  {
+    id: 'schedule-live',
+    title: '메인 프로모션 라이브',
+    owner: '운영대행사',
+    date: '2024.07.15',
     status: '예정',
   },
 ])
 
 const statusColumns = [
-  { id: 'todo', label: '할 일' },
-  { id: 'progress', label: '진행 중' },
-  { id: 'review', label: '검수 대기' },
-  { id: 'done', label: '완료' },
+  { id: 'draft', label: '작성중', sub: 'Draft' },
+  { id: 'review', label: '검수요청', sub: 'Review' },
+  { id: 'approved', label: '승인완료', sub: 'Approved' },
+  { id: 'live', label: '라이브', sub: 'Live' },
 ]
 
 const dateColumns = [
-  { id: '2026-05-10', label: '~ 05.10' },
-  { id: '2026-05-15', label: '~ 05.15' },
-  { id: '2026-05-20', label: '~ 05.20' },
-  { id: '2026-05-25', label: '~ 05.25' },
+  { id: '2024-06-10', label: '~ 06.10' },
+  { id: '2024-06-20', label: '~ 06.20' },
+  { id: '2024-07-10', label: '~ 07.10' },
+  { id: '2024-07-30', label: '~ 07.30' },
 ]
 
 const teams = [
   {
     id: 'hq',
-    name: '한화 본사',
-    role: '총괄 기획 및 최종 검수',
-    owner: '이성재 PM',
-    progress: 72,
-    tone: 'live',
-    permission: '모든 업무 수정 가능',
+    name: '본사 마케팅팀',
+    role: '기획 및 총괄',
+    progress: 75,
+    color: 'primary',
   },
   {
-    id: 'galleria',
-    name: '한화갤러리아',
-    role: 'VIP 고객 접점 및 팝업 운영',
-    owner: '갤러리아 마케팅팀',
-    progress: 84,
-    tone: 'approved',
-    permission: '당사 담당 업무 수정 가능',
+    id: 'design',
+    name: '디자인 스튜디오 A',
+    role: '에셋 제작',
+    progress: 85,
+    color: 'blue',
   },
   {
-    id: 'hotel',
-    name: '한화호텔앤드리조트',
-    role: '숙박 패키지 및 제휴 혜택',
-    owner: '리조트 세일즈팀',
-    progress: 58,
-    tone: 'delayed',
-    permission: '당사 담당 업무 수정 가능',
+    id: 'media',
+    name: '미디어 랩 B',
+    role: '퍼포먼스 마케팅',
+    progress: 60,
+    color: 'green',
   },
   {
-    id: 'agency',
-    name: '대행사A',
-    role: '콘텐츠 및 홍보물 제작',
-    owner: 'Agency PM',
-    progress: 46,
-    tone: 'warning',
-    permission: '당사 담당 업무 수정 가능',
+    id: 'pr',
+    name: 'PR 에이전시 C',
+    role: '보도자료 및 인플루언서',
+    progress: 92,
+    color: 'pink',
   },
 ]
 
 const teamTasks = [
   {
-    id: 'task-hq-budget',
-    teamId: 'hq',
-    status: 'todo',
-    dateColumn: '2026-05-10',
-    title: '캠페인 통합 예산안 기안',
-    instruction: '협력사별 집행 금액과 검수 예산을 하나의 기준표로 정리',
-    dueDate: '2026-05-09',
-    partner: '한화 본사',
-    review: '내부 검토',
-  },
-  {
-    id: 'task-hq-tone',
+    id: 'task-guide',
     teamId: 'hq',
     status: 'review',
-    dateColumn: '2026-05-20',
-    title: '초청장 톤앤매너 최종 확인',
-    instruction: 'VIP 세그먼트 문구와 브랜드 표현의 일관성 확인',
-    dueDate: '2026-05-18',
-    partner: '한화 본사',
-    review: '검수 대기',
+    dateColumn: '2024-06-10',
+    title: '캠페인 전체 가이드라인 V2',
+    type: '문서',
+    dueDate: 'D-2',
+    review: '검수요청',
+    ownerInitial: '김',
   },
   {
-    id: 'task-galleria-vmd',
-    teamId: 'galleria',
-    status: 'todo',
-    dateColumn: '2026-05-15',
-    title: '지점 팝업스토어 VMD 시안',
-    instruction: 'VIP 고객 동선과 현장 배너 위치 기준 반영',
-    dueDate: '2026-05-12',
-    partner: '한화갤러리아',
-    review: '초안',
+    id: 'task-storyboard',
+    teamId: 'hq',
+    status: 'approved',
+    dateColumn: '2024-06-20',
+    title: '티저 영상 스토리보드',
+    type: '영상',
+    dueDate: '완료',
+    review: '승인완료',
+    ownerInitial: '이',
   },
   {
-    id: 'task-galleria-target',
-    teamId: 'galleria',
-    status: 'progress',
-    dateColumn: '2026-05-15',
-    title: 'VIP 대상자 명단 추출',
-    instruction: '캠페인 수신 동의 고객만 대상으로 선별',
-    dueDate: '2026-05-15',
-    partner: '한화갤러리아',
-    review: '진행 중',
+    id: 'task-story-banner',
+    teamId: 'design',
+    status: 'draft',
+    dateColumn: '2024-06-10',
+    title: '인스타그램 스토리 배너 (3종)',
+    type: '이미지',
+    dueDate: '06.10',
+    review: '작성중',
+    ownerInitial: 'A',
   },
   {
-    id: 'task-hotel-package',
-    teamId: 'hotel',
-    status: 'progress',
-    dateColumn: '2026-05-25',
-    title: '숙박 패키지 예약 페이지 구축',
-    instruction: '패키지 혜택, 객실 조건, 예약 제한사항을 같은 구조로 노출',
-    dueDate: '2026-05-20',
-    partner: '한화호텔앤드리조트',
-    review: '진행 중',
+    id: 'task-hero',
+    teamId: 'design',
+    status: 'draft',
+    dateColumn: '2024-06-20',
+    title: '메인 랜딩페이지 히어로 이미지',
+    type: '이미지',
+    dueDate: '지연됨',
+    review: '수정요청',
+    ownerInitial: 'A',
+    urgent: true,
   },
   {
-    id: 'task-hotel-guide',
-    teamId: 'hotel',
+    id: 'task-landing',
+    teamId: 'design',
+    status: 'live',
+    dateColumn: '2024-07-10',
+    title: '사전예약 랜딩페이지 디자인',
+    type: '웹',
+    dueDate: '라이브',
+    review: '라이브',
+    ownerInitial: 'A',
+  },
+  {
+    id: 'task-media',
+    teamId: 'media',
     status: 'review',
-    dateColumn: '2026-05-20',
-    title: '제휴 혜택 가이드라인 안내문',
-    instruction: '현장 직원과 CS팀이 동일하게 답변할 수 있는 문구 정리',
-    dueDate: '2026-05-18',
-    partner: '한화호텔앤드리조트',
-    review: '수정 필요',
+    dateColumn: '2024-07-10',
+    title: '전환 캠페인 소재 세트',
+    type: '광고',
+    dueDate: 'D-5',
+    review: '검수요청',
+    ownerInitial: 'B',
   },
   {
-    id: 'task-agency-banner',
-    teamId: 'agency',
-    status: 'todo',
-    dateColumn: '2026-05-15',
-    title: '현장 배너 디자인',
-    instruction: 'X배너, 데스크 배너, 모바일 안내 이미지 사이즈별 제작',
-    dueDate: '2026-05-15',
-    partner: '대행사A',
-    review: '초안',
-  },
-  {
-    id: 'task-agency-invite',
-    teamId: 'agency',
-    status: 'review',
-    dateColumn: '2026-05-20',
-    title: 'VIP 초청장 디자인 V2 업로드',
-    instruction: '본사 피드백 반영 후 이미지와 문구를 함께 재제출',
-    dueDate: '2026-05-17',
-    partner: '대행사A',
-    review: '지연',
-  },
-  {
-    id: 'task-agency-kv',
-    teamId: 'agency',
-    status: 'done',
-    dateColumn: '2026-05-10',
-    title: '캠페인 메인 키비주얼',
-    instruction: '메인 KV 최종 파일을 라이브러리에 보관',
-    dueDate: '2026-05-10',
-    partner: '대행사A',
-    review: '승인 완료',
+    id: 'task-pr',
+    teamId: 'pr',
+    status: 'approved',
+    dateColumn: '2024-07-30',
+    title: '인플루언서 브리프 문서',
+    type: '문서',
+    dueDate: '완료',
+    review: '승인완료',
+    ownerInitial: 'C',
   },
 ]
 
 const references = [
   {
-    id: 'ref-vip',
-    title: '2025 VIP 초청전 결과 리포트',
-    source: '레퍼런스 보관함',
-    owner: '한화 본사',
-    status: '공유됨',
-    permission: '본사 승인 후 삭제',
+    id: 'ref-crawl',
+    title: '나이키 썸머 캠페인 랜딩페이지 분석',
+    source: '크롤링 데이터',
+    owner: '김본사',
+    date: '2024.05.10',
+    tags: ['UI', '여름'],
+    tone: 'blue',
+    icon: 'IMG',
   },
   {
-    id: 'ref-crawler',
-    title: '프리미엄 리조트 프로모션 사례 요약',
-    source: '크롤러 추출 데이터 AI 가공',
-    owner: '한화호텔앤드리조트',
-    status: '생성됨',
-    permission: '생성자 수정 가능',
+    id: 'ref-ai',
+    title: '해변 테마 프로모션 카피라이팅 아이디어',
+    source: 'AI 생성',
+    owner: '디자인 스튜디오 A',
+    date: '2024.05.12',
+    tags: ['카피', '아이디어'],
+    tone: 'primary',
+    icon: 'AI',
   },
   {
-    id: 'ref-popup',
-    title: '백화점 VIP 라운지 VMD 무드보드',
-    source: '외부 캠페인 벤치마크',
-    owner: '한화갤러리아',
-    status: '검토 필요',
-    permission: '당사 추가 자료',
+    id: 'ref-report',
+    title: 'MZ세대 여름 휴가 트렌드 리포트',
+    source: '직접 업로드',
+    owner: 'PR 에이전시 C',
+    date: '2024.05.15',
+    tags: ['리서치', '타겟분석'],
+    tone: 'neutral',
+    icon: 'PDF',
   },
 ]
 
 const participantCandidates = [
-  { id: 'minji', name: '김민지', team: '한화 본사', role: 'HQ Admin' },
-  { id: 'sungjae', name: '이성재', team: '한화 본사', role: 'Campaign PM' },
-  { id: 'galleria-lead', name: '정하린', team: '한화갤러리아', role: 'Partner Manager' },
-  { id: 'hotel-lead', name: '강윤서', team: '한화호텔앤드리조트', role: 'Partner Manager' },
-  { id: 'agency-lead', name: '최도윤', team: '대행사A', role: 'Agency PM' },
+  { id: 'hq-kim', name: '김본사', team: '글로벌 본사', role: '본사 관리자' },
+  { id: 'design-park', name: '박디자인', team: '디자인 스튜디오 A', role: '협력사 매니저' },
+  { id: 'media-lee', name: '이마켓', team: '미디어 랩 B', role: '협력사 팀원' },
 ]
 
 const campaignParticipants = ref([
-  { id: 'minji', name: '김민지', team: '한화 본사', role: 'HQ Admin', access: '읽기/수정' },
-  { id: 'sungjae', name: '이성재', team: '한화 본사', role: 'Campaign PM', access: '읽기/수정' },
-  { id: 'galleria-lead', name: '정하린', team: '한화갤러리아', role: 'Partner Manager', access: '당사 업무 수정' },
-])
-
-const deliverables = ref([
   {
-    id: 'dlv-kv',
-    title: '캠페인 메인 키비주얼',
-    category: '디자인 에셋',
-    owner: '대행사A',
-    reviewer: '한화 본사',
-    dueDate: '2026-05-10',
-    uploadedAt: '2026-05-09',
-    fileType: 'PNG/AI',
-    version: 'V3',
-    uploadStatus: '업로드 완료',
-    reviewStatus: '승인',
-    reviewedBy: '이성재 PM',
-    note: '최종 KV 확정, 라이브러리 보관 완료',
+    id: 'hq-kim',
+    name: '김본사',
+    email: 'kim.hq@callog.com',
+    team: '글로벌 본사',
+    role: '본사 관리자',
+    access: '읽기/수정',
+    addedAt: '2024.04.10',
   },
   {
-    id: 'dlv-invite',
-    title: 'VIP 초청장 디자인',
-    category: '디자인 에셋',
-    owner: '대행사A',
-    reviewer: '한화 본사',
-    dueDate: '2026-05-17',
-    uploadedAt: '2026-05-18',
-    fileType: 'PDF/PNG',
-    version: 'V2',
-    uploadStatus: '업로드 완료',
-    reviewStatus: '수정 요청',
-    reviewedBy: '이성재 PM',
-    note: '본사 피드백 반영 후 재제출 필요',
+    id: 'design-park',
+    name: '박디자인',
+    email: 'park@studio-a.com',
+    team: '디자인 스튜디오 A',
+    role: '협력사 매니저',
+    access: '당사 업무 수정',
+    addedAt: '2024.04.12',
   },
   {
-    id: 'dlv-vmd',
-    title: '팝업스토어 VMD 시안',
-    category: '현장 자료',
-    owner: '한화갤러리아',
-    reviewer: '한화 본사',
-    dueDate: '2026-05-12',
-    uploadedAt: null,
-    fileType: 'PPT/PDF',
-    version: 'V1 초안',
-    uploadStatus: '업로드 전',
-    reviewStatus: '대기',
-    reviewedBy: '-',
-    note: '현장 동선 반영 필요',
-  },
-  {
-    id: 'dlv-banner',
-    title: '현장 배너 디자인 (3종)',
-    category: '디자인 에셋',
-    owner: '대행사A',
-    reviewer: '한화갤러리아',
-    dueDate: '2026-05-15',
-    uploadedAt: null,
-    fileType: 'AI/PNG',
-    version: '-',
-    uploadStatus: '업로드 전',
-    reviewStatus: '대기',
-    reviewedBy: '-',
-    note: 'X배너/데스크배너/모바일 이미지 포함',
-  },
-  {
-    id: 'dlv-package',
-    title: '숙박 패키지 예약 페이지 기획서',
-    category: '기획 문서',
-    owner: '한화호텔앤드리조트',
-    reviewer: '한화 본사',
-    dueDate: '2026-05-20',
-    uploadedAt: '2026-05-19',
-    fileType: 'DOCX',
-    version: 'V2',
-    uploadStatus: '업로드 완료',
-    reviewStatus: '검수 중',
-    reviewedBy: '이성재 PM',
-    note: '패키지 혜택 구조 최종 확인 중',
-  },
-])
-
-const partnerContributions = ref([
-  {
-    id: 'pc-hq',
-    partner: '한화 본사',
-    role: '총괄 기획 및 최종 검수',
-    pledgeDesc: '기획·운영 리소스 (4명 × 4주)',
-    actualDesc: '4명 × 4주 투입 완료',
-    fulfillmentRate: 100,
-    contentTotal: 3,
-    contentDelivered: 3,
-    budgetPledge: 8000,
-    budgetActual: 8200,
-    status: '완료',
-    note: '초과 집행 (배너 추가 제작)',
-  },
-  {
-    id: 'pc-galleria',
-    partner: '한화갤러리아',
-    role: 'VIP 고객 접점 및 팝업 운영',
-    pledgeDesc: '고객 명단 5,000건 + 팝업 1식',
-    actualDesc: '명단 4,800건 확보 / 팝업 준비 중',
-    fulfillmentRate: 84,
-    contentTotal: 2,
-    contentDelivered: 1,
-    budgetPledge: 5000,
-    budgetActual: 3200,
-    status: '진행 중',
-    note: 'VMD 시안 미제출 상태',
-  },
-  {
-    id: 'pc-hotel',
-    partner: '한화호텔앤드리조트',
-    role: '숙박 패키지 및 제휴 혜택',
-    pledgeDesc: '패키지 3종 + 온라인 랜딩페이지',
-    actualDesc: '패키지 2종 확정 / 랜딩 구축 중',
-    fulfillmentRate: 58,
-    contentTotal: 2,
-    contentDelivered: 1,
-    budgetPledge: 3500,
-    budgetActual: 1800,
-    status: '지연',
-    note: '랜딩 페이지 구축 일정 초과',
-  },
-  {
-    id: 'pc-agency',
-    partner: '대행사A',
-    role: '콘텐츠 및 홍보물 제작',
-    pledgeDesc: 'KV + 초청장 + 배너 3종',
-    actualDesc: 'KV 완료 / 초청장 V2 재제출 / 배너 미착수',
-    fulfillmentRate: 46,
-    contentTotal: 3,
-    contentDelivered: 1,
-    budgetPledge: 6000,
-    budgetActual: 2800,
-    status: '경고',
-    note: '배너 착수 지연 - 리소스 재배정 필요',
-  },
-])
-
-const channelPlan = ref([
-  {
-    id: 'ch-kakao',
-    channel: '카카오톡 알림톡',
-    type: '직접 메시지',
-    owner: '한화갤러리아',
-    targetSegment: 'VIP 등급 고객',
-    reachEstimate: 4800,
-    scheduledDate: '2026-05-26',
-    contentStatus: '초안 완료',
-    approvalStatus: '검수 대기',
-    note: '발송 전 본사 최종 확인 필요',
-  },
-  {
-    id: 'ch-email',
-    channel: '이메일 뉴스레터',
-    type: '직접 메시지',
-    owner: '한화 본사',
-    targetSegment: '전체 회원 중 동의자',
-    reachEstimate: 22000,
-    scheduledDate: '2026-05-26',
-    contentStatus: '제작 중',
-    approvalStatus: '미착수',
-    note: '초청장 디자인 확정 후 적용 예정',
-  },
-  {
-    id: 'ch-insta',
-    channel: '인스타그램 피드',
-    type: 'SNS 게시',
-    owner: '대행사A',
-    targetSegment: '팔로워 + 광고 타겟',
-    reachEstimate: 18000,
-    scheduledDate: '2026-05-28',
-    contentStatus: '기획 완료',
-    approvalStatus: '승인 대기',
-    note: 'KV 기반 광고 소재 제작 예정',
-  },
-  {
-    id: 'ch-popup',
-    channel: '갤러리아 지점 팝업',
-    type: '오프라인',
-    owner: '한화갤러리아',
-    targetSegment: '방문 고객',
-    reachEstimate: 1200,
-    scheduledDate: '2026-06-01',
-    contentStatus: '미착수',
-    approvalStatus: '미착수',
-    note: 'VMD 확정 후 현장 세팅',
-  },
-  {
-    id: 'ch-resort',
-    channel: '리조트 예약 랜딩페이지',
-    type: '온라인',
-    owner: '한화호텔앤드리조트',
-    targetSegment: '패키지 관심 고객',
-    reachEstimate: 9200,
-    scheduledDate: '2026-05-25',
-    contentStatus: '개발 중',
-    approvalStatus: '미착수',
-    note: '예약 시스템 연동 테스트 진행 중',
+    id: 'media-lee',
+    name: '이마켓',
+    email: 'lee@media-b.com',
+    team: '미디어 랩 B',
+    role: '협력사 팀원',
+    access: '당사 업무 조회',
+    addedAt: '2024.04.15',
   },
 ])
 
 const kpiRows = ref([
   {
     id: 'kpi-impression',
-    name: 'VIP 초청장 노출 수',
-    category: '콘텐츠 노출',
-    target: 120000,
-    actual: 98000,
-    unit: '회',
+    name: '메인 배너 노출',
+    category: '노출도',
+    target: 1000000,
+    actual: 1245000,
+    unit: 'Views',
     source: '검증된 수치 직접 입력',
-    owner: '한화갤러리아',
-    inputDate: '2026-06-30',
-    status: '미달',
-    memo: '오픈 초반 발송량 보강 필요',
-    nextAction: '알림톡 재발송 세그먼트 검토',
+    owner: '미디어 랩 B',
+    inputDate: '2024.08.31',
+    memo: '목표 대비 초과 달성',
+    nextAction: '고성과 소재 보관',
+  },
+  {
+    id: 'kpi-conversion-rate',
+    name: '랜딩페이지 전환율',
+    category: '전환',
+    target: 5,
+    actual: 4.2,
+    unit: '%',
+    source: '랜딩 로그 수동 입력',
+    owner: '글로벌 본사',
+    inputDate: '2024.08.31',
+    memo: '이탈률 개선 필요',
+    nextAction: '상단 CTA 재설계',
   },
   {
     id: 'kpi-click',
-    name: '패키지 예약 페이지 클릭 수',
-    category: '전환 전 단계',
-    target: 8000,
-    actual: 9200,
-    unit: '건',
-    source: '랜딩 로그 수동 입력',
-    owner: '한화호텔앤드리조트',
-    inputDate: '2026-06-30',
-    status: '초과',
-    memo: '객실 혜택 문구 반응 양호',
-    nextAction: '예약 전환 구간 분석',
+    name: 'SNS 스토리 클릭',
+    category: '참여도',
+    target: 40000,
+    actual: 40500,
+    unit: 'Clicks',
+    source: '플랫폼 리포트 입력',
+    owner: '디자인 스튜디오 A',
+    inputDate: '2024.08.31',
+    memo: '목표 달성',
+    nextAction: '유사 소재 확장',
   },
   {
-    id: 'kpi-conversion',
-    name: '캠페인 목표 대비 실제 성과',
+    id: 'kpi-roas',
+    name: '리타겟팅 광고 ROAS',
     category: '전환',
-    target: 500,
-    actual: 480,
-    unit: '건',
-    source: 'PM 검증 수치 직접 입력',
-    owner: '한화 본사',
-    inputDate: '2026-06-30',
-    status: '미달',
-    memo: '마감 직전 유입 대비 전환율 보완 필요',
-    nextAction: '다음 캠페인 혜택 구조 조정',
+    target: 350,
+    actual: 0,
+    unit: '%',
+    source: '측정 대기',
+    owner: '미디어 랩 B',
+    inputDate: '-',
+    memo: '측정 전',
+    nextAction: '종료 후 수치 입력',
   },
 ])
 
-const selectedTeam = computed(() =>
-  teams.find((team) => team.id === selectedTeamId.value) ?? null,
-)
+const activityItems = [
+  {
+    id: 'act-feedback',
+    tone: 'primary',
+    icon: '말',
+    actor: '본사 김매니저',
+    text: 'SNS 배너 시안 1차에 피드백을 남겼습니다.',
+    quote: '폰트 크기를 조금 더 키우고, 버튼 색상을 브랜드 컬러로 변경 요청드립니다.',
+    time: '10분 전',
+  },
+  {
+    id: 'act-status',
+    tone: 'success',
+    icon: '완',
+    actor: '디자인 스튜디오 A',
+    text: '업무 상태를 승인완료로 변경했습니다.',
+    time: '2시간 전',
+  },
+  {
+    id: 'act-upload',
+    tone: 'info',
+    icon: '업',
+    actor: '미디어 랩 B',
+    text: '새로운 레퍼런스 타사 여름 프로모션 분석.pdf를 업로드했습니다.',
+    time: '어제 오후 3:45',
+  },
+]
+
+const overviewStats = computed(() => [
+  { label: '전체 에셋', value: 124, unit: '건', tone: 'info' },
+  { label: '승인 완료', value: 82, unit: '건', tone: 'success' },
+  { label: '검수 대기', value: 15, unit: '건', tone: 'primary', badge: '검수요청' },
+  { label: '지연 업무', value: 3, unit: '건', tone: 'warning', badge: '주의' },
+])
 
 const avgProgress = computed(() =>
   Math.round(teams.reduce((sum, team) => sum + team.progress, 0) / teams.length),
 )
 
-const reviewCount = computed(() =>
-  teamTasks.filter((task) => ['검수 대기', '수정 필요'].includes(task.review)).length,
-)
+const circumference = 251.2
+const progressOffset = computed(() => circumference - (circumference * avgProgress.value) / 100)
 
-const delayedCount = computed(() => teamTasks.filter((task) => task.review === '지연').length)
+const esgScore = computed(() => 94)
 
-const approvedCount = computed(() => teamTasks.filter((task) => task.review === '승인 완료').length)
-
-const esgScore = computed(() => 82)
-
-const performanceRecordCount = computed(() => kpiRows.value.length)
-
-const deliverableStats = computed(() => ({
-  total: deliverables.value.length,
-  uploaded: deliverables.value.filter((d) => d.uploadStatus === '업로드 완료').length,
-  inReview: deliverables.value.filter((d) => d.reviewStatus === '검수 중').length,
-  approved: deliverables.value.filter((d) => d.reviewStatus === '승인').length,
-}))
-
-const partnerContributionStats = computed(() => ({
-  avgFulfillment: Math.round(
-    partnerContributions.value.reduce((s, p) => s + p.fulfillmentRate, 0) / partnerContributions.value.length,
-  ),
-  totalBudgetPledge: partnerContributions.value.reduce((s, p) => s + p.budgetPledge, 0),
-  totalBudgetActual: partnerContributions.value.reduce((s, p) => s + p.budgetActual, 0),
-}))
-
-const channelStats = computed(() => ({
-  total: channelPlan.value.length,
-  contentReady: channelPlan.value.filter(
-    (c) => c.contentStatus === '초안 완료' || c.contentStatus === '기획 완료',
-  ).length,
-  totalReach: channelPlan.value.reduce((s, c) => s + c.reachEstimate, 0).toLocaleString(),
-}))
-
-function syncMetadataDraft() {
-  metadataDraft.value = {
-    name: activeCampaign.value?.name ?? '',
-    startDate: activeCampaign.value?.startDate ?? '',
-    endDate: activeCampaign.value?.endDate ?? '',
-    partnersText: partnerNames.value.join(', '),
-  }
-}
+const kpiSummary = computed(() => [
+  { label: '목표 달성률', value: '105%', sub: '초과 달성 중', tone: 'success' },
+  { label: '총 노출 수 (Views)', value: '1.2M', sub: '목표: 1M', tone: 'info' },
+  { label: '총 클릭 수 (Clicks)', value: '45.2K', sub: '목표: 40K', tone: 'primary' },
+  { label: '적시성 준수율 (협력사)', value: '92%', sub: '일부 지연 발생', tone: 'warning' },
+])
 
 function getTasksByStatus(teamId, statusId) {
   return teamTasks.filter((task) => task.teamId === teamId && task.status === statusId)
@@ -599,14 +412,35 @@ function getKpiStatus(row) {
   }
 
   if (getAchievement(row) > 100) {
-    return '초과'
+    return '초과달성'
   }
 
   if (getAchievement(row) >= 100) {
     return '달성'
   }
 
-  return '미달'
+  return '미달성'
+}
+
+function getKpiTone(row) {
+  const achievement = getAchievement(row)
+
+  if (!row.actual) return 'muted'
+  if (achievement > 100) return 'success'
+  if (achievement >= 100) return 'info'
+  return 'warning'
+}
+
+function syncMetadataDraft() {
+  metadataDraft.value = {
+    name: activeCampaign.value?.name ?? '2024 글로벌 썸머 프로모션 캠페인',
+    startDate: activeCampaign.value?.startDate ?? '2024-06-01',
+    endDate: activeCampaign.value?.endDate ?? '2024-08-31',
+    summary:
+      activeCampaign.value?.purpose ??
+      '여름 시즌을 맞이하여 북미 및 아시아 시장을 타겟으로 한 대규모 할인 프로모션 및 신제품 런칭 캠페인.',
+    partnersText: partnerNames.value.join(', '),
+  }
 }
 
 function saveMetadata() {
@@ -619,6 +453,7 @@ function saveMetadata() {
     name: metadataDraft.value.name,
     startDate: metadataDraft.value.startDate,
     endDate: metadataDraft.value.endDate,
+    purpose: metadataDraft.value.summary,
     partners: metadataDraft.value.partnersText
       .split(',')
       .map((partner) => partner.trim())
@@ -634,12 +469,11 @@ function addScheduleItem() {
     {
       id: `schedule-${Date.now()}`,
       title: '새 캠페인 일정',
-      owner: '한화 본사',
-      date: activeCampaign.value?.startDate || '2026-05-01',
+      owner: '본사',
+      date: '2024.06.01',
       status: '예정',
     },
   ]
-  metadataEditing.value = true
 }
 
 function removeScheduleItem(scheduleId) {
@@ -652,19 +486,13 @@ function addSelectedParticipants() {
     .filter((candidate) => selectedMemberIds.value.includes(candidate.id) && !existingIds.has(candidate.id))
     .map((candidate) => ({
       ...candidate,
-      access: candidate.team === '한화 본사' ? '읽기/수정' : '당사 업무 수정',
+      email: `${candidate.id}@callog.com`,
+      access: candidate.team === '글로벌 본사' ? '읽기/수정' : '당사 업무 수정',
+      addedAt: '2024.05.18',
     }))
 
   campaignParticipants.value = [...campaignParticipants.value, ...additions]
   selectedMemberIds.value = []
-}
-
-function openTeam(teamId) {
-  selectedTeamId.value = teamId
-}
-
-function closeTeamModal() {
-  selectedTeamId.value = null
 }
 
 watch(
@@ -683,892 +511,1362 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
 <template>
   <section class="campaign-detail">
     <div class="campaign-sticky-bar">
-    <header class="campaign-detail__header">
-      <div class="campaign-detail__identity">
-        <span
-          class="campaign-detail__mark"
-          :style="{ background: activeCampaign?.color ?? 'var(--color-primary-500)' }"
-        >
-          {{ activeCampaign?.initials ?? 'CP' }}
-        </span>
-        <div>
-          <p class="campaign-detail__eyebrow">캠페인 상세보기</p>
-          <h1>{{ activeCampaign?.name ?? '캠페인 상세' }}</h1>
-          <span>
-            {{ activeCampaign?.purpose || '캠페인의 일정, 업무, 레퍼런스, 참여자, KPI를 한 화면에서 관리합니다.' }}
-          </span>
+      <header class="campaign-hero" aria-label="캠페인 메인 페이지 헤더">
+        <div class="campaign-hero__copy">
+          <div class="campaign-hero__title">
+            <h1>{{ activeCampaign?.name ?? '2024 글로벌 썸머 프로모션 캠페인' }}</h1>
+            <span class="status-chip status-chip--primary">
+              <i aria-hidden="true"></i>
+              {{ campaignStatusLabel }}
+            </span>
+          </div>
+          <div class="campaign-hero__meta" aria-label="캠페인 메타데이터 요약">
+            <span># {{ campaignMetaCode }}</span>
+            <span>{{ activeCampaign?.period ?? '2024.06.01 - 2024.08.31' }}</span>
+            <span>본사 관리자 (수정 가능)</span>
+          </div>
         </div>
-      </div>
 
-      <div class="campaign-detail__meta">
-        <span class="campaign-detail__status">{{ campaignStatusLabel }}</span>
-        <strong>{{ activeCampaign?.period ?? '기간 미정' }}</strong>
-        <small>읽기: 모두 · 수정: 본사 관리자</small>
-      </div>
-    </header>
+        <div class="campaign-hero__actions">
+          <button type="button" class="btn btn--secondary">내보내기</button>
+          <button type="button" class="btn btn--primary" @click="activeTab = 'metadata'; metadataEditing = true">
+            캠페인 편집
+          </button>
+        </div>
+      </header>
 
-    <nav class="campaign-detail__tabs" aria-label="캠페인 상세 탭">
-      <button
-        v-for="tab in tabs"
-        :key="tab.id"
-        type="button"
-        class="campaign-detail__tab"
-        :class="{ active: activeTab === tab.id }"
-        @click="activeTab = tab.id"
-      >
-        <span>{{ tab.label }}</span>
-        <small>{{ tab.caption }}</small>
-      </button>
-    </nav>
+      <nav class="campaign-tabs" aria-label="캠페인 상세 탭">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          type="button"
+          class="campaign-tabs__button"
+          :class="{ active: activeTab === tab.id }"
+          @click="activeTab = tab.id"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
     </div>
 
-    <section v-if="activeTab === 'metadata'" class="campaign-panel">
-      <div class="campaign-panel__head">
-        <div>
-          <span class="requirement-badge">CAMPAIGN_001</span>
-          <h2>캠페인 메타데이터</h2>
-          <p>캠페인에 관한 정보를 캠페인 페이지 어디에서든 확인하고, 본사 관리자만 수정할 수 있습니다.</p>
-        </div>
-        <div class="campaign-actions">
-          <span class="permission-badge">본사 관리자만 수정</span>
-          <button type="button" class="secondary-button" @click="metadataEditing = !metadataEditing">
-            {{ metadataEditing ? '수정 취소' : '메타데이터 수정' }}
-          </button>
-          <button type="button" class="primary-button-small" @click="saveMetadata">저장</button>
-        </div>
-      </div>
+    <section v-if="activeTab === 'metadata'" class="tab-surface">
+      <div class="metadata-layout">
+        <div class="stack">
+          <article class="panel">
+            <div class="panel__header">
+              <div>
+                <span class="requirement-badge">CAMPAIGN_001</span>
+                <h2>기본 정보</h2>
+              </div>
+              <span class="permission-badge">본사 관리자만 수정</span>
+            </div>
 
-      <div class="metadata-grid">
-        <label>
-          <span>캠페인 제목</span>
-          <input v-model="metadataDraft.name" :disabled="!metadataEditing" type="text" />
-        </label>
-        <label>
-          <span>캠페인 시작일</span>
-          <input v-model="metadataDraft.startDate" :disabled="!metadataEditing" type="date" />
-        </label>
-        <label>
-          <span>캠페인 종료일</span>
-          <input v-model="metadataDraft.endDate" :disabled="!metadataEditing" type="date" />
-        </label>
-        <label class="metadata-grid__wide">
-          <span>협력사 목록</span>
-          <input v-model="metadataDraft.partnersText" :disabled="!metadataEditing" type="text" />
-        </label>
-      </div>
+            <div class="form-stack">
+              <label>
+                <span>캠페인 제목</span>
+                <input v-model="metadataDraft.name" :disabled="!metadataEditing" type="text" />
+              </label>
 
-      <div class="section-strip">
-        <div>
-          <h3>일정 추가/삭제/수정</h3>
-          <p>캠페인 운영 일정은 본사 관리자 계정에서 관리합니다.</p>
-        </div>
-        <button type="button" class="secondary-button" @click="addScheduleItem">일정 추가</button>
-      </div>
+              <div class="form-grid">
+                <label>
+                  <span>시작일</span>
+                  <input v-model="metadataDraft.startDate" :disabled="!metadataEditing" type="text" />
+                </label>
+                <label>
+                  <span>종료일</span>
+                  <input v-model="metadataDraft.endDate" :disabled="!metadataEditing" type="text" />
+                </label>
+              </div>
 
-      <div class="data-table data-table--schedule">
-        <div class="data-table__head">
-          <span>일정명</span>
-          <span>담당</span>
-          <span>날짜</span>
-          <span>상태</span>
-          <span>관리</span>
+              <label>
+                <span>캠페인 개요</span>
+                <textarea v-model="metadataDraft.summary" :disabled="!metadataEditing" rows="4" />
+              </label>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel__header">
+              <div>
+                <span class="requirement-badge">일정 추가/삭제/수정</span>
+                <h2>주요 일정 관리</h2>
+              </div>
+              <button type="button" class="btn btn--ghost" @click="addScheduleItem">일정 추가</button>
+            </div>
+
+            <div class="data-table data-table--schedule">
+              <div class="data-table__head">
+                <span>마일스톤</span>
+                <span>날짜</span>
+                <span>담당</span>
+                <span>상태</span>
+                <span></span>
+              </div>
+              <div v-for="item in scheduleItems" :key="item.id" class="data-table__row">
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.date }}</span>
+                <span class="type-badge">{{ item.owner }}</span>
+                <span class="status-pill status-pill--info">{{ item.status }}</span>
+                <button type="button" class="table-action" @click="removeScheduleItem(item.id)">삭제</button>
+              </div>
+            </div>
+          </article>
         </div>
-        <div v-for="item in scheduleItems" :key="item.id" class="data-table__row">
-          <input v-model="item.title" :disabled="!metadataEditing" type="text" />
-          <input v-model="item.owner" :disabled="!metadataEditing" type="text" />
-          <input v-model="item.date" :disabled="!metadataEditing" type="date" />
-          <input v-model="item.status" :disabled="!metadataEditing" type="text" />
-          <button type="button" class="ghost-danger-button" @click="removeScheduleItem(item.id)">삭제</button>
-        </div>
+
+        <aside class="stack">
+          <article class="panel">
+            <div class="panel__header">
+              <div>
+                <span class="requirement-badge">협력사 목록</span>
+                <h2>참여 협력사</h2>
+              </div>
+            </div>
+
+            <div class="partner-list">
+              <div v-for="(partner, index) in partnerNames" :key="partner" class="partner-item">
+                <span class="partner-item__avatar">{{ partner.slice(0, 1) }}</span>
+                <div>
+                  <strong>{{ partner }}</strong>
+                  <small>{{ ['크리에이티브 제작', '퍼포먼스 마케팅', '보도자료 및 인플루언서'][index] ?? '협력 업무' }}</small>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" class="dashed-button">협력사 추가</button>
+          </article>
+
+          <article class="panel">
+            <div class="panel__header">
+              <div>
+                <span class="requirement-badge">권한 정보</span>
+                <h2>시스템 정보</h2>
+              </div>
+            </div>
+
+            <dl class="meta-list">
+              <div>
+                <dt>생성일자</dt>
+                <dd>2024.04.10 14:32</dd>
+              </div>
+              <div>
+                <dt>생성자</dt>
+                <dd>김본사 (마케팅팀)</dd>
+              </div>
+              <div>
+                <dt>최근 수정</dt>
+                <dd>2024.05.18 09:15</dd>
+              </div>
+              <div>
+                <dt>접근 권한</dt>
+                <dd>전체 읽기, 본사 수정</dd>
+              </div>
+            </dl>
+          </article>
+
+          <div class="metadata-actions">
+            <button type="button" class="btn btn--secondary" @click="metadataEditing = !metadataEditing">
+              {{ metadataEditing ? '수정 취소' : '메타데이터 수정' }}
+            </button>
+            <button type="button" class="btn btn--primary" @click="saveMetadata">저장</button>
+          </div>
+        </aside>
       </div>
     </section>
 
-    <section v-else-if="activeTab === 'overview'" class="campaign-panel">
-      <div class="campaign-panel__head">
-        <div>
-          <span class="requirement-badge">CAMPAIGN_002</span>
-          <h2>캠페인 오버뷰</h2>
-          <p>전체 일정, 협력사별 진행률, 검수 대기 자료, 지연 업무, ESG 점수, 성과 기록을 함께 봅니다.</p>
-        </div>
-      </div>
-
+    <section v-else-if="activeTab === 'overview'" class="tab-surface">
       <div class="metric-grid">
-        <article class="metric-card">
-          <span>캠페인 전체 진척도</span>
-          <strong>{{ avgProgress }}%</strong>
-          <p>협력사별 평균 진행률</p>
-        </article>
-        <article class="metric-card">
-          <span>검수 대기 자료</span>
-          <strong>{{ reviewCount }}</strong>
-          <p>검수 대기 및 수정 필요</p>
-        </article>
-        <article class="metric-card">
-          <span>지연 업무</span>
-          <strong>{{ delayedCount }}</strong>
-          <p>마감 초과 산출물</p>
-        </article>
-        <article class="metric-card">
-          <span>ESG 점수</span>
-          <strong>{{ esgScore }}</strong>
-          <p>친환경 운영 기준 반영</p>
-        </article>
-        <article class="metric-card">
-          <span>성과 기록</span>
-          <strong>{{ performanceRecordCount }}</strong>
-          <p>KPI 입력 항목</p>
+        <article v-for="stat in overviewStats" :key="stat.label" class="metric-card" :class="`tone-${stat.tone}`">
+          <span class="metric-card__icon">{{ stat.label.slice(0, 1) }}</span>
+          <div>
+            <p>{{ stat.label }}</p>
+            <strong>{{ stat.value }}<small>{{ stat.unit }}</small></strong>
+            <em v-if="stat.badge">{{ stat.badge }}</em>
+          </div>
         </article>
       </div>
 
-      <div class="overview-grid">
-        <article class="overview-panel">
-          <h3>협력사별 진행률</h3>
-          <div class="progress-list">
-            <div v-for="team in teams" :key="team.id" class="progress-row">
-              <span>{{ team.name }}</span>
-              <div class="progress-track"><i :style="{ width: `${team.progress}%` }" /></div>
-              <strong>{{ team.progress }}%</strong>
+      <div class="overview-layout">
+        <div class="stack">
+          <article class="panel progress-panel">
+            <div class="progress-ring">
+              <svg viewBox="0 0 100 100" aria-hidden="true">
+                <circle cx="50" cy="50" r="40" class="progress-ring__track" />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  class="progress-ring__fill"
+                  :stroke-dasharray="circumference"
+                  :stroke-dashoffset="progressOffset"
+                />
+              </svg>
+              <div>
+                <strong>{{ avgProgress }}%</strong>
+                <span>전체 진척도</span>
+              </div>
             </div>
-          </div>
-        </article>
 
-        <article class="overview-panel">
-          <h3>검수 대기 및 지연 업무</h3>
-          <div class="compact-list">
-            <div v-for="task in teamTasks.filter((item) => ['검수 대기', '수정 필요', '지연'].includes(item.review))" :key="task.id">
+            <div class="progress-panel__list">
+              <h2>협력사별 진행 상황</h2>
+              <div v-for="team in teams.slice(1)" :key="team.id" class="progress-row">
+                <div>
+                  <span :class="`dot dot--${team.color}`"></span>
+                  <strong>{{ team.name }}</strong>
+                  <em>{{ team.progress }}%</em>
+                </div>
+                <div class="progress-track"><i :class="`fill-${team.color}`" :style="{ width: `${team.progress}%` }"></i></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel performance-panel">
+            <div class="panel__header">
+              <h2>최근 성과 요약</h2>
+              <button type="button" class="link-button" @click="activeTab = 'performance'">상세보기</button>
+            </div>
+            <div class="performance-grid">
+              <div>
+                <span>누적 노출 수</span>
+                <strong>1,245,000</strong>
+                <small>목표대비 112%</small>
+              </div>
+              <div>
+                <span>평균 클릭률(CTR)</span>
+                <strong>3.24%</strong>
+                <small>목표대비 105%</small>
+              </div>
+              <div>
+                <span>전환 건수</span>
+                <strong>8,420</strong>
+                <small class="warning">목표대비 94%</small>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <aside class="stack">
+          <article class="panel esg-panel">
+            <h2>ESG 컴플라이언스 점수</h2>
+            <div class="esg-score">
+              <strong>{{ esgScore }}</strong>
+              <span>/ 100</span>
+            </div>
+            <p>우수 등급 유지중 (전월 대비 +2)</p>
+            <div class="progress-track"><i class="fill-green" style="width: 88%"></i></div>
+            <small>친환경 에셋 비율 88%</small>
+          </article>
+
+          <article class="panel activity-panel">
+            <div class="panel__header">
+              <h2>최근 활동</h2>
+            </div>
+            <div class="activity-list">
+              <article v-for="activity in activityItems" :key="activity.id" class="activity-item">
+                <span class="activity-item__icon" :class="`tone-${activity.tone}`">{{ activity.icon }}</span>
+                <div>
+                  <p><strong>{{ activity.actor }}</strong>님이 {{ activity.text }}</p>
+                  <blockquote v-if="activity.quote">{{ activity.quote }}</blockquote>
+                  <time>{{ activity.time }}</time>
+                </div>
+              </article>
+            </div>
+          </article>
+        </aside>
+      </div>
+    </section>
+
+    <section v-else-if="activeTab === 'team-board'" class="tab-surface">
+      <div class="board-toolbar">
+        <div class="segmented-control">
+          <button type="button" :class="{ active: currentBoardView === 'swimlane' }" @click="currentBoardView = 'swimlane'">
+            스윔레인
+          </button>
+          <button type="button" :class="{ active: currentBoardView === 'timeline' }" @click="currentBoardView = 'timeline'">
+            칸반보드
+          </button>
+        </div>
+        <div class="board-toolbar__actions">
+          <input type="search" placeholder="업무 검색..." />
+          <button type="button" class="btn btn--primary">업무 추가</button>
+        </div>
+      </div>
+
+      <div class="board-grid">
+        <div class="board-grid__head">
+          <span>참여사</span>
+          <span v-for="column in currentBoardView === 'swimlane' ? statusColumns : dateColumns" :key="column.id">
+            {{ column.label }} <small v-if="column.sub">({{ column.sub }})</small>
+          </span>
+        </div>
+
+        <div v-for="team in teams" :key="team.id" class="board-grid__row">
+          <div class="team-cell">
+            <strong>{{ team.name }}</strong>
+            <span>{{ team.role }}</span>
+          </div>
+
+          <div
+            v-for="column in currentBoardView === 'swimlane' ? statusColumns : dateColumns"
+            :key="column.id"
+            class="board-cell"
+          >
+            <article
+              v-for="task in currentBoardView === 'swimlane'
+                ? getTasksByStatus(team.id, column.id)
+                : getTasksByDate(team.id, column.id)"
+              :key="task.id"
+              class="task-card"
+              :class="{ 'task-card--urgent': task.urgent }"
+            >
+              <div class="task-card__top">
+                <span class="status-pill" :class="task.urgent ? 'status-pill--warning' : 'status-pill--info'">
+                  {{ task.review }}
+                </span>
+                <small>{{ task.type }}</small>
+              </div>
               <strong>{{ task.title }}</strong>
-              <span>{{ task.partner }} · {{ task.review }} · {{ task.dueDate }}</span>
-            </div>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <section v-else-if="activeTab === 'team-board'" class="campaign-panel">
-      <div class="campaign-panel__head">
-        <div>
-          <span class="requirement-badge">CAMPAIGN_003</span>
-          <h2>팀 보드 보기</h2>
-          <p>지시 내용, 업무 기한, 담당 협력사와 본사 피드백 및 검수 상태를 참여사별로 확인합니다.</p>
-        </div>
-        <div class="campaign-board__toggle" role="group" aria-label="보드 보기 방식">
-          <button
-            type="button"
-            :class="{ active: currentBoardView === 'swimlane' }"
-            @click="currentBoardView = 'swimlane'"
-          >
-            스윔레인 뷰
-          </button>
-          <button
-            type="button"
-            :class="{ active: currentBoardView === 'timeline' }"
-            @click="currentBoardView = 'timeline'"
-          >
-            날짜별 타임라인 뷰
-          </button>
-        </div>
-      </div>
-
-      <div v-if="currentBoardView === 'swimlane'" class="board-wrap">
-        <p class="axis-note">가로축: 상태 · 세로축: 참여사</p>
-        <div class="board-grid board-grid--status">
-          <div class="board-grid__head">
-            <span>참여사</span>
-            <span v-for="status in statusColumns" :key="status.id">{{ status.label }}</span>
-          </div>
-          <div v-for="team in teams" :key="team.id" class="board-grid__row">
-            <button type="button" class="team-cell" @click="openTeam(team.id)">
-              <strong>{{ team.name }}</strong>
-              <span>{{ team.role }}</span>
-              <small>{{ team.permission }}</small>
-            </button>
-            <div v-for="status in statusColumns" :key="status.id" class="board-cell">
-              <article v-for="task in getTasksByStatus(team.id, status.id)" :key="task.id" class="task-card">
-                <strong>{{ task.title }}</strong>
-                <p>{{ task.instruction }}</p>
-                <div>
-                  <span>{{ task.partner }}</span>
-                  <small>{{ task.dueDate }}</small>
-                </div>
-              </article>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div v-else class="board-wrap">
-        <p class="axis-note">가로축: 날짜 · 세로축: 참여사</p>
-        <div class="board-grid board-grid--date">
-          <div class="board-grid__head">
-            <span>참여사</span>
-            <span v-for="date in dateColumns" :key="date.id">{{ date.label }}</span>
-          </div>
-          <div v-for="team in teams" :key="team.id" class="board-grid__row">
-            <button type="button" class="team-cell" @click="openTeam(team.id)">
-              <strong>{{ team.name }}</strong>
-              <span>{{ team.owner }}</span>
-              <small>{{ team.progress }}% 진행</small>
-            </button>
-            <div v-for="date in dateColumns" :key="date.id" class="board-cell">
-              <article v-for="task in getTasksByDate(team.id, date.id)" :key="task.id" class="task-card">
-                <strong>{{ task.title }}</strong>
-                <p>{{ task.review }}</p>
-                <div>
-                  <span>{{ task.partner }}</span>
-                  <small>{{ task.dueDate }}</small>
-                </div>
-              </article>
-            </div>
+              <div class="task-card__foot">
+                <span :class="{ warning: task.urgent }">{{ task.dueDate }}</span>
+                <em>{{ task.ownerInitial }}</em>
+              </div>
+            </article>
           </div>
         </div>
       </div>
     </section>
 
-    <section v-else-if="activeTab === 'references'" class="campaign-panel">
-      <div class="campaign-panel__head">
-        <div>
-          <span class="requirement-badge">CAMPAIGN_004</span>
-          <h2>레퍼런스탭</h2>
-          <p>현재 캠페인과 연결된 레퍼런스를 공유하고, 크롤러 추출 데이터를 AI로 가공해 생성합니다.</p>
+    <section v-else-if="activeTab === 'references'" class="tab-surface">
+      <div class="reference-toolbar">
+        <div class="segmented-control segmented-control--icon">
+          <button type="button" class="active">그리드</button>
+          <button type="button">목록</button>
         </div>
-        <div class="campaign-actions">
-          <button type="button" class="secondary-button">레퍼런스 추가</button>
-          <button type="button" class="primary-button-small">레퍼런스 생성</button>
+        <div>
+          <button type="button" class="btn btn--secondary">AI 생성</button>
+          <button type="button" class="btn btn--secondary">URL 크롤링</button>
+          <button type="button" class="btn btn--primary">파일 업로드</button>
         </div>
       </div>
 
       <div class="reference-grid">
         <article v-for="reference in references" :key="reference.id" class="reference-card">
-          <span>{{ reference.status }}</span>
-          <h3>{{ reference.title }}</h3>
-          <p>{{ reference.source }}</p>
-          <small>{{ reference.owner }} · {{ reference.permission }}</small>
-        </article>
-      </div>
-    </section>
-
-    <section v-else-if="activeTab === 'participants'" class="campaign-panel">
-      <div class="campaign-panel__head">
-        <div>
-          <span class="requirement-badge">CAMPAIGN_005</span>
-          <h2>참여자 설정</h2>
-          <p>본사 및 협력사의 관리자가 자신의 팀원 목록에서 참가자를 복수 선택해 추가합니다.</p>
-        </div>
-        <button type="button" class="primary-button-small" @click="addSelectedParticipants">참가자 추가</button>
-      </div>
-
-      <div class="participants-grid">
-        <article class="participant-panel">
-          <h3>현재 참가자</h3>
-          <div class="compact-list">
-            <div v-for="participant in campaignParticipants" :key="participant.id">
-              <strong>{{ participant.name }}</strong>
-              <span>{{ participant.team }} · {{ participant.role }} · {{ participant.access }}</span>
-            </div>
+          <div class="reference-card__thumb" :class="`tone-${reference.tone}`">
+            <strong>{{ reference.icon }}</strong>
           </div>
-        </article>
-
-        <article class="participant-panel">
-          <h3>팀원 목록</h3>
-          <div class="candidate-list">
-            <label v-for="candidate in participantCandidates" :key="candidate.id">
-              <input v-model="selectedMemberIds" type="checkbox" :value="candidate.id" />
-              <span>{{ candidate.name }}</span>
-              <small>{{ candidate.team }} · {{ candidate.role }}</small>
-            </label>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <section v-else-if="activeTab === 'performance'" class="campaign-panel">
-      <div class="campaign-panel__head">
-        <div>
-          <span class="requirement-badge">CAMPAIGN_006</span>
-          <h2>캠페인 성과/KPI</h2>
-          <p>성과 목표 및 KPI를 기준으로 실제 결과값을 직접 입력하고 목표 대비 달성률을 확인합니다.</p>
-        </div>
-        <span class="permission-badge">외부 성과 API 미연동 · 검증 수치 직접 입력</span>
-      </div>
-
-      <div class="data-table data-table--kpi">
-        <div class="data-table__head">
-          <span>KPI명</span>
-          <span>분류</span>
-          <span>목표값</span>
-          <span>실제값</span>
-          <span>단위</span>
-          <span>담당자</span>
-          <span>입력일</span>
-          <span>달성률</span>
-          <span>상태</span>
-        </div>
-        <div v-for="row in kpiRows" :key="row.id" class="data-table__row">
-          <strong>{{ row.name }}</strong>
-          <span>{{ row.category }}</span>
-          <input v-model.number="row.target" type="number" aria-label="목표값" />
-          <input v-model.number="row.actual" type="number" aria-label="실제값" />
-          <span>{{ row.unit }}</span>
-          <span>{{ row.owner }}</span>
-          <span>{{ row.inputDate }}</span>
-          <span>{{ getAchievement(row) }}%</span>
-          <span class="status-pill">{{ getKpiStatus(row) }}</span>
-        </div>
-      </div>
-
-      <div class="kpi-notes">
-        <article v-for="row in kpiRows" :key="`${row.id}-memo`">
-          <strong>{{ row.name }}</strong>
-          <p>측정 출처: {{ row.source }}</p>
-          <p>분석 메모: {{ row.memo }}</p>
-          <p>다음 액션: {{ row.nextAction }}</p>
-        </article>
-      </div>
-    </section>
-
-    <section v-else-if="activeTab === 'deliverables'" class="campaign-panel">
-      <div class="campaign-panel__head">
-        <div>
-          <span class="requirement-badge">CAMPAIGN_007</span>
-          <h2>산출물 & 검수</h2>
-          <p>협력사가 제출한 산출물의 업로드 현황과 본사 검수 결과를 한 곳에서 관리합니다.</p>
-        </div>
-        <div class="campaign-actions">
-          <button type="button" class="secondary-button">산출물 업로드</button>
-          <button type="button" class="primary-button-small">검수 요청</button>
-        </div>
-      </div>
-
-      <div class="metric-grid metric-grid--4">
-        <article class="metric-card">
-          <span>총 산출물</span>
-          <strong>{{ deliverableStats.total }}</strong>
-          <p>전체 등록 항목</p>
-        </article>
-        <article class="metric-card">
-          <span>업로드 완료</span>
-          <strong>{{ deliverableStats.uploaded }}</strong>
-          <p>파일 제출 완료</p>
-        </article>
-        <article class="metric-card">
-          <span>검수 진행 중</span>
-          <strong>{{ deliverableStats.inReview }}</strong>
-          <p>본사 검토 중</p>
-        </article>
-        <article class="metric-card">
-          <span>최종 승인</span>
-          <strong>{{ deliverableStats.approved }}</strong>
-          <p>검수 완료</p>
-        </article>
-      </div>
-
-      <div class="data-table data-table--deliverables">
-        <div class="data-table__head">
-          <span>산출물명</span>
-          <span>분류</span>
-          <span>담당사</span>
-          <span>검수처</span>
-          <span>마감일</span>
-          <span>버전</span>
-          <span>업로드 상태</span>
-          <span>검수 상태</span>
-          <span>비고</span>
-        </div>
-        <div v-for="dlv in deliverables" :key="dlv.id" class="data-table__row">
-          <strong>{{ dlv.title }}</strong>
-          <span>{{ dlv.category }}</span>
-          <span>{{ dlv.owner }}</span>
-          <span>{{ dlv.reviewer }}</span>
-          <span>{{ dlv.dueDate }}</span>
-          <span>{{ dlv.version }}</span>
-          <span class="status-pill"
-            :class="{
-              'status-pill--success': dlv.uploadStatus === '업로드 완료',
-              'status-pill--muted': dlv.uploadStatus === '업로드 전',
-            }">{{ dlv.uploadStatus }}</span>
-          <span class="status-pill"
-            :class="{
-              'status-pill--success': dlv.reviewStatus === '승인',
-              'status-pill--warning': dlv.reviewStatus === '검수 중' || dlv.reviewStatus === '수정 요청',
-              'status-pill--muted': dlv.reviewStatus === '대기',
-            }">{{ dlv.reviewStatus }}</span>
-          <span class="table-note">{{ dlv.note }}</span>
-        </div>
-      </div>
-    </section>
-
-    <section v-else-if="activeTab === 'partner-contribution'" class="campaign-panel">
-      <div class="campaign-panel__head">
-        <div>
-          <span class="requirement-badge">CAMPAIGN_008</span>
-          <h2>파트너 기여 현황</h2>
-          <p>협력사별 기여 약속 대비 실적 이행률과 예산 집행 현황을 비교합니다.</p>
-        </div>
-        <span class="permission-badge">본사 관리자 확인</span>
-      </div>
-
-      <div class="metric-grid metric-grid--3">
-        <article class="metric-card">
-          <span>평균 이행률</span>
-          <strong>{{ partnerContributionStats.avgFulfillment }}%</strong>
-          <p>전체 협력사 평균</p>
-        </article>
-        <article class="metric-card">
-          <span>예산 약속 합계</span>
-          <strong>{{ partnerContributionStats.totalBudgetPledge.toLocaleString() }}</strong>
-          <p>만원</p>
-        </article>
-        <article class="metric-card">
-          <span>예산 집행 합계</span>
-          <strong>{{ partnerContributionStats.totalBudgetActual.toLocaleString() }}</strong>
-          <p>만원</p>
-        </article>
-      </div>
-
-      <div class="contribution-list">
-        <article v-for="pc in partnerContributions" :key="pc.id" class="contribution-card">
-          <div class="contribution-card__head">
+          <div class="reference-card__body">
             <div>
-              <strong>{{ pc.partner }}</strong>
-              <span>{{ pc.role }}</span>
+              <span class="status-pill status-pill--info">{{ reference.source }}</span>
+              <small>{{ reference.date }}</small>
             </div>
-            <span class="status-pill"
-              :class="{
-                'status-pill--success': pc.status === '완료',
-                'status-pill--info': pc.status === '진행 중',
-                'status-pill--warning': pc.status === '경고',
-                'status-pill--danger': pc.status === '지연',
-              }">{{ pc.status }}</span>
-          </div>
-
-          <div class="contribution-card__body">
-            <div class="contribution-row">
-              <span>기여 약속</span>
-              <p>{{ pc.pledgeDesc }}</p>
-            </div>
-            <div class="contribution-row">
-              <span>실적 현황</span>
-              <p>{{ pc.actualDesc }}</p>
+            <h3>{{ reference.title }}</h3>
+            <div class="tag-row">
+              <span v-for="tag in reference.tags" :key="tag">#{{ tag }}</span>
             </div>
           </div>
+        </article>
+      </div>
+    </section>
 
-          <div class="contribution-card__metrics">
-            <div class="fulfillment-bar-wrap">
-              <div class="fulfillment-bar-label">
-                <span>이행률</span>
-                <strong>{{ pc.fulfillmentRate }}%</strong>
+    <section v-else-if="activeTab === 'participants'" class="tab-surface">
+      <article class="panel">
+        <div class="panel__header">
+          <div>
+            <span class="requirement-badge">CAMPAIGN_005</span>
+            <h2>캠페인 참여자 관리</h2>
+          </div>
+          <button type="button" class="btn btn--primary" @click="addSelectedParticipants">참가자 추가</button>
+        </div>
+
+        <div class="candidate-list">
+          <label v-for="candidate in participantCandidates" :key="candidate.id">
+            <input v-model="selectedMemberIds" type="checkbox" :value="candidate.id" />
+            <span>{{ candidate.name }}</span>
+            <small>{{ candidate.team }} · {{ candidate.role }}</small>
+          </label>
+        </div>
+
+        <div class="data-table data-table--participants">
+          <div class="data-table__head">
+            <span>이름 / 이메일</span>
+            <span>소속 회사</span>
+            <span>역할 (권한)</span>
+            <span>추가된 날짜</span>
+            <span>관리</span>
+          </div>
+          <div v-for="participant in campaignParticipants" :key="participant.id" class="data-table__row">
+            <div class="person-cell">
+              <span>{{ participant.name.slice(0, 1) }}</span>
+              <div>
+                <strong>{{ participant.name }}</strong>
+                <small>{{ participant.email }}</small>
               </div>
+            </div>
+            <span>{{ participant.team }}</span>
+            <span class="status-pill status-pill--info">{{ participant.role }}</span>
+            <span>{{ participant.addedAt }}</span>
+            <button type="button" class="table-action">관리</button>
+          </div>
+        </div>
+      </article>
+
+      <p class="info-callout">
+        참가자로 추가된 인원은 기본적으로 캠페인 조회 권한을 가집니다. 본사 관리자는 수정 권한을 가지며,
+        협력사는 자신에게 할당된 업무 및 직접 추가한 레퍼런스만 수정할 수 있습니다.
+      </p>
+    </section>
+
+    <section v-else-if="activeTab === 'performance'" class="tab-surface">
+      <div class="metric-grid">
+        <article v-for="item in kpiSummary" :key="item.label" class="kpi-card" :class="`tone-${item.tone}`">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <small>{{ item.sub }}</small>
+        </article>
+      </div>
+
+      <article class="panel kpi-panel">
+        <div class="panel__header">
+          <div>
+            <span class="requirement-badge">CAMPAIGN_006</span>
+            <h2>세부 KPI 목록</h2>
+          </div>
+          <div>
+            <button type="button" class="btn btn--secondary">프레임워크 불러오기</button>
+            <button type="button" class="btn btn--primary">지표 추가</button>
+          </div>
+        </div>
+
+        <div class="data-table data-table--kpi">
+          <div class="data-table__head">
+            <span>KPI 항목</span>
+            <span>분류</span>
+            <span>목표값</span>
+            <span>실제값</span>
+            <span>단위</span>
+            <span>달성률</span>
+            <span>상태</span>
+            <span>담당자</span>
+            <span>동작</span>
+          </div>
+          <div v-for="row in kpiRows" :key="row.id" class="data-table__row">
+            <strong>{{ row.name }}</strong>
+            <span class="type-badge">{{ row.category }}</span>
+            <span class="number-cell">{{ row.target.toLocaleString() }}</span>
+            <span class="number-cell">{{ row.actual ? row.actual.toLocaleString() : '-' }}</span>
+            <span>{{ row.unit }}</span>
+            <div class="achievement-cell">
               <div class="progress-track">
-                <i :style="{ width: `${pc.fulfillmentRate}%` }"
-                   :class="{
-                     'bg-success': pc.fulfillmentRate >= 90,
-                     'bg-warning': pc.fulfillmentRate >= 60 && pc.fulfillmentRate < 90,
-                     'bg-danger': pc.fulfillmentRate < 60,
-                   }" />
+                <i :class="`fill-${getKpiTone(row)}`" :style="{ width: `${Math.min(getAchievement(row), 100)}%` }"></i>
               </div>
+              <span>{{ getAchievement(row) }}%</span>
             </div>
-            <div class="contribution-stats">
-              <div>
-                <span>산출물 납품</span>
-                <strong>{{ pc.contentDelivered }} / {{ pc.contentTotal }}</strong>
-              </div>
-              <div>
-                <span>예산 집행</span>
-                <strong>{{ pc.budgetActual.toLocaleString() }} / {{ pc.budgetPledge.toLocaleString() }}만원</strong>
-              </div>
-            </div>
+            <span class="status-pill" :class="`status-pill--${getKpiTone(row)}`">{{ getKpiStatus(row) }}</span>
+            <span>{{ row.owner }}</span>
+            <button type="button" class="table-action">메모</button>
           </div>
+        </div>
 
-          <p class="contribution-card__note">{{ pc.note }}</p>
-        </article>
-      </div>
+        <div class="kpi-note-box">
+          <h3>성과 분석 및 개선 액션</h3>
+          <textarea
+            rows="3"
+            value="노출 목표는 초과 달성하였으나, 랜딩페이지 내 이탈률이 높아 전환율이 목표에 미달함. 다음 캠페인에서는 랜딩페이지 최상단에 CTA 버튼을 명확히 배치하고 로딩 속도를 최적화하는 액션 필요."
+          />
+          <button type="button" class="btn btn--secondary">저장하기</button>
+        </div>
+      </article>
     </section>
-
-    <section v-else-if="activeTab === 'channel-plan'" class="campaign-panel">
-      <div class="campaign-panel__head">
-        <div>
-          <span class="requirement-badge">CAMPAIGN_009</span>
-          <h2>채널 플래너</h2>
-          <p>마케팅 채널별 집행 일정, 담당사, 콘텐츠 준비 현황을 관리합니다.</p>
-        </div>
-        <div class="campaign-actions">
-          <button type="button" class="secondary-button">채널 추가</button>
-        </div>
-      </div>
-
-      <div class="metric-grid metric-grid--3">
-        <article class="metric-card">
-          <span>총 채널 수</span>
-          <strong>{{ channelStats.total }}</strong>
-          <p>운영 예정 채널</p>
-        </article>
-        <article class="metric-card">
-          <span>콘텐츠 준비 완료</span>
-          <strong>{{ channelStats.contentReady }}</strong>
-          <p>초안/기획 완료 채널</p>
-        </article>
-        <article class="metric-card">
-          <span>총 예상 도달</span>
-          <strong>{{ channelStats.totalReach }}</strong>
-          <p>누적 추정 도달 수</p>
-        </article>
-      </div>
-
-      <div class="data-table data-table--channel">
-        <div class="data-table__head">
-          <span>채널</span>
-          <span>유형</span>
-          <span>담당사</span>
-          <span>타겟 세그먼트</span>
-          <span>예상 도달</span>
-          <span>예정일</span>
-          <span>콘텐츠 상태</span>
-          <span>승인 상태</span>
-          <span>비고</span>
-        </div>
-        <div v-for="ch in channelPlan" :key="ch.id" class="data-table__row">
-          <strong>{{ ch.channel }}</strong>
-          <span class="type-badge">{{ ch.type }}</span>
-          <span>{{ ch.owner }}</span>
-          <span>{{ ch.targetSegment }}</span>
-          <span>{{ ch.reachEstimate.toLocaleString() }}</span>
-          <span>{{ ch.scheduledDate }}</span>
-          <span class="status-pill"
-            :class="{
-              'status-pill--success': ch.contentStatus === '초안 완료' || ch.contentStatus === '기획 완료',
-              'status-pill--info': ch.contentStatus === '제작 중' || ch.contentStatus === '개발 중',
-              'status-pill--muted': ch.contentStatus === '미착수',
-            }">{{ ch.contentStatus }}</span>
-          <span class="status-pill"
-            :class="{
-              'status-pill--success': ch.approvalStatus === '승인 완료',
-              'status-pill--warning': ch.approvalStatus === '검수 대기' || ch.approvalStatus === '승인 대기',
-              'status-pill--muted': ch.approvalStatus === '미착수',
-            }">{{ ch.approvalStatus }}</span>
-          <span class="table-note">{{ ch.note }}</span>
-        </div>
-      </div>
-    </section>
-
-    <Teleport to="body">
-      <Transition name="campaign-modal">
-        <div
-          v-if="selectedTeam"
-          class="team-modal"
-          role="dialog"
-          aria-modal="true"
-          :aria-label="`${selectedTeam.name} 상세`"
-          @click.self="closeTeamModal"
-        >
-          <section class="team-modal__panel">
-            <header>
-              <div>
-                <p>팀 상세</p>
-                <h2>{{ selectedTeam.name }}</h2>
-                <span>{{ selectedTeam.role }} · {{ selectedTeam.owner }}</span>
-              </div>
-              <button type="button" aria-label="닫기" @click="closeTeamModal">×</button>
-            </header>
-
-            <div class="team-modal__stats">
-              <div>
-                <span>진행률</span>
-                <strong>{{ selectedTeam.progress }}%</strong>
-              </div>
-              <div>
-                <span>수정 권한</span>
-                <strong>{{ selectedTeam.permission }}</strong>
-              </div>
-              <div>
-                <span>담당 업무</span>
-                <strong>{{ teamTasks.filter((task) => task.teamId === selectedTeam.id).length }}건</strong>
-              </div>
-            </div>
-
-            <div class="team-modal__items">
-              <article v-for="task in teamTasks.filter((item) => item.teamId === selectedTeam.id)" :key="task.id">
-                <strong>{{ task.title }}</strong>
-                <span>{{ task.instruction }} · {{ task.dueDate }} · {{ task.review }}</span>
-              </article>
-            </div>
-          </section>
-        </div>
-      </Transition>
-    </Teleport>
   </section>
 </template>
 
 <style scoped>
 .campaign-detail {
+  --campaign-primary-surface: var(--color-primary-100);
+  --campaign-primary-soft: var(--color-primary-50);
+  --campaign-primary-text: var(--color-primary-700);
+  --campaign-success-surface: var(--color-success-light);
+  --campaign-success-text: var(--color-success-dark);
+  --campaign-warning-surface: var(--color-warning-light);
+  --campaign-warning-text: var(--color-warning-dark);
+  --campaign-info-surface: var(--color-info-light);
+  --campaign-info-text: var(--color-info-dark);
+  --campaign-pink: #db2777;
+  --campaign-muted-fill: var(--color-gray-300);
+  --campaign-elevated-tint: var(--campaign-primary-soft);
+  --campaign-table-row-hover: color-mix(in srgb, var(--panel-muted) 58%, var(--panel-color));
   display: flex;
   width: 100%;
   max-width: var(--content-max-width);
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
   margin: 0 auto;
+  z-index: 0;
 }
 
-.campaign-detail__header,
-.campaign-detail__tabs,
-.campaign-panel,
+:global(:root[data-theme='dark']) .campaign-detail {
+  --campaign-primary-surface: rgba(139, 92, 246, 0.18);
+  --campaign-primary-soft: rgba(139, 92, 246, 0.1);
+  --campaign-primary-text: #ddd6fe;
+  --campaign-success-surface: rgba(16, 185, 129, 0.16);
+  --campaign-success-text: #6ee7b7;
+  --campaign-warning-surface: rgba(245, 158, 11, 0.16);
+  --campaign-warning-text: #fcd34d;
+  --campaign-info-surface: rgba(59, 130, 246, 0.16);
+  --campaign-info-text: #93c5fd;
+  --campaign-pink: #f472b6;
+  --campaign-muted-fill: #4b5563;
+  --campaign-elevated-tint: rgba(139, 92, 246, 0.08);
+  --campaign-table-row-hover: color-mix(in srgb, var(--panel-muted) 72%, var(--panel-color));
+}
+
+.campaign-sticky-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--app-bg);
+  padding-bottom: 10px;
+}
+
+.campaign-hero {
+  display: flex;
+  min-height: 92px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 6px 0 18px;
+}
+
+.campaign-hero__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.campaign-hero__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.campaign-hero h1 {
+  color: var(--text-primary);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.campaign-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.campaign-hero__meta span + span {
+  border-left: 1px solid var(--border-color);
+  padding-left: 12px;
+}
+
+.campaign-hero__actions,
+.reference-toolbar,
+.board-toolbar,
+.board-toolbar__actions,
+.metadata-actions,
+.panel__header,
+.performance-grid,
+.task-card__top,
+.task-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.campaign-tabs {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.campaign-tabs__button {
+  min-height: 50px;
+  flex: 0 0 auto;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 750;
+  padding: 0 24px;
+}
+
+.campaign-tabs__button.active {
+  border-bottom-color: var(--color-primary-500);
+  background: var(--campaign-primary-surface);
+  color: var(--campaign-primary-text);
+}
+
+.tab-surface {
+  display: grid;
+  gap: 18px;
+}
+
+.panel,
 .metric-card,
-.overview-panel,
-.participant-panel,
-.reference-card {
+.kpi-card,
+.board-grid,
+.info-callout {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--panel-color);
   box-shadow: var(--shadow-sm);
 }
 
-.campaign-detail__header {
-  display: flex;
-  min-height: 104px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 20px 24px;
-}
-
-.campaign-detail__identity {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 14px;
-}
-
-.campaign-detail__mark {
-  display: inline-flex;
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.campaign-detail__eyebrow,
-.requirement-badge,
-.metric-card span,
-.permission-badge,
-.section-strip p,
-.axis-note,
-.team-cell small {
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.campaign-detail__identity h1 {
-  margin-top: 3px;
-  color: var(--text-primary);
-  font-size: 24px;
-  font-weight: 750;
-  line-height: 1.25;
-}
-
-.campaign-detail__identity span,
-.campaign-detail__meta strong,
-.campaign-detail__meta small,
-.campaign-panel__head p,
-.compact-list span,
-.reference-card p,
-.reference-card small,
-.candidate-list small,
-.task-card p,
-.task-card small,
-.kpi-notes p,
-.team-modal__items span {
-  color: var(--muted-text);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.campaign-detail__meta {
+.panel {
   display: grid;
-  flex-shrink: 0;
-  justify-items: end;
-  gap: 6px;
+  gap: 18px;
+  padding: 24px;
 }
 
-.campaign-detail__status,
-.permission-badge,
-.status-pill,
-.reference-card span {
-  display: inline-flex;
-  min-height: 24px;
-  align-items: center;
-  border-radius: var(--radius-full);
-  font-size: 12px;
-  font-weight: 700;
+.panel__header {
+  align-items: flex-start;
 }
 
-.campaign-detail__status {
-  padding: 0 10px;
-  background: var(--color-primary-500);
-  color: #ffffff;
-}
-
-.permission-badge {
-  padding: 0 10px;
-  background: var(--color-primary-100);
-  color: var(--color-primary-700);
-  white-space: nowrap;
-}
-
-.campaign-detail__tabs {
-  display: flex;
-  align-items: stretch;
-  gap: 4px;
-  padding: 6px;
-}
-
-.campaign-detail__tab {
-  display: grid;
-  min-height: 52px;
-  flex: 1;
-  align-content: center;
-  gap: 2px;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 0 14px;
-  text-align: left;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.campaign-detail__tab span {
-  font-size: 14px;
-  font-weight: 750;
-}
-
-.campaign-detail__tab small {
-  color: var(--muted-text);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.campaign-detail__tab.active {
-  background: var(--color-primary-500);
-  color: #ffffff;
-}
-
-.campaign-detail__tab.active small {
-  color: rgba(255, 255, 255, 0.78);
-}
-
-.campaign-panel {
-  display: grid;
-  gap: 16px;
-  padding: 20px;
-}
-
-.campaign-panel__head,
-.section-strip,
-.campaign-actions,
-.task-card div,
-.data-table__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.campaign-panel__head h2,
-.section-strip h3,
-.overview-panel h3,
-.participant-panel h3 {
+.panel__header h2,
+.progress-panel__list h2,
+.kpi-note-box h3 {
   color: var(--text-primary);
   font-size: 18px;
-  font-weight: 750;
+  font-weight: 800;
 }
 
 .requirement-badge {
   display: inline-flex;
   margin-bottom: 5px;
-  color: var(--color-primary-700);
+  color: var(--campaign-primary-text);
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.primary-button-small,
-.secondary-button,
-.ghost-danger-button {
-  min-height: 34px;
+.btn {
+  min-height: 38px;
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 13px;
-  font-weight: 700;
-  padding: 0 13px;
+  font-weight: 750;
+  padding: 0 14px;
   white-space: nowrap;
 }
 
-.primary-button-small {
+.btn--primary {
   background: var(--color-primary-500);
   color: #ffffff;
 }
 
-.secondary-button {
+.btn--secondary,
+.btn--ghost {
   border: 1px solid var(--border-color);
   background: var(--panel-color);
   color: var(--text-secondary);
 }
 
-.ghost-danger-button {
-  background: var(--color-danger-light);
-  color: var(--color-danger-dark);
+.btn--ghost {
+  background: var(--panel-muted);
 }
 
-.metadata-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+.status-chip,
+.status-pill,
+.permission-badge,
+.type-badge {
+  display: inline-flex;
+  min-height: 24px;
+  width: fit-content;
+  align-items: center;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 750;
+  padding: 0 9px;
 }
 
-.metadata-grid label {
-  display: grid;
+.status-chip {
   gap: 6px;
 }
 
-.metadata-grid__wide {
-  grid-column: 1 / -1;
+.status-chip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
-.metadata-grid span,
-.data-table__head,
-.team-cell span,
-.task-card span,
-.candidate-list span,
-.reference-card span {
+.status-chip--primary,
+.status-pill--info,
+.status-pill--primary,
+.permission-badge {
+  background: var(--campaign-primary-surface);
+  color: var(--campaign-primary-text);
+}
+
+.status-pill--success {
+  background: var(--campaign-success-surface);
+  color: var(--campaign-success-text);
+}
+
+.status-pill--warning {
+  background: var(--campaign-warning-surface);
+  color: var(--campaign-warning-text);
+}
+
+.status-pill--muted {
+  background: var(--panel-muted);
+  color: var(--muted-text);
+}
+
+.type-badge {
+  border: 1px solid var(--border-color);
+  background: var(--panel-muted);
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 800;
 }
 
-input {
+.metadata-layout,
+.overview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.7fr);
+  gap: 18px;
+}
+
+.stack,
+.form-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+input,
+textarea {
   width: 100%;
   min-width: 0;
-  min-height: 36px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background: var(--control-color);
   color: var(--text-primary);
-  padding: 0 10px;
   font-size: 13px;
+  padding: 10px 12px;
 }
 
-input:disabled {
+input {
+  min-height: 38px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:disabled,
+textarea:disabled {
   background: var(--panel-muted);
   color: var(--muted-text);
   opacity: 1;
 }
 
-.section-strip {
+.partner-list,
+.activity-list,
+.candidate-list,
+.meta-list {
+  display: grid;
+  gap: 10px;
+}
+
+.partner-item,
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.partner-item {
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 12px;
+}
+
+.partner-item__avatar,
+.person-cell > span,
+.activity-item__icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--campaign-primary-surface);
+  color: var(--campaign-primary-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.partner-item strong,
+.person-cell strong,
+.data-table__row strong,
+.reference-card h3,
+.task-card strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.partner-item small,
+.person-cell small,
+.activity-item time,
+.reference-card small,
+.task-card small,
+.meta-list dt {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.dashed-button {
+  min-height: 38px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.meta-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+}
+
+.meta-list div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.meta-list dd {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.metric-card {
+  position: relative;
+  display: flex;
+  min-height: 100px;
+  align-items: center;
+  gap: 16px;
+  overflow: hidden;
+  padding: 22px;
+}
+
+.metric-card__icon {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--campaign-primary-surface);
+  color: var(--campaign-primary-text);
+  font-weight: 900;
+}
+
+.metric-card p,
+.kpi-card span,
+.performance-grid span {
+  color: var(--muted-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.metric-card strong,
+.kpi-card strong,
+.performance-grid strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-primary);
+  font-size: 28px;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.metric-card small {
+  margin-left: 3px;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+
+.metric-card em {
+  display: inline-flex;
+  margin-top: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--campaign-primary-surface);
+  color: var(--campaign-primary-text);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  padding: 2px 7px;
+}
+
+.tone-primary {
+  border-color: var(--color-primary-200);
+}
+
+.tone-success {
+  border-color: color-mix(in srgb, var(--color-success) 22%, var(--border-color));
+}
+
+.tone-warning {
+  border-color: color-mix(in srgb, var(--color-warning) 28%, var(--border-color));
+}
+
+.progress-panel {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: center;
+  gap: 28px;
+}
+
+.progress-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.progress-ring svg {
+  width: 176px;
+  height: 176px;
+  transform: rotate(-90deg);
+}
+
+.progress-ring circle {
+  fill: none;
+  stroke-width: 12;
+}
+
+.progress-ring__track {
+  stroke: var(--campaign-primary-surface);
+}
+
+.progress-ring__fill {
+  stroke: var(--color-primary-500);
+  stroke-linecap: round;
+}
+
+.progress-ring > div {
+  position: absolute;
+  display: grid;
+  place-items: center;
+}
+
+.progress-ring strong {
+  color: var(--text-primary);
+  font-size: 34px;
+  font-weight: 850;
+}
+
+.progress-ring span {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.progress-panel__list {
+  display: grid;
+  gap: 17px;
+}
+
+.progress-row {
+  display: grid;
+  gap: 8px;
+}
+
+.progress-row div:first-child {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) 46px;
+  align-items: center;
+  gap: 6px;
+}
+
+.progress-row em {
+  color: var(--text-primary);
+  font-style: normal;
+  font-weight: 800;
+  text-align: right;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dot--blue,
+.fill-blue {
+  background: var(--color-info);
+}
+
+.dot--green,
+.fill-green,
+.fill-success {
+  background: var(--color-success);
+}
+
+.dot--pink {
+  background: var(--campaign-pink);
+}
+
+.fill-pink {
+  background: var(--campaign-pink);
+}
+
+.fill-primary,
+.fill-info {
+  background: var(--color-primary-500);
+}
+
+.fill-warning {
+  background: var(--color-warning);
+}
+
+.fill-muted {
+  background: var(--campaign-muted-fill);
+}
+
+.progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--panel-muted);
+}
+
+.progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.performance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.performance-grid div,
+.kpi-note-box {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 16px;
+}
+
+.performance-grid small {
+  display: block;
+  margin-top: 5px;
+  color: var(--campaign-success-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.performance-grid small.warning,
+.task-card__foot .warning {
+  color: var(--campaign-warning-text);
+}
+
+.link-button {
+  color: var(--campaign-primary-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.esg-panel {
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--panel-color), var(--campaign-elevated-tint));
+}
+
+.esg-score {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.esg-score strong {
+  color: var(--text-primary);
+  font-size: 48px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.esg-panel p {
+  color: var(--campaign-success-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.esg-panel small {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.activity-item {
+  position: relative;
+}
+
+.activity-item p {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.activity-item blockquote {
+  margin-top: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 10px 12px;
+}
+
+.activity-item__icon.tone-success {
+  background: var(--campaign-success-surface);
+  color: var(--campaign-success-text);
+}
+
+.activity-item__icon.tone-info {
+  background: var(--campaign-info-surface);
+  color: var(--campaign-info-text);
+}
+
+.board-toolbar,
+.reference-toolbar {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-color);
+  padding: 12px;
+}
+
+.segmented-control {
+  display: inline-flex;
+  gap: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 4px;
+}
+
+.segmented-control button {
+  min-height: 32px;
+  border-radius: var(--radius-sm);
+  color: var(--muted-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 0 12px;
+}
+
+.segmented-control button.active {
+  background: var(--panel-color);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.board-grid {
+  overflow-x: auto;
+}
+
+.board-grid__head,
+.board-grid__row {
+  display: grid;
+  min-width: 1080px;
+  grid-template-columns: 190px repeat(4, minmax(205px, 1fr));
+}
+
+.board-grid__head {
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.board-grid__head span,
+.team-cell,
+.board-cell {
+  padding: 14px;
+}
+
+.board-grid__row {
   border-top: 1px solid var(--border-color);
-  padding-top: 16px;
+}
+
+.team-cell {
+  border-right: 1px solid var(--border-color);
+}
+
+.team-cell strong {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.team-cell span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.board-cell {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 140px;
+  border-right: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--panel-muted) 50%, var(--panel-color));
+}
+
+.board-cell:last-child {
+  border-right: 0;
+}
+
+.task-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--color-primary-400);
+  border-radius: var(--radius-md);
+  background: var(--panel-color);
+  padding: 12px;
+}
+
+.task-card--urgent {
+  border-color: color-mix(in srgb, var(--color-warning) 45%, var(--border-color));
+  border-left-color: var(--color-warning);
+}
+
+.task-card__foot em {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--campaign-primary-surface);
+  color: var(--campaign-primary-text);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.task-card__foot span {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.reference-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.reference-card {
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.reference-card__thumb {
+  display: grid;
+  height: 160px;
+  place-items: center;
+  background: var(--panel-muted);
+}
+
+.reference-card__thumb strong {
+  color: var(--campaign-primary-text);
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.reference-card__thumb.tone-blue {
+  background: var(--campaign-info-surface);
+}
+
+.reference-card__thumb.tone-primary {
+  background: var(--campaign-primary-surface);
+}
+
+.reference-card__body {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.reference-card__body > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-row span {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-muted);
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+}
+
+.candidate-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.candidate-list label {
+  grid-template-columns: 18px minmax(0, 0.45fr) minmax(0, 1fr);
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 12px;
 }
 
 .data-table {
@@ -1583,600 +1881,143 @@ input:disabled {
   min-width: 900px;
   align-items: center;
   border-bottom: 1px solid var(--border-color);
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 12px 14px;
 }
 
 .data-table__head {
   background: var(--panel-muted);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.data-table__row {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.data-table__row:hover {
+  background: var(--campaign-table-row-hover);
 }
 
 .data-table__row:last-child {
-  border-bottom: none;
+  border-bottom: 0;
 }
 
 .data-table--schedule .data-table__head,
 .data-table--schedule .data-table__row {
-  grid-template-columns: 1.4fr 1fr 150px 130px 76px;
+  grid-template-columns: 1.3fr 130px 140px 100px 70px;
+}
+
+.data-table--participants .data-table__head,
+.data-table--participants .data-table__row {
+  grid-template-columns: 1.4fr 1fr 150px 120px 80px;
 }
 
 .data-table--kpi .data-table__head,
 .data-table--kpi .data-table__row {
-  grid-template-columns: 1.5fr 1fr 110px 110px 70px 1fr 110px 90px 80px;
+  min-width: 1200px;
+  grid-template-columns: 1.4fr 0.8fr 110px 110px 70px 1.1fr 110px 130px 80px;
 }
 
-.data-table__row strong,
-.compact-list strong,
-.task-card strong,
-.reference-card h3,
-.team-cell strong,
-.team-modal__items strong {
-  color: var(--text-primary);
-  font-size: 13px;
+.person-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-action {
+  color: var(--campaign-primary-text);
+  cursor: pointer;
+  font-size: 12px;
   font-weight: 800;
 }
 
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.metric-card {
-  min-height: 126px;
-  padding: 18px;
-}
-
-.metric-card strong {
-  display: block;
-  margin-top: 8px;
-  color: var(--text-primary);
-  font-size: 30px;
-  line-height: 1;
-}
-
-.metric-card p {
-  margin-top: 8px;
-  color: var(--subtle-text);
-  font-size: 12px;
-}
-
-.overview-grid,
-.participants-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
-  gap: 12px;
-}
-
-.overview-panel,
-.participant-panel {
-  padding: 18px;
-}
-
-.progress-list,
-.compact-list,
-.candidate-list,
-.kpi-notes {
-  display: grid;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.progress-row {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) 52px;
-  align-items: center;
-  gap: 12px;
-}
-
-.progress-row span {
+.info-callout {
   color: var(--text-secondary);
   font-size: 13px;
-  font-weight: 700;
+  line-height: 1.6;
+  padding: 16px 18px;
 }
 
-.progress-track {
-  height: 8px;
-  overflow: hidden;
-  border-radius: var(--radius-full);
-  background: var(--color-primary-100);
+.kpi-card {
+  display: grid;
+  gap: 6px;
+  min-height: 126px;
+  border-left: 4px solid var(--color-primary-500);
+  padding: 20px;
 }
 
-.progress-track i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--color-primary-500);
+.kpi-card.tone-success {
+  border-left-color: var(--color-success);
 }
 
-.progress-row strong {
-  color: var(--text-primary);
-  font-size: 13px;
+.kpi-card.tone-info {
+  border-left-color: var(--color-info);
+}
+
+.kpi-card.tone-warning {
+  border-left-color: var(--color-warning);
+}
+
+.achievement-cell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 8px;
+}
+
+.number-cell {
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
-.compact-list div,
-.candidate-list label,
-.kpi-notes article,
-.team-modal__items article {
-  display: grid;
-  gap: 3px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 12px;
-}
-
-.candidate-list label {
-  grid-template-columns: 18px minmax(0, 0.5fr) minmax(0, 1fr);
-  align-items: center;
-}
-
-.candidate-list input {
-  min-height: auto;
-}
-
-.campaign-board__toggle {
-  display: inline-flex;
-  flex-shrink: 0;
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-}
-
-.campaign-board__toggle button {
-  min-height: 32px;
-  border-radius: var(--radius-sm);
-  color: var(--muted-text);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 0 12px;
-}
-
-.campaign-board__toggle button.active {
-  background: var(--panel-color);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.board-wrap {
+.kpi-note-box {
   display: grid;
   gap: 10px;
 }
 
-.board-grid {
-  overflow-x: auto;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-}
-
-.board-grid__head,
-.board-grid__row {
-  display: grid;
-  min-width: 1060px;
-  grid-template-columns: 190px repeat(4, minmax(180px, 1fr));
-}
-
-.board-grid__head {
-  min-height: 40px;
-  align-items: center;
-  background: var(--panel-muted);
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.board-grid__head span,
-.team-cell,
-.board-cell {
-  padding: 12px;
-}
-
-.board-grid__row {
-  border-top: 1px solid var(--border-color);
-}
-
-.team-cell {
-  display: grid;
-  gap: 5px;
-  border-right: 1px solid var(--border-color);
-  cursor: pointer;
-  text-align: left;
-}
-
-.board-cell {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  min-height: 150px;
-  border-right: 1px solid var(--border-color);
-  background: color-mix(in srgb, var(--panel-muted) 54%, var(--panel-color));
-}
-
-.board-cell:last-child {
-  border-right: none;
-}
-
-.task-card {
-  display: grid;
-  gap: 8px;
-  border: 1px solid var(--border-color);
-  border-left: 3px solid var(--color-primary-400);
-  border-radius: var(--radius-md);
-  background: var(--panel-color);
-  padding: 11px;
-}
-
-.reference-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.reference-card {
-  display: grid;
-  gap: 8px;
-  min-height: 170px;
-  padding: 18px;
-}
-
-.reference-card span,
-.status-pill {
-  width: fit-content;
-  padding: 0 9px;
-  background: var(--badge-bg);
-  color: var(--badge-text);
-}
-
-.status-pill {
-  justify-content: center;
-}
-
-.kpi-notes {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.team-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(15, 23, 42, 0.34);
-  padding: 24px;
-}
-
-.team-modal__panel {
-  width: min(680px, 100%);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-color);
-  box-shadow: var(--shadow-elevated);
-  padding: 22px;
-}
-
-.team-modal__panel header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 16px;
-}
-
-.team-modal__panel header p {
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.team-modal__panel header h2 {
-  color: var(--text-primary);
-  font-size: 20px;
-  font-weight: 800;
-}
-
-.team-modal__panel header span {
-  color: var(--muted-text);
-  font-size: 13px;
-}
-
-.team-modal__panel header button {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 22px;
-  line-height: 1;
-}
-
-.team-modal__stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.team-modal__stats div {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 12px;
-}
-
-.team-modal__stats span {
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.team-modal__stats strong {
-  display: block;
-  margin-top: 4px;
-  color: var(--text-primary);
-  font-size: 16px;
-}
-
-.campaign-modal-enter-active,
-.campaign-modal-leave-active {
-  transition: opacity var(--transition-fast);
-}
-
-.campaign-modal-enter-from,
-.campaign-modal-leave-to {
-  opacity: 0;
-}
-
-.campaign-sticky-bar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  background: var(--app-bg);
-  padding-bottom: 4px;
-}
-
-.metric-grid--4 {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.metric-grid--3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.status-pill--success {
-  background: var(--color-success-light, #d1fae5);
-  color: var(--color-success-dark, #065f46);
-}
-
-.status-pill--warning {
-  background: var(--color-warning-light, #fef3c7);
-  color: var(--color-warning-dark, #92400e);
-}
-
-.status-pill--danger {
-  background: var(--color-danger-light, #fee2e2);
-  color: var(--color-danger-dark, #991b1b);
-}
-
-.status-pill--info {
-  background: var(--color-primary-100);
-  color: var(--color-primary-700);
-}
-
-.status-pill--muted {
-  background: var(--panel-muted);
-  color: var(--muted-text);
-}
-
-.table-note {
-  color: var(--muted-text);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.data-table--deliverables .data-table__head,
-.data-table--deliverables .data-table__row {
-  grid-template-columns: 1.6fr 0.8fr 0.9fr 0.9fr 110px 80px 110px 100px 1.2fr;
-  min-width: 1200px;
-}
-
-.data-table--channel .data-table__head,
-.data-table--channel .data-table__row {
-  grid-template-columns: 1.2fr 0.7fr 0.9fr 1fr 90px 110px 110px 100px 1.2fr;
-  min-width: 1200px;
-}
-
-.type-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  background: var(--panel-muted);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.contribution-list {
-  display: grid;
-  gap: 12px;
-}
-
-.contribution-card {
-  display: grid;
-  gap: 14px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 18px;
-}
-
-.contribution-card__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.contribution-card__head strong {
-  display: block;
-  color: var(--text-primary);
-  font-size: 15px;
-  font-weight: 800;
-}
-
-.contribution-card__head span:first-child {
-  display: block;
-  margin-top: 3px;
-  color: var(--muted-text);
-  font-size: 12px;
-}
-
-.contribution-card__body {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.contribution-row {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--panel-color);
-  padding: 10px 12px;
-}
-
-.contribution-row span {
-  display: block;
-  color: var(--muted-text);
-  font-size: 11px;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.contribution-row p {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.contribution-card__metrics {
-  display: grid;
-  gap: 10px;
-}
-
-.fulfillment-bar-wrap {
-  display: grid;
-  gap: 6px;
-}
-
-.fulfillment-bar-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.fulfillment-bar-label span {
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.fulfillment-bar-label strong {
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.progress-track i.bg-success { background: var(--color-success, #10b981); }
-.progress-track i.bg-warning { background: var(--color-warning, #f59e0b); }
-.progress-track i.bg-danger  { background: var(--color-danger, #ef4444); }
-
-.contribution-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.contribution-stats div {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--panel-color);
-  padding: 10px 12px;
-}
-
-.contribution-stats span {
-  display: block;
-  color: var(--muted-text);
-  font-size: 11px;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.contribution-stats strong {
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.contribution-card__note {
-  border-top: 1px solid var(--border-color);
-  padding-top: 10px;
-  color: var(--muted-text);
-  font-size: 12px;
-  line-height: 1.5;
+.kpi-note-box .btn {
+  justify-self: end;
 }
 
 @media (max-width: 1180px) {
   .metric-grid,
-  .metric-grid--4,
-  .metric-grid--3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .reference-grid,
+  .candidate-list,
+  .performance-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .overview-grid,
-  .participants-grid,
-  .reference-grid,
-  .kpi-notes,
-  .contribution-card__body,
-  .contribution-stats {
+  .metadata-layout,
+  .overview-layout,
+  .progress-panel {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 760px) {
-  .campaign-detail__header,
-  .campaign-panel__head,
-  .section-strip {
-    align-items: flex-start;
+  .campaign-hero,
+  .board-toolbar,
+  .reference-toolbar,
+  .panel__header,
+  .campaign-hero__actions,
+  .board-toolbar__actions {
+    align-items: stretch;
     flex-direction: column;
   }
 
-  .campaign-detail__meta {
-    justify-items: start;
+  .campaign-hero__meta span + span {
+    border-left: 0;
+    padding-left: 0;
   }
 
-  .campaign-detail__tabs,
-  .campaign-actions,
-  .campaign-board__toggle {
-    overflow-x: auto;
-  }
-
-  .campaign-detail__tab {
-    min-width: 142px;
-  }
-
-  .metadata-grid,
   .metric-grid,
-  .team-modal__stats {
+  .reference-grid,
+  .candidate-list,
+  .performance-grid,
+  .form-grid {
     grid-template-columns: 1fr;
   }
 }
