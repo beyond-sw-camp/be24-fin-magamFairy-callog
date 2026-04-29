@@ -621,6 +621,11 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <div v-if="profileCard.companyLogoDataUrl" class="callog-profile-card__logo">
+          <img :src="profileCard.companyLogoDataUrl" alt="" />
+          <span>회사 로고</span>
+        </div>
+
         <dl class="callog-profile-card__details">
           <div>
             <dt>회사</dt>
@@ -967,6 +972,27 @@ onBeforeUnmount(() => {
   color: var(--muted-text);
   font-size: 12px;
   font-weight: 600;
+}
+
+.callog-profile-card__logo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.callog-profile-card__logo img {
+  width: 92px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.callog-profile-card__logo span {
+  color: var(--subtle-text);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .callog-profile-card__details {

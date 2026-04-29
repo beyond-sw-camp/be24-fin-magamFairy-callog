@@ -77,6 +77,7 @@ const profileForm = reactive({
   phone: '',
   email: '',
   imageDataUrl: '',
+  companyLogoDataUrl: '',
 })
 const feedback = reactive({
   profile: '',
@@ -126,6 +127,7 @@ function syncProfileForm() {
     phone: userSettingsStore.profile.phone,
     email: userSettingsStore.profile.email,
     imageDataUrl: userSettingsStore.profile.imageDataUrl,
+    companyLogoDataUrl: userSettingsStore.profile.companyLogoDataUrl,
   })
 }
 
@@ -219,6 +221,25 @@ function handleProfileImageUpload(event) {
 
 function clearProfileImage() {
   profileForm.imageDataUrl = ''
+}
+
+function handleCompanyLogoUpload(event) {
+  const file = event.target.files?.[0]
+
+  if (!file) {
+    return
+  }
+
+  const reader = new FileReader()
+  reader.onload = () => {
+    profileForm.companyLogoDataUrl = String(reader.result || '')
+  }
+  reader.readAsDataURL(file)
+  event.target.value = ''
+}
+
+function clearCompanyLogo() {
+  profileForm.companyLogoDataUrl = ''
 }
 
 function openImageGenerationModal() {
@@ -385,6 +406,42 @@ watch(
                 @click="clearProfileImage"
               >
                 이미지 제거
+              </button>
+            </div>
+          </section>
+
+          <section class="settings-logo-panel">
+            <div class="company-logo-preview">
+              <div class="company-logo-preview__image">
+                <img
+                  v-if="profileForm.companyLogoDataUrl"
+                  :src="profileForm.companyLogoDataUrl"
+                  alt=""
+                />
+                <span v-else class="material-symbols-outlined">business</span>
+              </div>
+              <div>
+                <strong>회사 로고</strong>
+                <p>명함 다운로드 이미지에 함께 표시됩니다.</p>
+              </div>
+            </div>
+
+            <div class="profile-actions">
+              <label class="settings-button settings-button--ghost">
+                로고 선택
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="settings-file"
+                  @change="handleCompanyLogoUpload"
+                />
+              </label>
+              <button
+                type="button"
+                class="settings-button settings-button--ghost"
+                @click="clearCompanyLogo"
+              >
+                로고 제거
               </button>
             </div>
           </section>
@@ -831,6 +888,49 @@ watch(
   gap: 14px;
 }
 
+.settings-logo-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card-muted);
+}
+
+.company-logo-preview {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.company-logo-preview__image {
+  display: inline-flex;
+  width: 96px;
+  height: 54px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  color: var(--text-muted);
+}
+
+.company-logo-preview__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 8px;
+}
+
+.company-logo-preview__image .material-symbols-outlined {
+  font-size: 24px;
+}
+
 .profile-preview__image {
   display: inline-flex;
   width: 72px;
@@ -861,11 +961,19 @@ watch(
 }
 
 .profile-preview p,
+.company-logo-preview p,
 .settings-row p,
 .settings-block p {
   margin-top: 4px;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.company-logo-preview strong {
+  display: block;
+  color: var(--text-heading);
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .profile-actions,
@@ -1216,6 +1324,7 @@ watch(
 
   .settings-header,
   .settings-profile,
+  .settings-logo-panel,
   .settings-row,
   .settings-account__row {
     align-items: stretch;

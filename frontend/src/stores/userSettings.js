@@ -11,6 +11,7 @@ const fallbackProfile = {
   phone: '010-0000-0000',
   email: 'user@callog.com',
   imageDataUrl: '',
+  companyLogoDataUrl: '',
 }
 
 const defaultNotifications = {
@@ -102,6 +103,17 @@ function drawRoundedRect(context, x, y, width, height, radius) {
   context.closePath()
 }
 
+function drawContainedImage(context, image, x, y, width, height) {
+  const imageRatio = image.width / image.height
+  const boxRatio = width / height
+  const nextWidth = imageRatio > boxRatio ? width : height * imageRatio
+  const nextHeight = imageRatio > boxRatio ? width / imageRatio : height
+  const nextX = x + (width - nextWidth) / 2
+  const nextY = y + (height - nextHeight) / 2
+
+  context.drawImage(image, nextX, nextY, nextWidth, nextHeight)
+}
+
 function createDefaultAvatarDataUrl(initials) {
   if (typeof document === 'undefined') {
     return ''
@@ -174,6 +186,13 @@ function normalizeProfile(source, rawUser = null) {
       'profileImageUrl',
       'avatar',
     ]),
+    companyLogoDataUrl: readFirstString(rawUser, [
+      'companyLogoDataUrl',
+      'companyLogo',
+      'companyLogoUrl',
+      'logo',
+      'logoUrl',
+    ]),
   }
 
   const mergedProfile = {
@@ -192,6 +211,7 @@ function normalizeProfile(source, rawUser = null) {
     phone: String(mergedProfile.phone || fallbackProfile.phone).trim(),
     email: String(mergedProfile.email || fallbackProfile.email).trim(),
     imageDataUrl: String(mergedProfile.imageDataUrl || createDefaultAvatarDataUrl(initials)).trim(),
+    companyLogoDataUrl: String(mergedProfile.companyLogoDataUrl || '').trim(),
   }
 }
 
@@ -419,9 +439,27 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     context.fillText(profile.phone, 254, 308)
     context.fillText(profile.email, 254, 342)
 
-    context.fillStyle = 'rgba(255, 255, 255, 0.58)'
-    context.font = '700 18px Arial, sans-serif'
-    context.fillText('CALLOG', 70, 350)
+    try {
+      if (profile.companyLogoDataUrl?.startsWith('data:')) {
+        const logo = await loadImage(profile.companyLogoDataUrl)
+
+        drawRoundedRect(context, 66, 324, 136, 48, 12)
+        context.fillStyle = 'rgba(255, 255, 255, 0.9)'
+        context.fill()
+
+        context.save()
+        drawRoundedRect(context, 78, 334, 112, 28, 6)
+        context.clip()
+        drawContainedImage(context, logo, 78, 334, 112, 28)
+        context.restore()
+      } else {
+        throw new Error('empty company logo')
+      }
+    } catch {
+      context.fillStyle = 'rgba(255, 255, 255, 0.58)'
+      context.font = '700 18px Arial, sans-serif'
+      context.fillText(profile.company || 'CALLOG', 70, 350)
+    }
 
     const filename = `callog-profile-card-${sanitizeUserKey(profile.name)}.png`
     triggerDownload(canvas.toDataURL('image/png'), filename)
