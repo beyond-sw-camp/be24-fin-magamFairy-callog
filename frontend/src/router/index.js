@@ -115,6 +115,10 @@ const routes = [
         path: '/references',
         name: 'references',
         component: () => import('@/views/ReferencesView.vue'),
+        meta: {
+          title: '검수 자료실',
+          section: '가이드라인 · 레퍼런스 · AI 판사',
+        },
       },
       {
         path: 'reports',
