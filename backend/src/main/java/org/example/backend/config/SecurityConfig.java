@@ -50,7 +50,8 @@ public class SecurityConfig {
                         "/ws-stomp/**",
                         "/notification/subscribe",
                         "/api/sse/**",
-                        "/sse/**"
+                        "/sse/**",
+                        "/campaigns/**"
                 ).permitAll()
                 .requestMatchers("/matching/**").permitAll() // 임시
                 .anyRequest().authenticated()

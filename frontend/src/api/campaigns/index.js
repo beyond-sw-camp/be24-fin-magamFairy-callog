@@ -26,6 +26,15 @@ function unwrapResponse(response) {
 export const ListCampaign = async () => {
   return unwrapResponse(await api.get('/campaigns'))
 }
+export const GetCampaignDetails = async (taps) => {
+  return unwrapResponse(
+    await api.get('/campaigns', {
+      params: {
+        taps: taps // 키와 변수명이 같으면 그냥 { taps } 로 생략 가능
+      }
+    })
+  );
+};
 
 export const CreateCampaign = async (payload) => {
   return unwrapResponse(await api.post('/campaigns/new', payload))
@@ -45,6 +54,7 @@ export const InvitePartners = async (campaignId, partners) => {
 
 export default {
   ListCampaign,
+  GetCampaignDetails,
   CreateCampaign,
   UpdateCampaign,
   UpdateCampaignStatus,

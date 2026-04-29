@@ -2,11 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
+import { GetCampaignDetails } from '@/api/campaigns'
 
 const route = useRoute()
 const store = usePlannerStore()
 
-const activeTab = ref('overview')
+const activeTab = ref('캠페인 오버뷰')
 const currentBoardView = ref('swimlane')
 const metadataEditing = ref(false)
 const selectedMemberIds = ref([])
@@ -19,13 +20,18 @@ const metadataDraft = ref({
   partnersText: '',
 })
 
-const tabs = [
-  { id: 'overview', label: '캠페인 오버뷰', caption: 'CAMPAIGN_002' },
-  { id: 'team-board', label: '팀 보드 보기', caption: 'CAMPAIGN_003' },
-  { id: 'references', label: '레퍼런스탭', caption: 'CAMPAIGN_004' },
-  { id: 'participants', label: '참여자 설정', caption: 'CAMPAIGN_005' },
-  { id: 'performance', label: '캠페인 성과/KPI', caption: 'CAMPAIGN_006' },
-]
+const tabs = ["캠페인 오버뷰", "팀 보드 보기", "레퍼런스 탭", "참여자 설정", "캠페인 성과/KPI"];
+
+const handleTabClick = async (tabName) => {
+  activeTab.value = tabName;
+  try {
+    // tabName에 "참여자 설정" 같은 값이 들어와서 호출됨
+    const data = await GetCampaignDetails(tabName);
+    console.log("받아온 데이터:", data);
+  } catch (error) {
+    console.error("에러 발생:", error);
+  }
+};
 
 const activeCampaign = computed(() => {
   const campaignId = String(route.params.campaignId ?? '')
@@ -33,8 +39,6 @@ const activeCampaign = computed(() => {
 
   return routeCampaign ?? store.activeCampaign
 })
-
-const campaignMetaCode = computed(() => activeCampaign.value?.code ?? 'CAMPAIGN_001')
 
 const campaignStatusLabel = computed(() => {
   const labels = {
@@ -521,7 +525,6 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
             </span>
           </div>
           <div class="campaign-hero__meta" aria-label="캠페인 메타데이터 요약">
-            <span># {{ campaignMetaCode }}</span>
             <span>{{ activeCampaign?.period ?? '2024.06.01 - 2024.08.31' }}</span>
             <span>본사 관리자 (수정 가능)</span>
           </div>
@@ -538,13 +541,13 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       <nav class="campaign-tabs" aria-label="캠페인 상세 탭">
         <button
           v-for="tab in tabs"
-          :key="tab.id"
+          :key="tab"
           type="button"
           class="campaign-tabs__button"
-          :class="{ active: activeTab === tab.id }"
-          @click="activeTab = tab.id"
+          :class="{ active: activeTab === tab }"
+          @click="handleTabClick(tab)"
         >
-          {{ tab.label }}
+          {{ tab }}
         </button>
       </nav>
     </div>
@@ -673,7 +676,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       </div>
     </section>
 
-    <section v-else-if="activeTab === 'overview'" class="tab-surface">
+    <section v-else-if="activeTab === '캠페인 오버뷰'" class="tab-surface">
       <div class="metric-grid">
         <article v-for="stat in overviewStats" :key="stat.label" class="metric-card" :class="`tone-${stat.tone}`">
           <span class="metric-card__icon">{{ stat.label.slice(0, 1) }}</span>
@@ -722,7 +725,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
           <article class="panel performance-panel">
             <div class="panel__header">
               <h2>최근 성과 요약</h2>
-              <button type="button" class="link-button" @click="activeTab = 'performance'">상세보기</button>
+              <button type="button" class="link-button" @click="handleTabClick('캠페인 성과/KPI')">상세보기</button>
             </div>
             <div class="performance-grid">
               <div>
@@ -775,7 +778,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       </div>
     </section>
 
-    <section v-else-if="activeTab === 'team-board'" class="tab-surface">
+    <section v-else-if="activeTab === '팀 보드 보기'" class="tab-surface">
       <div class="board-toolbar">
         <div class="segmented-control">
           <button type="button" :class="{ active: currentBoardView === 'swimlane' }" @click="currentBoardView = 'swimlane'">
@@ -835,7 +838,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       </div>
     </section>
 
-    <section v-else-if="activeTab === 'references'" class="tab-surface">
+    <section v-else-if="activeTab === '레퍼런스 탭'" class="tab-surface">
       <div class="reference-toolbar">
         <div class="segmented-control segmented-control--icon">
           <button type="button" class="active">그리드</button>
@@ -867,7 +870,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       </div>
     </section>
 
-    <section v-else-if="activeTab === 'participants'" class="tab-surface">
+    <section v-else-if="activeTab === '참여자 설정'" class="tab-surface">
       <article class="panel">
         <div class="panel__header">
           <div>
@@ -915,7 +918,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       </p>
     </section>
 
-    <section v-else-if="activeTab === 'performance'" class="tab-surface">
+    <section v-else-if="activeTab === '캠페인 성과/KPI'" class="tab-surface">
       <div class="metric-grid">
         <article v-for="item in kpiSummary" :key="item.label" class="kpi-card" :class="`tone-${item.tone}`">
           <span>{{ item.label }}</span>
