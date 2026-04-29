@@ -402,17 +402,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
       }
     }
 
-    if (companyLogo) {
-      context.save()
-      drawRoundedRect(context, 34, 32, 652, 368, 26)
-      context.clip()
-      context.globalAlpha = 0.1
-      drawContainedImage(context, companyLogo, 424, 58, 212, 96)
-      context.globalAlpha = 0.055
-      drawContainedImage(context, companyLogo, 432, 246, 190, 86)
-      context.restore()
-    }
-
     context.save()
     context.beginPath()
     context.arc(142, 152, 74, 0, Math.PI * 2)
@@ -443,40 +432,46 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     context.arc(142, 152, 76, 0, Math.PI * 2)
     context.stroke()
 
-    context.textAlign = 'left'
-    context.textBaseline = 'alphabetic'
-    context.fillStyle = '#ffffff'
-    context.font = '700 42px Arial, sans-serif'
-    context.fillText(profile.name, 252, 132)
-
-    context.fillStyle = '#c4b5fd'
-    context.font = '600 22px Arial, sans-serif'
-    context.fillText(profile.role, 254, 170)
-
-    context.fillStyle = 'rgba(255, 255, 255, 0.78)'
-    context.font = '500 20px Arial, sans-serif'
-    context.fillText(profile.company, 254, 224)
-    context.fillText(profile.department, 254, 258)
-    context.fillText(profile.phone, 254, 308)
-    context.fillText(profile.email, 254, 342)
-
     if (companyLogo) {
-      drawRoundedRect(context, 66, 322, 144, 52, 14)
-      context.fillStyle = 'rgba(255, 255, 255, 0.13)'
+      drawRoundedRect(context, 474, 58, 176, 68, 16)
+      context.fillStyle = 'rgba(255, 255, 255, 0.11)'
       context.fill()
-      context.strokeStyle = 'rgba(255, 255, 255, 0.22)'
+      context.strokeStyle = 'rgba(255, 255, 255, 0.18)'
       context.lineWidth = 1
       context.stroke()
 
       context.save()
-      drawRoundedRect(context, 80, 334, 116, 28, 7)
+      drawRoundedRect(context, 492, 74, 140, 36, 8)
       context.clip()
-      context.globalAlpha = 0.92
-      drawContainedImage(context, companyLogo, 80, 334, 116, 28)
+      context.globalAlpha = 0.95
+      drawContainedImage(context, companyLogo, 492, 74, 140, 36)
       context.restore()
-    } else {
-      context.fillStyle = 'rgba(255, 255, 255, 0.58)'
-      context.font = '700 18px Arial, sans-serif'
+    }
+
+    context.textAlign = 'right'
+    context.textBaseline = 'alphabetic'
+    context.fillStyle = 'rgba(255, 255, 255, 0.72)'
+    context.font = '700 20px Arial, sans-serif'
+    context.fillText(profile.company || 'CALLOG', 640, companyLogo ? 158 : 120)
+
+    context.fillStyle = '#ffffff'
+    context.font = '700 42px Arial, sans-serif'
+    context.fillText(profile.name, 640, companyLogo ? 206 : 168)
+
+    context.fillStyle = '#c4b5fd'
+    context.font = '600 22px Arial, sans-serif'
+    context.fillText(profile.role, 640, companyLogo ? 244 : 206)
+
+    context.fillStyle = 'rgba(255, 255, 255, 0.78)'
+    context.font = '500 20px Arial, sans-serif'
+    context.fillText(profile.department, 640, 288)
+    context.fillText(profile.phone, 640, 324)
+    context.fillText(profile.email, 640, 358)
+
+    if (!companyLogo) {
+      context.textAlign = 'left'
+      context.fillStyle = 'rgba(255, 255, 255, 0.46)'
+      context.font = '700 16px Arial, sans-serif'
       context.fillText(profile.company || 'CALLOG', 70, 350)
     }
 
