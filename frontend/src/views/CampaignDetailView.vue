@@ -23,9 +23,12 @@ const tabs = [
   { id: 'metadata', label: '메타데이터', caption: 'CAMPAIGN_001' },
   { id: 'overview', label: '오버뷰', caption: 'CAMPAIGN_002' },
   { id: 'team-board', label: '팀 보드', caption: 'CAMPAIGN_003' },
+  { id: 'deliverables', label: '산출물 & 검수', caption: 'CAMPAIGN_007' },
   { id: 'references', label: '레퍼런스', caption: 'CAMPAIGN_004' },
   { id: 'participants', label: '참여자 설정', caption: 'CAMPAIGN_005' },
   { id: 'performance', label: '성과/KPI', caption: 'CAMPAIGN_006' },
+  { id: 'partner-contribution', label: '파트너 기여 현황', caption: 'CAMPAIGN_008' },
+  { id: 'channel-plan', label: '채널 플래너', caption: 'CAMPAIGN_009' },
 ]
 
 const activeCampaign = computed(() => {
@@ -277,6 +280,206 @@ const campaignParticipants = ref([
   { id: 'galleria-lead', name: '정하린', team: '한화갤러리아', role: 'Partner Manager', access: '당사 업무 수정' },
 ])
 
+const deliverables = ref([
+  {
+    id: 'dlv-kv',
+    title: '캠페인 메인 키비주얼',
+    category: '디자인 에셋',
+    owner: '대행사A',
+    reviewer: '한화 본사',
+    dueDate: '2026-05-10',
+    uploadedAt: '2026-05-09',
+    fileType: 'PNG/AI',
+    version: 'V3',
+    uploadStatus: '업로드 완료',
+    reviewStatus: '승인',
+    reviewedBy: '이성재 PM',
+    note: '최종 KV 확정, 라이브러리 보관 완료',
+  },
+  {
+    id: 'dlv-invite',
+    title: 'VIP 초청장 디자인',
+    category: '디자인 에셋',
+    owner: '대행사A',
+    reviewer: '한화 본사',
+    dueDate: '2026-05-17',
+    uploadedAt: '2026-05-18',
+    fileType: 'PDF/PNG',
+    version: 'V2',
+    uploadStatus: '업로드 완료',
+    reviewStatus: '수정 요청',
+    reviewedBy: '이성재 PM',
+    note: '본사 피드백 반영 후 재제출 필요',
+  },
+  {
+    id: 'dlv-vmd',
+    title: '팝업스토어 VMD 시안',
+    category: '현장 자료',
+    owner: '한화갤러리아',
+    reviewer: '한화 본사',
+    dueDate: '2026-05-12',
+    uploadedAt: null,
+    fileType: 'PPT/PDF',
+    version: 'V1 초안',
+    uploadStatus: '업로드 전',
+    reviewStatus: '대기',
+    reviewedBy: '-',
+    note: '현장 동선 반영 필요',
+  },
+  {
+    id: 'dlv-banner',
+    title: '현장 배너 디자인 (3종)',
+    category: '디자인 에셋',
+    owner: '대행사A',
+    reviewer: '한화갤러리아',
+    dueDate: '2026-05-15',
+    uploadedAt: null,
+    fileType: 'AI/PNG',
+    version: '-',
+    uploadStatus: '업로드 전',
+    reviewStatus: '대기',
+    reviewedBy: '-',
+    note: 'X배너/데스크배너/모바일 이미지 포함',
+  },
+  {
+    id: 'dlv-package',
+    title: '숙박 패키지 예약 페이지 기획서',
+    category: '기획 문서',
+    owner: '한화호텔앤드리조트',
+    reviewer: '한화 본사',
+    dueDate: '2026-05-20',
+    uploadedAt: '2026-05-19',
+    fileType: 'DOCX',
+    version: 'V2',
+    uploadStatus: '업로드 완료',
+    reviewStatus: '검수 중',
+    reviewedBy: '이성재 PM',
+    note: '패키지 혜택 구조 최종 확인 중',
+  },
+])
+
+const partnerContributions = ref([
+  {
+    id: 'pc-hq',
+    partner: '한화 본사',
+    role: '총괄 기획 및 최종 검수',
+    pledgeDesc: '기획·운영 리소스 (4명 × 4주)',
+    actualDesc: '4명 × 4주 투입 완료',
+    fulfillmentRate: 100,
+    contentTotal: 3,
+    contentDelivered: 3,
+    budgetPledge: 8000,
+    budgetActual: 8200,
+    status: '완료',
+    note: '초과 집행 (배너 추가 제작)',
+  },
+  {
+    id: 'pc-galleria',
+    partner: '한화갤러리아',
+    role: 'VIP 고객 접점 및 팝업 운영',
+    pledgeDesc: '고객 명단 5,000건 + 팝업 1식',
+    actualDesc: '명단 4,800건 확보 / 팝업 준비 중',
+    fulfillmentRate: 84,
+    contentTotal: 2,
+    contentDelivered: 1,
+    budgetPledge: 5000,
+    budgetActual: 3200,
+    status: '진행 중',
+    note: 'VMD 시안 미제출 상태',
+  },
+  {
+    id: 'pc-hotel',
+    partner: '한화호텔앤드리조트',
+    role: '숙박 패키지 및 제휴 혜택',
+    pledgeDesc: '패키지 3종 + 온라인 랜딩페이지',
+    actualDesc: '패키지 2종 확정 / 랜딩 구축 중',
+    fulfillmentRate: 58,
+    contentTotal: 2,
+    contentDelivered: 1,
+    budgetPledge: 3500,
+    budgetActual: 1800,
+    status: '지연',
+    note: '랜딩 페이지 구축 일정 초과',
+  },
+  {
+    id: 'pc-agency',
+    partner: '대행사A',
+    role: '콘텐츠 및 홍보물 제작',
+    pledgeDesc: 'KV + 초청장 + 배너 3종',
+    actualDesc: 'KV 완료 / 초청장 V2 재제출 / 배너 미착수',
+    fulfillmentRate: 46,
+    contentTotal: 3,
+    contentDelivered: 1,
+    budgetPledge: 6000,
+    budgetActual: 2800,
+    status: '경고',
+    note: '배너 착수 지연 - 리소스 재배정 필요',
+  },
+])
+
+const channelPlan = ref([
+  {
+    id: 'ch-kakao',
+    channel: '카카오톡 알림톡',
+    type: '직접 메시지',
+    owner: '한화갤러리아',
+    targetSegment: 'VIP 등급 고객',
+    reachEstimate: 4800,
+    scheduledDate: '2026-05-26',
+    contentStatus: '초안 완료',
+    approvalStatus: '검수 대기',
+    note: '발송 전 본사 최종 확인 필요',
+  },
+  {
+    id: 'ch-email',
+    channel: '이메일 뉴스레터',
+    type: '직접 메시지',
+    owner: '한화 본사',
+    targetSegment: '전체 회원 중 동의자',
+    reachEstimate: 22000,
+    scheduledDate: '2026-05-26',
+    contentStatus: '제작 중',
+    approvalStatus: '미착수',
+    note: '초청장 디자인 확정 후 적용 예정',
+  },
+  {
+    id: 'ch-insta',
+    channel: '인스타그램 피드',
+    type: 'SNS 게시',
+    owner: '대행사A',
+    targetSegment: '팔로워 + 광고 타겟',
+    reachEstimate: 18000,
+    scheduledDate: '2026-05-28',
+    contentStatus: '기획 완료',
+    approvalStatus: '승인 대기',
+    note: 'KV 기반 광고 소재 제작 예정',
+  },
+  {
+    id: 'ch-popup',
+    channel: '갤러리아 지점 팝업',
+    type: '오프라인',
+    owner: '한화갤러리아',
+    targetSegment: '방문 고객',
+    reachEstimate: 1200,
+    scheduledDate: '2026-06-01',
+    contentStatus: '미착수',
+    approvalStatus: '미착수',
+    note: 'VMD 확정 후 현장 세팅',
+  },
+  {
+    id: 'ch-resort',
+    channel: '리조트 예약 랜딩페이지',
+    type: '온라인',
+    owner: '한화호텔앤드리조트',
+    targetSegment: '패키지 관심 고객',
+    reachEstimate: 9200,
+    scheduledDate: '2026-05-25',
+    contentStatus: '개발 중',
+    approvalStatus: '미착수',
+    note: '예약 시스템 연동 테스트 진행 중',
+  },
+])
+
 const kpiRows = ref([
   {
     id: 'kpi-impression',
@@ -341,6 +544,29 @@ const approvedCount = computed(() => teamTasks.filter((task) => task.review === 
 const esgScore = computed(() => 82)
 
 const performanceRecordCount = computed(() => kpiRows.value.length)
+
+const deliverableStats = computed(() => ({
+  total: deliverables.value.length,
+  uploaded: deliverables.value.filter((d) => d.uploadStatus === '업로드 완료').length,
+  inReview: deliverables.value.filter((d) => d.reviewStatus === '검수 중').length,
+  approved: deliverables.value.filter((d) => d.reviewStatus === '승인').length,
+}))
+
+const partnerContributionStats = computed(() => ({
+  avgFulfillment: Math.round(
+    partnerContributions.value.reduce((s, p) => s + p.fulfillmentRate, 0) / partnerContributions.value.length,
+  ),
+  totalBudgetPledge: partnerContributions.value.reduce((s, p) => s + p.budgetPledge, 0),
+  totalBudgetActual: partnerContributions.value.reduce((s, p) => s + p.budgetActual, 0),
+}))
+
+const channelStats = computed(() => ({
+  total: channelPlan.value.length,
+  contentReady: channelPlan.value.filter(
+    (c) => c.contentStatus === '초안 완료' || c.contentStatus === '기획 완료',
+  ).length,
+  totalReach: channelPlan.value.reduce((s, c) => s + c.reachEstimate, 0).toLocaleString(),
+}))
 
 function syncMetadataDraft() {
   metadataDraft.value = {
@@ -456,6 +682,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
 
 <template>
   <section class="campaign-detail">
+    <div class="campaign-sticky-bar">
     <header class="campaign-detail__header">
       <div class="campaign-detail__identity">
         <span
@@ -493,6 +720,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
         <small>{{ tab.caption }}</small>
       </button>
     </nav>
+    </div>
 
     <section v-if="activeTab === 'metadata'" class="campaign-panel">
       <div class="campaign-panel__head">
@@ -795,6 +1023,230 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
           <p>분석 메모: {{ row.memo }}</p>
           <p>다음 액션: {{ row.nextAction }}</p>
         </article>
+      </div>
+    </section>
+
+    <section v-else-if="activeTab === 'deliverables'" class="campaign-panel">
+      <div class="campaign-panel__head">
+        <div>
+          <span class="requirement-badge">CAMPAIGN_007</span>
+          <h2>산출물 & 검수</h2>
+          <p>협력사가 제출한 산출물의 업로드 현황과 본사 검수 결과를 한 곳에서 관리합니다.</p>
+        </div>
+        <div class="campaign-actions">
+          <button type="button" class="secondary-button">산출물 업로드</button>
+          <button type="button" class="primary-button-small">검수 요청</button>
+        </div>
+      </div>
+
+      <div class="metric-grid metric-grid--4">
+        <article class="metric-card">
+          <span>총 산출물</span>
+          <strong>{{ deliverableStats.total }}</strong>
+          <p>전체 등록 항목</p>
+        </article>
+        <article class="metric-card">
+          <span>업로드 완료</span>
+          <strong>{{ deliverableStats.uploaded }}</strong>
+          <p>파일 제출 완료</p>
+        </article>
+        <article class="metric-card">
+          <span>검수 진행 중</span>
+          <strong>{{ deliverableStats.inReview }}</strong>
+          <p>본사 검토 중</p>
+        </article>
+        <article class="metric-card">
+          <span>최종 승인</span>
+          <strong>{{ deliverableStats.approved }}</strong>
+          <p>검수 완료</p>
+        </article>
+      </div>
+
+      <div class="data-table data-table--deliverables">
+        <div class="data-table__head">
+          <span>산출물명</span>
+          <span>분류</span>
+          <span>담당사</span>
+          <span>검수처</span>
+          <span>마감일</span>
+          <span>버전</span>
+          <span>업로드 상태</span>
+          <span>검수 상태</span>
+          <span>비고</span>
+        </div>
+        <div v-for="dlv in deliverables" :key="dlv.id" class="data-table__row">
+          <strong>{{ dlv.title }}</strong>
+          <span>{{ dlv.category }}</span>
+          <span>{{ dlv.owner }}</span>
+          <span>{{ dlv.reviewer }}</span>
+          <span>{{ dlv.dueDate }}</span>
+          <span>{{ dlv.version }}</span>
+          <span class="status-pill"
+            :class="{
+              'status-pill--success': dlv.uploadStatus === '업로드 완료',
+              'status-pill--muted': dlv.uploadStatus === '업로드 전',
+            }">{{ dlv.uploadStatus }}</span>
+          <span class="status-pill"
+            :class="{
+              'status-pill--success': dlv.reviewStatus === '승인',
+              'status-pill--warning': dlv.reviewStatus === '검수 중' || dlv.reviewStatus === '수정 요청',
+              'status-pill--muted': dlv.reviewStatus === '대기',
+            }">{{ dlv.reviewStatus }}</span>
+          <span class="table-note">{{ dlv.note }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section v-else-if="activeTab === 'partner-contribution'" class="campaign-panel">
+      <div class="campaign-panel__head">
+        <div>
+          <span class="requirement-badge">CAMPAIGN_008</span>
+          <h2>파트너 기여 현황</h2>
+          <p>협력사별 기여 약속 대비 실적 이행률과 예산 집행 현황을 비교합니다.</p>
+        </div>
+        <span class="permission-badge">본사 관리자 확인</span>
+      </div>
+
+      <div class="metric-grid metric-grid--3">
+        <article class="metric-card">
+          <span>평균 이행률</span>
+          <strong>{{ partnerContributionStats.avgFulfillment }}%</strong>
+          <p>전체 협력사 평균</p>
+        </article>
+        <article class="metric-card">
+          <span>예산 약속 합계</span>
+          <strong>{{ partnerContributionStats.totalBudgetPledge.toLocaleString() }}</strong>
+          <p>만원</p>
+        </article>
+        <article class="metric-card">
+          <span>예산 집행 합계</span>
+          <strong>{{ partnerContributionStats.totalBudgetActual.toLocaleString() }}</strong>
+          <p>만원</p>
+        </article>
+      </div>
+
+      <div class="contribution-list">
+        <article v-for="pc in partnerContributions" :key="pc.id" class="contribution-card">
+          <div class="contribution-card__head">
+            <div>
+              <strong>{{ pc.partner }}</strong>
+              <span>{{ pc.role }}</span>
+            </div>
+            <span class="status-pill"
+              :class="{
+                'status-pill--success': pc.status === '완료',
+                'status-pill--info': pc.status === '진행 중',
+                'status-pill--warning': pc.status === '경고',
+                'status-pill--danger': pc.status === '지연',
+              }">{{ pc.status }}</span>
+          </div>
+
+          <div class="contribution-card__body">
+            <div class="contribution-row">
+              <span>기여 약속</span>
+              <p>{{ pc.pledgeDesc }}</p>
+            </div>
+            <div class="contribution-row">
+              <span>실적 현황</span>
+              <p>{{ pc.actualDesc }}</p>
+            </div>
+          </div>
+
+          <div class="contribution-card__metrics">
+            <div class="fulfillment-bar-wrap">
+              <div class="fulfillment-bar-label">
+                <span>이행률</span>
+                <strong>{{ pc.fulfillmentRate }}%</strong>
+              </div>
+              <div class="progress-track">
+                <i :style="{ width: `${pc.fulfillmentRate}%` }"
+                   :class="{
+                     'bg-success': pc.fulfillmentRate >= 90,
+                     'bg-warning': pc.fulfillmentRate >= 60 && pc.fulfillmentRate < 90,
+                     'bg-danger': pc.fulfillmentRate < 60,
+                   }" />
+              </div>
+            </div>
+            <div class="contribution-stats">
+              <div>
+                <span>산출물 납품</span>
+                <strong>{{ pc.contentDelivered }} / {{ pc.contentTotal }}</strong>
+              </div>
+              <div>
+                <span>예산 집행</span>
+                <strong>{{ pc.budgetActual.toLocaleString() }} / {{ pc.budgetPledge.toLocaleString() }}만원</strong>
+              </div>
+            </div>
+          </div>
+
+          <p class="contribution-card__note">{{ pc.note }}</p>
+        </article>
+      </div>
+    </section>
+
+    <section v-else-if="activeTab === 'channel-plan'" class="campaign-panel">
+      <div class="campaign-panel__head">
+        <div>
+          <span class="requirement-badge">CAMPAIGN_009</span>
+          <h2>채널 플래너</h2>
+          <p>마케팅 채널별 집행 일정, 담당사, 콘텐츠 준비 현황을 관리합니다.</p>
+        </div>
+        <div class="campaign-actions">
+          <button type="button" class="secondary-button">채널 추가</button>
+        </div>
+      </div>
+
+      <div class="metric-grid metric-grid--3">
+        <article class="metric-card">
+          <span>총 채널 수</span>
+          <strong>{{ channelStats.total }}</strong>
+          <p>운영 예정 채널</p>
+        </article>
+        <article class="metric-card">
+          <span>콘텐츠 준비 완료</span>
+          <strong>{{ channelStats.contentReady }}</strong>
+          <p>초안/기획 완료 채널</p>
+        </article>
+        <article class="metric-card">
+          <span>총 예상 도달</span>
+          <strong>{{ channelStats.totalReach }}</strong>
+          <p>누적 추정 도달 수</p>
+        </article>
+      </div>
+
+      <div class="data-table data-table--channel">
+        <div class="data-table__head">
+          <span>채널</span>
+          <span>유형</span>
+          <span>담당사</span>
+          <span>타겟 세그먼트</span>
+          <span>예상 도달</span>
+          <span>예정일</span>
+          <span>콘텐츠 상태</span>
+          <span>승인 상태</span>
+          <span>비고</span>
+        </div>
+        <div v-for="ch in channelPlan" :key="ch.id" class="data-table__row">
+          <strong>{{ ch.channel }}</strong>
+          <span class="type-badge">{{ ch.type }}</span>
+          <span>{{ ch.owner }}</span>
+          <span>{{ ch.targetSegment }}</span>
+          <span>{{ ch.reachEstimate.toLocaleString() }}</span>
+          <span>{{ ch.scheduledDate }}</span>
+          <span class="status-pill"
+            :class="{
+              'status-pill--success': ch.contentStatus === '초안 완료' || ch.contentStatus === '기획 완료',
+              'status-pill--info': ch.contentStatus === '제작 중' || ch.contentStatus === '개발 중',
+              'status-pill--muted': ch.contentStatus === '미착수',
+            }">{{ ch.contentStatus }}</span>
+          <span class="status-pill"
+            :class="{
+              'status-pill--success': ch.approvalStatus === '승인 완료',
+              'status-pill--warning': ch.approvalStatus === '검수 대기' || ch.approvalStatus === '승인 대기',
+              'status-pill--muted': ch.approvalStatus === '미착수',
+            }">{{ ch.approvalStatus }}</span>
+          <span class="table-note">{{ ch.note }}</span>
+        </div>
       </div>
     </section>
 
@@ -1480,15 +1932,222 @@ input:disabled {
   opacity: 0;
 }
 
+.campaign-sticky-bar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--app-bg);
+  padding-bottom: 4px;
+}
+
+.metric-grid--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metric-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.status-pill--success {
+  background: var(--color-success-light, #d1fae5);
+  color: var(--color-success-dark, #065f46);
+}
+
+.status-pill--warning {
+  background: var(--color-warning-light, #fef3c7);
+  color: var(--color-warning-dark, #92400e);
+}
+
+.status-pill--danger {
+  background: var(--color-danger-light, #fee2e2);
+  color: var(--color-danger-dark, #991b1b);
+}
+
+.status-pill--info {
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+
+.status-pill--muted {
+  background: var(--panel-muted);
+  color: var(--muted-text);
+}
+
+.table-note {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.data-table--deliverables .data-table__head,
+.data-table--deliverables .data-table__row {
+  grid-template-columns: 1.6fr 0.8fr 0.9fr 0.9fr 110px 80px 110px 100px 1.2fr;
+  min-width: 1200px;
+}
+
+.data-table--channel .data-table__head,
+.data-table--channel .data-table__row {
+  grid-template-columns: 1.2fr 0.7fr 0.9fr 1fr 90px 110px 110px 100px 1.2fr;
+  min-width: 1200px;
+}
+
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--panel-muted);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.contribution-list {
+  display: grid;
+  gap: 12px;
+}
+
+.contribution-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 18px;
+}
+
+.contribution-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.contribution-card__head strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.contribution-card__head span:first-child {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.contribution-card__body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.contribution-row {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
+  padding: 10px 12px;
+}
+
+.contribution-row span {
+  display: block;
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.contribution-row p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.contribution-card__metrics {
+  display: grid;
+  gap: 10px;
+}
+
+.fulfillment-bar-wrap {
+  display: grid;
+  gap: 6px;
+}
+
+.fulfillment-bar-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fulfillment-bar-label span {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fulfillment-bar-label strong {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.progress-track i.bg-success { background: var(--color-success, #10b981); }
+.progress-track i.bg-warning { background: var(--color-warning, #f59e0b); }
+.progress-track i.bg-danger  { background: var(--color-danger, #ef4444); }
+
+.contribution-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.contribution-stats div {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
+  padding: 10px 12px;
+}
+
+.contribution-stats span {
+  display: block;
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.contribution-stats strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.contribution-card__note {
+  border-top: 1px solid var(--border-color);
+  padding-top: 10px;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 @media (max-width: 1180px) {
-  .metric-grid {
+  .metric-grid,
+  .metric-grid--4,
+  .metric-grid--3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .overview-grid,
   .participants-grid,
   .reference-grid,
-  .kpi-notes {
+  .kpi-notes,
+  .contribution-card__body,
+  .contribution-stats {
     grid-template-columns: 1fr;
   }
 }
