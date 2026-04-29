@@ -777,16 +777,36 @@ watch(
 
 .settings-panel__head {
   display: flex;
-  min-height: 88px;
+  height: 88px;
   align-items: center;
+  overflow: hidden;
   padding: 18px 20px;
+}
+
+.settings-panel__head > div {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-rows: 16px 25px;
+  align-content: center;
+}
+
+.settings-panel__head .settings-eyebrow {
+  overflow: hidden;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-panel__head h3 {
   margin-top: 4px;
+  overflow: hidden;
   color: var(--text-heading);
   font-size: 18px;
   font-weight: 800;
+  line-height: 25px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-pane {
