@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useUserSettingsStore } from '@/stores/userSettings'
 import { getNoti } from '@/api/notifications/index.js'
 import { formatRelativeTime } from '@/utils/datechange.js'
 
@@ -10,36 +11,75 @@ const route = useRoute()
 const router = useRouter()
 const store = usePlannerStore()
 const authStore = useAuthStore()
+const userSettingsStore = useUserSettingsStore()
 
 const notifications = ref([])
 const notificationsOpen = ref(false)
+const notificationsButton = ref(null)
 const appsMenuOpen = ref(false)
+const appsMenuButton = ref(null)
+const profileCardOpen = ref(false)
+const profileCardButton = ref(null)
+
+const APP_MENU_MARGIN = 12
+const NOTIFICATION_MENU_WIDTH = 360
+const NOTIFICATION_MENU_HEIGHT_ESTIMATE = 390
+const APP_MENU_WIDTH = 220
+const APP_MENU_HEIGHT_ESTIMATE = 260
+const PROFILE_CARD_WIDTH = 320
+const PROFILE_CARD_HEIGHT_ESTIMATE = 350
+
+const notificationsPosition = reactive({
+  top: 0,
+  left: 0,
+})
+const appsMenuPosition = reactive({
+  top: 0,
+  left: 0,
+})
+const profileCardPosition = reactive({
+  top: 0,
+  left: 0,
+})
 
 const pageRoutes = [
   { id: 'dashboard', to: '/dashboard', label: '메인', section: '통합 대시보드' },
   { id: 'calendar', to: '/calendar', label: '캘린더', section: '운영 플래너' },
   { id: 'tasks', to: '/tasks', label: '업무 보드', section: '실행 보드' },
-  { id: 'operations', to: '/operations', label: '운영 허브', section: '고객 및 업무 오케스트레이션' },
+  {
+    id: 'operations',
+    to: '/operations',
+    label: '운영 허브',
+    section: '고객 및 업무 오케스트레이션',
+  },
   { id: 'templates', to: '/templates', label: '템플릿', section: '콘텐츠 라이브러리' },
   { id: 'reports', to: '/reports', label: '리포트', section: '성과 리뷰' },
   { id: 'references', to: '/references', label: '레퍼런스', section: '콘텐츠 라이브러리' },
 ]
 
 const activeRoute = computed(
-  () => pageRoutes.find((item) => route.path === item.to || route.path.startsWith(`${item.to}/`)) ?? pageRoutes[0],
+  () =>
+    pageRoutes.find((item) => route.path === item.to || route.path.startsWith(`${item.to}/`)) ??
+    pageRoutes[0],
 )
 const pageTitle = computed(() => route.meta?.title ?? activeRoute.value.label)
 const sectionTitle = computed(() => route.meta?.section ?? activeRoute.value.section)
-const profile = computed(() => store.findMember(store.currentUserId))
+const userSettingsKey = computed(() => resolveUserSettingsKey(authStore.user))
+const profileCard = computed(() => userSettingsStore.profileCardData)
+const notificationsStyle = computed(() => ({
+  top: `${notificationsPosition.top}px`,
+  left: `${notificationsPosition.left}px`,
+}))
+const appsMenuStyle = computed(() => ({
+  top: `${appsMenuPosition.top}px`,
+  left: `${appsMenuPosition.left}px`,
+}))
+const profileCardStyle = computed(() => ({
+  top: `${profileCardPosition.top}px`,
+  left: `${profileCardPosition.left}px`,
+}))
 
 const appMenuItems = computed(() => [
-  {
-    key: 'account',
-    label: '내 계정',
-    kind: 'route',
-    to: { name: 'mypage' },
-    icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>`,
-  },
   {
     key: 'provisioning',
     label: '계정 발급',
@@ -47,13 +87,6 @@ const appMenuItems = computed(() => [
     to: { name: 'user-provisioning' },
     creatorOnly: true,
     icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20a5 5 0 00-10 0m10 0H7m10 0h3a2 2 0 002-2v-1a4 4 0 00-4-4h-1m-6 7H4a2 2 0 01-2-2v-1a4 4 0 014-4h1m0 0a4 4 0 100-8 4 4 0 000 8zm10-4a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`,
-  },
-  {
-    key: 'notifications',
-    label: '최근 알림',
-    kind: 'action',
-    action: 'notifications',
-    icon: `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>`,
   },
   {
     key: 'theme',
@@ -87,6 +120,19 @@ const visibleAppMenuItems = computed(() =>
   appMenuItems.value.filter((item) => !item.creatorOnly || authStore.canCreateUsers),
 )
 
+function resolveUserSettingsKey(user) {
+  return (
+    user?.userId ??
+    user?.idx ??
+    user?.id ??
+    user?.loginId ??
+    user?.email ??
+    user?.sub ??
+    store.currentUserId ??
+    'guest'
+  )
+}
+
 const getNotifications = async () => {
   try {
     const res = await getNoti(3)
@@ -94,9 +140,30 @@ const getNotifications = async () => {
   } catch (e) {
     console.error(e)
     notifications.value = [
-      { id: 34897, type: 'qa', created_at: '2026-04-21T10:04:13Z', title: '알림 제목 1', message: '알림 내용 1', isRead: false },
-      { id: 78354, type: 'ai', created_at: '2026-04-12T12:04:13Z', title: '알림 제목 2', message: '알림 내용 2', isRead: false },
-      { id: 54876, type: 'task', created_at: '2026-04-05T12:04:13Z', title: '알림 제목 3', message: '알림 내용 3', isRead: false },
+      {
+        id: 34897,
+        type: 'qa',
+        created_at: '2026-04-21T10:04:13Z',
+        title: '알림 제목 1',
+        message: '알림 내용 1',
+        isRead: false,
+      },
+      {
+        id: 78354,
+        type: 'ai',
+        created_at: '2026-04-12T12:04:13Z',
+        title: '알림 제목 2',
+        message: '알림 내용 2',
+        isRead: false,
+      },
+      {
+        id: 54876,
+        type: 'task',
+        created_at: '2026-04-05T12:04:13Z',
+        title: '알림 제목 3',
+        message: '알림 내용 3',
+        isRead: false,
+      },
     ]
   }
 }
@@ -104,16 +171,102 @@ const getNotifications = async () => {
 function closeFloatingMenus() {
   notificationsOpen.value = false
   appsMenuOpen.value = false
+  profileCardOpen.value = false
 }
 
 function toggleNotifications() {
-  notificationsOpen.value = !notificationsOpen.value
   appsMenuOpen.value = false
+  profileCardOpen.value = false
+
+  if (notificationsOpen.value) {
+    notificationsOpen.value = false
+    return
+  }
+
+  positionNotifications()
+  notificationsOpen.value = true
+  void nextTick(positionNotifications)
+}
+
+function clamp(value, min, max) {
+  if (max < min) {
+    return min
+  }
+
+  return Math.min(max, Math.max(min, value))
+}
+
+function positionNotifications() {
+  const button = notificationsButton.value
+
+  if (!(button instanceof HTMLElement)) {
+    return
+  }
+
+  const rect = button.getBoundingClientRect()
+  const maxLeft = window.innerWidth - NOTIFICATION_MENU_WIDTH - APP_MENU_MARGIN
+  const maxTop = window.innerHeight - NOTIFICATION_MENU_HEIGHT_ESTIMATE - APP_MENU_MARGIN
+
+  notificationsPosition.left = clamp(rect.right - NOTIFICATION_MENU_WIDTH, APP_MENU_MARGIN, maxLeft)
+  notificationsPosition.top = clamp(rect.bottom + 8, APP_MENU_MARGIN, maxTop)
+}
+
+function positionAppsMenu() {
+  const button = appsMenuButton.value
+
+  if (!(button instanceof HTMLElement)) {
+    return
+  }
+
+  const rect = button.getBoundingClientRect()
+  const maxLeft = window.innerWidth - APP_MENU_WIDTH - APP_MENU_MARGIN
+  const maxTop = window.innerHeight - APP_MENU_HEIGHT_ESTIMATE - APP_MENU_MARGIN
+
+  appsMenuPosition.left = clamp(rect.right - APP_MENU_WIDTH, APP_MENU_MARGIN, maxLeft)
+  appsMenuPosition.top = clamp(rect.bottom + 8, APP_MENU_MARGIN, maxTop)
+}
+
+function positionProfileCard() {
+  const button = profileCardButton.value
+
+  if (!(button instanceof HTMLElement)) {
+    return
+  }
+
+  const rect = button.getBoundingClientRect()
+  const maxLeft = window.innerWidth - PROFILE_CARD_WIDTH - APP_MENU_MARGIN
+  const maxTop = window.innerHeight - PROFILE_CARD_HEIGHT_ESTIMATE - APP_MENU_MARGIN
+
+  profileCardPosition.left = clamp(rect.right - PROFILE_CARD_WIDTH, APP_MENU_MARGIN, maxLeft)
+  profileCardPosition.top = clamp(rect.bottom + 8, APP_MENU_MARGIN, maxTop)
 }
 
 function toggleAppsMenu() {
-  appsMenuOpen.value = !appsMenuOpen.value
   notificationsOpen.value = false
+  profileCardOpen.value = false
+
+  if (appsMenuOpen.value) {
+    appsMenuOpen.value = false
+    return
+  }
+
+  positionAppsMenu()
+  appsMenuOpen.value = true
+  void nextTick(positionAppsMenu)
+}
+
+function toggleProfileCard() {
+  notificationsOpen.value = false
+  appsMenuOpen.value = false
+
+  if (profileCardOpen.value) {
+    profileCardOpen.value = false
+    return
+  }
+
+  positionProfileCard()
+  profileCardOpen.value = true
+  void nextTick(positionProfileCard)
 }
 
 function handleSearchInput(event) {
@@ -134,40 +287,80 @@ async function handleAppMenuItem(item) {
       store.toggleTheme()
       return
     }
-
-    if (item.action === 'notifications') {
-      notificationsOpen.value = true
-    }
     return
   }
 
   router.push(item.to)
 }
 
+function handleProfileEdit() {
+  closeFloatingMenus()
+  router.push({
+    name: 'settings',
+    query: {
+      tab: 'profile',
+    },
+  })
+}
+
+function handleProfileDownload() {
+  void userSettingsStore.downloadProfileCard()
+}
+
 function handleDocumentClick(event) {
   const path = typeof event.composedPath === 'function' ? event.composedPath() : []
   const inside = path.some(
-    (node) => node instanceof HTMLElement && node.dataset?.headerRoot === 'true',
+    (node) =>
+      node instanceof HTMLElement &&
+      (node.dataset?.headerRoot === 'true' ||
+        node.dataset?.notificationsMenuRoot === 'true' ||
+        node.dataset?.appsMenuRoot === 'true' ||
+        node.dataset?.profileCardRoot === 'true'),
   )
   if (!inside) {
     closeFloatingMenus()
   }
 }
 
+function handleViewportChange() {
+  if (notificationsOpen.value) {
+    positionNotifications()
+  }
+
+  if (appsMenuOpen.value) {
+    positionAppsMenu()
+  }
+
+  if (profileCardOpen.value) {
+    positionProfileCard()
+  }
+}
+
+watch(
+  () => [userSettingsKey.value, authStore.user],
+  () => {
+    userSettingsStore.loadUserSettings(userSettingsKey.value, authStore.user)
+  },
+  { immediate: true, deep: true },
+)
+
 onMounted(() => {
   window.addEventListener('click', handleDocumentClick)
+  window.addEventListener('resize', handleViewportChange)
+  window.addEventListener('scroll', handleViewportChange, true)
   getNotifications()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('click', handleDocumentClick)
+  window.removeEventListener('resize', handleViewportChange)
+  window.removeEventListener('scroll', handleViewportChange, true)
 })
 </script>
 
 <template>
   <header data-header-root="true" class="callog-header">
     <div class="callog-header__inner">
-
       <!-- 왼쪽: 토글 버튼 + 브레드크럼 -->
       <div class="callog-header__left">
         <button
@@ -178,16 +371,38 @@ onBeforeUnmount(() => {
           @click="store.toggleSidebar"
         >
           <!-- 열림 상태: PanelLeftClose -->
-          <svg v-if="!store.sidebarCollapsed" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect width="18" height="18" x="3" y="3" rx="2"/>
-            <path d="M9 3v18"/>
-            <path d="m16 15-3-3 3-3"/>
+          <svg
+            v-if="!store.sidebarCollapsed"
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M9 3v18" />
+            <path d="m16 15-3-3 3-3" />
           </svg>
           <!-- 닫힘 상태: PanelLeftOpen -->
-          <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect width="18" height="18" x="3" y="3" rx="2"/>
-            <path d="M9 3v18"/>
-            <path d="m14 9 3 3-3 3"/>
+          <svg
+            v-else
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M9 3v18" />
+            <path d="m14 9 3 3-3 3" />
           </svg>
         </button>
 
@@ -199,11 +414,22 @@ onBeforeUnmount(() => {
 
       <!-- 오른쪽: 기능 버튼들 -->
       <div class="callog-header__right">
-
         <!-- 검색 -->
         <label class="callog-header__search" aria-label="검색">
-          <svg class="callog-header__search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          <svg
+            class="callog-header__search-icon"
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
           </svg>
           <input
             :value="store.searchQuery"
@@ -217,25 +443,56 @@ onBeforeUnmount(() => {
         <!-- 알림 -->
         <div class="callog-header__dropdown-wrap">
           <button
+            ref="notificationsButton"
             type="button"
             class="callog-header__icon-btn callog-header__icon-btn--notif"
             aria-label="알림"
             :aria-expanded="notificationsOpen"
             @click.stop="toggleNotifications"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
             </svg>
             <span class="callog-header__notif-dot" />
           </button>
 
           <Transition name="callog-dropdown">
-            <div v-if="notificationsOpen" class="callog-header__dropdown callog-header__dropdown--notif">
+            <div
+              v-if="false && notificationsOpen"
+              class="callog-header__dropdown callog-header__dropdown--notif"
+            >
               <div class="callog-dropdown__head">
                 <strong class="callog-dropdown__title">최근 알림</strong>
-                <RouterLink to="/notifications" class="callog-dropdown__more" @click="closeFloatingMenus">
+                <RouterLink
+                  to="/notifications"
+                  class="callog-dropdown__more"
+                  @click="closeFloatingMenus"
+                >
                   알림 센터
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
                 </RouterLink>
               </div>
               <div class="callog-dropdown__body">
@@ -245,7 +502,9 @@ onBeforeUnmount(() => {
                       <p class="callog-notif-item__title">{{ item.title }}</p>
                       <button type="button" class="callog-notif-item__btn">자세히 보기</button>
                     </div>
-                    <p class="callog-notif-item__meta">{{ formatRelativeTime(item.created_at) }} · {{ item.message }}</p>
+                    <p class="callog-notif-item__meta">
+                      {{ formatRelativeTime(item.created_at) }} · {{ item.message }}
+                    </p>
                   </div>
                 </div>
                 <div v-else class="callog-dropdown__empty">새로운 알림이 없습니다.</div>
@@ -255,57 +514,186 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- 프로필 -->
-        <RouterLink
-          to="/mypage"
+        <button
+          ref="profileCardButton"
+          type="button"
           class="callog-header__avatar"
           aria-label="프로필"
-          @click="closeFloatingMenus"
+          :aria-expanded="profileCardOpen"
+          @click.stop="toggleProfileCard"
         >
-          {{ profile?.initials ?? 'U' }}
-        </RouterLink>
+          <img v-if="profileCard.imageDataUrl" :src="profileCard.imageDataUrl" alt="" />
+          <span v-else>{{ profileCard.initials }}</span>
+        </button>
 
         <!-- 전체 메뉴 -->
         <div class="callog-header__dropdown-wrap">
           <button
+            ref="appsMenuButton"
             type="button"
             class="callog-header__icon-btn"
             aria-label="전체 메뉴"
             :aria-expanded="appsMenuOpen"
             @click.stop="toggleAppsMenu"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="5" r="1" />
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="12" cy="19" r="1" />
             </svg>
           </button>
-
-          <Transition name="callog-dropdown">
-            <div v-if="appsMenuOpen" class="callog-header__dropdown callog-header__dropdown--menu">
-              <div class="callog-dropdown__head">
-                <strong class="callog-dropdown__title">전체 메뉴</strong>
-              </div>
-              <div class="callog-appmenu-list">
-                <button
-                  v-for="item in visibleAppMenuItems"
-                  :key="item.key"
-                  type="button"
-                  class="callog-appmenu-item"
-                  :class="{
-                    'callog-appmenu-item--active': item.active,
-                    'callog-appmenu-item--danger': item.danger,
-                  }"
-                  @click="handleAppMenuItem(item)"
-                >
-                  <span class="callog-appmenu-item__icon" v-html="item.icon" />
-                  <span>{{ item.label }}</span>
-                </button>
-              </div>
-            </div>
-          </Transition>
         </div>
-
       </div>
     </div>
   </header>
+
+  <Teleport to="body">
+    <Transition name="callog-dropdown">
+      <div
+        v-if="notificationsOpen"
+        data-notifications-menu-root="true"
+        class="callog-header__dropdown callog-header__dropdown--notif callog-header__dropdown--floating"
+        :style="notificationsStyle"
+      >
+        <div class="callog-dropdown__head">
+          <strong class="callog-dropdown__title">최근 알림</strong>
+          <RouterLink to="/notifications" class="callog-dropdown__more" @click="closeFloatingMenus">
+            알림 센터
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          </RouterLink>
+        </div>
+        <div class="callog-dropdown__body">
+          <div v-if="notifications.length" class="callog-notif-list">
+            <div v-for="item in notifications" :key="item.id" class="callog-notif-item">
+              <div class="callog-notif-item__top">
+                <p class="callog-notif-item__title">{{ item.title }}</p>
+                <button type="button" class="callog-notif-item__btn">자세히 보기</button>
+              </div>
+              <p class="callog-notif-item__meta">
+                {{ formatRelativeTime(item.created_at) }} · {{ item.message }}
+              </p>
+            </div>
+          </div>
+          <div v-else class="callog-dropdown__empty">새로운 알림이 없습니다.</div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <Teleport to="body">
+    <Transition name="callog-dropdown">
+      <div
+        v-if="profileCardOpen"
+        data-profile-card-root="true"
+        class="callog-profile-card callog-header__dropdown--floating"
+        :style="profileCardStyle"
+      >
+        <div class="callog-profile-card__hero">
+          <div class="callog-profile-card__avatar">
+            <img v-if="profileCard.imageDataUrl" :src="profileCard.imageDataUrl" alt="" />
+            <span v-else>{{ profileCard.initials }}</span>
+          </div>
+          <div>
+            <strong>{{ profileCard.name }}</strong>
+            <p>{{ profileCard.role }}</p>
+          </div>
+        </div>
+
+        <div v-if="profileCard.companyLogoDataUrl" class="callog-profile-card__logo">
+          <img :src="profileCard.companyLogoDataUrl" alt="" />
+          <span>회사 로고</span>
+        </div>
+
+        <dl class="callog-profile-card__details">
+          <div>
+            <dt>회사</dt>
+            <dd>{{ profileCard.company }}</dd>
+          </div>
+          <div>
+            <dt>부서</dt>
+            <dd>{{ profileCard.department }}</dd>
+          </div>
+          <div>
+            <dt>전화번호</dt>
+            <dd>{{ profileCard.phone }}</dd>
+          </div>
+          <div>
+            <dt>이메일</dt>
+            <dd>{{ profileCard.email }}</dd>
+          </div>
+        </dl>
+
+        <div class="callog-profile-card__actions">
+          <button type="button" class="callog-profile-card__button" @click="handleProfileDownload">
+            다운로드
+          </button>
+          <button type="button" class="callog-profile-card__button" @click="handleProfileEdit">
+            수정
+          </button>
+          <button
+            type="button"
+            class="callog-profile-card__button callog-profile-card__button--ghost"
+            @click="closeFloatingMenus"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <Teleport to="body">
+    <Transition name="callog-dropdown">
+      <div
+        v-if="appsMenuOpen"
+        data-apps-menu-root="true"
+        class="callog-header__dropdown callog-header__dropdown--menu callog-header__dropdown--floating"
+        :style="appsMenuStyle"
+      >
+        <div class="callog-dropdown__head">
+          <strong class="callog-dropdown__title">전체 메뉴</strong>
+        </div>
+        <div class="callog-appmenu-list">
+          <button
+            v-for="item in visibleAppMenuItems"
+            :key="item.key"
+            type="button"
+            class="callog-appmenu-item"
+            :class="{
+              'callog-appmenu-item--active': item.active,
+              'callog-appmenu-item--danger': item.danger,
+            }"
+            @click="handleAppMenuItem(item)"
+          >
+            <span class="callog-appmenu-item__icon" v-html="item.icon" />
+            <span>{{ item.label }}</span>
+          </button>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -332,7 +720,6 @@ onBeforeUnmount(() => {
   padding: 0 20px;
   gap: 12px;
 }
-
 
 .callog-header__left {
   display: flex;
@@ -386,14 +773,12 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
-
 .callog-header__right {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
-
 
 .callog-header__icon-btn {
   display: flex;
@@ -416,7 +801,6 @@ onBeforeUnmount(() => {
   border-color: var(--border-strong);
 }
 
-
 .callog-header__icon-btn--notif {
   position: relative;
 }
@@ -427,11 +811,10 @@ onBeforeUnmount(() => {
   right: 8px;
   width: 6px;
   height: 6px;
-  background: #EF4444;
+  background: #ef4444;
   border-radius: 50%;
   border: 2px solid var(--header-color);
 }
-
 
 .callog-header__search {
   position: relative;
@@ -469,7 +852,6 @@ onBeforeUnmount(() => {
   width: 220px;
 }
 
-
 .callog-header__avatar {
   display: flex;
   align-items: center;
@@ -479,17 +861,26 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: var(--badge-bg);
   color: var(--badge-text);
+  border: none;
   font-size: 13px;
   font-weight: 700;
+  overflow: hidden;
+  padding: 0;
   text-decoration: none;
   transition: all var(--transition-fast);
   flex-shrink: 0;
+  cursor: pointer;
 }
 
 .callog-header__avatar:hover {
   background: var(--nav-icon-active-bg);
 }
 
+.callog-header__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
 .callog-header__dropdown-wrap {
   position: relative;
@@ -512,8 +903,166 @@ onBeforeUnmount(() => {
   width: 360px;
 }
 
+.callog-header__dropdown--notif.callog-header__dropdown--floating {
+  z-index: 10000;
+}
+
 .callog-header__dropdown--menu {
   width: 220px;
+}
+
+.callog-header__dropdown--floating {
+  position: fixed;
+  right: auto;
+  z-index: 9999;
+}
+
+.callog-profile-card {
+  position: fixed;
+  width: 320px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--dropdown-color);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text-primary);
+  z-index: 10000;
+}
+
+.callog-profile-card__hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--panel-muted);
+}
+
+.callog-profile-card__avatar {
+  display: inline-flex;
+  width: 62px;
+  height: 62px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.callog-profile-card__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.callog-profile-card__hero strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.callog-profile-card__hero p {
+  margin-top: 3px;
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.callog-profile-card__logo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.callog-profile-card__logo img {
+  width: 92px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.callog-profile-card__logo span {
+  color: var(--subtle-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.callog-profile-card__details {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 8px 16px;
+}
+
+.callog-profile-card__details div {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 34px;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.callog-profile-card__details div:last-child {
+  border-bottom: 0;
+}
+
+.callog-profile-card__details dt,
+.callog-profile-card__details dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+}
+
+.callog-profile-card__details dt {
+  color: var(--subtle-text);
+  font-weight: 700;
+}
+
+.callog-profile-card__details dd {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.callog-profile-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.callog-profile-card__button {
+  min-height: 30px;
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  background: var(--accent-strong);
+  color: #ffffff;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.callog-profile-card__button--ghost {
+  border-color: var(--border-color);
+  background: var(--panel-color);
+  color: var(--text-secondary);
+}
+
+.callog-profile-card__button:hover {
+  filter: brightness(1.04);
 }
 
 .callog-dropdown__head {
@@ -611,7 +1160,6 @@ onBeforeUnmount(() => {
   color: var(--subtle-text);
 }
 
-
 .callog-appmenu-list {
   display: flex;
   flex-direction: column;
@@ -651,7 +1199,7 @@ onBeforeUnmount(() => {
 }
 
 .callog-appmenu-item--danger {
-  color: #EF4444;
+  color: #ef4444;
 }
 
 .callog-appmenu-item--danger:hover {
@@ -670,9 +1218,8 @@ onBeforeUnmount(() => {
 }
 
 .callog-appmenu-item--danger .callog-appmenu-item__icon {
-  color: #FCA5A5;
+  color: #fca5a5;
 }
-
 
 .callog-dropdown-enter-active,
 .callog-dropdown-leave-active {
