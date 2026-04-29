@@ -8,10 +8,10 @@ defineProps({
   },
 })
 
-const emit = defineEmits(['handoff'])
-
 const selectedGoal = ref('vip')
 const selectedComboId = ref(1)
+const detailMode = ref('summary')
+const operationHandoff = ref(null)
 
 const goals = [
   { id: 'vip', name: 'VIP 혜택 강화', count: 2 },
@@ -91,8 +91,23 @@ function scoreTone(score) {
 
 function moveToOperationBoard() {
   if (!selectedCombo.value) return
-  emit('handoff', selectedCombo.value)
+  operationHandoff.value = {
+    ...selectedCombo.value,
+    source: `추천 조합 #M-${String(selectedCombo.value.id).padStart(3, '0')}`,
+  }
+  detailMode.value = 'operation'
 }
+
+function selectDetailMode(mode) {
+  if (mode === 'operation' && !operationHandoff.value) return
+  detailMode.value = mode
+}
+
+const operationTasks = [
+  { title: '랜딩/배너 제작', owner: '이디자인', due: '05.05', status: '실행 준비' },
+  { title: '푸시 문구 생성', owner: '김콘텐츠', due: '05.02', status: '진행 중' },
+  { title: '유의사항 검수', owner: '최법무', due: '05.08', status: '검수 대기' },
+]
 </script>
 
 <template>
@@ -141,47 +156,95 @@ function moveToOperationBoard() {
 
     <aside v-if="selectedCombo" class="match-panel match-detail">
       <div class="match-panel__head">
-        <h3>상세</h3>
+        <h3>{{ detailMode === 'summary' ? '추천 상세' : '운영 전환' }}</h3>
         <span class="match-badge" :class="scoreTone(selectedCombo.score)">
           {{ selectedCombo.score }}점
         </span>
       </div>
 
-      <div class="match-detail__title">
-        <strong>{{ selectedCombo.title }}</strong>
-        <p>{{ selectedCombo.partner }}</p>
+      <div class="match-detail-switch" role="tablist" aria-label="추천 조합 상세 단계">
+        <button
+          type="button"
+          :class="{ active: detailMode === 'summary' }"
+          @click="selectDetailMode('summary')"
+        >
+          추천 상세
+        </button>
+        <button
+          type="button"
+          :class="{ active: detailMode === 'operation', disabled: !operationHandoff }"
+          :disabled="!operationHandoff"
+          @click="selectDetailMode('operation')"
+        >
+          운영 전환
+        </button>
       </div>
 
-      <dl class="match-detail__grid">
-        <div>
-          <dt>한화 자산</dt>
-          <dd>{{ selectedCombo.asset }}</dd>
+      <template v-if="detailMode === 'summary'">
+        <div class="match-detail__title">
+          <strong>{{ selectedCombo.title }}</strong>
+          <p>{{ selectedCombo.partner }}</p>
         </div>
-        <div>
-          <dt>파트너 혜택</dt>
-          <dd>{{ selectedCombo.offer }}</dd>
-        </div>
-        <div>
-          <dt>채널</dt>
-          <dd>{{ selectedCombo.channels }}</dd>
-        </div>
-        <div>
-          <dt>산출물</dt>
-          <dd>{{ selectedCombo.outputs }}</dd>
-        </div>
-        <div>
-          <dt>일정</dt>
-          <dd>{{ selectedCombo.schedule }}</dd>
-        </div>
-        <div>
-          <dt>리스크</dt>
-          <dd>{{ selectedCombo.risk }}</dd>
-        </div>
-      </dl>
 
-      <button type="button" class="match-primary" @click="moveToOperationBoard">
-        운영 보드로 전환
-      </button>
+        <dl class="match-detail__grid">
+          <div>
+            <dt>한화 자산</dt>
+            <dd>{{ selectedCombo.asset }}</dd>
+          </div>
+          <div>
+            <dt>파트너 혜택</dt>
+            <dd>{{ selectedCombo.offer }}</dd>
+          </div>
+          <div>
+            <dt>채널</dt>
+            <dd>{{ selectedCombo.channels }}</dd>
+          </div>
+          <div>
+            <dt>산출물</dt>
+            <dd>{{ selectedCombo.outputs }}</dd>
+          </div>
+          <div>
+            <dt>일정</dt>
+            <dd>{{ selectedCombo.schedule }}</dd>
+          </div>
+          <div>
+            <dt>리스크</dt>
+            <dd>{{ selectedCombo.risk }}</dd>
+          </div>
+        </dl>
+
+        <button type="button" class="match-primary" @click="moveToOperationBoard">
+          운영 보드로 전환
+        </button>
+      </template>
+
+      <template v-else>
+        <div class="operation-inline">
+          <div class="operation-inline__head">
+            <strong>{{ operationHandoff.title }}</strong>
+            <span>{{ operationHandoff.source }}</span>
+          </div>
+
+          <div class="operation-inline__meta">
+            <div>
+              <span>목표</span>
+              <strong>{{ operationHandoff.target }}</strong>
+            </div>
+            <div>
+              <span>예상 일정</span>
+              <strong>{{ operationHandoff.schedule }}</strong>
+            </div>
+          </div>
+
+          <div class="operation-task-list">
+            <article v-for="task in operationTasks" :key="task.title">
+              <span>{{ task.status }}</span>
+              <strong>{{ task.title }}</strong>
+              <p>{{ task.owner }} · {{ task.due }}</p>
+            </article>
+          </div>
+        </div>
+      </template>
     </aside>
   </section>
 </template>
@@ -359,6 +422,39 @@ function moveToOperationBoard() {
   padding-bottom: 0.65rem;
 }
 
+.match-detail-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-muted);
+  padding: 0.28rem;
+}
+
+.match-detail-switch button {
+  min-height: 2.15rem;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.match-detail-switch button.active {
+  background: var(--panel-color);
+  color: var(--accent-color);
+  box-shadow:
+    0 4px 12px rgba(19, 35, 68, 0.06),
+    inset 0 -2px 0 var(--accent-color);
+}
+
+.match-detail-switch button.disabled {
+  cursor: not-allowed;
+  color: var(--subtle-text);
+  opacity: 0.62;
+}
+
 .match-detail__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -394,6 +490,65 @@ function moveToOperationBoard() {
   color: #fff;
   font-size: 0.82rem;
   font-weight: 800;
+}
+
+.operation-inline {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.operation-inline__head,
+.operation-inline__meta div,
+.operation-task-list article {
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  padding: 0.62rem;
+}
+
+.operation-inline__head {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.operation-inline__head strong,
+.operation-inline__meta strong,
+.operation-task-list strong {
+  color: var(--text-primary);
+  font-size: 0.84rem;
+}
+
+.operation-inline__head span,
+.operation-inline__meta span,
+.operation-task-list span,
+.operation-task-list p {
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.operation-inline__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.operation-task-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.operation-task-list article {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.operation-task-list span {
+  color: var(--accent-color);
+}
+
+.operation-task-list p {
+  font-weight: 600;
 }
 
 @media (max-width: 1180px) {
