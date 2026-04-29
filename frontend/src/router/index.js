@@ -70,7 +70,7 @@ const routes = [
         component: () => import('@/views/OverView.vue'),
         meta: {
           title: '오버뷰',
-          section: '전체 일정 톺아보기',
+          section: '전체 일정 모아보기',
         },
       },
       {
@@ -115,7 +115,7 @@ const routes = [
         name: 'frames',
         component: () => import('@/views/FramesView.vue'),
         meta: {
-          title: '??? ???',
+          title: '캠페인 프레임',
           section: '??? ?? ??',
         
         },
@@ -124,6 +124,28 @@ const routes = [
         path: '/references',
         name: 'references',
         component: () => import('@/views/ReferencesView.vue'),
+        meta: {
+          title: '레퍼런스',
+          section: '캠페인 레퍼런스',
+        },
+      },
+      {
+        path: 'resources',
+        name: 'resources',
+        component: () => import('@/views/CampaignResourcesView.vue'),
+        meta: {
+          title: '자료실',
+          section: '가이드라인 · 톤앤매너 · 위험요소 · 운영자료',
+        },
+      },
+      {
+        path: 'review-approval',
+        name: 'review-approval',
+        component: () => import('@/views/ReviewApprovalView.vue'),
+        meta: {
+          title: '검수/승인',
+          section: '검수 대기 · 승인 요청 · 오픈 차단',
+        },
       },
       {
         path: 'reports',
@@ -150,6 +172,15 @@ const routes = [
         meta: {
           title: '알림 센터',
           section: '알림 전체를 확인하고 관리하는 곳',
+        },
+      },
+      {
+        path: 'matching',
+        name: 'matching',
+        component: () => import('@/views/MatchOverview.vue'),
+        meta: {
+          title: '매칭',
+          section: '매치 엔진',
         },
       },
     ],
