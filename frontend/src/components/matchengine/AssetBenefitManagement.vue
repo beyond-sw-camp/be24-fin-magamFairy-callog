@@ -27,32 +27,36 @@ const rows = computed(() => (currentSubTab.value === 'assets' ? assets : benefit
 
 <template>
   <section class="asset-workspace">
-    <aside class="asset-side">
-      <button
-        type="button"
-        :class="{ active: currentSubTab === 'assets' }"
-        @click="currentSubTab = 'assets'"
-      >
-        <strong>계열사 자산</strong>
-        <span>{{ assets.length }}개</span>
-      </button>
-      <button
-        type="button"
-        :class="{ active: currentSubTab === 'benefits' }"
-        @click="currentSubTab = 'benefits'"
-      >
-        <strong>파트너 혜택</strong>
-        <span>{{ benefits.length }}개</span>
-      </button>
-      <button type="button" class="asset-primary">
-        {{ currentSubTab === 'assets' ? '자산 등록' : '혜택 등록' }}
-      </button>
-    </aside>
-
     <article class="asset-panel">
       <div class="asset-panel__head">
-        <h3>{{ currentSubTab === 'assets' ? '계열사 자산 관리' : '파트너 혜택 관리' }}</h3>
-        <span>매칭 입력값</span>
+        <div class="asset-panel__title">
+          <h3>{{ currentSubTab === 'assets' ? '계열사 자산' : '제안 혜택 후보' }}</h3>
+        </div>
+
+        <div class="asset-toolbar">
+          <div class="asset-segment" role="tablist" aria-label="매칭 입력값 유형">
+            <button
+              type="button"
+              :class="{ active: currentSubTab === 'assets' }"
+              @click="currentSubTab = 'assets'"
+            >
+              계열사 자산
+              <span>{{ assets.length }}</span>
+            </button>
+            <button
+              type="button"
+              :class="{ active: currentSubTab === 'benefits' }"
+              @click="currentSubTab = 'benefits'"
+            >
+              제안 혜택
+              <span>{{ benefits.length }}</span>
+            </button>
+          </div>
+
+          <button type="button" class="asset-primary">
+            {{ currentSubTab === 'assets' ? '자산 등록' : '혜택 후보 등록' }}
+          </button>
+        </div>
       </div>
 
       <div v-if="currentSubTab === 'assets'" class="asset-table asset-table--assets">
@@ -100,14 +104,10 @@ const rows = computed(() => (currentSubTab.value === 'assets' ? assets : benefit
 
 <style scoped>
 .asset-workspace {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 0.7rem;
   height: 100%;
   min-height: 0;
 }
 
-.asset-side,
 .asset-panel {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -116,62 +116,9 @@ const rows = computed(() => (currentSubTab.value === 'assets' ? assets : benefit
   min-height: 0;
 }
 
-.asset-side {
-  display: grid;
-  align-content: start;
-  gap: 0.5rem;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--panel-muted) 86%, var(--accent-soft)),
-      var(--panel-muted)
-    );
-  border-color: color-mix(in srgb, var(--border-strong) 72%, var(--accent-color));
-  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--border-color) 72%, transparent);
-}
-
-.asset-side button {
-  display: flex;
-  min-height: 2.8rem;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--panel-color) 66%, var(--panel-muted));
-  padding: 0 0.65rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.asset-side button.active {
-  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-strong));
-  background: color-mix(in srgb, var(--accent-color) 11%, var(--panel-color));
-  color: var(--text-primary);
-  box-shadow:
-    0 5px 14px rgba(19, 35, 68, 0.06),
-    inset 3px 0 0 var(--accent-color);
-}
-
-.asset-side strong {
-  font-size: 0.82rem;
-}
-
-.asset-side span {
-  color: var(--muted-text);
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
-.asset-side .asset-primary {
-  justify-content: center;
-  margin-top: 0.25rem;
-  background: var(--accent-color);
-  color: #fff;
-  font-size: 0.82rem;
-  font-weight: 800;
-}
-
 .asset-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   overflow: auto;
   background: var(--panel-color);
@@ -182,18 +129,99 @@ const rows = computed(() => (currentSubTab.value === 'assets' ? assets : benefit
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--panel-color) 94%, var(--panel-muted)),
+      var(--panel-color)
+    );
+  padding: 0.55rem 0.65rem;
   margin-bottom: 0.65rem;
+}
+
+.asset-panel__title {
+  display: flex;
+  min-height: 2.6rem;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.asset-panel__title::before {
+  content: '';
+  width: 0.28rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  background: var(--accent-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 10%, transparent);
 }
 
 .asset-panel__head h3 {
   color: var(--text-primary);
-  font-size: 0.95rem;
+  font-size: 1.02rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
-.asset-panel__head span {
+.asset-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.asset-segment {
+  display: inline-flex;
+  gap: 0.35rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--panel-muted);
+  padding: 0.3rem;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-color) 55%, transparent);
+}
+
+.asset-segment button {
+  display: inline-flex;
+  min-width: 7.3rem;
+  min-height: 2.6rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 8px;
+  padding: 0 0.95rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.asset-segment button.active {
+  background: var(--panel-color);
+  color: var(--accent-color);
+  box-shadow:
+    0 4px 12px rgba(19, 35, 68, 0.06),
+    inset 0 -2px 0 var(--accent-color);
+}
+
+.asset-segment span {
   color: var(--muted-text);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.asset-primary {
+  display: inline-flex;
+  min-height: 3.2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent-color);
+  color: #fff;
+  padding: 0 1.05rem;
+  font-size: 0.82rem;
   font-weight: 800;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent-color) 18%, transparent);
 }
 
 .asset-table {
@@ -224,7 +252,7 @@ const rows = computed(() => (currentSubTab.value === 'assets' ? assets : benefit
 
 .asset-table__head span {
   color: var(--muted-text);
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   font-weight: 900;
 }
 
@@ -238,13 +266,13 @@ const rows = computed(() => (currentSubTab.value === 'assets' ? assets : benefit
 
 .asset-table__row strong {
   color: var(--text-primary);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
 }
 
 .asset-table__row span {
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 0.76rem;
+  font-size: 0.84rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -257,7 +285,7 @@ const rows = computed(() => (currentSubTab.value === 'assets' ? assets : benefit
   border-radius: 999px;
   background: var(--color-success-light);
   color: var(--color-success-dark);
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-style: normal;
   font-weight: 900;
 }
@@ -268,8 +296,15 @@ const rows = computed(() => (currentSubTab.value === 'assets' ? assets : benefit
 }
 
 @media (max-width: 1180px) {
-  .asset-workspace {
-    grid-template-columns: 1fr;
+  .asset-panel__head,
+  .asset-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .asset-segment {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>
