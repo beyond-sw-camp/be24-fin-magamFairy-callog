@@ -1,4 +1,4 @@
-import api from '../plugins/interceptor'
+import api, { reissueAccessToken } from '../plugins/interceptor'
 
 function isSuccessResponse(payload) {
   return (
@@ -43,6 +43,14 @@ export async function loginRequest(credentials) {
 export async function fetchMyInfo() {
   const response = await api.get('/auth/me')
   return unwrapResponse(response)
+}
+
+export async function reissueRequest() {
+  const accessToken = await reissueAccessToken()
+
+  return {
+    accessToken,
+  }
 }
 
 export async function logoutRequest() {
