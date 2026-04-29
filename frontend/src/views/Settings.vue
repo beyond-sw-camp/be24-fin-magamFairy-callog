@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSettings, updateSettings } from '@/api/settings/index.js'
+import { getMyProfile, updateMyProfile } from '@/api/userProfiles/index.js'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePlannerStore } from '@/stores/planner'
 import { useUserSettingsStore } from '@/stores/userSettings'
@@ -88,6 +89,10 @@ function resolveSettingsPayload(payload) {
   return payload?.result ?? payload?.data ?? payload ?? {}
 }
 
+function resolveProfilePayload(payload) {
+  return payload?.result ?? payload?.data ?? payload ?? {}
+}
+
 function syncProfileForm() {
   Object.assign(profileForm, {
     name: userSettingsStore.profile.name,
@@ -122,6 +127,24 @@ function applyRemoteSettings(payload) {
   }
 }
 
+function applyRemoteProfile(payload) {
+  const source = resolveProfilePayload(payload)
+  const nextProfile = {
+    name: source.name,
+    email: source.email,
+    phone: source.phone,
+    imageDataUrl: source.profileImageUrl,
+  }
+
+  Object.keys(nextProfile).forEach((key) => {
+    if (nextProfile[key] === undefined || nextProfile[key] === null) {
+      delete nextProfile[key]
+    }
+  })
+
+  userSettingsStore.updateProfile(nextProfile)
+}
+
 async function syncSettingToServer(body) {
   try {
     await updateSettings(body)
@@ -142,12 +165,16 @@ function setTheme(nextTheme) {
 
 function setDensity(value) {
   userSettingsStore.updateThemeUi({ density: value })
+  void syncSettingToServer({ density: value })
 }
 
 function toggleThemeUiValue(key) {
+  const nextValue = !userSettingsStore.themeUi[key]
+
   userSettingsStore.updateThemeUi({
-    [key]: !userSettingsStore.themeUi[key],
+    [key]: nextValue,
   })
+  void syncSettingToServer({ [key]: nextValue })
 }
 
 function handleProfileImageUpload(event) {
@@ -211,11 +238,23 @@ function requestImageGeneration() {
   closeImageGenerationModal()
 }
 
-function saveProfile() {
+function resolveProfileImagePayload() {
+  if (!profileForm.imageDataUrl || profileForm.imageDataUrl.startsWith('data:')) {
+    return {}
+  }
+
+  return {
+    profileImageKey: null,
+    profileImageUrl: profileForm.imageDataUrl,
+  }
+}
+
+async function saveProfile() {
   feedback.profile = ''
   feedback.profileError = ''
 
   const email = profileForm.email.trim()
+  const phone = profileForm.phone.trim()
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
   if (email && !emailPattern.test(email)) {
@@ -223,13 +262,35 @@ function saveProfile() {
     return
   }
 
-  userSettingsStore.updateProfile({
-    ...profileForm,
-    email,
-    phone: profileForm.phone.trim(),
-  })
-  syncProfileForm()
-  feedback.profile = '프로필 정보가 저장되었습니다.'
+  try {
+    const response = await updateMyProfile({
+      email,
+      phone,
+      ...resolveProfileImagePayload(),
+    })
+
+    applyRemoteProfile(response.data)
+    userSettingsStore.updateProfile({
+      ...profileForm,
+      email,
+      phone,
+    })
+    syncProfileForm()
+    feedback.profile = '프로필 정보가 저장되었습니다.'
+  } catch (error) {
+    console.error('프로필 저장 API 호출에 실패했습니다.', error)
+    feedback.profileError = '프로필 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  }
+}
+
+async function loadRemoteProfile() {
+  try {
+    const response = await getMyProfile()
+    applyRemoteProfile(response.data)
+    syncProfileForm()
+  } catch (error) {
+    console.warn('프로필 정보를 불러오지 못해 로컬 설정을 사용합니다.', error)
+  }
 }
 
 watch(
@@ -263,6 +324,8 @@ watch(
     if (!isAuthenticated) {
       return
     }
+
+    await loadRemoteProfile()
 
     try {
       const response = await getSettings()
