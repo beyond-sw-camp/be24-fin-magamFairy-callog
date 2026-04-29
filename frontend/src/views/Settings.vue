@@ -1,26 +1,115 @@
 <script setup>
-import { computed, onMounted, reactive } from 'vue'
-import { usePlannerStore } from '@/stores/planner'
+import { computed, reactive, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getSettings, updateSettings } from '@/api/settings/index.js'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { usePlannerStore } from '@/stores/planner'
+import { useUserSettingsStore } from '@/stores/userSettings'
 
-const store = usePlannerStore()
+const route = useRoute()
+const router = useRouter()
+const plannerStore = usePlannerStore()
+const authStore = useAuthStore()
+const userSettingsStore = useUserSettingsStore()
 
-const notificationItems = {
-  task: { label: '업무 알림', desc: '신규 업무 생성, 배정, 상태 변경 알림' },
-  qa: { label: 'QA 알림', desc: '검수 결과 및 버그 수정 요청 알림' },
-  ai: { label: 'AI 분석 알림', desc: '리스크 감지 및 업무 가이드 생성 알림' },
-}
-
-const settings = reactive({
-  notifications: {
-    task: true,
-    qa: true,
-    ai: true,
-    critical: true,
+const tabs = [
+  {
+    id: 'profile',
+    label: '프로필',
+    icon: 'badge',
+    summary: '개인 정보와 프로필 이미지를 관리합니다.',
   },
+  {
+    id: 'notifications',
+    label: '알림',
+    icon: 'notifications',
+    summary: '업무, QA, AI 분석 알림을 설정합니다.',
+  },
+  {
+    id: 'theme',
+    label: '테마/UI',
+    icon: 'contrast',
+    summary: '라이트/다크 모드와 화면 표시를 조정합니다.',
+  },
+  {
+    id: 'security',
+    label: '계정/보안',
+    icon: 'lock',
+    summary: '로그인 계정과 보안 진입 정보를 확인합니다.',
+  },
+]
+
+const notificationItems = [
+  {
+    key: 'task',
+    label: '업무 알림',
+    description: '업무 생성, 배정, 상태 변경 알림',
+  },
+  {
+    key: 'qa',
+    label: 'QA 알림',
+    description: '검수 결과, 수정 요청, 반려 알림',
+  },
+  {
+    key: 'ai',
+    label: 'AI 분석 알림',
+    description: '리스크 감지, 가이드, 분석 결과 알림',
+  },
+  {
+    key: 'critical',
+    label: '중요 알림',
+    description: '마감 임박, 업무 지연 등 필수 알림',
+    locked: true,
+  },
+]
+
+const densityOptions = [
+  { value: 'comfortable', label: '기본' },
+  { value: 'compact', label: '촘촘하게' },
+]
+
+const tabIds = new Set(tabs.map((tab) => tab.id))
+const profileForm = reactive({
+  name: '',
+  company: '',
+  department: '',
+  role: '',
+  phone: '',
+  email: '',
+  imageDataUrl: '',
+})
+const feedback = reactive({
+  profile: '',
+  profileError: '',
 })
 
-const isDarkMode = computed(() => store.theme === 'dark')
+const activeTab = computed(() => {
+  const requestedTab = String(route.query.tab || 'profile')
+
+  return tabIds.has(requestedTab) ? requestedTab : 'profile'
+})
+
+const currentTab = computed(() => tabs.find((tab) => tab.id === activeTab.value) ?? tabs[0])
+const isDarkMode = computed(() => plannerStore.theme === 'dark')
+const generatorPromptModel = computed({
+  get: () => userSettingsStore.generatorPrompt,
+  set: (value) => userSettingsStore.setGeneratorPrompt(value),
+})
+const accountEmail = computed(() => profileForm.email || userSettingsStore.profile.email)
+const userKey = computed(() => resolveUserKey(authStore.user))
+
+function resolveUserKey(user) {
+  return (
+    user?.userId ??
+    user?.idx ??
+    user?.id ??
+    user?.loginId ??
+    user?.email ??
+    user?.sub ??
+    plannerStore.currentUserId ??
+    'guest'
+  )
+}
 
 function normalizeTheme(value) {
   return value === 'light' || value === 'dark' ? value : null
@@ -30,6 +119,27 @@ function resolveSettingsPayload(payload) {
   return payload?.result ?? payload?.data ?? payload ?? {}
 }
 
+function syncProfileForm() {
+  Object.assign(profileForm, {
+    name: userSettingsStore.profile.name,
+    company: userSettingsStore.profile.company,
+    department: userSettingsStore.profile.department,
+    role: userSettingsStore.profile.role,
+    phone: userSettingsStore.profile.phone,
+    email: userSettingsStore.profile.email,
+    imageDataUrl: userSettingsStore.profile.imageDataUrl,
+  })
+}
+
+function selectTab(tabId) {
+  router.replace({
+    query: {
+      ...route.query,
+      tab: tabId,
+    },
+  })
+}
+
 function applyRemoteSettings(payload) {
   const source = resolveSettingsPayload(payload)
   const nextTheme =
@@ -37,14 +147,15 @@ function applyRemoteSettings(payload) {
     (typeof source.darkMode === 'boolean' ? (source.darkMode ? 'dark' : 'light') : null)
 
   if (nextTheme) {
-    store.setTheme(nextTheme)
+    plannerStore.setTheme(nextTheme)
+    userSettingsStore.updateThemeUi({ theme: nextTheme })
   }
 
-  Object.keys(settings.notifications).forEach((key) => {
-    const remoteValue = source.notifications?.[key] ?? source[key]
+  notificationItems.forEach((item) => {
+    const remoteValue = source.notifications?.[item.key] ?? source[item.key]
 
     if (typeof remoteValue === 'boolean') {
-      settings.notifications[key] = remoteValue
+      userSettingsStore.updateNotification(item.key, remoteValue)
     }
   })
 }
@@ -53,97 +164,381 @@ async function syncSettingToServer(body) {
   try {
     await updateSettings(body)
   } catch (error) {
-    console.warn('설정 저장 실패. 로컬 테마 설정은 유지됩니다.', error)
+    console.warn('설정 저장 API 호출에 실패했습니다. 로컬 설정은 유지됩니다.', error)
   }
 }
 
-function toggleDarkMode() {
-  const nextTheme = isDarkMode.value ? 'light' : 'dark'
+function setTheme(nextTheme) {
+  plannerStore.setTheme(nextTheme)
+  userSettingsStore.updateThemeUi({ theme: nextTheme })
 
-  store.setTheme(nextTheme)
   void syncSettingToServer({
     theme: nextTheme,
     darkMode: nextTheme === 'dark',
   })
 }
 
-function updateNotification(type) {
-  if (type === 'critical') {
+function toggleNotification(item) {
+  if (item.locked) {
     return
   }
 
-  const nextValue = !settings.notifications[type]
-  settings.notifications[type] = nextValue
+  const nextValue = !userSettingsStore.notifications[item.key]
+  userSettingsStore.updateNotification(item.key, nextValue)
 
   void syncSettingToServer({
-    [type]: nextValue,
+    [item.key]: nextValue,
     notifications: {
-      [type]: nextValue,
+      [item.key]: nextValue,
     },
   })
 }
 
-onMounted(async () => {
-  try {
-    const res = await getSettings()
-    applyRemoteSettings(res.data)
-  } catch (error) {
-    console.warn('설정 정보를 불러오지 못해 로컬 설정을 사용합니다.', error)
+function setDensity(value) {
+  userSettingsStore.updateThemeUi({ density: value })
+}
+
+function toggleThemeUiValue(key) {
+  userSettingsStore.updateThemeUi({
+    [key]: !userSettingsStore.themeUi[key],
+  })
+}
+
+function handleProfileImageUpload(event) {
+  const file = event.target.files?.[0]
+
+  if (!file) {
+    return
   }
-})
+
+  const reader = new FileReader()
+  reader.onload = () => {
+    profileForm.imageDataUrl = String(reader.result || '')
+  }
+  reader.readAsDataURL(file)
+  event.target.value = ''
+}
+
+function clearProfileImage() {
+  profileForm.imageDataUrl = ''
+}
+
+function requestImageGeneration() {
+  userSettingsStore.setGeneratorPrompt(generatorPromptModel.value)
+  userSettingsStore.markImageGenerationReady()
+}
+
+function saveProfile() {
+  feedback.profile = ''
+  feedback.profileError = ''
+
+  const email = profileForm.email.trim()
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+  if (email && !emailPattern.test(email)) {
+    feedback.profileError = '올바른 이메일 형식으로 입력해 주세요.'
+    return
+  }
+
+  userSettingsStore.updateProfile({
+    ...profileForm,
+    email,
+    phone: profileForm.phone.trim(),
+  })
+  syncProfileForm()
+  feedback.profile = '프로필 정보가 저장되었습니다.'
+}
+
+watch(
+  () => [userKey.value, authStore.user],
+  () => {
+    userSettingsStore.loadUserSettings(userKey.value, authStore.user)
+    syncProfileForm()
+  },
+  { immediate: true, deep: true },
+)
+
+watch(
+  () => ({ ...userSettingsStore.profile }),
+  () => {
+    syncProfileForm()
+  },
+  { deep: true },
+)
+
+watch(
+  () => plannerStore.theme,
+  (nextTheme) => {
+    userSettingsStore.updateThemeUi({ theme: nextTheme })
+  },
+  { immediate: true },
+)
+
+watch(
+  () => authStore.isAuthenticated,
+  async (isAuthenticated) => {
+    if (!isAuthenticated) {
+      return
+    }
+
+    try {
+      const response = await getSettings()
+      applyRemoteSettings(response.data)
+    } catch (error) {
+      console.warn('설정 정보를 불러오지 못해 로컬 설정을 사용합니다.', error)
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <section class="settings-page ui-page">
-    <div class="settings-panel ui-card">
-      <div class="settings-section ui-card-header">
-        <div>
-          <h3 class="settings-title">다크 모드 설정</h3>
-          <p class="settings-description ui-muted">화면 테마를 어둡게 전환하여 눈의 피로를 줄입니다.</p>
-        </div>
+    <header class="settings-header">
+      <div>
+        <p class="settings-eyebrow">SETTING_001</p>
+        <h2 class="settings-heading">환경설정</h2>
+        <p class="settings-subtitle">현재 적용된 개인 환경 설정을 확인하고 바로 변경합니다.</p>
+      </div>
+      <div class="settings-status" :class="{ 'is-dark': isDarkMode }">
+        <span class="settings-status__dot" />
+        <span>{{ isDarkMode ? '다크 모드' : '라이트 모드' }}</span>
+      </div>
+    </header>
 
+    <div class="settings-shell">
+      <nav class="settings-tabs" aria-label="환경설정 메뉴">
         <button
+          v-for="tab in tabs"
+          :key="tab.id"
           type="button"
-          class="ui-toggle"
-          :class="{ 'is-active': isDarkMode }"
-          :aria-pressed="isDarkMode"
-          aria-label="다크 모드 설정"
-          @click="toggleDarkMode"
+          class="settings-tab"
+          :class="{ 'is-active': activeTab === tab.id }"
+          :aria-current="activeTab === tab.id ? 'page' : undefined"
+          @click="selectTab(tab.id)"
         >
-          <span class="ui-toggle-thumb" />
+          <span class="material-symbols-outlined settings-tab__icon">{{ tab.icon }}</span>
+          <span>
+            <strong>{{ tab.label }}</strong>
+            <small>{{ tab.summary }}</small>
+          </span>
         </button>
-      </div>
+      </nav>
 
-      <div class="settings-section ui-card-header">
-        <div>
-          <h3 class="settings-title">알림 수신 설정</h3>
-          <p class="settings-description ui-muted">수신하고 싶은 알림 유형을 선택하세요.</p>
-        </div>
-      </div>
-
-      <div class="settings-list">
-        <div
-          v-for="(info, key) in notificationItems"
-          :key="key"
-          class="settings-row"
-        >
+      <article class="settings-panel ui-card">
+        <div class="settings-panel__head ui-card-header">
           <div>
-            <strong class="settings-row__label">{{ info.label }}</strong>
-            <p class="settings-row__description ui-muted">{{ info.desc }}</p>
+            <p class="settings-eyebrow">{{ currentTab.label }}</p>
+            <h3>{{ currentTab.summary }}</h3>
           </div>
-
-          <button
-            type="button"
-            class="ui-toggle"
-            :class="{ 'is-active': settings.notifications[key] }"
-            :aria-pressed="settings.notifications[key]"
-            :aria-label="`${info.label} 수신 설정`"
-            @click="updateNotification(key)"
-          >
-            <span class="ui-toggle-thumb" />
-          </button>
         </div>
-      </div>
+
+        <form v-if="activeTab === 'profile'" class="settings-pane" @submit.prevent="saveProfile">
+          <section class="settings-profile">
+            <div class="profile-preview">
+              <div class="profile-preview__image">
+                <img v-if="profileForm.imageDataUrl" :src="profileForm.imageDataUrl" alt="" />
+                <span v-else>{{ userSettingsStore.profileInitials }}</span>
+              </div>
+              <div>
+                <strong>{{ profileForm.name || 'Callog User' }}</strong>
+                <p>{{ profileForm.company }} · {{ profileForm.department }}</p>
+              </div>
+            </div>
+
+            <div class="profile-actions">
+              <label class="settings-button settings-button--ghost">
+                이미지 선택
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="settings-file"
+                  @change="handleProfileImageUpload"
+                />
+              </label>
+              <button
+                type="button"
+                class="settings-button settings-button--ghost"
+                @click="clearProfileImage"
+              >
+                이미지 제거
+              </button>
+            </div>
+          </section>
+
+          <section class="settings-form-grid" aria-label="프로필 정보">
+            <label class="settings-field">
+              <span>이름</span>
+              <input v-model.trim="profileForm.name" type="text" autocomplete="name" />
+            </label>
+            <label class="settings-field">
+              <span>이메일</span>
+              <input v-model.trim="profileForm.email" type="email" autocomplete="email" />
+            </label>
+            <label class="settings-field">
+              <span>전화번호</span>
+              <input v-model.trim="profileForm.phone" type="tel" autocomplete="tel" />
+            </label>
+            <label class="settings-field">
+              <span>회사</span>
+              <input v-model.trim="profileForm.company" type="text" />
+            </label>
+            <label class="settings-field">
+              <span>부서</span>
+              <input v-model.trim="profileForm.department" type="text" />
+            </label>
+            <label class="settings-field">
+              <span>역할</span>
+              <input v-model.trim="profileForm.role" type="text" />
+            </label>
+          </section>
+
+          <section class="settings-generator">
+            <div>
+              <strong>프로필 이미지 자동 생성</strong>
+              <p>프롬프트를 준비해 두면 OpenAI API 연동 시 추천 이미지 생성에 사용됩니다.</p>
+            </div>
+            <div class="settings-generator__control">
+              <input
+                v-model.trim="generatorPromptModel"
+                type="text"
+                placeholder="예: 차분한 B2B 마케팅 리드 프로필"
+              />
+              <button
+                type="button"
+                class="settings-button settings-button--ghost"
+                @click="requestImageGeneration"
+              >
+                준비
+              </button>
+            </div>
+            <p class="settings-message">{{ userSettingsStore.generatorMessage }}</p>
+          </section>
+
+          <footer class="settings-actions">
+            <p v-if="feedback.profileError" class="settings-error">{{ feedback.profileError }}</p>
+            <p v-else-if="feedback.profile" class="settings-success">{{ feedback.profile }}</p>
+            <button type="submit" class="settings-button settings-button--primary">저장</button>
+          </footer>
+        </form>
+
+        <div v-else-if="activeTab === 'notifications'" class="settings-pane">
+          <div class="settings-list">
+            <div v-for="item in notificationItems" :key="item.key" class="settings-row">
+              <div>
+                <strong>{{ item.label }}</strong>
+                <p>{{ item.description }}</p>
+              </div>
+              <button
+                type="button"
+                class="ui-toggle"
+                :class="{ 'is-active': userSettingsStore.notifications[item.key] }"
+                :aria-pressed="userSettingsStore.notifications[item.key]"
+                :aria-label="`${item.label} 수신 설정`"
+                :disabled="item.locked"
+                @click="toggleNotification(item)"
+              >
+                <span class="ui-toggle-thumb" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="activeTab === 'theme'" class="settings-pane">
+          <section class="settings-block">
+            <div>
+              <strong>테마</strong>
+              <p>선택 즉시 전체 UI에 반영됩니다.</p>
+            </div>
+            <div class="settings-segmented" role="group" aria-label="테마 선택">
+              <button
+                type="button"
+                :class="{ 'is-active': !isDarkMode }"
+                @click="setTheme('light')"
+              >
+                라이트
+              </button>
+              <button type="button" :class="{ 'is-active': isDarkMode }" @click="setTheme('dark')">
+                다크
+              </button>
+            </div>
+          </section>
+
+          <section class="settings-block">
+            <div>
+              <strong>화면 밀도</strong>
+              <p>반복 작업에 맞춰 정보 간격을 조정합니다.</p>
+            </div>
+            <div class="settings-segmented" role="group" aria-label="화면 밀도 선택">
+              <button
+                v-for="option in densityOptions"
+                :key="option.value"
+                type="button"
+                :class="{ 'is-active': userSettingsStore.themeUi.density === option.value }"
+                @click="setDensity(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+          </section>
+
+          <section class="settings-list">
+            <div class="settings-row">
+              <div>
+                <strong>모션 줄이기</strong>
+                <p>전환 애니메이션을 더 차분하게 표시합니다.</p>
+              </div>
+              <button
+                type="button"
+                class="ui-toggle"
+                :class="{ 'is-active': userSettingsStore.themeUi.reduceMotion }"
+                :aria-pressed="userSettingsStore.themeUi.reduceMotion"
+                aria-label="모션 줄이기 설정"
+                @click="toggleThemeUiValue('reduceMotion')"
+              >
+                <span class="ui-toggle-thumb" />
+              </button>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>고대비 표시</strong>
+                <p>텍스트와 경계 대비를 높이는 표시 옵션입니다.</p>
+              </div>
+              <button
+                type="button"
+                class="ui-toggle"
+                :class="{ 'is-active': userSettingsStore.themeUi.highContrast }"
+                :aria-pressed="userSettingsStore.themeUi.highContrast"
+                aria-label="고대비 표시 설정"
+                @click="toggleThemeUiValue('highContrast')"
+              >
+                <span class="ui-toggle-thumb" />
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <div v-else class="settings-pane">
+          <section class="settings-account">
+            <div class="settings-account__row">
+              <span>로그인 계정</span>
+              <strong>{{ accountEmail }}</strong>
+            </div>
+            <div class="settings-account__row">
+              <span>권한</span>
+              <strong>{{ userSettingsStore.profile.role }}</strong>
+            </div>
+            <div class="settings-account__row">
+              <span>세션 상태</span>
+              <strong>{{ userSettingsStore.security.sessionStatus }}</strong>
+            </div>
+            <div class="settings-account__row">
+              <span>비밀번호</span>
+              <strong>별도 기능에서 변경</strong>
+            </div>
+          </section>
+        </div>
+      </article>
     </div>
   </section>
 </template>
@@ -151,81 +546,476 @@ onMounted(async () => {
 <style scoped>
 .settings-page {
   display: grid;
-  max-width: 56rem;
-  gap: 1.5rem;
+  max-width: 1180px;
+  gap: 16px;
   margin: 0 auto;
-  padding: 1.5rem;
-  font-family: 'Pretendard', system-ui, sans-serif;
+  padding: 24px;
 }
 
-.settings-panel {
-  border-radius: 24px;
-}
-
-.settings-section {
+.settings-header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1.5rem 2rem;
+  gap: 16px;
+  padding-bottom: 2px;
 }
 
-.settings-title {
+.settings-eyebrow {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.settings-heading {
+  margin-top: 4px;
   color: var(--text-heading);
-  font-size: 1.125rem;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.settings-subtitle {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.settings-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-body);
+  font-size: 13px;
   font-weight: 700;
 }
 
-.settings-description {
-  margin-top: 0.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
+.settings-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning-color);
+}
+
+.settings-status.is-dark .settings-status__dot {
+  background: var(--accent-color);
+}
+
+.settings-shell {
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.settings-tabs {
+  display: grid;
+  align-self: start;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.settings-tab {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  min-height: 58px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.settings-tab:hover,
+.settings-tab.is-active {
+  background: var(--surface-control-hover);
+  color: var(--text-heading);
+}
+
+.settings-tab.is-active {
+  box-shadow: inset 3px 0 0 var(--accent-color);
+}
+
+.settings-tab__icon {
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 20px;
+}
+
+.settings-tab strong,
+.settings-tab small {
+  display: block;
+}
+
+.settings-tab strong {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.settings-tab small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.settings-panel {
+  min-width: 0;
+  border-radius: var(--radius-md);
+}
+
+.settings-panel__head {
+  padding: 18px 20px;
+}
+
+.settings-panel__head h3 {
+  margin-top: 4px;
+  color: var(--text-heading);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.settings-pane {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.settings-profile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.profile-preview {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 14px;
+}
+
+.profile-preview__image {
+  display: inline-flex;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.profile-preview__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-preview strong {
+  display: block;
+  color: var(--text-heading);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.profile-preview p,
+.settings-generator p,
+.settings-row p,
+.settings-block p {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.profile-actions,
+.settings-actions,
+.settings-generator__control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-file {
+  display: none;
+}
+
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-field {
+  display: grid;
+  gap: 7px;
+  color: var(--text-body);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-field input,
+.settings-generator__control input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  padding: 0 12px;
+  color: var(--text-heading);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.settings-field input:focus,
+.settings-generator__control input:focus {
+  border-color: var(--accent-color);
+  background: var(--control-focus-color);
+  outline: none;
+}
+
+.settings-generator,
+.settings-block {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card-muted);
+}
+
+.settings-generator strong,
+.settings-block strong,
+.settings-row strong {
+  color: var(--text-heading);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.settings-generator__control {
+  align-items: stretch;
+}
+
+.settings-generator__control input {
+  flex: 1;
+}
+
+.settings-message,
+.settings-success,
+.settings-error {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-message {
+  color: var(--text-muted);
+}
+
+.settings-success {
+  color: var(--success-color);
+}
+
+.settings-error {
+  color: var(--danger-text-strong);
+}
+
+.settings-actions {
+  justify-content: flex-end;
+  min-height: 40px;
+}
+
+.settings-actions p {
+  margin-right: auto;
+}
+
+.settings-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-md);
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.settings-button--primary {
+  border: 1px solid var(--accent-strong);
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+.settings-button--ghost {
+  border: 1px solid var(--line-soft);
+  background: var(--surface-control);
+  color: var(--text-heading);
+}
+
+.settings-button--ghost:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-control-hover);
 }
 
 .settings-list {
   display: grid;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .settings-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1.5rem 2rem;
+  gap: 16px;
+  min-height: 74px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--line-soft);
-  transition: background var(--transition-fast);
+  background: var(--surface-card);
 }
 
 .settings-row:last-child {
   border-bottom: 0;
 }
 
-.settings-row:hover {
-  background: var(--surface-control-hover);
+.settings-segmented {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-self: start;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
 }
 
-.settings-row__label {
-  display: block;
-  margin-bottom: 0.25rem;
-  color: var(--text-heading);
-  font-size: 0.94rem;
+.settings-segmented button {
+  min-width: 96px;
+  min-height: 38px;
+  padding: 0 14px;
+  color: var(--text-body);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.settings-segmented button.is-active {
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+.settings-account {
+  display: grid;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.settings-account__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 58px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.settings-account__row:last-child {
+  border-bottom: 0;
+}
+
+.settings-account__row span {
+  color: var(--text-muted);
+  font-size: 13px;
   font-weight: 700;
 }
 
-.settings-row__description {
-  font-size: 0.875rem;
-  font-weight: 500;
+.settings-account__row strong {
+  color: var(--text-heading);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
 }
 
-@media (max-width: 640px) {
-  .settings-page {
-    padding: 1rem;
+@media (max-width: 960px) {
+  .settings-shell {
+    grid-template-columns: 1fr;
   }
 
-  .settings-section,
-  .settings-row {
-    padding-left: 1.25rem;
-    padding-right: 1.25rem;
+  .settings-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .settings-page {
+    padding: 16px;
+  }
+
+  .settings-header,
+  .settings-profile,
+  .settings-row,
+  .settings-account__row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-status,
+  .settings-segmented,
+  .settings-actions,
+  .profile-actions,
+  .settings-generator__control {
+    width: 100%;
+  }
+
+  .settings-tabs,
+  .settings-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-actions {
+    justify-content: stretch;
+  }
+
+  .settings-actions p {
+    margin-right: 0;
+  }
+
+  .settings-button,
+  .settings-segmented button {
+    width: 100%;
   }
 }
 </style>

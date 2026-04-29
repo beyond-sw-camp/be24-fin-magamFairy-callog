@@ -1,8 +1,9 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useUserSettingsStore } from '@/stores/userSettings'
 import { getNoti } from '@/api/notifications/index.js'
 import { formatRelativeTime } from '@/utils/datechange.js'
 
@@ -10,17 +11,26 @@ const route = useRoute()
 const router = useRouter()
 const store = usePlannerStore()
 const authStore = useAuthStore()
+const userSettingsStore = useUserSettingsStore()
 
 const notifications = ref([])
 const notificationsOpen = ref(false)
 const appsMenuOpen = ref(false)
 const appsMenuButton = ref(null)
+const profileCardOpen = ref(false)
+const profileCardButton = ref(null)
 
 const APP_MENU_MARGIN = 12
 const APP_MENU_WIDTH = 220
 const APP_MENU_HEIGHT_ESTIMATE = 260
+const PROFILE_CARD_WIDTH = 320
+const PROFILE_CARD_HEIGHT_ESTIMATE = 350
 
 const appsMenuPosition = reactive({
+  top: 0,
+  left: 0,
+})
+const profileCardPosition = reactive({
   top: 0,
   left: 0,
 })
@@ -47,10 +57,15 @@ const activeRoute = computed(
 )
 const pageTitle = computed(() => route.meta?.title ?? activeRoute.value.label)
 const sectionTitle = computed(() => route.meta?.section ?? activeRoute.value.section)
-const profile = computed(() => store.findMember(store.currentUserId))
+const userSettingsKey = computed(() => resolveUserSettingsKey(authStore.user))
+const profileCard = computed(() => userSettingsStore.profileCardData)
 const appsMenuStyle = computed(() => ({
   top: `${appsMenuPosition.top}px`,
   left: `${appsMenuPosition.left}px`,
+}))
+const profileCardStyle = computed(() => ({
+  top: `${profileCardPosition.top}px`,
+  left: `${profileCardPosition.left}px`,
 }))
 
 const appMenuItems = computed(() => [
@@ -94,6 +109,19 @@ const visibleAppMenuItems = computed(() =>
   appMenuItems.value.filter((item) => !item.creatorOnly || authStore.canCreateUsers),
 )
 
+function resolveUserSettingsKey(user) {
+  return (
+    user?.userId ??
+    user?.idx ??
+    user?.id ??
+    user?.loginId ??
+    user?.email ??
+    user?.sub ??
+    store.currentUserId ??
+    'guest'
+  )
+}
+
 const getNotifications = async () => {
   try {
     const res = await getNoti(3)
@@ -132,11 +160,13 @@ const getNotifications = async () => {
 function closeFloatingMenus() {
   notificationsOpen.value = false
   appsMenuOpen.value = false
+  profileCardOpen.value = false
 }
 
 function toggleNotifications() {
   notificationsOpen.value = !notificationsOpen.value
   appsMenuOpen.value = false
+  profileCardOpen.value = false
 }
 
 function clamp(value, min, max) {
@@ -162,8 +192,24 @@ function positionAppsMenu() {
   appsMenuPosition.top = clamp(rect.bottom + 8, APP_MENU_MARGIN, maxTop)
 }
 
+function positionProfileCard() {
+  const button = profileCardButton.value
+
+  if (!(button instanceof HTMLElement)) {
+    return
+  }
+
+  const rect = button.getBoundingClientRect()
+  const maxLeft = window.innerWidth - PROFILE_CARD_WIDTH - APP_MENU_MARGIN
+  const maxTop = window.innerHeight - PROFILE_CARD_HEIGHT_ESTIMATE - APP_MENU_MARGIN
+
+  profileCardPosition.left = clamp(rect.right - PROFILE_CARD_WIDTH, APP_MENU_MARGIN, maxLeft)
+  profileCardPosition.top = clamp(rect.bottom + 8, APP_MENU_MARGIN, maxTop)
+}
+
 function toggleAppsMenu() {
   notificationsOpen.value = false
+  profileCardOpen.value = false
 
   if (appsMenuOpen.value) {
     appsMenuOpen.value = false
@@ -173,6 +219,20 @@ function toggleAppsMenu() {
   positionAppsMenu()
   appsMenuOpen.value = true
   void nextTick(positionAppsMenu)
+}
+
+function toggleProfileCard() {
+  notificationsOpen.value = false
+  appsMenuOpen.value = false
+
+  if (profileCardOpen.value) {
+    profileCardOpen.value = false
+    return
+  }
+
+  positionProfileCard()
+  profileCardOpen.value = true
+  void nextTick(positionProfileCard)
 }
 
 function handleSearchInput(event) {
@@ -199,12 +259,28 @@ async function handleAppMenuItem(item) {
   router.push(item.to)
 }
 
+function handleProfileEdit() {
+  closeFloatingMenus()
+  router.push({
+    name: 'settings',
+    query: {
+      tab: 'profile',
+    },
+  })
+}
+
+function handleProfileDownload() {
+  void userSettingsStore.downloadProfileCard()
+}
+
 function handleDocumentClick(event) {
   const path = typeof event.composedPath === 'function' ? event.composedPath() : []
   const inside = path.some(
     (node) =>
       node instanceof HTMLElement &&
-      (node.dataset?.headerRoot === 'true' || node.dataset?.appsMenuRoot === 'true'),
+      (node.dataset?.headerRoot === 'true' ||
+        node.dataset?.appsMenuRoot === 'true' ||
+        node.dataset?.profileCardRoot === 'true'),
   )
   if (!inside) {
     closeFloatingMenus()
@@ -215,7 +291,19 @@ function handleViewportChange() {
   if (appsMenuOpen.value) {
     positionAppsMenu()
   }
+
+  if (profileCardOpen.value) {
+    positionProfileCard()
+  }
 }
+
+watch(
+  () => [userSettingsKey.value, authStore.user],
+  () => {
+    userSettingsStore.loadUserSettings(userSettingsKey.value, authStore.user)
+  },
+  { immediate: true, deep: true },
+)
 
 onMounted(() => {
   window.addEventListener('click', handleDocumentClick)
@@ -386,14 +474,17 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- 프로필 -->
-        <RouterLink
-          to="/mypage"
+        <button
+          ref="profileCardButton"
+          type="button"
           class="callog-header__avatar"
           aria-label="프로필"
-          @click="closeFloatingMenus"
+          :aria-expanded="profileCardOpen"
+          @click.stop="toggleProfileCard"
         >
-          {{ profile?.initials ?? 'U' }}
-        </RouterLink>
+          <img v-if="profileCard.imageDataUrl" :src="profileCard.imageDataUrl" alt="" />
+          <span v-else>{{ profileCard.initials }}</span>
+        </button>
 
         <!-- 전체 메뉴 -->
         <div class="callog-header__dropdown-wrap">
@@ -425,6 +516,63 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </header>
+
+  <Teleport to="body">
+    <Transition name="callog-dropdown">
+      <div
+        v-if="profileCardOpen"
+        data-profile-card-root="true"
+        class="callog-profile-card callog-header__dropdown--floating"
+        :style="profileCardStyle"
+      >
+        <div class="callog-profile-card__hero">
+          <div class="callog-profile-card__avatar">
+            <img v-if="profileCard.imageDataUrl" :src="profileCard.imageDataUrl" alt="" />
+            <span v-else>{{ profileCard.initials }}</span>
+          </div>
+          <div>
+            <strong>{{ profileCard.name }}</strong>
+            <p>{{ profileCard.role }}</p>
+          </div>
+        </div>
+
+        <dl class="callog-profile-card__details">
+          <div>
+            <dt>회사</dt>
+            <dd>{{ profileCard.company }}</dd>
+          </div>
+          <div>
+            <dt>부서</dt>
+            <dd>{{ profileCard.department }}</dd>
+          </div>
+          <div>
+            <dt>전화번호</dt>
+            <dd>{{ profileCard.phone }}</dd>
+          </div>
+          <div>
+            <dt>이메일</dt>
+            <dd>{{ profileCard.email }}</dd>
+          </div>
+        </dl>
+
+        <div class="callog-profile-card__actions">
+          <button type="button" class="callog-profile-card__button" @click="handleProfileDownload">
+            다운로드
+          </button>
+          <button type="button" class="callog-profile-card__button" @click="handleProfileEdit">
+            수정
+          </button>
+          <button
+            type="button"
+            class="callog-profile-card__button callog-profile-card__button--ghost"
+            @click="closeFloatingMenus"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 
   <Teleport to="body">
     <Transition name="callog-dropdown">
@@ -623,15 +771,25 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: var(--badge-bg);
   color: var(--badge-text);
+  border: none;
   font-size: 13px;
   font-weight: 700;
+  overflow: hidden;
+  padding: 0;
   text-decoration: none;
   transition: all var(--transition-fast);
   flex-shrink: 0;
+  cursor: pointer;
 }
 
 .callog-header__avatar:hover {
   background: var(--nav-icon-active-bg);
+}
+
+.callog-header__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .callog-header__dropdown-wrap {
@@ -663,6 +821,133 @@ onBeforeUnmount(() => {
   position: fixed;
   right: auto;
   z-index: 9999;
+}
+
+.callog-profile-card {
+  position: fixed;
+  width: 320px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--dropdown-color);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text-primary);
+  z-index: 10000;
+}
+
+.callog-profile-card__hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--panel-muted);
+}
+
+.callog-profile-card__avatar {
+  display: inline-flex;
+  width: 62px;
+  height: 62px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.callog-profile-card__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.callog-profile-card__hero strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.callog-profile-card__hero p {
+  margin-top: 3px;
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.callog-profile-card__details {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 8px 16px;
+}
+
+.callog-profile-card__details div {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 34px;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.callog-profile-card__details div:last-child {
+  border-bottom: 0;
+}
+
+.callog-profile-card__details dt,
+.callog-profile-card__details dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+}
+
+.callog-profile-card__details dt {
+  color: var(--subtle-text);
+  font-weight: 700;
+}
+
+.callog-profile-card__details dd {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.callog-profile-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.callog-profile-card__button {
+  min-height: 30px;
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-sm);
+  background: var(--accent-strong);
+  color: #ffffff;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.callog-profile-card__button--ghost {
+  border-color: var(--border-color);
+  background: var(--panel-color);
+  color: var(--text-secondary);
+}
+
+.callog-profile-card__button:hover {
+  filter: brightness(1.04);
 }
 
 .callog-dropdown__head {
