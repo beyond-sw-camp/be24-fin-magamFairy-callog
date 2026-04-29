@@ -8,6 +8,7 @@ import lombok.Getter;
 public enum BaseResponseStatus {
     // 2000번대 성공
     SUCCESS(true, 2000, "요청이 성공했습니다"),
+    ASSET_ADD_SUCCESS(true, 2001 , "자산 등록에 성공했습니다."),
 
 
     // 3000번대 클라이언트 입력 오류, 입력값 검증 오류
