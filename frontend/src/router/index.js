@@ -31,6 +31,15 @@ const routes = [
         },
       },
       {
+        path: 'campaigns/:campaignId',
+        name: 'campaign-detail',
+        component: () => import('@/views/CampaignDetailView.vue'),
+        meta: {
+          title: '캠페인 상세',
+          section: '캠페인 운영 보드',
+        },
+      },
+      {
         path: 'content/new',
         name: 'content-create',
         component: () => import('@/views/ContentEditorView.vue'),
@@ -115,6 +124,28 @@ const routes = [
         path: '/references',
         name: 'references',
         component: () => import('@/views/ReferencesView.vue'),
+        meta: {
+          title: '레퍼런스',
+          section: '캠페인 레퍼런스',
+        },
+      },
+      {
+        path: 'resources',
+        name: 'resources',
+        component: () => import('@/views/CampaignResourcesView.vue'),
+        meta: {
+          title: '자료실',
+          section: '가이드라인 · 톤앤매너 · 위험요소 · 운영자료',
+        },
+      },
+      {
+        path: 'review-approval',
+        name: 'review-approval',
+        component: () => import('@/views/ReviewApprovalView.vue'),
+        meta: {
+          title: '검수/승인',
+          section: '검수 대기 · 승인 요청 · 오픈 차단',
+        },
       },
       {
         path: 'reports',

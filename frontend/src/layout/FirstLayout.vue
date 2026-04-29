@@ -11,9 +11,14 @@ onMounted(() => {
 </script>
 
 <template>
+  <main class="first-layout ui-page">
     <RouterView />
+  </main>
 </template>
 
 <style scoped>
-
+.first-layout {
+  min-height: 100vh;
+  background: var(--surface-page);
+}
 </style>

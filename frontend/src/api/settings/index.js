@@ -1,11 +1,11 @@
 import api from '/plugins/interceptor.js'
 
 export const getSettings = async () => {
-  return res = await api.get("/settings")
+  return api.get('/settings')
 }
 
 export const updateSettings = async (body) => {
-  return res = await api.patch("/update", body)
+  return api.patch('/settings', body)
 }
 
 export default {
