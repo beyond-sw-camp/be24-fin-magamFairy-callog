@@ -8,7 +8,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const form = reactive({
-  loginId: '',
+  id: '',
   password: '',
 })
 
@@ -35,7 +35,7 @@ const handleLogin = async () => {
 
   try {
     await authStore.login({
-      loginId: form.loginId,
+      id: form.id,
       password: form.password,
     })
 
@@ -94,7 +94,7 @@ const handleLogin = async () => {
                 <span
                   class="ml-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400"
                 >
-                  Login ID
+                  ID
                 </span>
                 <span class="relative block">
                   <span
@@ -116,7 +116,7 @@ const handleLogin = async () => {
                     </svg>
                   </span>
                   <input
-                    v-model="form.loginId"
+                    v-model="form.id"
                     type="text"
                     autocomplete="username"
                     placeholder="예: CALLOG_team1_admin"
