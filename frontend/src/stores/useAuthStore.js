@@ -33,12 +33,6 @@ function decodeJwtPayload(accessToken) {
   }
 }
 
-function isTokenExpired(accessToken) {
-  const payload = decodeJwtPayload(accessToken)
-
-  return typeof payload?.exp === 'number' && payload.exp * 1000 <= Date.now()
-}
-
 function sanitizeDecodedUser(decodedUser) {
   if (!decodedUser || typeof decodedUser !== 'object') {
     return null
@@ -105,7 +99,7 @@ export const useAuthStore = defineStore('auth', () => {
   function restore() {
     const savedToken = readStoredToken()
 
-    if (!savedToken || isTokenExpired(savedToken)) {
+    if (!savedToken) {
       clearAuthState()
       isHydrated.value = true
       return false
