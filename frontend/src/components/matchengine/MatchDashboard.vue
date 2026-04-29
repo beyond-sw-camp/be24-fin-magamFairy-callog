@@ -9,16 +9,45 @@ defineProps({
 })
 
 const summaryStats = [
-  { label: '등록 자산', value: '12', helper: '활성 9', stage: 'Asset Pool' },
-  { label: '제안 접수', value: '8', helper: '오늘 2', stage: 'Intake' },
-  { label: '자동 평가', value: '6', helper: '검토 대기 2', stage: 'Scoring' },
-  { label: '조합 추천', value: '3', helper: '90점 이상 1', stage: 'Matching' },
+  { label: '등록 자산', value: '12', helper: '활성 9건', stage: 'Asset Pool' },
+  { label: '제안 접수', value: '8', helper: '오늘 3건', stage: 'Intake' },
+  { label: '자동 평가', value: '6', helper: '검토 대기 3건', stage: 'Scoring' },
+  { label: '조합 추천', value: '3', helper: '90점 이상 1건', stage: 'Matching' },
   { label: '운영 전환', value: '2', helper: '보드 생성', stage: 'Handoff' },
 ]
+
+const stageNotes = {
+  'Asset Pool': {
+    title: '등록 자산 단계 · 중복 자산 3건 정리',
+    description: '동일 키워드 자산이 중복 등록되어 있어요. 병합하면 추천 정확도가 올라갑니다.',
+    action: '정리하기',
+  },
+  Intake: {
+    title: '제안 접수 단계 · 담당자 배정 대기 3건',
+    description: '오늘 들어온 제안 중 3건이 담당자 배정 대기 중입니다.',
+    action: '배정 시작',
+  },
+  Scoring: {
+    title: '자동 평가 단계 · 점수 검토 후 컷오프 적용',
+    description: '85점 이상 6건 중 3건이 사람 검토 대기입니다. 평균 처리 18분.',
+    action: '검토 열기',
+  },
+  Matching: {
+    title: '조합 추천 단계 · 추천 조합 1건 승인 대기',
+    description: '나이키 코리아 × 러닝 멤버십 · 매칭 점수 85 · 담당자 확인 필요',
+    action: '승인 요청',
+  },
+  Handoff: {
+    title: '운영 전환 단계 · 운영 보드로 전달',
+    description: '승인된 조합은 운영팀 칸반에 카드로 생성됩니다.',
+    action: '전달하기',
+  },
+}
 
 const partnerProposals = [
   {
     id: 1,
+    logo: 'SBX',
     partnerName: '스타벅스 코리아',
     benefitSummary: '시즌 음료 사이즈업 쿠폰 1만장 및 앱 배너 노출',
     totalScore: 94,
@@ -28,12 +57,17 @@ const partnerProposals = [
     status: '평가 완료',
     contact: '파트너 제휴팀 / 응답 1일 이내',
     condition: '쿠폰 10,000장, 스타벅스 앱 동시 공지 가능',
-    scoreBreakdown: ['고객 적합도 96', '혜택 매력도 92', '운영 난이도 88'],
+    scoreBreakdown: [
+      { label: '고객 적합도', value: 96 },
+      { label: '혜택 매력도', value: 92 },
+      { label: '운영 난이도', value: 88 },
+    ],
     risks: ['쿠폰 조기 소진 가능성', 'VIP 고객 중복 노출 빈도 관리 필요'],
     actions: ['추천 조합 생성', '혜택 조건서 검토', '파트너 미팅 일정 등록'],
   },
   {
     id: 2,
+    logo: 'NIKE',
     partnerName: '나이키 코리아',
     benefitSummary: '러닝앱 멤버십 공동 챌린지 및 리미티드 굿즈',
     totalScore: 85,
@@ -43,12 +77,17 @@ const partnerProposals = [
     status: '조건 협의',
     contact: 'NRC 마케팅 담당 / 일정 확인 중',
     condition: '러닝 챌린지 4주 운영, 리워드 굿즈 2,000개',
-    scoreBreakdown: ['고객 적합도 90', '수익 기여도 85', '브랜드 적합도 95'],
+    scoreBreakdown: [
+      { label: '고객 적합도', value: 90 },
+      { label: '수익 기여도', value: 85 },
+      { label: '브랜드 적합도', value: 95 },
+    ],
     risks: ['오프라인 클래스 일정 촉박', '우천 시 대체 미션 필요'],
     actions: ['운영 가능 일정 확인', '패키지 가격안 작성', '법무 유의사항 검토'],
   },
   {
     id: 3,
+    logo: 'CGV',
     partnerName: 'CGV',
     benefitSummary: 'VIP 고객 대상 프리미엄 관람권 1+1 혜택',
     totalScore: 76,
@@ -58,12 +97,17 @@ const partnerProposals = [
     status: '검토 대기',
     contact: 'CGV 제휴 담당 / 응답 2일 이내',
     condition: '프리미엄 상영관 예매권 1+1, 앱 신규 가입 CTA 연동',
-    scoreBreakdown: ['고객 적합도 78', '전환 기대 84', '운영 난이도 86'],
+    scoreBreakdown: [
+      { label: '고객 적합도', value: 78 },
+      { label: '전환 기대', value: 84 },
+      { label: '운영 난이도', value: 86 },
+    ],
     risks: ['예매권 사용 조건 복잡', '가입 전환 추적 코드 필요'],
     actions: ['쿠폰 조건 단순화 요청', '가입 랜딩 문구 작성', 'A/B 테스트 설계'],
   },
   {
     id: 4,
+    logo: 'LG',
     partnerName: 'LG 생활건강',
     benefitSummary: '신규 뷰티 브랜드 런칭 기념 샘플링 키트 제공',
     totalScore: 65,
@@ -73,13 +117,22 @@ const partnerProposals = [
     status: '보완 요청',
     contact: '브랜드 BM / 샘플 수량 확인 중',
     condition: '샘플링 키트 8,500개, 객실 비치형 전환 검토',
-    scoreBreakdown: ['비용 효율성 85', '고객 적합도 70', '브랜드 적합도 60'],
+    scoreBreakdown: [
+      { label: '비용 효율성', value: 85 },
+      { label: '고객 적합도', value: 70 },
+      { label: '브랜드 적합도', value: 60 },
+    ],
     risks: ['타깃 고객층 불명확', '브랜드 이미지 연결 근거 부족'],
     actions: ['대상 고객군 재정의', '제품 라인업 재요청', '객실 비치 비용 산정'],
   },
 ]
 
-const selectedProposalId = ref(partnerProposals[0].id)
+const selectedProposalId = ref(partnerProposals[1].id)
+const activeStage = ref('Matching')
+const activeStageIndex = computed(() =>
+  summaryStats.findIndex((stat) => stat.stage === activeStage.value),
+)
+const activeStageNote = computed(() => stageNotes[activeStage.value] ?? stageNotes.Matching)
 const selectedProposal = computed(
   () =>
     partnerProposals.find((proposal) => proposal.id === selectedProposalId.value) ??
@@ -96,13 +149,41 @@ function gradeClass(score) {
 
 <template>
   <section class="match-dashboard">
-    <div class="dash-stat-grid">
-      <article v-for="stat in summaryStats" :key="stat.label" class="dash-stat">
-        <small>{{ stat.stage }}</small>
-        <span>{{ stat.label }}</span>
-        <strong>{{ stat.value }}</strong>
-        <em>{{ stat.helper }}</em>
-      </article>
+    <div class="dash-flow">
+      <div class="dash-pipeline-strip" aria-label="매칭 처리 단계">
+        <button
+          v-for="(stat, index) in summaryStats"
+          :key="stat.label"
+          type="button"
+          class="dash-pipeline-step"
+          :class="{
+            'dash-pipeline-step--active': activeStage === stat.stage,
+            'dash-pipeline-step--done': index < activeStageIndex,
+          }"
+          @click="activeStage = stat.stage"
+        >
+          <span>{{ index + 1 }}</span>
+          <strong>{{ stat.label }}</strong>
+          <em>{{ stat.helper }}</em>
+          <b>{{ stat.value }}</b>
+        </button>
+      </div>
+
+      <div class="dash-stage-note">
+        <span class="dash-stage-note__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
+          </svg>
+        </span>
+        <div class="dash-stage-note__copy">
+          <strong>{{ activeStageNote.title }}</strong>
+          <span>{{ activeStageNote.description }}</span>
+        </div>
+        <div class="dash-stage-note__actions">
+          <button type="button" class="dash-stage-note__secondary">미루기</button>
+          <button type="button" class="dash-stage-note__primary">{{ activeStageNote.action }} →</button>
+        </div>
+      </div>
     </div>
 
     <div class="dash-layout">
@@ -140,12 +221,15 @@ function gradeClass(score) {
       <aside class="dash-panel dash-detail">
         <div class="dash-panel__head">
           <h3>제안 상세</h3>
-          <span>{{ selectedProposal.status }}</span>
+          <button type="button" class="dash-detail__link">조건 협상</button>
         </div>
 
-        <div class="dash-detail__title">
-          <strong>{{ selectedProposal.partnerName }}</strong>
-          <p>{{ selectedProposal.benefitSummary }}</p>
+        <div class="dash-detail__summary">
+          <span class="dash-detail__logo">{{ selectedProposal.logo }}</span>
+          <div class="dash-detail__title">
+            <strong>{{ selectedProposal.partnerName }}</strong>
+            <p>{{ selectedProposal.benefitSummary }}</p>
+          </div>
         </div>
 
         <dl class="dash-detail__meta">
@@ -165,9 +249,16 @@ function gradeClass(score) {
 
         <section class="dash-detail__section">
           <h4>점수 근거</h4>
-          <ul>
-            <li v-for="item in selectedProposal.scoreBreakdown" :key="item">{{ item }}</li>
-          </ul>
+          <dl class="dash-score-list">
+            <div
+              v-for="item in selectedProposal.scoreBreakdown"
+              :key="item.label"
+              class="dash-score-line"
+            >
+              <dt>{{ item.label }}</dt>
+              <dd>{{ item.value }}</dd>
+            </div>
+          </dl>
         </section>
 
         <section class="dash-detail__section">
@@ -177,12 +268,10 @@ function gradeClass(score) {
           </ul>
         </section>
 
-        <section class="dash-detail__section">
-          <h4>다음 액션</h4>
-          <ul>
-            <li v-for="item in selectedProposal.actions" :key="item">{{ item }}</li>
-          </ul>
-        </section>
+        <div class="dash-detail__actions">
+          <button type="button" class="dash-detail__reject">반려</button>
+          <button type="button" class="dash-detail__approve">승인 요청 →</button>
+        </div>
       </aside>
 
     </div>
@@ -193,18 +282,11 @@ function gradeClass(score) {
 .match-dashboard {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 0.7rem;
+  gap: 0.8rem;
   height: 100%;
   min-height: 0;
 }
 
-.dash-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.55rem;
-}
-
-.dash-stat,
 .dash-panel {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -212,54 +294,12 @@ function gradeClass(score) {
   box-shadow: 0 6px 18px rgba(19, 35, 68, 0.04);
 }
 
-.dash-stat {
-  position: relative;
-  min-height: 4.65rem;
-  overflow: hidden;
-  padding: 0.7rem 0.78rem;
-}
-
-.dash-stat::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: color-mix(in srgb, var(--accent-color) 62%, var(--border-strong));
-}
-
-.dash-stat span,
-.dash-stat small,
-.dash-stat em,
 .dash-panel__head span,
 .dash-table__head span,
-.dash-table__row span,
-.dash-pipeline span {
+.dash-table__row span {
   color: var(--muted-text);
   font-size: 0.72rem;
   font-weight: 700;
-}
-
-.dash-stat small {
-  display: block;
-  margin-bottom: 0.18rem;
-  color: color-mix(in srgb, var(--accent-color) 62%, var(--muted-text));
-  font-size: 0.62rem;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.dash-stat strong {
-  display: block;
-  margin-top: 0.12rem;
-  color: var(--text-primary);
-  font-size: 1.3rem;
-  line-height: 1;
-}
-
-.dash-stat em {
-  display: block;
-  margin-top: 0.18rem;
-  font-style: normal;
 }
 
 .dash-layout {
@@ -380,41 +420,307 @@ function gradeClass(score) {
   color: var(--color-danger-dark);
 }
 
-.dash-pipeline {
+.dash-flow {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.55rem;
 }
 
-.dash-pipeline div {
+.dash-pipeline-strip {
   display: flex;
-  min-height: 2.85rem;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: var(--panel-muted);
-  padding: 0 0.7rem;
+  min-width: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel-color);
 }
 
-.dash-pipeline strong {
+.dash-pipeline-step {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  height: 56px;
+  align-items: center;
+  gap: 0.56rem;
+  border: 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--panel-color);
   color: var(--text-primary);
-  font-size: 1rem;
+  padding: 0 1.1rem 0 1.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.dash-pipeline-step + .dash-pipeline-step {
+  padding-left: 2rem;
+}
+
+.dash-pipeline-step:first-child {
+  border-left: 1px solid var(--border-color);
+  border-radius: 6px 0 0 6px;
+  padding-left: 1rem;
+}
+
+.dash-pipeline-step:last-child {
+  border-right: 1px solid var(--border-color);
+  border-radius: 0 6px 6px 0;
+  padding-right: 1rem;
+}
+
+.dash-pipeline-step::before,
+.dash-pipeline-step::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  top: 0;
+  right: -13px;
+  z-index: 1;
+  border-top: 28px solid transparent;
+  border-bottom: 28px solid transparent;
+  border-left: 13px solid var(--border-color);
+}
+
+.dash-pipeline-step::after {
+  right: -12px;
+  z-index: 2;
+  border-left-color: var(--panel-color);
+}
+
+.dash-pipeline-step:last-child::before,
+.dash-pipeline-step:last-child::after {
+  display: none;
+}
+
+.dash-pipeline-step:hover {
+  background: color-mix(in srgb, var(--accent-color) 5%, var(--panel-color));
+}
+
+.dash-pipeline-step:hover::after {
+  border-left-color: color-mix(in srgb, var(--accent-color) 5%, var(--panel-color));
+}
+
+.dash-pipeline-step--done {
+  border-color: color-mix(in srgb, var(--accent-color) 16%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-color));
+  color: color-mix(in srgb, var(--accent-color) 76%, var(--text-primary));
+}
+
+.dash-pipeline-step--done::before {
+  border-left-color: color-mix(in srgb, var(--accent-color) 16%, var(--border-color));
+}
+
+.dash-pipeline-step--done::after {
+  border-left-color: color-mix(in srgb, var(--accent-color) 10%, var(--panel-color));
+}
+
+.dash-pipeline-step--active {
+  z-index: 2;
+  border-color: #14152b;
+  background: #14152b;
+  color: #ffffff;
+}
+
+.dash-pipeline-step--active::before,
+.dash-pipeline-step--active::after {
+  border-left-color: #14152b;
+}
+
+.dash-pipeline-step span {
+  display: inline-flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-color) 18%, var(--panel-color));
+  color: var(--accent-color);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.dash-pipeline-step strong {
+  overflow: hidden;
+  flex: 1;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-pipeline-step b {
+  color: var(--text-primary);
+  flex: 0 0 auto;
+  font-size: 1.08rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.dash-pipeline-step em {
+  overflow: hidden;
+  flex: 0 1 auto;
+  color: var(--muted-text);
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-pipeline-step--done span {
+  background: color-mix(in srgb, var(--accent-color) 18%, #ffffff);
+  color: var(--accent-color);
+}
+
+.dash-pipeline-step--done strong,
+.dash-pipeline-step--done b {
+  color: color-mix(in srgb, var(--accent-color) 74%, var(--text-primary));
+}
+
+.dash-pipeline-step--active span {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.dash-pipeline-step--active strong,
+.dash-pipeline-step--active b {
+  color: #ffffff;
+}
+
+.dash-pipeline-step--active em {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.dash-stage-note {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  min-height: 2.9rem;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 18%, var(--border-color));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-color) 6%, var(--panel-color));
+  padding: 0.52rem 0.72rem;
+}
+
+.dash-stage-note__icon {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--accent-color);
+  color: #ffffff;
+}
+
+.dash-stage-note__icon svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.dash-stage-note__copy {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.dash-stage-note__copy strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.dash-stage-note__copy span {
+  overflow: hidden;
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-stage-note__actions {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.dash-stage-note__actions button {
+  min-height: 1.8rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 900;
+  padding: 0 0.68rem;
+  white-space: nowrap;
+}
+
+.dash-stage-note__secondary {
+  border: 1px solid var(--border-color);
+  background: var(--panel-color);
+  color: var(--text-secondary);
+}
+
+.dash-stage-note__primary {
+  border: 0;
+  background: #14152b;
+  color: #ffffff;
 }
 
 .dash-detail {
   display: grid;
   align-content: start;
-  gap: 0.6rem;
+  gap: 0.72rem;
+  padding-bottom: 0;
+}
+
+.dash-detail__link {
+  border: 0;
+  background: transparent;
+  color: var(--accent-color);
+  font-size: 0.7rem;
+  font-weight: 900;
+  padding: 0;
+}
+
+.dash-detail__summary {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.62rem;
+}
+
+.dash-detail__logo {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #ff671f;
+  color: #ffffff;
+  font-size: 0.66rem;
+  font-weight: 900;
 }
 
 .dash-detail__title {
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 0.55rem;
+  min-width: 0;
 }
 
 .dash-detail__title strong {
   color: var(--text-primary);
-  font-size: 0.92rem;
+  font-size: 0.9rem;
 }
 
 .dash-detail__title p,
@@ -427,16 +733,13 @@ function gradeClass(score) {
 
 .dash-detail__meta {
   display: grid;
-  gap: 0.45rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 0.7rem;
   margin: 0;
 }
 
-.dash-detail__meta div,
-.dash-detail__section {
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: var(--panel-muted);
-  padding: 0.55rem;
+.dash-detail__meta div:nth-child(3) {
+  grid-column: 1 / -1;
 }
 
 .dash-detail__meta dt,
@@ -454,15 +757,127 @@ function gradeClass(score) {
 
 .dash-detail__section ul {
   display: grid;
-  gap: 0.28rem;
+  gap: 0.32rem;
   margin: 0;
-  padding-left: 1rem;
+  padding-left: 0;
+  list-style: none;
+}
+
+.dash-score-list {
+  display: grid;
+  gap: 0.34rem;
+  margin: 0;
+}
+
+.dash-score-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  min-height: 1.05rem;
+}
+
+.dash-score-line dt {
+  position: relative;
+  min-width: 0;
+  padding-left: 0.8rem;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.dash-score-line dt::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 0.34rem;
+  height: 0.34rem;
+  border-radius: 999px;
+  background: var(--accent-color);
+  transform: translateY(-50%);
+}
+
+.dash-score-line dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.dash-detail__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.42rem;
+  border-top: 1px solid var(--border-color);
+  margin: 0 -0.8rem;
+  padding: 0.62rem 0.8rem 0.8rem;
+}
+
+.dash-detail__actions button {
+  min-height: 2.2rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.dash-detail__reject {
+  border: 1px solid var(--border-color);
+  background: var(--panel-color);
+  color: var(--text-secondary);
+}
+
+.dash-detail__approve {
+  border: 0;
+  background: var(--accent-color);
+  color: #ffffff;
 }
 
 @media (max-width: 1180px) {
-  .dash-stat-grid,
   .dash-layout {
     grid-template-columns: 1fr;
+  }
+
+  .dash-pipeline-strip {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .dash-pipeline-step {
+    width: 100%;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-left: 1rem;
+  }
+
+  .dash-pipeline-step + .dash-pipeline-step {
+    padding-left: 1rem;
+  }
+
+  .dash-pipeline-step:first-child,
+  .dash-pipeline-step:last-child {
+    border-radius: 0;
+  }
+
+  .dash-pipeline-step::before,
+  .dash-pipeline-step::after {
+    display: none;
+  }
+
+  .dash-stage-note {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .dash-stage-note__actions {
+    justify-content: stretch;
+  }
+
+  .dash-stage-note__actions button {
+    flex: 1;
   }
 }
 </style>
