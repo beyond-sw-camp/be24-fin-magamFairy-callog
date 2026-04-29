@@ -34,7 +34,8 @@ public class JwtFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         return path.startsWith("/auth/login")
                 || path.startsWith("/login")
-                || path.startsWith("/auth/reissue");
+                || path.startsWith("/auth/reissue")
+                || path.startsWith("/auth/logout");
     }
 
     @Override
