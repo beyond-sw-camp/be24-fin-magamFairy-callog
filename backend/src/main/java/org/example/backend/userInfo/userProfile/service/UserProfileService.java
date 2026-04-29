@@ -50,8 +50,8 @@ public class UserProfileService {
         userProfile.update(
                 normalize(dto.email()),
                 normalize(dto.phone()),
-                normalize(dto.profileImageKey()),
-                normalize(dto.profileImageUrl())
+                resolveProfileImageValue(dto.profileImageKey(), userProfile.getProfileImageKey()),
+                resolveProfileImageValue(dto.profileImageUrl(), userProfile.getProfileImageUrl())
         );
 
         return UserProfileDto.Res.from(userProfile);
@@ -75,5 +75,11 @@ public class UserProfileService {
         }
 
         return value.trim();
+    }
+
+    private String resolveProfileImageValue(String nextValue, String currentValue) {
+        String normalizedValue = normalize(nextValue);
+
+        return normalizedValue == null ? currentValue : normalizedValue;
     }
 }
