@@ -183,7 +183,7 @@ const rows = computed(() => (currentSubTab.value === 'assets' ? assets : benefit
 
 .asset-segment button {
   display: inline-flex;
-  min-width: 7.3rem;
+  width: 7.6rem;
   min-height: 2.6rem;
   align-items: center;
   justify-content: center;
@@ -212,6 +212,7 @@ const rows = computed(() => (currentSubTab.value === 'assets' ? assets : benefit
 
 .asset-primary {
   display: inline-flex;
+  width: 7.8rem;
   min-height: 3.2rem;
   align-items: center;
   justify-content: center;
