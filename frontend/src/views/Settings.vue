@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSettings, updateSettings } from '@/api/settings/index.js'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -82,6 +82,8 @@ const feedback = reactive({
   profile: '',
   profileError: '',
 })
+const isImageGenerationModalOpen = ref(false)
+const imageGenerationPrompt = ref('')
 
 const activeTab = computed(() => {
   const requestedTab = String(route.query.tab || 'profile')
@@ -91,10 +93,6 @@ const activeTab = computed(() => {
 
 const currentTab = computed(() => tabs.find((tab) => tab.id === activeTab.value) ?? tabs[0])
 const isDarkMode = computed(() => plannerStore.theme === 'dark')
-const generatorPromptModel = computed({
-  get: () => userSettingsStore.generatorPrompt,
-  set: (value) => userSettingsStore.setGeneratorPrompt(value),
-})
 const accountEmail = computed(() => profileForm.email || userSettingsStore.profile.email)
 const userKey = computed(() => resolveUserKey(authStore.user))
 
@@ -223,9 +221,27 @@ function clearProfileImage() {
   profileForm.imageDataUrl = ''
 }
 
+function openImageGenerationModal() {
+  imageGenerationPrompt.value = userSettingsStore.generatorPrompt
+  isImageGenerationModalOpen.value = true
+}
+
+function closeImageGenerationModal() {
+  isImageGenerationModalOpen.value = false
+}
+
 function requestImageGeneration() {
-  userSettingsStore.setGeneratorPrompt(generatorPromptModel.value)
+  const prompt = imageGenerationPrompt.value.trim()
+
+  if (!prompt) {
+    return
+  }
+
+  userSettingsStore.setGeneratorPrompt(prompt)
   userSettingsStore.markImageGenerationReady()
+  feedback.profile = '프로필 이미지 생성 프롬프트가 저장되었습니다.'
+  feedback.profileError = ''
+  closeImageGenerationModal()
 }
 
 function saveProfile() {
@@ -347,6 +363,13 @@ watch(
             </div>
 
             <div class="profile-actions">
+              <button
+                type="button"
+                class="settings-button settings-button--ghost"
+                @click="openImageGenerationModal"
+              >
+                이미지 생성
+              </button>
               <label class="settings-button settings-button--ghost">
                 이미지 선택
                 <input
@@ -391,28 +414,6 @@ watch(
               <span>역할</span>
               <input v-model.trim="profileForm.role" type="text" />
             </label>
-          </section>
-
-          <section class="settings-generator">
-            <div>
-              <strong>프로필 이미지 자동 생성</strong>
-              <p>프롬프트를 준비해 두면 OpenAI API 연동 시 추천 이미지 생성에 사용됩니다.</p>
-            </div>
-            <div class="settings-generator__control">
-              <input
-                v-model.trim="generatorPromptModel"
-                type="text"
-                placeholder="예: 차분한 B2B 마케팅 리드 프로필"
-              />
-              <button
-                type="button"
-                class="settings-button settings-button--ghost"
-                @click="requestImageGeneration"
-              >
-                준비
-              </button>
-            </div>
-            <p class="settings-message">{{ userSettingsStore.generatorMessage }}</p>
           </section>
 
           <footer class="settings-actions">
@@ -540,6 +541,76 @@ watch(
         </div>
       </article>
     </div>
+
+    <Teleport to="body">
+      <Transition name="settings-modal">
+        <div
+          v-if="isImageGenerationModalOpen"
+          class="settings-modal"
+          role="presentation"
+          @click.self="closeImageGenerationModal"
+        >
+          <form
+            class="settings-modal__panel"
+            aria-label="프로필 이미지 생성"
+            @submit.prevent="requestImageGeneration"
+          >
+            <header class="settings-modal__header">
+              <div>
+                <p class="settings-eyebrow">240 x 240</p>
+                <h3>프로필 이미지 생성</h3>
+              </div>
+              <button
+                type="button"
+                class="settings-modal__close"
+                aria-label="닫기"
+                @click="closeImageGenerationModal"
+              >
+                ×
+              </button>
+            </header>
+
+            <div class="settings-modal__body">
+              <div class="settings-modal__preview">
+                <span class="material-symbols-outlined">auto_awesome</span>
+                <strong>240</strong>
+                <small>PNG</small>
+              </div>
+              <label class="settings-field">
+                <span>간단한 프롬프트</span>
+                <input
+                  v-model.trim="imageGenerationPrompt"
+                  type="text"
+                  maxlength="80"
+                  placeholder="예: 차분한 B2B 마케팅 리드"
+                  autofocus
+                />
+              </label>
+              <p class="settings-modal__note">
+                현재는 이미지 생성 API 연동 전 준비 단계이며, 입력한 문구만 저장됩니다.
+              </p>
+            </div>
+
+            <footer class="settings-modal__actions">
+              <button
+                type="button"
+                class="settings-button settings-button--ghost"
+                @click="closeImageGenerationModal"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                class="settings-button settings-button--primary"
+                :disabled="!imageGenerationPrompt.trim()"
+              >
+                생성 준비
+              </button>
+            </footer>
+          </form>
+        </div>
+      </Transition>
+    </Teleport>
   </section>
 </template>
 
@@ -742,7 +813,6 @@ watch(
 }
 
 .profile-preview p,
-.settings-generator p,
 .settings-row p,
 .settings-block p {
   margin-top: 4px;
@@ -751,8 +821,7 @@ watch(
 }
 
 .profile-actions,
-.settings-actions,
-.settings-generator__control {
+.settings-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -776,8 +845,7 @@ watch(
   font-weight: 700;
 }
 
-.settings-field input,
-.settings-generator__control input {
+.settings-field input {
   width: 100%;
   min-height: 40px;
   border: 1px solid var(--line-soft);
@@ -790,14 +858,12 @@ watch(
     border-color var(--transition-fast);
 }
 
-.settings-field input:focus,
-.settings-generator__control input:focus {
+.settings-field input:focus {
   border-color: var(--accent-color);
   background: var(--control-focus-color);
   outline: none;
 }
 
-.settings-generator,
 .settings-block {
   display: grid;
   gap: 12px;
@@ -807,20 +873,11 @@ watch(
   background: var(--surface-card-muted);
 }
 
-.settings-generator strong,
 .settings-block strong,
 .settings-row strong {
   color: var(--text-heading);
   font-size: 14px;
   font-weight: 800;
-}
-
-.settings-generator__control {
-  align-items: stretch;
-}
-
-.settings-generator__control input {
-  flex: 1;
 }
 
 .settings-message,
@@ -883,6 +940,131 @@ watch(
 .settings-button--ghost:hover {
   border-color: var(--line-strong);
   background: var(--surface-control-hover);
+}
+
+.settings-modal {
+  position: fixed;
+  z-index: 10020;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 13, 22, 0.58);
+  backdrop-filter: blur(8px);
+}
+
+.settings-modal__panel {
+  width: min(440px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text-body);
+}
+
+.settings-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-card-muted);
+}
+
+.settings-modal__header h3 {
+  margin-top: 4px;
+  color: var(--text-heading);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.settings-modal__close {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  color: var(--text-heading);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.settings-modal__body {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.settings-modal__preview {
+  display: grid;
+  width: 240px;
+  height: 240px;
+  place-items: center;
+  align-content: center;
+  justify-self: center;
+  gap: 4px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-card-muted);
+  color: var(--text-muted);
+}
+
+.settings-modal__preview .material-symbols-outlined {
+  color: var(--accent-color);
+  font-size: 34px;
+}
+
+.settings-modal__preview strong {
+  color: var(--text-heading);
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.settings-modal__preview small {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-modal__note {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.settings-modal-enter-active,
+.settings-modal-leave-active {
+  transition: opacity var(--transition-fast);
+}
+
+.settings-modal-enter-from,
+.settings-modal-leave-to {
+  opacity: 0;
+}
+
+.settings-modal-enter-active .settings-modal__panel,
+.settings-modal-leave-active .settings-modal__panel {
+  transition: transform var(--transition-fast);
+}
+
+.settings-modal-enter-from .settings-modal__panel,
+.settings-modal-leave-to .settings-modal__panel {
+  transform: translateY(8px) scale(0.98);
 }
 
 .settings-list {
@@ -995,8 +1177,7 @@ watch(
   .settings-status,
   .settings-segmented,
   .settings-actions,
-  .profile-actions,
-  .settings-generator__control {
+  .profile-actions {
     width: 100%;
   }
 
@@ -1016,6 +1197,21 @@ watch(
   .settings-button,
   .settings-segmented button {
     width: 100%;
+  }
+
+  .settings-modal {
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .settings-modal__preview {
+    width: min(240px, 100%);
+    height: auto;
+    aspect-ratio: 1;
+  }
+
+  .settings-modal__actions {
+    flex-direction: column-reverse;
   }
 }
 </style>
