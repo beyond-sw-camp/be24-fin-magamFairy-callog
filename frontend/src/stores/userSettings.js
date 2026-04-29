@@ -392,6 +392,27 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     context.lineWidth = 2
     context.stroke()
 
+    let companyLogo = null
+
+    if (profile.companyLogoDataUrl?.startsWith('data:')) {
+      try {
+        companyLogo = await loadImage(profile.companyLogoDataUrl)
+      } catch {
+        companyLogo = null
+      }
+    }
+
+    if (companyLogo) {
+      context.save()
+      drawRoundedRect(context, 34, 32, 652, 368, 26)
+      context.clip()
+      context.globalAlpha = 0.1
+      drawContainedImage(context, companyLogo, 424, 58, 212, 96)
+      context.globalAlpha = 0.055
+      drawContainedImage(context, companyLogo, 432, 246, 190, 86)
+      context.restore()
+    }
+
     context.save()
     context.beginPath()
     context.arc(142, 152, 74, 0, Math.PI * 2)
@@ -439,23 +460,21 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     context.fillText(profile.phone, 254, 308)
     context.fillText(profile.email, 254, 342)
 
-    try {
-      if (profile.companyLogoDataUrl?.startsWith('data:')) {
-        const logo = await loadImage(profile.companyLogoDataUrl)
+    if (companyLogo) {
+      drawRoundedRect(context, 66, 322, 144, 52, 14)
+      context.fillStyle = 'rgba(255, 255, 255, 0.13)'
+      context.fill()
+      context.strokeStyle = 'rgba(255, 255, 255, 0.22)'
+      context.lineWidth = 1
+      context.stroke()
 
-        drawRoundedRect(context, 66, 324, 136, 48, 12)
-        context.fillStyle = 'rgba(255, 255, 255, 0.9)'
-        context.fill()
-
-        context.save()
-        drawRoundedRect(context, 78, 334, 112, 28, 6)
-        context.clip()
-        drawContainedImage(context, logo, 78, 334, 112, 28)
-        context.restore()
-      } else {
-        throw new Error('empty company logo')
-      }
-    } catch {
+      context.save()
+      drawRoundedRect(context, 80, 334, 116, 28, 7)
+      context.clip()
+      context.globalAlpha = 0.92
+      drawContainedImage(context, companyLogo, 80, 334, 116, 28)
+      context.restore()
+    } else {
       context.fillStyle = 'rgba(255, 255, 255, 0.58)'
       context.font = '700 18px Arial, sans-serif'
       context.fillText(profile.company || 'CALLOG', 70, 350)
