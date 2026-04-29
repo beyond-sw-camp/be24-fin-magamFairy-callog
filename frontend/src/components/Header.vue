@@ -15,17 +15,24 @@ const userSettingsStore = useUserSettingsStore()
 
 const notifications = ref([])
 const notificationsOpen = ref(false)
+const notificationsButton = ref(null)
 const appsMenuOpen = ref(false)
 const appsMenuButton = ref(null)
 const profileCardOpen = ref(false)
 const profileCardButton = ref(null)
 
 const APP_MENU_MARGIN = 12
+const NOTIFICATION_MENU_WIDTH = 360
+const NOTIFICATION_MENU_HEIGHT_ESTIMATE = 390
 const APP_MENU_WIDTH = 220
 const APP_MENU_HEIGHT_ESTIMATE = 260
 const PROFILE_CARD_WIDTH = 320
 const PROFILE_CARD_HEIGHT_ESTIMATE = 350
 
+const notificationsPosition = reactive({
+  top: 0,
+  left: 0,
+})
 const appsMenuPosition = reactive({
   top: 0,
   left: 0,
@@ -59,6 +66,10 @@ const pageTitle = computed(() => route.meta?.title ?? activeRoute.value.label)
 const sectionTitle = computed(() => route.meta?.section ?? activeRoute.value.section)
 const userSettingsKey = computed(() => resolveUserSettingsKey(authStore.user))
 const profileCard = computed(() => userSettingsStore.profileCardData)
+const notificationsStyle = computed(() => ({
+  top: `${notificationsPosition.top}px`,
+  left: `${notificationsPosition.left}px`,
+}))
 const appsMenuStyle = computed(() => ({
   top: `${appsMenuPosition.top}px`,
   left: `${appsMenuPosition.left}px`,
@@ -164,9 +175,17 @@ function closeFloatingMenus() {
 }
 
 function toggleNotifications() {
-  notificationsOpen.value = !notificationsOpen.value
   appsMenuOpen.value = false
   profileCardOpen.value = false
+
+  if (notificationsOpen.value) {
+    notificationsOpen.value = false
+    return
+  }
+
+  positionNotifications()
+  notificationsOpen.value = true
+  void nextTick(positionNotifications)
 }
 
 function clamp(value, min, max) {
@@ -175,6 +194,21 @@ function clamp(value, min, max) {
   }
 
   return Math.min(max, Math.max(min, value))
+}
+
+function positionNotifications() {
+  const button = notificationsButton.value
+
+  if (!(button instanceof HTMLElement)) {
+    return
+  }
+
+  const rect = button.getBoundingClientRect()
+  const maxLeft = window.innerWidth - NOTIFICATION_MENU_WIDTH - APP_MENU_MARGIN
+  const maxTop = window.innerHeight - NOTIFICATION_MENU_HEIGHT_ESTIMATE - APP_MENU_MARGIN
+
+  notificationsPosition.left = clamp(rect.right - NOTIFICATION_MENU_WIDTH, APP_MENU_MARGIN, maxLeft)
+  notificationsPosition.top = clamp(rect.bottom + 8, APP_MENU_MARGIN, maxTop)
 }
 
 function positionAppsMenu() {
@@ -279,6 +313,7 @@ function handleDocumentClick(event) {
     (node) =>
       node instanceof HTMLElement &&
       (node.dataset?.headerRoot === 'true' ||
+        node.dataset?.notificationsMenuRoot === 'true' ||
         node.dataset?.appsMenuRoot === 'true' ||
         node.dataset?.profileCardRoot === 'true'),
   )
@@ -288,6 +323,10 @@ function handleDocumentClick(event) {
 }
 
 function handleViewportChange() {
+  if (notificationsOpen.value) {
+    positionNotifications()
+  }
+
   if (appsMenuOpen.value) {
     positionAppsMenu()
   }
@@ -404,6 +443,7 @@ onBeforeUnmount(() => {
         <!-- 알림 -->
         <div class="callog-header__dropdown-wrap">
           <button
+            ref="notificationsButton"
             type="button"
             class="callog-header__icon-btn callog-header__icon-btn--notif"
             aria-label="알림"
@@ -429,7 +469,7 @@ onBeforeUnmount(() => {
 
           <Transition name="callog-dropdown">
             <div
-              v-if="notificationsOpen"
+              v-if="false && notificationsOpen"
               class="callog-header__dropdown callog-header__dropdown--notif"
             >
               <div class="callog-dropdown__head">
@@ -516,6 +556,51 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </header>
+
+  <Teleport to="body">
+    <Transition name="callog-dropdown">
+      <div
+        v-if="notificationsOpen"
+        data-notifications-menu-root="true"
+        class="callog-header__dropdown callog-header__dropdown--notif callog-header__dropdown--floating"
+        :style="notificationsStyle"
+      >
+        <div class="callog-dropdown__head">
+          <strong class="callog-dropdown__title">최근 알림</strong>
+          <RouterLink to="/notifications" class="callog-dropdown__more" @click="closeFloatingMenus">
+            알림 센터
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          </RouterLink>
+        </div>
+        <div class="callog-dropdown__body">
+          <div v-if="notifications.length" class="callog-notif-list">
+            <div v-for="item in notifications" :key="item.id" class="callog-notif-item">
+              <div class="callog-notif-item__top">
+                <p class="callog-notif-item__title">{{ item.title }}</p>
+                <button type="button" class="callog-notif-item__btn">자세히 보기</button>
+              </div>
+              <p class="callog-notif-item__meta">
+                {{ formatRelativeTime(item.created_at) }} · {{ item.message }}
+              </p>
+            </div>
+          </div>
+          <div v-else class="callog-dropdown__empty">새로운 알림이 없습니다.</div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 
   <Teleport to="body">
     <Transition name="callog-dropdown">
@@ -811,6 +896,10 @@ onBeforeUnmount(() => {
 
 .callog-header__dropdown--notif {
   width: 360px;
+}
+
+.callog-header__dropdown--notif.callog-header__dropdown--floating {
+  z-index: 10000;
 }
 
 .callog-header__dropdown--menu {
