@@ -2,32 +2,34 @@ package org.example.backend.matching.model;
 
 import lombok.Builder;
 import lombok.Getter;
+import org.example.backend.organization.model.Organization;
 import org.springframework.data.domain.Page;
-import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 
+import static org.example.backend.common.Constants.DEFAULT_ASSET_STATUS;
+
 public class MatchingDto {
 
-//    @Getter
-//    @Builder
-//    public static class AddAsset {
-//        private String target;
-//        private String type;
-//        private String scale;
-//        private String conditions;
-//        private String createdAt;
-//
-//        public MarketingAsset toEntity() {
-//            return MarketingAsset.builder()
-//                    .target(this.target)
-//                    .scale(this.scale)
-//                    .type(this.type)
-//                    .conditions(this.conditions)
-//                    .createdAt(this.createdAt)
-//                    .build();
-//        }
-//    }
+    @Getter
+    @Builder
+    public static class AddAsset {
+        private String target;
+        private String type;
+        private String scale;
+        private String conditions;
+
+        public MarketingAsset toEntity(Organization organization) {
+            return MarketingAsset.builder()
+                    .organization(organization)
+                    .target(this.target)
+                    .scale(this.scale)
+                    .type(this.type)
+                    .conditions(this.conditions)
+                    .isActive(DEFAULT_ASSET_STATUS)
+                    .build();
+        }
+    }
 
     @Getter
     @Builder
