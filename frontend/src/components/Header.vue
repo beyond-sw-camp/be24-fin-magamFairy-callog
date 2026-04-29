@@ -54,7 +54,9 @@ const pageRoutes = [
   },
   { id: 'templates', to: '/templates', label: '템플릿', section: '콘텐츠 라이브러리' },
   { id: 'reports', to: '/reports', label: '리포트', section: '성과 리뷰' },
-  { id: 'references', to: '/references', label: '레퍼런스', section: '콘텐츠 라이브러리' },
+  { id: 'references', to: '/references', label: '레퍼런스', section: '캠페인 레퍼런스' },
+  { id: 'resources', to: '/resources', label: '자료실', section: '캠페인 자료실' },
+  { id: 'review-approval', to: '/review-approval', label: '검수/승인', section: '검수 대기 · 승인 요청' },
 ]
 
 const activeRoute = computed(
