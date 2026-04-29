@@ -7,10 +7,13 @@ import lombok.RequiredArgsConstructor;
 import org.example.backend.user.model.TokenDto;
 import org.example.backend.user.service.AuthService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -24,13 +27,20 @@ public class AuthController {
 
     @PostMapping("/reissue")
     public ResponseEntity<?> reissue(HttpServletRequest request, HttpServletResponse response) {
-        String refreshToken = findRefreshCookie(request);
-        TokenDto.AuthTokenResponse tokens = authService.reissue(refreshToken);
+        try {
+            String refreshToken = findRefreshCookie(request);
+            TokenDto.AuthTokenResponse tokens = authService.reissue(refreshToken);
 
-        response.setHeader("Authorization", "Bearer " + tokens.accessToken());
-        response.addCookie(createRefreshCookie(tokens.refreshToken(), 14 * 24 * 60 * 60));
+            response.setHeader("Authorization", "Bearer " + tokens.accessToken());
 
-        return ResponseEntity.ok().body("token reissued");
+            return ResponseEntity.ok().body("token reissued");
+        } catch (IllegalArgumentException e) {
+            response.addCookie(createRefreshCookie(null, 0));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "error", "invalid refresh token",
+                    "message", e.getMessage()
+            ));
+        }
     }
 
     @PostMapping("/logout")
