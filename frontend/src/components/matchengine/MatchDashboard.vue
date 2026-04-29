@@ -1,32 +1,27 @@
 <script setup>
-import { ref, computed } from 'vue';
-
-// Overview.vue에서 전달받는 다크모드 상태
-const props = defineProps({
+defineProps({
   isDark: {
     type: Boolean,
-    default: false
-  }
-});
+    default: false,
+  },
+})
 
-// 상단 요약 위젯용 더미 데이터
-const summaryStats = ref([
-  { label: '등록된 자산', value: '12', unit: '건', color: 'text-blue-500' },
-  { label: '신규 파트너 제안', value: '8', unit: '건', color: 'text-fuchsia-500' },
-  { label: '최우선 추천 대기', value: '3', unit: '건', color: 'text-[#8B5CF6]' },
-  { label: '진행중인 캠페인', value: '5', unit: '건', color: 'text-emerald-500' },
-]);
+const summaryStats = [
+  { label: '등록 자산', value: '12', helper: '활성 9' },
+  { label: '신규 제안', value: '8', helper: '오늘 2' },
+  { label: '최우선 추천', value: '3', helper: '90점 이상' },
+  { label: '진행 캠페인', value: '5', helper: '운영 중' },
+]
 
-// MATCH_013: 파트너 제안 목록 더미 데이터
-// MATCH_009: 90점 이상(최우선 추천), 80점 이상(우선 검토), 70점 이상(조건부 검토) 기준 반영
-const partnerProposals = ref([
+const partnerProposals = [
   {
     id: 1,
     partnerName: '스타벅스 코리아',
     benefitSummary: '시즌 음료 사이즈업 쿠폰 1만장 및 앱 배너 노출',
     totalScore: 94,
     grade: '최우선 추천',
-    date: '2026-04-28'
+    date: '04.28',
+    owner: '브랜드제휴팀',
   },
   {
     id: 2,
@@ -34,7 +29,8 @@ const partnerProposals = ref([
     benefitSummary: '러닝앱 멤버십 공동 챌린지 및 리미티드 굿즈',
     totalScore: 85,
     grade: '우선 검토',
-    date: '2026-04-27'
+    date: '04.27',
+    owner: '호텔마케팅팀',
   },
   {
     id: 3,
@@ -42,7 +38,8 @@ const partnerProposals = ref([
     benefitSummary: 'VIP 고객 대상 프리미엄 관람권 1+1 혜택',
     totalScore: 76,
     grade: '조건부 검토',
-    date: '2026-04-25'
+    date: '04.25',
+    owner: 'CRM팀',
   },
   {
     id: 4,
@@ -50,124 +47,256 @@ const partnerProposals = ref([
     benefitSummary: '신규 뷰티 브랜드 런칭 기념 샘플링 키트 제공',
     totalScore: 65,
     grade: '보완 필요',
-    date: '2026-04-24'
-  }
-]);
+    date: '04.24',
+    owner: '브랜드제휴팀',
+  },
+]
 
-// 추천 등급에 따른 배지 스타일 반환 함수
-const getGradeBadgeStyle = (grade) => {
-  const styles = {
-    '최우선 추천': 'bg-violet-100 text-violet-700 border-violet-200',
-    '우선 검토': 'bg-blue-100 text-blue-700 border-blue-200',
-    '조건부 검토': 'bg-amber-100 text-amber-700 border-amber-200',
-    '보완 필요': 'bg-rose-100 text-rose-700 border-rose-200',
-    '추천 제외': 'bg-gray-100 text-gray-700 border-gray-200'
-  };
-  
-  // 다크모드일 경우의 색상
-  const darkStyles = {
-    '최우선 추천': 'bg-violet-900/40 text-violet-300 border-violet-700/50',
-    '우선 검토': 'bg-blue-900/40 text-blue-300 border-blue-700/50',
-    '조건부 검토': 'bg-amber-900/40 text-amber-300 border-amber-700/50',
-    '보완 필요': 'bg-rose-900/40 text-rose-300 border-rose-700/50',
-    '추천 제외': 'bg-gray-800/40 text-gray-400 border-gray-700/50'
-  };
+const pipelines = [
+  { label: '제안 접수', value: 8 },
+  { label: '자동 평가', value: 6 },
+  { label: '조합 추천', value: 3 },
+  { label: '운영 전환', value: 2 },
+]
 
-  return props.isDark ? (darkStyles[grade] || darkStyles['추천 제외']) : (styles[grade] || styles['추천 제외']);
-};
+function gradeClass(score) {
+  if (score >= 90) return 'dash-grade--strong'
+  if (score >= 80) return 'dash-grade--info'
+  if (score >= 70) return 'dash-grade--warning'
+  return 'dash-grade--danger'
+}
 </script>
 
 <template>
-  <div class="space-y-6">
-    
-    <!-- 1. 상단 현황 요약 위젯 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div 
-        v-for="(stat, index) in summaryStats" 
-        :key="index"
-        class="p-6 rounded-xl border transition-colors duration-300 shadow-sm"
-        :class="isDark ? 'bg-[#262637] border-[#37374f]' : 'bg-white border-gray-100'"
-      >
-        <p class="text-sm font-medium mb-1" :class="isDark ? 'text-slate-400' : 'text-gray-500'">
-          {{ stat.label }}
-        </p>
-        <div class="flex items-baseline space-x-1">
-          <span class="text-3xl font-bold" :class="[isDark ? 'text-white' : 'text-gray-900']">
-            {{ stat.value }}
-          </span>
-          <span class="text-sm font-medium" :class="stat.color">{{ stat.unit }}</span>
-        </div>
-      </div>
+  <section class="match-dashboard">
+    <div class="dash-stat-grid">
+      <article v-for="stat in summaryStats" :key="stat.label" class="dash-stat">
+        <span>{{ stat.label }}</span>
+        <strong>{{ stat.value }}</strong>
+        <small>{{ stat.helper }}</small>
+      </article>
     </div>
 
-    <!-- 2. 파트너 제안 목록 리스트 (MATCH_013) -->
-    <div>
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-bold" :class="isDark ? 'text-white' : 'text-gray-800'">
-          신규 파트너 제안 요약
-        </h3>
-        <button class="text-sm font-medium text-[#8B5CF6] hover:underline">
-          전체 보기
-        </button>
-      </div>
-
-      <!-- 제안 카드 그리드 -->
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        <div 
-          v-for="proposal in partnerProposals" 
-          :key="proposal.id"
-          class="relative p-6 rounded-xl border transition-all duration-200 hover:shadow-md cursor-pointer flex flex-col h-full"
-          :class="isDark ? 'bg-[#262637] border-[#37374f] hover:border-[#8B5CF6]/50' : 'bg-white border-gray-200 hover:border-[#8B5CF6]/50'"
-        >
-          <!-- 카드 헤더: 파트너사명 및 뱃지 -->
-          <div class="flex justify-between items-start mb-4">
-            <div>
-              <h4 class="text-lg font-bold" :class="isDark ? 'text-slate-100' : 'text-gray-900'">
-                {{ proposal.partnerName }}
-              </h4>
-              <p class="text-xs mt-1" :class="isDark ? 'text-slate-500' : 'text-gray-400'">
-                제안일: {{ proposal.date }}
-              </p>
-            </div>
-            
-            <!-- 추천 등급 배지 -->
-            <span 
-              class="px-2.5 py-1 text-xs font-semibold rounded-full border"
-              :class="getGradeBadgeStyle(proposal.grade)"
-            >
-              {{ proposal.grade }}
-            </span>
-          </div>
-
-          <!-- 카드 본문: 제공 혜택 요약 -->
-          <div class="flex-1 mb-6">
-            <p class="text-sm line-clamp-2" :class="isDark ? 'text-slate-300' : 'text-gray-600'">
-              {{ proposal.benefitSummary }}
-            </p>
-          </div>
-
-          <!-- 카드 푸터: 종합 점수 -->
-          <div class="pt-4 border-t flex justify-between items-center" 
-               :class="isDark ? 'border-[#37374f]' : 'border-gray-100'">
-            <span class="text-sm font-medium" :class="isDark ? 'text-slate-400' : 'text-gray-500'">종합 평가 점수</span>
-            <div class="flex items-center space-x-2">
-              <!-- 점수 바 시각화 (간단한 프로그레스 바) -->
-              <div class="w-20 h-2 rounded-full overflow-hidden" :class="isDark ? 'bg-slate-700' : 'bg-gray-100'">
-                <div 
-                  class="h-full rounded-full" 
-                  :class="proposal.totalScore >= 80 ? 'bg-[#8B5CF6]' : (proposal.totalScore >= 70 ? 'bg-amber-400' : 'bg-rose-400')"
-                  :style="`width: ${proposal.totalScore}%`"
-                ></div>
-              </div>
-              <span class="text-lg font-bold" :class="isDark ? 'text-white' : 'text-gray-900'">
-                {{ proposal.totalScore }}<span class="text-xs font-normal ml-0.5" :class="isDark ? 'text-slate-500' : 'text-gray-400'">점</span>
-              </span>
-            </div>
-          </div>
-          
+    <div class="dash-layout">
+      <article class="dash-panel dash-panel--wide">
+        <div class="dash-panel__head">
+          <h3>신규 파트너 제안</h3>
+          <span>최신순</span>
         </div>
-      </div>
+
+        <div class="dash-table">
+          <div class="dash-table__head">
+            <span>파트너</span>
+            <span>혜택</span>
+            <span>담당</span>
+            <span>점수</span>
+            <span>등급</span>
+          </div>
+          <button
+            v-for="proposal in partnerProposals"
+            :key="proposal.id"
+            type="button"
+            class="dash-table__row"
+          >
+            <strong>{{ proposal.partnerName }}</strong>
+            <span>{{ proposal.benefitSummary }}</span>
+            <span>{{ proposal.owner }}</span>
+            <b>{{ proposal.totalScore }}</b>
+            <em :class="gradeClass(proposal.totalScore)">{{ proposal.grade }}</em>
+          </button>
+        </div>
+      </article>
+
+      <aside class="dash-panel">
+        <div class="dash-panel__head">
+          <h3>진행 흐름</h3>
+          <span>오늘 기준</span>
+        </div>
+
+        <div class="dash-pipeline">
+          <div v-for="item in pipelines" :key="item.label">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
+        </div>
+      </aside>
     </div>
-    
-  </div>
+  </section>
 </template>
+
+<style scoped>
+.match-dashboard {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  height: 100%;
+  min-height: 0;
+}
+
+.dash-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.dash-stat,
+.dash-panel {
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel-color);
+  box-shadow: 0 6px 18px rgba(19, 35, 68, 0.04);
+}
+
+.dash-stat {
+  min-height: 4.4rem;
+  padding: 0.72rem 0.8rem;
+}
+
+.dash-stat span,
+.dash-stat small,
+.dash-panel__head span,
+.dash-table__head span,
+.dash-table__row span,
+.dash-pipeline span {
+  color: var(--muted-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.dash-stat strong {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--text-primary);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.dash-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(240px, 0.55fr);
+  gap: 0.7rem;
+  min-height: 0;
+}
+
+.dash-panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.8rem;
+}
+
+.dash-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.65rem;
+}
+
+.dash-panel__head h3 {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.dash-table {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.dash-table__head,
+.dash-table__row {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(260px, 1.7fr) minmax(100px, 0.7fr) 50px 96px;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.dash-table__head {
+  padding: 0 0.55rem 0.25rem;
+}
+
+.dash-table__row {
+  min-height: 3.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  padding: 0.55rem;
+  text-align: left;
+}
+
+.dash-table__row strong {
+  color: var(--text-primary);
+  font-size: 0.84rem;
+}
+
+.dash-table__row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-table__row b {
+  color: var(--accent-color);
+  font-size: 0.92rem;
+}
+
+.dash-table__row em {
+  display: inline-flex;
+  min-height: 1.45rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 0.48rem;
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.dash-grade--strong {
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.dash-grade--info {
+  background: var(--color-info-light);
+  color: var(--color-info-dark);
+}
+
+.dash-grade--warning {
+  background: var(--color-warning-light);
+  color: var(--color-warning-dark);
+}
+
+.dash-grade--danger {
+  background: var(--color-danger-light);
+  color: var(--color-danger-dark);
+}
+
+.dash-pipeline {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.dash-pipeline div {
+  display: flex;
+  min-height: 2.85rem;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  padding: 0 0.7rem;
+}
+
+.dash-pipeline strong {
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+@media (max-width: 1180px) {
+  .dash-stat-grid,
+  .dash-layout {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
