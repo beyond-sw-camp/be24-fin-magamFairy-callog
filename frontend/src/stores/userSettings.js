@@ -14,13 +14,6 @@ const fallbackProfile = {
   companyLogoDataUrl: '',
 }
 
-const defaultNotifications = {
-  task: true,
-  qa: true,
-  ai: true,
-  critical: true,
-}
-
 const defaultThemeUi = {
   theme: 'light',
   density: 'comfortable',
@@ -244,7 +237,6 @@ function triggerDownload(dataUrl, filename) {
 export const useUserSettingsStore = defineStore('userSettings', () => {
   const activeUserKey = ref('guest')
   const profile = reactive({ ...fallbackProfile })
-  const notifications = reactive({ ...defaultNotifications })
   const themeUi = reactive({ ...defaultThemeUi })
   const security = reactive({ ...defaultSecurity })
   const generatorPrompt = ref('')
@@ -270,7 +262,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
       storageKey.value,
       JSON.stringify({
         profile: { ...profile },
-        notifications: { ...notifications },
         themeUi: { ...themeUi },
         security: { ...security },
         generatorPrompt: generatorPrompt.value,
@@ -286,10 +277,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     const nextProfile = normalizeProfile(savedSettings.profile, rawUser)
 
     assignState(profile, nextProfile)
-    assignState(notifications, {
-      ...defaultNotifications,
-      ...(savedSettings.notifications ?? {}),
-    })
     assignState(themeUi, {
       ...defaultThemeUi,
       ...(savedSettings.themeUi ?? {}),
@@ -314,15 +301,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     )
 
     assignState(profile, nextProfile)
-    persist()
-  }
-
-  function updateNotification(key, value) {
-    if (!Object.prototype.hasOwnProperty.call(notifications, key)) {
-      return
-    }
-
-    notifications[key] = Boolean(value)
     persist()
   }
 
@@ -489,14 +467,12 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     generatorStatus,
     loadUserSettings,
     markImageGenerationReady,
-    notifications,
     profile,
     profileCardData,
     profileInitials,
     security,
     setGeneratorPrompt,
     themeUi,
-    updateNotification,
     updateProfile,
     updateSecurity,
     updateThemeUi,

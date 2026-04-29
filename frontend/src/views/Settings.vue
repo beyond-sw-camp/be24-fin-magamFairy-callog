@@ -20,12 +20,6 @@ const tabs = [
     summary: '개인 정보와 프로필 이미지를 관리합니다.',
   },
   {
-    id: 'notifications',
-    label: '알림',
-    icon: 'notifications',
-    summary: '업무, QA, AI 분석 알림을 설정합니다.',
-  },
-  {
     id: 'theme',
     label: '테마/UI',
     icon: 'contrast',
@@ -36,30 +30,6 @@ const tabs = [
     label: '계정/보안',
     icon: 'lock',
     summary: '로그인 계정과 보안 진입 정보를 확인합니다.',
-  },
-]
-
-const notificationItems = [
-  {
-    key: 'task',
-    label: '업무 알림',
-    description: '업무 생성, 배정, 상태 변경 알림',
-  },
-  {
-    key: 'qa',
-    label: 'QA 알림',
-    description: '검수 결과, 수정 요청, 반려 알림',
-  },
-  {
-    key: 'ai',
-    label: 'AI 분석 알림',
-    description: '리스크 감지, 가이드, 분석 결과 알림',
-  },
-  {
-    key: 'critical',
-    label: '중요 알림',
-    description: '마감 임박, 업무 지연 등 필수 알림',
-    locked: true,
   },
 ]
 
@@ -150,14 +120,6 @@ function applyRemoteSettings(payload) {
     plannerStore.setTheme(nextTheme)
     userSettingsStore.updateThemeUi({ theme: nextTheme })
   }
-
-  notificationItems.forEach((item) => {
-    const remoteValue = source.notifications?.[item.key] ?? source[item.key]
-
-    if (typeof remoteValue === 'boolean') {
-      userSettingsStore.updateNotification(item.key, remoteValue)
-    }
-  })
 }
 
 async function syncSettingToServer(body) {
@@ -175,22 +137,6 @@ function setTheme(nextTheme) {
   void syncSettingToServer({
     theme: nextTheme,
     darkMode: nextTheme === 'dark',
-  })
-}
-
-function toggleNotification(item) {
-  if (item.locked) {
-    return
-  }
-
-  const nextValue = !userSettingsStore.notifications[item.key]
-  userSettingsStore.updateNotification(item.key, nextValue)
-
-  void syncSettingToServer({
-    [item.key]: nextValue,
-    notifications: {
-      [item.key]: nextValue,
-    },
   })
 }
 
@@ -479,28 +425,6 @@ watch(
             <button type="submit" class="settings-button settings-button--primary">저장</button>
           </footer>
         </form>
-
-        <div v-else-if="activeTab === 'notifications'" class="settings-pane">
-          <div class="settings-list">
-            <div v-for="item in notificationItems" :key="item.key" class="settings-row">
-              <div>
-                <strong>{{ item.label }}</strong>
-                <p>{{ item.description }}</p>
-              </div>
-              <button
-                type="button"
-                class="ui-toggle"
-                :class="{ 'is-active': userSettingsStore.notifications[item.key] }"
-                :aria-pressed="userSettingsStore.notifications[item.key]"
-                :aria-label="`${item.label} 수신 설정`"
-                :disabled="item.locked"
-                @click="toggleNotification(item)"
-              >
-                <span class="ui-toggle-thumb" />
-              </button>
-            </div>
-          </div>
-        </div>
 
         <div v-else-if="activeTab === 'theme'" class="settings-pane">
           <section class="settings-block">
