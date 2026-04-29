@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.backend.organization.model.Organization;
 import org.example.backend.organization.service.OrganizationService;
 import org.example.backend.user.repository.UserRepository;
+import org.example.backend.userInfo.userProfile.service.UserProfileService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -24,6 +25,7 @@ public class Administrator implements ApplicationRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final OrganizationService organizationService;
+    private final UserProfileService userProfileService;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -52,7 +54,8 @@ public class Administrator implements ApplicationRunner {
             admin.setPassword(passwordEncoder.encode(ADMIN_PASSWORD));
         }
 
-        userRepository.save(admin);
+        User savedAdmin = userRepository.save(admin);
+        userProfileService.ensureProfile(savedAdmin);
     }
 
     private boolean shouldResetPassword(String storedPassword) {

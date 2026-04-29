@@ -121,7 +121,7 @@ const calendarWeeks = computed(() => {
 </script>
 
 <template>
-  <div class="w-full h-screen flex flex-col transition-colors duration-300"
+  <div class="w-full h-full flex flex-col transition-colors duration-300"
        :class="isDark ? 'bg-[#1e1e2d] text-slate-200' : 'bg-white text-gray-800'">
     
     <header class="flex items-center justify-between px-6 py-4 border-b transition-colors"

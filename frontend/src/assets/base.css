@@ -94,6 +94,21 @@
   --danger-text-strong: #DC2626;
   --shadow-soft: 0 20px 55px rgba(19, 35, 68, 0.07);
   --shadow-elevated: 0 32px 80px rgba(19, 35, 68, 0.15);
+  --surface-page: var(--app-bg);
+  --surface-card: var(--panel-color);
+  --surface-card-muted: var(--panel-muted);
+  --surface-card-subtle: var(--panel-subtle);
+  --surface-control: var(--control-color);
+  --surface-control-hover: var(--panel-muted);
+  --surface-control-active: var(--accent-color);
+  --text-heading: var(--text-primary);
+  --text-body: var(--text-secondary);
+  --text-muted: var(--muted-text);
+  --line-soft: var(--border-color);
+  --line-strong: var(--border-strong);
+  --toggle-bg: #e2e8f0;
+  --toggle-bg-active: var(--success-color);
+  --toggle-thumb: #ffffff;
 }
 
 :root[data-theme='dark'] {
@@ -132,6 +147,21 @@
   --danger-text-strong: #ff8a9b;
   --shadow-soft: 0 18px 50px rgba(0, 0, 0, 0.28);
   --shadow-elevated: 0 32px 90px rgba(0, 0, 0, 0.45);
+  --surface-page: var(--app-bg);
+  --surface-card: var(--panel-color);
+  --surface-card-muted: var(--panel-muted);
+  --surface-card-subtle: var(--panel-subtle);
+  --surface-control: var(--control-color);
+  --surface-control-hover: #252d3c;
+  --surface-control-active: var(--success-color);
+  --text-heading: var(--text-primary);
+  --text-body: var(--text-secondary);
+  --text-muted: var(--muted-text);
+  --line-soft: var(--border-color);
+  --line-strong: var(--border-strong);
+  --toggle-bg: #3f3f56;
+  --toggle-bg-active: var(--success-color);
+  --toggle-thumb: #ffffff;
 }
 
 *,
