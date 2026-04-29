@@ -617,10 +617,12 @@ watch(
 <style scoped>
 .settings-page {
   display: grid;
+  width: min(1180px, 100%);
   max-width: 1180px;
   gap: 16px;
   margin: 0 auto;
   padding: 24px;
+  scrollbar-gutter: stable;
 }
 
 .settings-header {
@@ -679,6 +681,7 @@ watch(
 .settings-shell {
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr);
+  align-items: start;
   gap: 16px;
 }
 
@@ -695,10 +698,12 @@ watch(
 
 .settings-tab {
   display: grid;
+  position: relative;
   grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 58px;
+  min-height: 76px;
   padding: 10px;
   border-radius: var(--radius-sm);
   color: var(--text-body);
@@ -709,6 +714,17 @@ watch(
     color var(--transition-fast);
 }
 
+.settings-tab::before {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: transparent;
+  content: '';
+}
+
 .settings-tab:hover,
 .settings-tab.is-active {
   background: var(--surface-control-hover);
@@ -716,7 +732,11 @@ watch(
 }
 
 .settings-tab.is-active {
-  box-shadow: inset 3px 0 0 var(--accent-color);
+  box-shadow: none;
+}
+
+.settings-tab.is-active::before {
+  background: var(--accent-color);
 }
 
 .settings-tab__icon {
@@ -733,6 +753,10 @@ watch(
   display: block;
 }
 
+.settings-tab > span:last-child {
+  min-width: 0;
+}
+
 .settings-tab strong {
   font-size: 14px;
   font-weight: 800;
@@ -747,10 +771,14 @@ watch(
 
 .settings-panel {
   min-width: 0;
+  min-height: 560px;
   border-radius: var(--radius-md);
 }
 
 .settings-panel__head {
+  display: flex;
+  min-height: 88px;
+  align-items: center;
   padding: 18px 20px;
 }
 
