@@ -52,6 +52,7 @@ public class SecurityConfig {
                         "/api/sse/**",
                         "/sse/**"
                 ).permitAll()
+                .requestMatchers("/matching/**").permitAll() // 임시
                 .anyRequest().authenticated()
         );
 
