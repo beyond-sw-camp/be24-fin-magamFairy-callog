@@ -65,6 +65,15 @@ const routes = [
         },
       },
       {
+        path: 'team-board',
+        name: 'team-board',
+        component: () => import('@/views/TeamBoardView.vue'),
+        meta: {
+          title: '팀 보드',
+          section: '전체 협업 팀보드',
+        },
+      },
+      {
         path: 'overview',
         name: 'overview',
         component: () => import('@/views/OverView.vue'),
