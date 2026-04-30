@@ -5,7 +5,6 @@ import org.example.backend.common.model.BaseResponse;
 import org.example.backend.common.model.BaseResponseStatus;
 import org.example.backend.matching.model.MatchingDto;
 import org.example.backend.matching.service.AssetService;
-import org.example.backend.matching.service.BenefitService;
 import org.example.backend.user.model.AuthUserDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
