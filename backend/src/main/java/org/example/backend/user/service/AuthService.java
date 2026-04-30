@@ -23,10 +23,10 @@ public class AuthService {
     private final UserRepository userRepository;
 
     @Transactional
-    public TokenDto.AuthTokenResponse issueTokens(Long userIdx, String id, String email, String name, String role) {
+    public TokenDto.AuthTokenResponse issueTokens(Long userIdx, String id, String email, String name, String role, String companyName, String department) {
         String userId = requireId(id, email);
-        String access = jwtUtil.createToken("access", userIdx, userId, email, name, role, 600000L);
-        String refresh = jwtUtil.createToken("refresh", userIdx, userId, email, name, role, 1209600000L);
+        String access = jwtUtil.createToken("access", userIdx, userId, email, name, role, companyName, department, 600000L);
+        String refresh = jwtUtil.createToken("refresh", userIdx, userId, email, name, role, companyName, department, 1209600000L);
         LocalDateTime expiryDate = LocalDateTime.now().plusDays(14);
 
         refreshTokenRepository.findByUserId(userId)
@@ -76,6 +76,8 @@ public class AuthService {
                 user.getEmail(),
                 user.getName(),
                 user.getRole(),
+                user.getCompanyName(),
+                user.getDepartment(),
                 60000L
         );
         return new TokenDto.AuthTokenResponse(newAccess, refreshToken);

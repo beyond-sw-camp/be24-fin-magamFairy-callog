@@ -24,6 +24,15 @@ public class BaseResponse<T> {
         );
     }
 
+    public static <T> BaseResponse success(BaseResponseStatus status,T data) {
+        return new BaseResponse(
+                status.isSuccess(),
+                status.getCode(),
+                status.getMessage(),
+                data
+        );
+    }
+
     public static <T> BaseResponse fail(BaseResponseStatus status) {
         return new BaseResponse(
                 status.isSuccess(),

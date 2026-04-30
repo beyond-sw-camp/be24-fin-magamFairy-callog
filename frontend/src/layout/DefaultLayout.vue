@@ -17,12 +17,14 @@ onMounted(() => {
 <template>
   <div class="callog-layout">
     <AppSidebar />
-    <AppSidebar2 />
     <div class="callog-main">
       <AppHeader />
-      <main class="callog-content">
-        <RouterView />
-      </main>
+      <div class="callog-body">
+        <AppSidebar2 />
+        <main class="callog-content">
+          <RouterView />
+        </main>
+      </div>
     </div>
   </div>
   <TaskModal />

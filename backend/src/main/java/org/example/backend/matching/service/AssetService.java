@@ -1,5 +1,6 @@
 package org.example.backend.matching.service;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.matching.model.MarketingAsset;
@@ -22,7 +23,7 @@ public class AssetService {
     private final UserRepository userRepository;
 
     public MatchingDto.AssetRes getAsset(Long idx) {
-        return MatchingDto.AssetRes.toDto(assetRepository.getReferenceById(idx));
+        return MatchingDto.AssetRes.toDto(assetRepository.findById(idx).orElseThrow(EntityNotFoundException::new));
     }
 
     public MatchingDto.AssetList getAssetList(int page, int size) {
@@ -35,10 +36,10 @@ public class AssetService {
 
     @Transactional
     public void addAsset(MatchingDto.AddAsset dto, AuthUserDetails user) {
-        User userEntity = userRepository.findById(user.getIdx()).orElseThrow();
+        User userEntity = userRepository.getReferenceById(user.getIdx());
         Organization affiliate = userEntity.getOrganization();
         if(affiliate.getType().equals(EXTERNAL_PARTNER)){
-            System.out.println("뭔가 안됨");
+            System.out.println("권한 거부");
         }else {
             assetRepository.save(dto.toEntity(affiliate));
         }

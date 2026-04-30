@@ -1,109 +1,152 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
+import CampaignCreateModal from '@/components/campaign/CampaignCreateModal.vue'
+import { campaignLabels, campaignSidebarText, campaignStatusMeta } from '@/constants/campaignText'
+import { CreateCampaign, UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
 
 const route = useRoute()
+const router = useRouter()
 const store = usePlannerStore()
 const authStore = useAuthStore()
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'callog-sidebar2-width'
-const SIDEBAR_DEFAULT_WIDTH = 260
-const SIDEBAR_MIN_WIDTH = 220
-const SIDEBAR_MAX_WIDTH = 420
+const SIDEBAR_DEFAULT_WIDTH = 240
+const SIDEBAR_MIN_WIDTH = 200
+const SIDEBAR_MAX_WIDTH = 400
+
+const FLOAT_MARGIN = 16
+const MENU_WIDTH = 224
+const MENU_HEIGHT_ESTIMATE = 220
 
 const sidebarElement = ref(null)
 const sidebarWidth = ref(SIDEBAR_DEFAULT_WIDTH)
 const sidebarResizeLeft = ref(0)
 const isResizing = ref(false)
 
-const sidebarStyle = computed(() => ({
-  '--sidebar2-width': `${sidebarWidth.value}px`,
-}))
+const createModalOpen = ref(false)
+const campaignModalMode = ref('create')
+const editingCampaignId = ref(null)
+const contextCampaignId = ref(null)
+const draggedCampaignId = ref(null)
+const dropTargetCampaignId = ref(null)
+const dropPlacement = ref('before')
+const folderDropState = ref('idle')
 
-const navItems = [
-  {
-    id: 'dashboard',
-    to: '/dashboard',
-    label: 'Dashboard',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>`,
-  },
-  {
-    id: 'calendar',
-    to: '/calendar',
-    label: 'Campaign Timeline',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>`,
-  },
-  {
-    id: 'tasks',
-    to: '/tasks',
-    label: 'Content Cards',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>`,
-    badgeKey: 'contentCards',
-  },
-  {
-    id: 'reports',
-    to: '/reports',
-    label: 'Reports',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>`,
-  },
-  {
-    id: 'operations',
-    to: '/operations',
-    label: 'Partners',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
-  },
-  {
-    id: 'matching',
-    to: '/matching',
-    label: '매칭',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 1 0-7l1.5-1.5a5 5 0 0 1 7 7L17 13"/><path d="M14 11a5 5 0 0 1 0 7l-1.5 1.5a5 5 0 0 1-7-7L7 11"/></svg>`,
-    badgeKey: 'matching',
-  },
-  {
-    id: 'frames',
-    to: '/frames',
-    label: '캠페인 프레임',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>`,
-  },
-  {
-    id: 'references',
-    to: '/references',
-    label: '레퍼런스',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>`,
-  },
-  {
-    id: 'resources',
-    to: '/resources',
-    label: '자료실',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
-  },
-  {
-    id: 'review-approval',
-    to: '/review-approval',
-    label: '검수/승인',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
-    badgeKey: 'reviewQueue',
-  },
-]
+const contextMenuPosition = reactive({ top: FLOAT_MARGIN, left: FLOAT_MARGIN })
 
-const badges = computed(() => ({
-  contentCards: store.tasks.length || null,
-  reviewQueue: store.tasks.filter((t) => t.status === 'review').length || null,
-  matching: 3,
-}))
+const sidebarStyle = computed(() => ({ '--sidebar2-width': `${sidebarWidth.value}px` }))
 
-const profile = computed(() => store.findMember(store.currentUserId))
+const sidebarCampaigns = computed(() => store.sidebarCampaigns)
+const folderCampaignCount = computed(() => store.campaignFolderCount)
+const isFolderRoute = computed(() => route.name === 'campaign-folder')
 
-const userInitials = computed(() => {
-  if (profile.value?.initials) return profile.value.initials
-  const name = authStore.user?.name ?? authStore.user?.id ?? ''
-  return name.charAt(0).toUpperCase() || 'U'
+const visualSidebarCampaigns = computed(() => {
+  const campaigns = [...sidebarCampaigns.value]
+  const sourceCampaignId = draggedCampaignId.value
+  const targetCampaignId = dropTargetCampaignId.value
+
+  if (!sourceCampaignId || !targetCampaignId || sourceCampaignId === targetCampaignId) {
+    return campaigns
+  }
+
+  const sourceIndex = campaigns.findIndex((c) => c.id === sourceCampaignId)
+  if (sourceIndex === -1) return campaigns
+
+  const [sourceCampaign] = campaigns.splice(sourceIndex, 1)
+  const targetIndex = campaigns.findIndex((c) => c.id === targetCampaignId)
+  if (targetIndex === -1) return sidebarCampaigns.value
+
+  const insertIndex = dropPlacement.value === 'after' ? targetIndex + 1 : targetIndex
+  campaigns.splice(insertIndex, 0, sourceCampaign)
+  return campaigns
 })
 
-const userName = computed(() => profile.value?.name ?? authStore.user?.name ?? '사용자')
-const userRole = computed(() => profile.value?.role ?? authStore.user?.role ?? 'HQ Admin')
+const draggedCampaign = computed(
+  () => store.campaigns.find((c) => c.id === draggedCampaignId.value) ?? null,
+)
+const canDropIntoFolder = computed(() => draggedCampaign.value?.status === 'completed')
+
+const contextCampaign = computed(
+  () => store.campaigns.find((c) => c.id === contextCampaignId.value) ?? null,
+)
+const editingCampaign = computed(
+  () => store.campaigns.find((c) => c.id === editingCampaignId.value) ?? null,
+)
+
+const contextMenuStyle = computed(() => ({
+  top: `${contextMenuPosition.top}px`,
+  left: `${contextMenuPosition.left}px`,
+}))
+
+const contextCampaignStatus = computed(() => getCampaignStatusMeta(contextCampaign.value?.status))
+
+const contextMenuActions = computed(() => {
+  const campaign = contextCampaign.value
+  if (!campaign) return []
+  return [
+    {
+      key: 'edit',
+      label: campaignLabels.editCampaign,
+      description: campaignSidebarText.editDescription,
+      tone: 'default',
+      icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>`,
+    },
+    campaign.status === 'completed'
+      ? {
+          key: 'reopen',
+          label: campaignSidebarText.reopenCampaign,
+          description: campaignSidebarText.reopenDescription,
+          tone: 'default',
+          nextStatus: 'live',
+          icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 3 14 9-14 9V3Z"/></svg>`,
+        }
+      : {
+          key: 'complete',
+          label: campaignSidebarText.markAsComplete,
+          description: campaignSidebarText.completeDescription,
+          tone: 'success',
+          nextStatus: 'completed',
+          icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>`,
+        },
+    campaign.status === 'paused'
+      ? {
+          key: 'resume',
+          label: campaignSidebarText.resumeCampaign,
+          description: campaignSidebarText.resumeDescription,
+          tone: 'default',
+          nextStatus: 'live',
+          icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 3 14 9-14 9V3Z"/></svg>`,
+        }
+      : {
+          key: 'pause',
+          label: campaignSidebarText.pauseCampaign,
+          description: campaignSidebarText.pauseDescription,
+          tone: 'warning',
+          nextStatus: 'paused',
+          icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H6v16h4V4Zm8 0h-4v16h4V4Z"/></svg>`,
+        },
+  ]
+})
+
+const userStorageKey = computed(
+  () =>
+    authStore.user?.userId ||
+    authStore.user?.id ||
+    authStore.user?.loginId ||
+    authStore.user?.email ||
+    store.currentUserId,
+)
+
+function getCampaignStatusMeta(status) {
+  return campaignStatusMeta[status] ?? { label: campaignStatusMeta.draft.label, tone: 'draft' }
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value))
+}
 
 function clampSidebarWidth(value) {
   return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, value))
@@ -114,10 +157,7 @@ function setSidebarWidth(value) {
 }
 
 function persistSidebarWidth() {
-  if (typeof window === 'undefined') {
-    return
-  }
-
+  if (typeof window === 'undefined') return
   window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth.value))
 }
 
@@ -126,13 +166,9 @@ function handleSidebarResize(event) {
 }
 
 function stopSidebarResize() {
-  if (!isResizing.value) {
-    return
-  }
-
+  if (!isResizing.value) return
   isResizing.value = false
   persistSidebarWidth()
-
   window.removeEventListener('pointermove', handleSidebarResize)
   window.removeEventListener('pointerup', stopSidebarResize)
   document.body.style.cursor = ''
@@ -140,15 +176,11 @@ function stopSidebarResize() {
 }
 
 function startSidebarResize(event) {
-  if (store.sidebarCollapsed) {
-    return
-  }
-
+  if (store.sidebarCollapsed) return
   event.preventDefault()
   sidebarResizeLeft.value = sidebarElement.value?.getBoundingClientRect().left ?? 0
   isResizing.value = true
   handleSidebarResize(event)
-
   window.addEventListener('pointermove', handleSidebarResize)
   window.addEventListener('pointerup', stopSidebarResize)
   document.body.style.cursor = 'col-resize'
@@ -156,113 +188,316 @@ function startSidebarResize(event) {
 }
 
 function handleResizeKeydown(event) {
-  if (store.sidebarCollapsed) {
+  if (store.sidebarCollapsed) return
+  const step = event.shiftKey ? 24 : 8
+  if (event.key === 'ArrowLeft') { event.preventDefault(); setSidebarWidth(sidebarWidth.value - step); persistSidebarWidth() }
+  if (event.key === 'ArrowRight') { event.preventDefault(); setSidebarWidth(sidebarWidth.value + step); persistSidebarWidth() }
+}
+
+function isServerCampaignId(campaignId) {
+  return /^\d+$/.test(String(campaignId))
+}
+
+function closeCampaignMenu() {
+  contextCampaignId.value = null
+}
+
+function closeCreateModal() {
+  createModalOpen.value = false
+  campaignModalMode.value = 'create'
+  editingCampaignId.value = null
+}
+
+function selectCampaign(campaignId) {
+  closeCampaignMenu()
+  store.setActiveCampaign(campaignId)
+  router.push({ name: 'campaign-detail', params: { campaignId } })
+}
+
+function openFolderPage() {
+  closeCampaignMenu()
+  router.push({ name: 'campaign-folder' })
+}
+
+function openCreateModal() {
+  closeCampaignMenu()
+  campaignModalMode.value = 'create'
+  editingCampaignId.value = null
+  createModalOpen.value = true
+}
+
+function openEditModal(campaignId) {
+  editingCampaignId.value = campaignId
+  campaignModalMode.value = 'edit'
+  closeCampaignMenu()
+  createModalOpen.value = true
+}
+
+function openCampaignMenu(campaign, event) {
+  event.preventDefault()
+  contextMenuPosition.left = clamp(event.clientX + 8, FLOAT_MARGIN, window.innerWidth - MENU_WIDTH - FLOAT_MARGIN)
+  contextMenuPosition.top = clamp(event.clientY + 8, FLOAT_MARGIN, window.innerHeight - MENU_HEIGHT_ESTIMATE - FLOAT_MARGIN)
+  contextCampaignId.value = campaign.id
+}
+
+async function handleCampaignSubmit(payload) {
+  try {
+    const campaign =
+      campaignModalMode.value === 'edit' && editingCampaignId.value
+        ? await saveExistingCampaign(editingCampaignId.value, payload)
+        : await saveNewCampaign(payload)
+    closeCreateModal()
+    if (campaign?.id) selectCampaign(campaign.id)
+  } catch (error) {
+    console.warn('Campaign save failed', error)
+  }
+}
+
+async function saveNewCampaign(payload) {
+  const savedCampaign = await CreateCampaign(payload)
+  return store.createCampaign(savedCampaign)
+}
+
+async function saveExistingCampaign(campaignId, payload) {
+  if (!isServerCampaignId(campaignId)) return store.updateCampaign(campaignId, payload)
+  const savedCampaign = await UpdateCampaign(campaignId, payload)
+  return store.updateCampaign(campaignId, savedCampaign)
+}
+
+async function handleContextMenuAction(action) {
+  const campaign = contextCampaign.value
+  if (!campaign) return
+  if (action.key === 'edit') { openEditModal(campaign.id); return }
+  if (action.nextStatus) {
+    try {
+      if (isServerCampaignId(campaign.id)) {
+        const savedCampaign = await UpdateCampaignStatus(campaign.id, action.nextStatus)
+        store.updateCampaign(campaign.id, savedCampaign)
+      } else {
+        store.updateCampaignStatus(campaign.id, action.nextStatus)
+      }
+    } catch (error) {
+      console.warn('Campaign status update failed', error)
+      return
+    }
+  }
+  closeCampaignMenu()
+}
+
+function resetDragState() {
+  draggedCampaignId.value = null
+  dropTargetCampaignId.value = null
+  dropPlacement.value = 'before'
+  folderDropState.value = 'idle'
+}
+
+function handleCampaignDragStart(campaign, event) {
+  draggedCampaignId.value = campaign.id
+  dropTargetCampaignId.value = null
+  folderDropState.value = campaign.status === 'completed' ? 'ready' : 'blocked'
+  closeCampaignMenu()
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', campaign.id)
+  }
+}
+
+function handleCampaignDragEnd() { resetDragState() }
+
+function handleCampaignDragOver(campaign, event) {
+  if (!draggedCampaignId.value) return
+  if (draggedCampaignId.value === campaign.id) {
+    if (dropTargetCampaignId.value) {
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+    }
     return
   }
+  event.preventDefault()
+  const rect = event.currentTarget?.getBoundingClientRect()
+  if (rect) dropPlacement.value = event.clientY > rect.top + rect.height / 2 ? 'after' : 'before'
+  dropTargetCampaignId.value = campaign.id
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+}
 
-  const step = event.shiftKey ? 24 : 8
-
-  if (event.key === 'ArrowLeft') {
-    event.preventDefault()
-    setSidebarWidth(sidebarWidth.value - step)
-    persistSidebarWidth()
+function handleCampaignDrop(campaign, event) {
+  event.preventDefault()
+  if (!draggedCampaignId.value) { resetDragState(); return }
+  if (draggedCampaignId.value === campaign.id) {
+    store.reorderCampaign(draggedCampaignId.value, dropTargetCampaignId.value, dropPlacement.value)
+    resetDragState(); return
   }
+  store.reorderCampaign(draggedCampaignId.value, campaign.id, dropPlacement.value)
+  resetDragState()
+}
 
-  if (event.key === 'ArrowRight') {
-    event.preventDefault()
-    setSidebarWidth(sidebarWidth.value + step)
-    persistSidebarWidth()
-  }
+function handleFolderDragEnter() {
+  if (!draggedCampaign.value) return
+  folderDropState.value = canDropIntoFolder.value ? 'ready' : 'blocked'
+}
 
-  if (event.key === 'Home') {
-    event.preventDefault()
-    setSidebarWidth(SIDEBAR_MIN_WIDTH)
-    persistSidebarWidth()
-  }
+function handleFolderDragOver(event) {
+  if (!draggedCampaign.value) return
+  folderDropState.value = canDropIntoFolder.value ? 'ready' : 'blocked'
+  if (!canDropIntoFolder.value) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+}
 
-  if (event.key === 'End') {
-    event.preventDefault()
-    setSidebarWidth(SIDEBAR_MAX_WIDTH)
-    persistSidebarWidth()
+function handleFolderDragLeave() { folderDropState.value = 'idle' }
+
+function handleFolderDrop(event) {
+  event.preventDefault()
+  if (!draggedCampaign.value || !canDropIntoFolder.value) { resetDragState(); return }
+  store.moveCampaignToFolder(draggedCampaign.value.id)
+  resetDragState()
+}
+
+function handleGlobalPointerDown(event) {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) { closeCampaignMenu(); return }
+  if (contextCampaignId.value && !target.closest('.campaign-list__context-menu') && !target.closest('.campaign-list__item')) {
+    closeCampaignMenu()
   }
 }
 
-function isActive(item) {
-  return route.path === item.to || route.path.startsWith(`${item.to}/`)
+function handleGlobalKeydown(event) {
+  if (event.key !== 'Escape') return
+  if (createModalOpen.value) { closeCreateModal(); return }
+  closeCampaignMenu()
 }
+
+watch(
+  userStorageKey,
+  (nextKey) => { store.setCampaignUiOwnerKey(nextKey) },
+  { immediate: true },
+)
 
 onMounted(() => {
   const storedWidth = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)
   const parsedWidth = Number(storedWidth)
-
-  if (Number.isFinite(parsedWidth)) {
-    setSidebarWidth(parsedWidth)
-  }
+  if (Number.isFinite(parsedWidth)) setSidebarWidth(parsedWidth)
+  window.addEventListener('pointerdown', handleGlobalPointerDown)
+  window.addEventListener('keydown', handleGlobalKeydown)
 })
 
 onBeforeUnmount(() => {
   stopSidebarResize()
+  window.removeEventListener('pointerdown', handleGlobalPointerDown)
+  window.removeEventListener('keydown', handleGlobalKeydown)
+  resetDragState()
 })
 </script>
 
 <template>
   <aside
     ref="sidebarElement"
-    class="sidebar2"
+    class="campaign-list"
     :class="{
-      'sidebar2--collapsed': store.sidebarCollapsed,
-      'sidebar2--resizing': isResizing,
+      'campaign-list--collapsed': store.sidebarCollapsed,
+      'campaign-list--resizing': isResizing,
     }"
     :style="sidebarStyle"
   >
-    <div class="sidebar2__inner">
-      <!-- 로고 -->
-      <div class="sidebar2__header">
-        <RouterLink to="/dashboard" class="sidebar2__logo" aria-label="대시보드로 이동">
-          Callog
-        </RouterLink>
-      </div>
-
-      <!-- Active Campaign 블록 -->
-      <div v-if="store.activeCampaign" class="sidebar2__campaign">
-        <p class="sidebar2__campaign-label">Active Campaign</p>
-        <p class="sidebar2__campaign-name">{{ store.activeCampaign.name }}</p>
-        <p class="sidebar2__campaign-period">{{ store.activeCampaign.period }}</p>
-      </div>
-
-      <div class="sidebar2__divider" />
-
-      <!-- 메뉴 -->
-      <nav class="sidebar2__nav" aria-label="사이드바 메뉴">
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.id"
-          :to="item.to"
-          class="sidebar2__item"
-          :class="{ active: isActive(item) }"
-          :aria-current="isActive(item) ? 'page' : undefined"
+    <div class="campaign-list__clip">
+    <div class="campaign-list__inner">
+      <div class="campaign-list__header">
+        <span class="campaign-list__header-title">Campaigns</span>
+        <button
+          type="button"
+          class="campaign-list__create-btn"
+          :title="campaignLabels.createCampaign"
+          :aria-label="campaignLabels.createCampaign"
+          @click="openCreateModal"
         >
-          <span class="sidebar2__item-icon" v-html="item.icon" />
-          <span class="sidebar2__item-label">{{ item.label }}</span>
-          <span v-if="item.badgeKey && badges[item.badgeKey]" class="sidebar2__item-badge">{{
-            badges[item.badgeKey]
-          }}</span>
-        </RouterLink>
-      </nav>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      </div>
 
-      <!-- 하단 프로필 -->
-      <div class="sidebar2__profile">
-        <RouterLink to="/mypage" class="sidebar2__profile-link">
-          <span class="sidebar2__profile-avatar">{{ userInitials }}</span>
-          <div class="sidebar2__profile-info">
-            <p class="sidebar2__profile-name">{{ userName }}</p>
-            <p class="sidebar2__profile-role">{{ userRole }}</p>
-          </div>
-        </RouterLink>
+      <div class="campaign-list__divider" />
+
+      <TransitionGroup
+        tag="nav"
+        name="campaign-list-anim"
+        class="campaign-list__nav"
+        :aria-label="campaignSidebarText.campaignList"
+      >
+        <button
+          v-for="campaign in visualSidebarCampaigns"
+          :key="campaign.id"
+          type="button"
+          class="campaign-list__item"
+          :class="{
+            active: store.activeCampaignId === campaign.id,
+            'campaign-list__item--dragging': draggedCampaignId === campaign.id,
+            'campaign-list__item--drop-before': dropTargetCampaignId === campaign.id && dropPlacement === 'before',
+            'campaign-list__item--drop-after': dropTargetCampaignId === campaign.id && dropPlacement === 'after',
+          }"
+          :aria-current="store.activeCampaignId === campaign.id ? 'page' : undefined"
+          draggable="true"
+          @click="selectCampaign(campaign.id)"
+          @contextmenu="openCampaignMenu(campaign, $event)"
+          @dragstart="handleCampaignDragStart(campaign, $event)"
+          @dragend="handleCampaignDragEnd"
+          @dragover="handleCampaignDragOver(campaign, $event)"
+          @drop="handleCampaignDrop(campaign, $event)"
+        >
+          <span class="campaign-list__item-dot" :style="{ background: campaign.color }" />
+          <span class="campaign-list__item-name">{{ campaign.name }}</span>
+          <span
+            v-if="campaign.status === 'paused' || campaign.status === 'completed'"
+            class="campaign-list__item-badge"
+            :class="`campaign-list__item-badge--${getCampaignStatusMeta(campaign.status).tone}`"
+          >
+            {{ getCampaignStatusMeta(campaign.status).label }}
+          </span>
+        </button>
+      </TransitionGroup>
+
+      <div class="campaign-list__footer">
+        <button
+          type="button"
+          class="campaign-list__folder-btn"
+          :class="{
+            active: isFolderRoute,
+            'campaign-list__folder-btn--drop-ready': folderDropState === 'ready' && draggedCampaignId,
+            'campaign-list__folder-btn--drop-blocked': folderDropState === 'blocked' && draggedCampaignId,
+          }"
+          :aria-label="campaignSidebarText.folderLabel"
+          @click="openFolderPage"
+          @dragenter="handleFolderDragEnter"
+          @dragover="handleFolderDragOver"
+          @dragleave="handleFolderDragLeave"
+          @drop="handleFolderDrop"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5v-10Z" />
+          </svg>
+          <span>{{ campaignSidebarText.folderLabel }}</span>
+          <span v-if="folderCampaignCount" class="campaign-list__folder-count">
+            {{ folderCampaignCount }}
+          </span>
+        </button>
       </div>
     </div>
+    </div>
+
+    <button
+      type="button"
+      class="campaign-list__toggle"
+      :aria-label="store.sidebarCollapsed ? '캠페인 목록 열기' : '캠페인 목록 닫기'"
+      @click="store.toggleSidebar"
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path v-if="store.sidebarCollapsed" d="m9 18 6-6-6-6" />
+        <path v-else d="m15 18-6-6 6-6" />
+      </svg>
+    </button>
+
     <div
-      class="sidebar2__resize-handle"
+      class="campaign-list__resize-handle"
       role="separator"
       aria-label="사이드바 너비 조절"
       aria-orientation="vertical"
@@ -270,74 +505,346 @@ onBeforeUnmount(() => {
       :aria-valuemin="SIDEBAR_MIN_WIDTH"
       :aria-valuemax="SIDEBAR_MAX_WIDTH"
       :aria-valuenow="sidebarWidth"
-      :aria-valuetext="`${sidebarWidth}px`"
       @pointerdown="startSidebarResize"
       @keydown="handleResizeKeydown"
     />
   </aside>
+
+  <CampaignCreateModal
+    v-if="createModalOpen"
+    :mode="campaignModalMode"
+    :initial-values="editingCampaign"
+    @close="closeCreateModal"
+    @submit="handleCampaignSubmit"
+  />
+
+  <Teleport to="body">
+    <Transition name="campaign-float">
+      <div
+        v-if="contextCampaign"
+        class="campaign-list__context-menu"
+        :style="contextMenuStyle"
+        role="menu"
+        :aria-label="campaignSidebarText.campaignActions"
+      >
+        <div class="campaign-list__context-head">
+          <p>{{ campaignSidebarText.campaignActions }}</p>
+          <strong>{{ contextCampaign.name }}</strong>
+          <span
+            class="campaign-list__status"
+            :class="`campaign-list__status--${contextCampaignStatus.tone}`"
+          >
+            {{ contextCampaignStatus.label }}
+          </span>
+        </div>
+        <div class="campaign-list__context-list">
+          <button
+            v-for="action in contextMenuActions"
+            :key="action.key"
+            type="button"
+            class="campaign-list__context-item"
+            :class="`campaign-list__context-item--${action.tone}`"
+            @click="handleContextMenuAction(action)"
+          >
+            <span class="campaign-list__context-icon" v-html="action.icon" />
+            <span class="campaign-list__context-copy">
+              <strong>{{ action.label }}</strong>
+              <small>{{ action.description }}</small>
+            </span>
+          </button>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
-.sidebar2 {
-  --sidebar2-surface: var(--sidebar-color);
-  --sidebar2-panel: color-mix(in srgb, var(--panel-muted) 82%, var(--panel-color));
-  --sidebar2-hover: color-mix(in srgb, var(--panel-muted) 90%, var(--panel-color));
-  --sidebar2-menu-color: #6b7280;
-  --sidebar2-menu-color-strong: #111827;
-  --sidebar2-menu-hover-bg: #f9fafb;
-  --sidebar2-menu-active-bg: #f3e8ff;
-  --sidebar2-menu-active-ink: #5b21b6;
-  --sidebar2-menu-indicator: #5b21b6;
-  --sidebar2-menu-badge-bg: #f3e8ff;
-  --sidebar2-menu-badge-text: #6d28d9;
+.campaign-list {
   --sidebar2-active-shadow: color-mix(in srgb, var(--accent-color) 24%, transparent);
-  width: var(--sidebar2-width, var(--sidebar-width));
+  width: var(--sidebar2-width, 240px);
   flex-shrink: 0;
-  background: var(--sidebar2-surface);
+  background: var(--sidebar-color);
   border-right: 1px solid var(--border-color);
-  overflow: hidden;
-  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  overflow: visible;
+  z-index: 15;
   transition:
     width var(--transition-normal),
     background var(--transition-normal),
-    border-color var(--transition-normal),
-    color var(--transition-normal);
-  height: 100vh;
-  position: sticky;
-  top: 0;
-  z-index: 15;
+    border-color var(--transition-normal);
 }
 
-[data-theme='dark'] .sidebar2 {
-  --sidebar2-menu-color: #a7a0bb;
-  --sidebar2-menu-color-strong: #ffffff;
-  --sidebar2-menu-hover-bg: #171421;
-  --sidebar2-menu-active-bg: #2a2140;
-  --sidebar2-menu-active-ink: #ddd6fe;
-  --sidebar2-menu-indicator: #c4b5fd;
-  --sidebar2-menu-badge-bg: #2a2140;
-  --sidebar2-menu-badge-text: #c4b5fd;
-}
-
-.sidebar2--resizing {
-  transition: none;
-}
-
-.sidebar2--collapsed {
+.campaign-list--collapsed {
   width: 0;
   border-right-width: 0;
 }
 
-.sidebar2__inner {
-  width: var(--sidebar2-width, var(--sidebar-width));
+.campaign-list--resizing {
+  transition: none;
+}
+
+.campaign-list__clip {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.campaign-list__inner {
+  width: var(--sidebar2-width, 240px);
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
-.sidebar2__resize-handle {
+.campaign-list__toggle {
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 25;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--panel-color);
+  border: 1px solid var(--border-color);
+  color: var(--muted-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.campaign-list__toggle:hover {
+  background: var(--panel-muted);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.campaign-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px 8px;
+  flex-shrink: 0;
+}
+
+.campaign-list__header-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.campaign-list__create-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--muted-text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.campaign-list__create-btn:hover {
+  background: var(--panel-muted);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.campaign-list__create-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.campaign-list__divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 0 12px 8px;
+  flex-shrink: 0;
+}
+
+.campaign-list__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.campaign-list__nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.campaign-list__nav::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.campaign-list__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted-text);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.campaign-list__item:hover {
+  background: var(--panel-muted);
+  color: var(--text-primary);
+}
+
+.campaign-list__item.active {
+  background: color-mix(in srgb, var(--color-primary-500) 10%, transparent);
+  color: var(--color-primary-600);
+  box-shadow: inset 3px 0 0 var(--color-primary-500);
+}
+
+.campaign-list__item--dragging { opacity: 0.4; }
+
+.campaign-list__item--drop-before::before,
+.campaign-list__item--drop-after::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-500);
+  pointer-events: none;
+}
+
+.campaign-list__item--drop-before::before { top: -3px; }
+.campaign-list__item--drop-after::after { bottom: -3px; }
+
+.campaign-list__item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.campaign-list__item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campaign-list__item-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+.campaign-list__item-badge--completed {
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
+}
+
+.campaign-list__item-badge--paused {
+  background: var(--color-warning-light);
+  color: var(--color-warning-dark);
+}
+
+.campaign-list__footer {
+  padding: 8px;
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.campaign-list__folder-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted-text);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.campaign-list__folder-btn:hover,
+.campaign-list__folder-btn.active {
+  background: var(--panel-muted);
+  color: var(--text-primary);
+}
+
+.campaign-list__folder-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  flex-shrink: 0;
+}
+
+.campaign-list__folder-btn--drop-ready {
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
+}
+
+.campaign-list__folder-btn--drop-blocked {
+  background: var(--color-danger-light);
+  color: var(--color-danger-dark);
+}
+
+.campaign-list__folder-count {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.campaign-list__resize-handle {
   position: absolute;
   top: 0;
   right: 0;
@@ -348,7 +855,7 @@ onBeforeUnmount(() => {
   z-index: 3;
 }
 
-.sidebar2__resize-handle::before {
+.campaign-list__resize-handle::before {
   content: '';
   position: absolute;
   top: 0;
@@ -356,209 +863,126 @@ onBeforeUnmount(() => {
   width: 2px;
   height: 100%;
   background: transparent;
-  transition:
-    background var(--transition-fast),
-    box-shadow var(--transition-fast);
+  transition: background var(--transition-fast);
 }
 
-.sidebar2__resize-handle:hover::before,
-.sidebar2__resize-handle:focus-visible::before,
-.sidebar2--resizing .sidebar2__resize-handle::before {
+.campaign-list__resize-handle:hover::before,
+.campaign-list--resizing .campaign-list__resize-handle::before {
   background: var(--accent-color);
   box-shadow: -4px 0 14px var(--sidebar2-active-shadow);
 }
 
-.sidebar2__resize-handle:focus-visible {
-  outline: none;
-}
-
-.sidebar2--collapsed .sidebar2__resize-handle {
+.campaign-list--collapsed .campaign-list__resize-handle {
   opacity: 0;
   pointer-events: none;
 }
 
-/* 헤더 */
-.sidebar2__header {
-  padding: 16px 16px 8px;
-  flex-shrink: 0;
-}
-
-.sidebar2__logo {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
-  text-decoration: none;
-  letter-spacing: -0.02em;
-}
-
-/* Active Campaign */
-.sidebar2__campaign {
-  margin: 8px 12px 0;
-  background: var(--sidebar2-panel);
+/* Context menu */
+.campaign-list__context-menu {
+  position: fixed;
+  z-index: 60;
+  width: 224px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  padding: 12px 14px;
-  flex-shrink: 0;
+  background: var(--panel-color);
+  box-shadow: var(--shadow-elevated);
+  padding: 8px;
 }
 
-.sidebar2__campaign-label {
-  font-size: 11px;
-  color: var(--subtle-text);
-  margin-bottom: 4px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.sidebar2__campaign-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sidebar2__campaign-period {
-  font-size: 12px;
-  color: var(--muted-text);
-  margin-top: 4px;
-  white-space: nowrap;
-}
-
-/* 구분선 */
-.sidebar2__divider {
-  height: 1px;
-  background: var(--border-color);
-  margin: 16px 12px 8px;
-  flex-shrink: 0;
-}
-
-/* 메뉴 */
-.sidebar2__nav {
-  display: flex;
-  flex-direction: column;
+.campaign-list__context-head {
+  display: grid;
   gap: 4px;
-  padding: 8px 12px 16px;
-  flex: 1;
+  padding: 10px 12px 14px;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.sidebar2__item {
+.campaign-list__context-head p {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.campaign-list__context-head strong {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.campaign-list__context-list {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+}
+
+.campaign-list__context-item {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 38px;
-  padding: 8px 12px;
+  width: 100%;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
   border-radius: var(--radius-md);
-  font-size: 14px;
-  color: var(--sidebar2-menu-color);
   background: transparent;
-  text-decoration: none;
-  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
   text-align: left;
+  border: none;
   transition:
-    background-color var(--transition-fast),
-    color var(--transition-fast),
-    box-shadow var(--transition-fast);
-  white-space: nowrap;
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
-.sidebar2__item:hover {
-  background: var(--sidebar2-menu-hover-bg);
-  color: var(--sidebar2-menu-color-strong);
-}
+.campaign-list__context-item:hover { background: var(--panel-muted); color: var(--text-primary); }
+.campaign-list__context-item--success:hover { background: var(--color-success-light); color: var(--color-success-dark); }
+.campaign-list__context-item--warning:hover { background: var(--color-warning-light); color: var(--color-warning-dark); }
 
-.sidebar2__item.active {
-  background: var(--sidebar2-menu-active-bg);
-  box-shadow: inset 4px 0 0 var(--sidebar2-menu-indicator);
-  color: var(--sidebar2-menu-active-ink);
-}
-
-.sidebar2__item:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-primary-300) 88%, transparent);
-  outline-offset: 2px;
-}
-
-.sidebar2__item-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+.campaign-list__context-icon {
+  display: inline-flex;
   width: 18px;
   height: 18px;
-  pointer-events: none;
-}
-
-.sidebar2__item-label {
-  flex: 1;
-  font-weight: 500;
-}
-
-.sidebar2__item-badge {
-  min-width: 22px;
-  margin-left: auto;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--sidebar2-menu-badge-bg);
-  color: var(--sidebar2-menu-badge-text);
-  font-size: 12px;
-  font-weight: 600;
-  flex-shrink: 0;
-  text-align: center;
-}
-
-/* 하단 프로필 */
-.sidebar2__profile {
-  padding: 12px 8px;
-  border-top: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
-
-.sidebar2__profile-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
-  text-decoration: none;
-  transition: background var(--transition-fast);
-}
-
-.sidebar2__profile-link:hover {
-  background: var(--sidebar2-hover);
-}
-
-.sidebar2__profile-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--badge-bg);
-  color: var(--badge-text);
-  display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
   flex-shrink: 0;
+  margin-top: 1px;
 }
 
-.sidebar2__profile-info {
-  min-width: 0;
+.campaign-list__context-icon :deep(svg) {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
-.sidebar2__profile-name {
-  font-size: 14px;
+.campaign-list__context-copy { display: grid; gap: 3px; }
+.campaign-list__context-copy strong { color: inherit; font-size: 14px; font-weight: 600; }
+.campaign-list__context-copy small { color: var(--muted-text); font-size: 12px; line-height: 1.4; }
+
+.campaign-list__status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.sidebar2__profile-role {
-  font-size: 12px;
-  color: var(--muted-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.campaign-list__status--draft { background: var(--color-gray-100); color: var(--color-gray-600); }
+.campaign-list__status--review { background: var(--color-primary-100); color: var(--color-primary-700); }
+.campaign-list__status--live { background: var(--color-primary-500); color: #fff; }
+.campaign-list__status--completed { background: var(--color-success-light); color: var(--color-success-dark); }
+.campaign-list__status--paused { background: var(--color-warning-light); color: var(--color-warning-dark); }
+
+.campaign-list-anim-move { transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.campaign-list-anim-enter-active,
+.campaign-list-anim-leave-active { transition: opacity var(--transition-fast), transform var(--transition-fast); }
+.campaign-list-anim-enter-from,
+.campaign-list-anim-leave-to { opacity: 0; transform: translateX(-8px); }
+
+.campaign-float-enter-active,
+.campaign-float-leave-active { transition: opacity var(--transition-fast), transform var(--transition-fast); }
+.campaign-float-enter-from,
+.campaign-float-leave-to { opacity: 0; transform: translateY(4px); }
 </style>

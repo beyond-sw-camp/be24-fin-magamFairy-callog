@@ -19,7 +19,7 @@ public class JwtUtil {
         this.encodeKey = Keys.hmacShaKeyFor(Decoders.BASE64URL.decode(key));
     }
 
-    public String createToken(String category, Long idx, String id, String email, String name, String role, Long expiredMs) {
+    public String createToken(String category, Long idx, String id, String email, String name, String role, String companyName, String department, Long expiredMs) {
         JwtBuilder builder = Jwts.builder()
                 .claim("category", category)
                 .claim("idx", idx)
@@ -32,6 +32,12 @@ public class JwtUtil {
 
         if (email != null && !email.isBlank()) {
             builder.claim("email", email);
+        }
+        if (companyName != null && !companyName.isBlank()) {
+            builder.claim("companyName", companyName);
+        }
+        if (department != null && !department.isBlank()) {
+            builder.claim("department", department);
         }
 
         return builder.compact();

@@ -1,13 +1,71 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
+import { GetCampaignDetails } from '@/api/campaigns'
+import {
+  ListMilestones,
+  ListTaskParts,
+  ListTasksByCampaign,
+  CreateMilestone,
+  CreateTaskPart,
+  CreateTask,
+  UpdateTask,
+} from '@/api/teamboard'
+
+const TEAMBOARD_STATUS_MAP = {
+  BACKLOG: 'backlog',
+  TODO: 'backlog',
+  IN_PROGRESS: 'in_progress',
+  REVIEW: 'review',
+  BLOCKED: 'revision',
+  DONE: 'done',
+}
+
+const TEAMBOARD_PRIORITY_MAP = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  CRITICAL: 'critical',
+}
+
+const STATUS_TO_BACKEND = {
+  backlog: 'BACKLOG',
+  in_progress: 'IN_PROGRESS',
+  review: 'REVIEW',
+  approval_wait: 'REVIEW',
+  revision: 'BLOCKED',
+  done: 'DONE',
+}
+
+const TYPE_TO_BACKEND = {
+  '문서': 'DOCUMENT',
+  '이미지': 'DESIGN',
+  '영상': 'VIDEO',
+  '웹': 'OTHER',
+  '광고': 'OTHER',
+  '브리프': 'DOCUMENT',
+  '기타': 'OTHER',
+}
+
+function toIsoDateTime(dateStr) {
+  return dateStr ? `${dateStr}T00:00:00` : null
+}
+
+function formatTeamboardDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}.${dd}`
+}
 
 const route = useRoute()
 const store = usePlannerStore()
 
-const activeTab = ref('overview')
-const currentBoardView = ref('swimlane')
+const activeTab = ref('캠페인 오버뷰')
+const currentBoardView = ref('part')
 const metadataEditing = ref(false)
 const selectedMemberIds = ref([])
 
@@ -19,13 +77,18 @@ const metadataDraft = ref({
   partnersText: '',
 })
 
-const tabs = [
-  { id: 'overview', label: '캠페인 오버뷰', caption: 'CAMPAIGN_002' },
-  { id: 'team-board', label: '팀 보드 보기', caption: 'CAMPAIGN_003' },
-  { id: 'references', label: '레퍼런스탭', caption: 'CAMPAIGN_004' },
-  { id: 'participants', label: '참여자 설정', caption: 'CAMPAIGN_005' },
-  { id: 'performance', label: '캠페인 성과/KPI', caption: 'CAMPAIGN_006' },
-]
+const tabs = ["캠페인 오버뷰", "팀 보드 보기", "레퍼런스 탭", "참여자 설정", "캠페인 성과/KPI"];
+
+const handleTabClick = async (tabName) => {
+  activeTab.value = tabName;
+  try {
+    // tabName에 "참여자 설정" 같은 값이 들어와서 호출됨
+    const data = await GetCampaignDetails(tabName);
+    console.log("받아온 데이터:", data);
+  } catch (error) {
+    console.error("에러 발생:", error);
+  }
+};
 
 const activeCampaign = computed(() => {
   const campaignId = String(route.params.campaignId ?? '')
@@ -33,8 +96,6 @@ const activeCampaign = computed(() => {
 
   return routeCampaign ?? store.activeCampaign
 })
-
-const campaignMetaCode = computed(() => activeCampaign.value?.code ?? 'CAMPAIGN_001')
 
 const campaignStatusLabel = computed(() => {
   const labels = {
@@ -90,130 +151,102 @@ const scheduleItems = ref([
 ])
 
 const statusColumns = [
-  { id: 'draft', label: '작성중', sub: 'Draft' },
-  { id: 'review', label: '검수요청', sub: 'Review' },
-  { id: 'approved', label: '승인완료', sub: 'Approved' },
-  { id: 'live', label: '라이브', sub: 'Live' },
+  { id: 'backlog', label: '백로그', sub: 'Backlog' },
+  { id: 'in_progress', label: '진행 중', sub: 'WIP' },
+  { id: 'review', label: '검수 요청', sub: 'QA' },
+  { id: 'approval_wait', label: '본사 승인 대기', sub: 'Approval' },
+  { id: 'revision', label: '수정 중', sub: 'Revision' },
+  { id: 'done', label: '완료', sub: 'Done' },
 ]
 
-const dateColumns = [
-  { id: '2024-06-10', label: '~ 06.10' },
-  { id: '2024-06-20', label: '~ 06.20' },
-  { id: '2024-07-10', label: '~ 07.10' },
-  { id: '2024-07-30', label: '~ 07.30' },
-]
+const milestoneRows = ref([])
 
-const teams = [
-  {
-    id: 'hq',
-    name: '본사 마케팅팀',
-    role: '기획 및 총괄',
-    progress: 75,
-    color: 'primary',
-  },
-  {
-    id: 'design',
-    name: '디자인 스튜디오 A',
-    role: '에셋 제작',
-    progress: 85,
+const teams = []
+
+const teamTasks = ref([])
+
+const taskTypeOptions = ['문서', '이미지', '영상', '웹', '광고', '브리프', '기타']
+const taskPartRecords = ref([])
+const taskPartOptions = computed(() => taskPartRecords.value.map((part) => part.name))
+const taskPriorityOptions = [
+  { id: 'low', label: '낮음' },
+  { id: 'medium', label: '보통' },
+  { id: 'high', label: '높음' },
+  { id: 'critical', label: '긴급' },
+]
+const isTaskModalOpen = ref(false)
+const isPartModalOpen = ref(false)
+const taskFormError = ref('')
+const taskDetailOpen = ref(false)
+const taskDetailItem = ref(null)
+const partFormError = ref('')
+const partCreateType = ref('part')
+const milestoneFormError = ref('')
+
+const campaignTeams = computed(() => [
+  ...(teams[0] ? [teams[0]] : []),
+  ...partnerNames.value.map((partnerName, index) => ({
+    id: `partner-${index}`,
+    name: partnerName,
+    role: '캠페인 협력 업무',
+    progress: 50,
     color: 'blue',
-  },
-  {
-    id: 'media',
-    name: '미디어 랩 B',
-    role: '퍼포먼스 마케팅',
-    progress: 60,
-    color: 'green',
-  },
-  {
-    id: 'pr',
-    name: 'PR 에이전시 C',
-    role: '보도자료 및 인플루언서',
-    progress: 92,
-    color: 'pink',
-  },
-]
+  })),
+])
 
-const teamTasks = [
-  {
-    id: 'task-guide',
-    teamId: 'hq',
-    status: 'review',
-    dateColumn: '2024-06-10',
-    title: '캠페인 전체 가이드라인 V2',
-    type: '문서',
-    dueDate: 'D-2',
-    review: '검수요청',
-    ownerInitial: '김',
-  },
-  {
-    id: 'task-storyboard',
-    teamId: 'hq',
-    status: 'approved',
-    dateColumn: '2024-06-20',
-    title: '티저 영상 스토리보드',
-    type: '영상',
-    dueDate: '완료',
-    review: '승인완료',
-    ownerInitial: '이',
-  },
-  {
-    id: 'task-story-banner',
-    teamId: 'design',
-    status: 'draft',
-    dateColumn: '2024-06-10',
-    title: '인스타그램 스토리 배너 (3종)',
-    type: '이미지',
-    dueDate: '06.10',
-    review: '작성중',
-    ownerInitial: 'A',
-  },
-  {
-    id: 'task-hero',
-    teamId: 'design',
-    status: 'draft',
-    dateColumn: '2024-06-20',
-    title: '메인 랜딩페이지 히어로 이미지',
-    type: '이미지',
-    dueDate: '지연됨',
-    review: '수정요청',
-    ownerInitial: 'A',
-    urgent: true,
-  },
-  {
-    id: 'task-landing',
-    teamId: 'design',
-    status: 'live',
-    dateColumn: '2024-07-10',
-    title: '사전예약 랜딩페이지 디자인',
-    type: '웹',
-    dueDate: '라이브',
-    review: '라이브',
-    ownerInitial: 'A',
-  },
-  {
-    id: 'task-media',
-    teamId: 'media',
-    status: 'review',
-    dateColumn: '2024-07-10',
-    title: '전환 캠페인 소재 세트',
-    type: '광고',
-    dueDate: 'D-5',
-    review: '검수요청',
-    ownerInitial: 'B',
-  },
-  {
-    id: 'task-pr',
-    teamId: 'pr',
-    status: 'approved',
-    dateColumn: '2024-07-30',
-    title: '인플루언서 브리프 문서',
-    type: '문서',
-    dueDate: '완료',
-    review: '승인완료',
-    ownerInitial: 'C',
-  },
-]
+
+const taskPartRows = computed(() =>
+  taskPartRecords.value.map((part) => ({
+    id: part.name,
+    label: part.name,
+    sub: `${getTasksByPart(part.name).length}건`,
+    meta: part,
+  })),
+)
+
+const campaignBoardRows = computed(() => (currentBoardView.value === 'milestone' ? milestoneRows.value : taskPartRows.value))
+
+function createDefaultTaskForm() {
+  return {
+    id: null,
+    title: '',
+    status: statusColumns[0]?.id ?? 'backlog',
+    milestone: milestoneRows.value[0]?.id ?? '',
+    dueDate: '',
+    part: taskPartOptions.value[0],
+    type: taskTypeOptions[0],
+    priority: 'medium',
+    ownerName: '',
+    ownerInitial: '',
+    description: '',
+  }
+}
+
+const taskForm = ref(createDefaultTaskForm())
+
+function createDefaultPartForm() {
+  return {
+    name: '',
+    milestone: milestoneRows.value[0]?.id ?? '',
+    reviewFlow: '검수 요청 → 본사 승인 대기 → 수정 중 → 완료',
+    priority: 'medium',
+    dependency: '',
+    deliverable: '',
+    description: '',
+  }
+}
+
+const partForm = ref(createDefaultPartForm())
+
+function createDefaultMilestoneForm() {
+  return {
+    label: '',
+    startDate: '',
+    endDate: '',
+    description: '',
+  }
+}
+const milestoneForm = ref(createDefaultMilestoneForm())
 
 const references = [
   {
@@ -375,7 +408,7 @@ const overviewStats = computed(() => [
 ])
 
 const avgProgress = computed(() =>
-  Math.round(teams.reduce((sum, team) => sum + team.progress, 0) / teams.length),
+  teams.length ? Math.round(teams.reduce((sum, team) => sum + team.progress, 0) / teams.length) : 0,
 )
 
 const circumference = 251.2
@@ -390,12 +423,321 @@ const kpiSummary = computed(() => [
   { label: '적시성 준수율 (협력사)', value: '92%', sub: '일부 지연 발생', tone: 'warning' },
 ])
 
-function getTasksByStatus(teamId, statusId) {
-  return teamTasks.filter((task) => task.teamId === teamId && task.status === statusId)
+function getTasksByPart(partId) {
+  return teamTasks.value.filter((task) => (task.part ?? '기타') === partId)
 }
 
-function getTasksByDate(teamId, dateColumnId) {
-  return teamTasks.filter((task) => task.teamId === teamId && task.dateColumn === dateColumnId)
+function getTasksForBoardRow(rowId, statusId) {
+  return teamTasks.value.filter((task) => {
+    const rowMatches =
+      currentBoardView.value === 'milestone'
+        ? (task.milestone ?? milestoneRows.value[0]?.id) === rowId
+        : (task.part ?? '기타') === rowId
+
+    return rowMatches && task.status === statusId
+  })
+}
+
+
+function openTaskCreateModal() {
+  taskForm.value = createDefaultTaskForm()
+  taskFormError.value = ''
+  isTaskModalOpen.value = true
+}
+
+function closeTaskCreateModal() {
+  isTaskModalOpen.value = false
+  taskFormError.value = ''
+}
+
+function openPartCreateModal() {
+  partCreateType.value = 'part'
+  partForm.value = createDefaultPartForm()
+  partFormError.value = ''
+  milestoneForm.value = createDefaultMilestoneForm()
+  milestoneFormError.value = ''
+  isPartModalOpen.value = true
+}
+
+function closePartCreateModal() {
+  isPartModalOpen.value = false
+  partFormError.value = ''
+  milestoneFormError.value = ''
+}
+
+function openTaskDetail(task) {
+  taskDetailItem.value = task
+  taskDetailOpen.value = true
+}
+
+function closeTaskDetail() {
+  taskDetailOpen.value = false
+}
+
+function isStepDone(stepId, currentStatus) {
+  const order = ['backlog', 'in_progress', 'review', 'approval_wait', 'revision', 'done']
+  return order.indexOf(stepId) < order.indexOf(currentStatus)
+}
+
+function milestoneLabelById(milestoneId) {
+  return milestoneRows.value.find((m) => m.id === milestoneId)?.label ?? milestoneId
+}
+
+function editFromDetail() {
+  if (!taskDetailItem.value) return
+  const t = taskDetailItem.value
+
+  const milestoneRow = milestoneRows.value.find((m) => m.label === t.milestone)
+  const partRow = taskPartRecords.value.find((p) => p.name === t.part)
+
+  taskForm.value = {
+    ...createDefaultTaskForm(),
+    id: t.id ?? null,
+    title: t.title ?? '',
+    status: t.status ?? statusColumns[0]?.id ?? 'backlog',
+    milestone: milestoneRow?.id ?? '',
+    part: partRow?.name ?? taskPartOptions.value[0] ?? '',
+    type: t.type || taskTypeOptions[0],
+    priority: t.priority ?? 'medium',
+    dueDate: t.dueDateRaw ? String(t.dueDateRaw).slice(0, 10) : '',
+    ownerName: t.ownerName ?? '',
+    ownerInitial: t.ownerInitial ?? '',
+    description: t.description ?? '',
+  }
+  taskFormError.value = ''
+  closeTaskDetail()
+  isTaskModalOpen.value = true
+}
+
+async function addTaskPart() {
+  const name = partForm.value.name.trim()
+
+  if (!name) {
+    partFormError.value = '업무 파트명을 입력해주세요.'
+    return
+  }
+
+  const isDuplicated = taskPartOptions.value.some((part) => part.toLowerCase() === name.toLowerCase())
+
+  if (isDuplicated) {
+    partFormError.value = '이미 등록된 업무 파트입니다.'
+    return
+  }
+
+  const milestoneId = Number(partForm.value.milestone) || null
+  if (!milestoneId) {
+    partFormError.value = '기준 마일스톤을 선택해주세요.'
+    return
+  }
+
+  const campaignId = route.params.campaignId
+  if (!campaignId) return
+
+  try {
+    const result = await CreateTaskPart(campaignId, milestoneId, {
+      name,
+      reviewFlow: partForm.value.reviewFlow.trim() || null,
+      taskPriority: (partForm.value.priority ?? 'medium').toUpperCase(),
+      dependency: partForm.value.dependency.trim() || null,
+      deliverable: partForm.value.deliverable.trim() || null,
+      description: partForm.value.description.trim() || null,
+      sortOrder: taskPartRecords.value.length,
+    })
+
+    taskPartRecords.value = [
+      ...taskPartRecords.value,
+      {
+        id: `part-${result.idx}`,
+        name: result.name,
+        milestone: partForm.value.milestone,
+        reviewFlow: result.reviewFlow ?? '',
+        priority: (result.taskPriority ?? 'MEDIUM').toLowerCase(),
+        dependency: result.dependency ?? '',
+        deliverable: result.deliverable ?? '',
+        description: result.description ?? '',
+      },
+    ]
+
+    currentBoardView.value = 'part'
+    closePartCreateModal()
+  } catch (error) {
+    partFormError.value = error?.message ?? '업무 파트 생성에 실패했습니다.'
+  }
+}
+
+async function addMilestone() {
+  const label = milestoneForm.value.label.trim()
+
+  if (!label) {
+    milestoneFormError.value = '마일스톤명을 입력해주세요.'
+    return
+  }
+
+  const isDuplicated = milestoneRows.value.some((m) => m.label.toLowerCase() === label.toLowerCase())
+  if (isDuplicated) {
+    milestoneFormError.value = '이미 등록된 마일스톤입니다.'
+    return
+  }
+
+  const campaignId = route.params.campaignId
+  if (!campaignId) return
+
+  try {
+    const result = await CreateMilestone(campaignId, {
+      name: label,
+      startDate: toIsoDateTime(milestoneForm.value.startDate),
+      endDate: toIsoDateTime(milestoneForm.value.endDate),
+      description: milestoneForm.value.description.trim() || null,
+      sortOrder: milestoneRows.value.length,
+    })
+
+    let sub = ''
+    if (milestoneForm.value.endDate) {
+      const parts = milestoneForm.value.endDate.split('-')
+      sub = parts.length === 3 ? `~ ${parts[1]}.${parts[2]}` : ''
+    }
+
+    milestoneRows.value = [
+      ...milestoneRows.value,
+      {
+        id: String(result.idx),
+        label: result.name,
+        sub,
+        startDate: milestoneForm.value.startDate,
+        endDate: milestoneForm.value.endDate,
+        description: milestoneForm.value.description.trim(),
+      },
+    ]
+
+    currentBoardView.value = 'milestone'
+    closePartCreateModal()
+  } catch (error) {
+    milestoneFormError.value = error?.message ?? '마일스톤 생성에 실패했습니다.'
+  }
+}
+
+function formatTaskDueLabel(value) {
+  const normalizedValue = String(value ?? '').trim()
+
+  if (!normalizedValue) {
+    return '일정 미정'
+  }
+
+  const dateParts = normalizedValue.split('-')
+
+  if (dateParts.length === 3) {
+    return `${dateParts[1]}.${dateParts[2]}`
+  }
+
+  return normalizedValue
+}
+
+function statusLabelById(statusId) {
+  return statusColumns.find((column) => column.id === statusId)?.label ?? '작성중'
+}
+
+function priorityLabelById(priorityId) {
+  return taskPriorityOptions.find((option) => option.id === priorityId)?.label ?? '보통'
+}
+
+
+function createOwnerInitial(task) {
+  const explicitInitial = task.ownerInitial?.trim()
+
+  if (explicitInitial) {
+    return explicitInitial
+  }
+
+  const ownerName = task.ownerName?.trim()
+
+  if (ownerName) {
+    return ownerName.slice(0, 1)
+  }
+
+  return 'N'
+}
+
+function getTaskTone(task) {
+  if (task.status === 'blocked' || task.status === 'revision') {
+    return 'warning'
+  }
+
+  if (task.status === 'done') {
+    return 'success'
+  }
+
+  return 'info'
+}
+
+async function addTeamTask() {
+  const title = taskForm.value.title.trim()
+
+  if (!title) {
+    taskFormError.value = '업무명을 입력해주세요.'
+    return
+  }
+
+  const campaignId = route.params.campaignId
+  if (!campaignId) return
+
+  const partRecord = taskPartRecords.value.find((p) => p.name === taskForm.value.part)
+  const taskPartId = partRecord ? Number(partRecord.id.replace('part-', '')) || null : null
+  const milestoneId = Number(taskForm.value.milestone) || null
+
+  const payload = {
+    name: title,
+    participantId: null,
+    dueDate: toIsoDateTime(taskForm.value.dueDate),
+    taskType: TYPE_TO_BACKEND[taskForm.value.type] ?? 'OTHER',
+    status: STATUS_TO_BACKEND[taskForm.value.status] ?? 'BACKLOG',
+    taskPartId,
+    milestoneId,
+    assigneeId: null,
+    priority: (taskForm.value.priority ?? 'medium').toUpperCase(),
+    memo: taskForm.value.description.trim() || null,
+  }
+
+  const existingId = Number(taskForm.value.id) || null
+
+  try {
+    const result = existingId
+      ? await UpdateTask(existingId, payload)
+      : await CreateTask(campaignId, payload)
+
+    const mapped = {
+      id: String(result.idx),
+      status: TEAMBOARD_STATUS_MAP[result.status] ?? 'backlog',
+      milestone: result.milestoneName ?? '',
+      title: result.name,
+      part: result.taskPartName ?? taskForm.value.part ?? '',
+      type: taskForm.value.type,
+      priority: TEAMBOARD_PRIORITY_MAP[result.priority] ?? 'medium',
+      dueDate: result.dueDate ? formatTeamboardDate(result.dueDate) : '',
+      dueDateRaw: result.dueDate ?? '',
+      ownerName: result.assigneeName ?? taskForm.value.ownerName.trim(),
+      ownerInitial:
+        result.assigneeName?.charAt(0) ||
+        taskForm.value.ownerInitial.trim() ||
+        taskForm.value.ownerName.trim().slice(0, 1) ||
+        'N',
+      description: result.memo ?? taskForm.value.description.trim(),
+    }
+
+    if (existingId) {
+      const idx = teamTasks.value.findIndex((t) => t.id === String(existingId))
+      if (idx !== -1) {
+        teamTasks.value.splice(idx, 1, mapped)
+      } else {
+        teamTasks.value.unshift(mapped)
+      }
+    } else {
+      teamTasks.value.unshift(mapped)
+    }
+
+    closeTaskCreateModal()
+  } catch (error) {
+    taskFormError.value = error?.message ?? '업무 저장에 실패했습니다.'
+  }
 }
 
 function getAchievement(row) {
@@ -506,6 +848,72 @@ watch(
 )
 
 watch(activeCampaign, syncMetadataDraft, { immediate: true })
+
+async function loadCampaignTeamboard(campaignId) {
+  if (!campaignId) return
+
+  try {
+    const [milestonesData, taskPartsData, tasksData] = await Promise.all([
+      ListMilestones(campaignId),
+      ListTaskParts(campaignId),
+      ListTasksByCampaign(campaignId),
+    ])
+
+    if (Array.isArray(milestonesData) && milestonesData.length > 0) {
+      milestoneRows.value = milestonesData.map((m) => ({
+        id: String(m.idx),
+        label: m.name,
+        sub: m.endDate ? `~ ${formatTeamboardDate(m.endDate)}` : '',
+      }))
+    }
+
+    if (Array.isArray(taskPartsData) && taskPartsData.length > 0) {
+      taskPartRecords.value = taskPartsData.map((p) => ({
+        id: `part-${p.idx}`,
+        name: p.name,
+        milestone: p.milestoneIdx != null ? String(p.milestoneIdx) : '',
+        reviewFlow: p.reviewFlow ?? '',
+        dependency: p.dependency ?? '',
+        deliverable: p.deliverable ?? '',
+        description: p.description ?? '',
+      }))
+    }
+
+    if (Array.isArray(tasksData) && tasksData.length > 0) {
+      teamTasks.value = tasksData.map((t) => ({
+        id: String(t.idx),
+        status: TEAMBOARD_STATUS_MAP[t.status] ?? 'backlog',
+        title: t.name ?? '',
+        type: t.taskType ?? '',
+        dueDate: t.dueDate ? formatTeamboardDate(t.dueDate) : '',
+        dueDateRaw: t.dueDate ?? '',
+        ownerInitial: t.assigneeName ? t.assigneeName.charAt(0) : '?',
+        ownerName: t.assigneeName ?? '',
+        part: t.taskPartName ?? '',
+        priority: TEAMBOARD_PRIORITY_MAP[t.priority] ?? 'medium',
+        milestone: t.milestoneName ?? '',
+      }))
+    }
+  } catch (error) {
+    console.error('캠페인 팀보드 로딩 실패:', error)
+  }
+}
+
+onMounted(() => {
+  const initialCampaignId = route.params.campaignId
+  if (initialCampaignId) {
+    loadCampaignTeamboard(String(initialCampaignId))
+  }
+})
+
+watch(
+  () => route.params.campaignId,
+  (campaignId) => {
+    if (campaignId) {
+      loadCampaignTeamboard(String(campaignId))
+    }
+  },
+)
 </script>
 
 <template>
@@ -521,7 +929,6 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
             </span>
           </div>
           <div class="campaign-hero__meta" aria-label="캠페인 메타데이터 요약">
-            <span># {{ campaignMetaCode }}</span>
             <span>{{ activeCampaign?.period ?? '2024.06.01 - 2024.08.31' }}</span>
             <span>본사 관리자 (수정 가능)</span>
           </div>
@@ -538,13 +945,13 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       <nav class="campaign-tabs" aria-label="캠페인 상세 탭">
         <button
           v-for="tab in tabs"
-          :key="tab.id"
+          :key="tab"
           type="button"
           class="campaign-tabs__button"
-          :class="{ active: activeTab === tab.id }"
-          @click="activeTab = tab.id"
+          :class="{ active: activeTab === tab }"
+          @click="handleTabClick(tab)"
         >
-          {{ tab.label }}
+          {{ tab }}
         </button>
       </nav>
     </div>
@@ -673,7 +1080,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       </div>
     </section>
 
-    <section v-else-if="activeTab === 'overview'" class="tab-surface">
+    <section v-else-if="activeTab === '캠페인 오버뷰'" class="tab-surface">
       <div class="metric-grid">
         <article v-for="stat in overviewStats" :key="stat.label" class="metric-card" :class="`tone-${stat.tone}`">
           <span class="metric-card__icon">{{ stat.label.slice(0, 1) }}</span>
@@ -722,7 +1129,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
           <article class="panel performance-panel">
             <div class="panel__header">
               <h2>최근 성과 요약</h2>
-              <button type="button" class="link-button" @click="activeTab = 'performance'">상세보기</button>
+              <button type="button" class="link-button" @click="handleTabClick('캠페인 성과/KPI')">상세보기</button>
             </div>
             <div class="performance-grid">
               <div>
@@ -775,59 +1182,67 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       </div>
     </section>
 
-    <section v-else-if="activeTab === 'team-board'" class="tab-surface">
+    <section v-else-if="activeTab === '팀 보드 보기'" class="tab-surface">
       <div class="board-toolbar">
         <div class="segmented-control">
-          <button type="button" :class="{ active: currentBoardView === 'swimlane' }" @click="currentBoardView = 'swimlane'">
-            스윔레인
+          <button type="button" :class="{ active: currentBoardView === 'part' }" @click="currentBoardView = 'part'">
+            업무 파트
           </button>
-          <button type="button" :class="{ active: currentBoardView === 'timeline' }" @click="currentBoardView = 'timeline'">
-            칸반보드
+          <button type="button" :class="{ active: currentBoardView === 'milestone' }" @click="currentBoardView = 'milestone'">
+            마일스톤
           </button>
         </div>
         <div class="board-toolbar__actions">
+          <span class="board-context-pill">본사 + 캠페인 참여사 {{ campaignTeams.length }}곳</span>
           <input type="search" placeholder="업무 검색..." />
-          <button type="button" class="btn btn--primary">업무 추가</button>
+          <button type="button" class="btn btn--primary" @click="openTaskCreateModal">업무 추가</button>
+          <button type="button" class="btn btn--secondary" @click="openPartCreateModal">업무 파트 / 마일스톤 생성하기</button>
         </div>
       </div>
 
-      <div class="board-grid">
+      <div
+        class="board-grid"
+        :style="{ '--board-column-count': statusColumns.length }"
+      >
         <div class="board-grid__head">
-          <span>참여사</span>
-          <span v-for="column in currentBoardView === 'swimlane' ? statusColumns : dateColumns" :key="column.id">
+          <span>{{ currentBoardView === 'milestone' ? '마일스톤' : '업무 파트' }}</span>
+          <span v-for="column in statusColumns" :key="column.id">
             {{ column.label }} <small v-if="column.sub">({{ column.sub }})</small>
           </span>
         </div>
 
-        <div v-for="team in teams" :key="team.id" class="board-grid__row">
+        <div v-for="row in campaignBoardRows" :key="row.id" class="board-grid__row">
           <div class="team-cell">
-            <strong>{{ team.name }}</strong>
-            <span>{{ team.role }}</span>
+            <strong>{{ row.label }}</strong>
+            <span>{{ row.sub }}</span>
+            <small v-if="row.meta?.reviewFlow">검수: {{ row.meta.reviewFlow }}</small>
           </div>
 
           <div
-            v-for="column in currentBoardView === 'swimlane' ? statusColumns : dateColumns"
+            v-for="column in statusColumns"
             :key="column.id"
             class="board-cell"
           >
             <article
-              v-for="task in currentBoardView === 'swimlane'
-                ? getTasksByStatus(team.id, column.id)
-                : getTasksByDate(team.id, column.id)"
+              v-for="task in getTasksForBoardRow(row.id, column.id)"
               :key="task.id"
               class="task-card"
-              :class="{ 'task-card--urgent': task.urgent }"
+              role="button"
+              tabindex="0"
+              @click="openTaskDetail(task)"
+              @keydown.enter="openTaskDetail(task)"
             >
               <div class="task-card__top">
-                <span class="status-pill" :class="task.urgent ? 'status-pill--warning' : 'status-pill--info'">
-                  {{ task.review }}
+                <span class="status-pill" :class="`status-pill--${getTaskTone(task)}`">
+                  {{ statusLabelById(task.status) }}
                 </span>
-                <small>{{ task.type }}</small>
+                <small>{{ task.part ?? task.type }}</small>
               </div>
               <strong>{{ task.title }}</strong>
               <div class="task-card__foot">
-                <span :class="{ warning: task.urgent }">{{ task.dueDate }}</span>
-                <em>{{ task.ownerInitial }}</em>
+                <span>{{ task.dueDate }}</span>
+                <small v-if="task.priority" class="task-priority">{{ priorityLabelById(task.priority) }}</small>
+                <em>{{ createOwnerInitial(task) }}</em>
               </div>
             </article>
           </div>
@@ -835,7 +1250,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       </div>
     </section>
 
-    <section v-else-if="activeTab === 'references'" class="tab-surface">
+    <section v-else-if="activeTab === '레퍼런스 탭'" class="tab-surface">
       <div class="reference-toolbar">
         <div class="segmented-control segmented-control--icon">
           <button type="button" class="active">그리드</button>
@@ -867,7 +1282,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       </div>
     </section>
 
-    <section v-else-if="activeTab === 'participants'" class="tab-surface">
+    <section v-else-if="activeTab === '참여자 설정'" class="tab-surface">
       <article class="panel">
         <div class="panel__header">
           <div>
@@ -915,7 +1330,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
       </p>
     </section>
 
-    <section v-else-if="activeTab === 'performance'" class="tab-surface">
+    <section v-else-if="activeTab === '캠페인 성과/KPI'" class="tab-surface">
       <div class="metric-grid">
         <article v-for="item in kpiSummary" :key="item.label" class="kpi-card" :class="`tone-${item.tone}`">
           <span>{{ item.label }}</span>
@@ -976,6 +1391,395 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
         </div>
       </article>
     </section>
+
+    <Teleport to="body">
+      <div
+        v-if="isTaskModalOpen"
+        class="task-modal-backdrop"
+        role="presentation"
+        @click.self="closeTaskCreateModal"
+        @keydown.esc="closeTaskCreateModal"
+      >
+        <section
+          class="team-task-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="team-task-modal-title"
+          tabindex="-1"
+        >
+          <header class="team-task-modal__header">
+            <div>
+              <span class="requirement-badge">TEAM_BOARD_TASK</span>
+              <h2 id="team-task-modal-title">업무 추가</h2>
+              <p>참여사 보드에 표시할 업무 속성을 입력합니다.</p>
+            </div>
+            <button
+              type="button"
+              class="team-task-modal__close"
+              aria-label="업무 추가 모달 닫기"
+              @click="closeTaskCreateModal"
+            >
+              X
+            </button>
+          </header>
+
+          <form class="team-task-form" @submit.prevent="addTeamTask">
+            <label class="team-task-form__wide">
+              <span>업무명</span>
+              <input v-model.trim="taskForm.title" type="text" placeholder="예: SNS 배너 1차 시안 검수" />
+            </label>
+
+            <div class="team-task-form__grid">
+              <label>
+                <span>상태</span>
+                <select v-model="taskForm.status">
+                  <option v-for="column in statusColumns" :key="column.id" :value="column.id">
+                    {{ column.label }}
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>업무 파트</span>
+                <select v-model="taskForm.part">
+                  <option v-for="part in taskPartOptions" :key="part" :value="part">
+                    {{ part }}
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>마일스톤</span>
+                <select v-model="taskForm.milestone">
+                  <option v-for="milestone in milestoneRows" :key="milestone.id" :value="milestone.id">
+                    {{ milestone.label }}
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>마감일</span>
+                <input v-model="taskForm.dueDate" type="date" />
+              </label>
+
+              <label>
+                <span>업무 유형</span>
+                <select v-model="taskForm.type">
+                  <option v-for="type in taskTypeOptions" :key="type" :value="type">
+                    {{ type }}
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>우선순위</span>
+                <select v-model="taskForm.priority">
+                  <option
+                    v-for="option in taskPriorityOptions"
+                    :key="option.id"
+                    :value="option.id"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>담당자</span>
+                <input
+                  v-model.trim="taskForm.ownerName"
+                  type="text"
+                  placeholder="예: 김본사"
+                />
+              </label>
+
+              <label>
+                <span>담당자 이니셜</span>
+                <input
+                  v-model.trim="taskForm.ownerInitial"
+                  type="text"
+                  maxlength="2"
+                  placeholder="김"
+                />
+              </label>
+            </div>
+
+            <label class="team-task-form__wide">
+              <span>업무 메모</span>
+              <textarea
+                v-model.trim="taskForm.description"
+                rows="3"
+                placeholder="산출물 기준, 검수 포인트, 파트너 요청사항을 간단히 남겨주세요."
+              />
+            </label>
+
+            <p v-if="taskFormError" class="team-task-form__error">{{ taskFormError }}</p>
+
+            <footer class="team-task-modal__actions">
+              <button type="button" class="btn btn--secondary" @click="closeTaskCreateModal">취소</button>
+              <button type="submit" class="btn btn--primary">추가하기</button>
+            </footer>
+          </form>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="isPartModalOpen"
+        class="task-modal-backdrop"
+        role="presentation"
+        @click.self="closePartCreateModal"
+        @keydown.esc="closePartCreateModal"
+      >
+        <section
+          class="team-task-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="team-part-modal-title"
+          tabindex="-1"
+        >
+          <header class="team-task-modal__header">
+            <div>
+              <span class="requirement-badge">{{ partCreateType === 'part' ? 'TEAM_BOARD_PART' : 'TEAM_BOARD_MILESTONE' }}</span>
+              <h2 id="team-part-modal-title">{{ partCreateType === 'part' ? '업무 파트 생성하기' : '마일스톤 생성하기' }}</h2>
+              <p>{{ partCreateType === 'part' ? '캠페인 내부 보드에서 새 행으로 관리할 업무 도메인과 검수 기준을 정의합니다.' : '캠페인의 주요 진행 단계와 기준 일정을 설정합니다.' }}</p>
+            </div>
+            <button
+              type="button"
+              class="team-task-modal__close"
+              aria-label="모달 닫기"
+              @click="closePartCreateModal"
+            >
+              X
+            </button>
+          </header>
+
+          <div class="part-modal-tabs">
+            <button
+              type="button"
+              :class="['part-modal-tab', { 'part-modal-tab--active': partCreateType === 'part' }]"
+              @click="partCreateType = 'part'"
+            >
+              업무 파트
+            </button>
+            <button
+              type="button"
+              :class="['part-modal-tab', { 'part-modal-tab--active': partCreateType === 'milestone' }]"
+              @click="partCreateType = 'milestone'"
+            >
+              마일스톤
+            </button>
+          </div>
+
+          <!-- 업무 파트 폼 -->
+          <form v-if="partCreateType === 'part'" class="team-task-form" @submit.prevent="addTaskPart">
+            <label class="team-task-form__wide">
+              <span>업무 파트명</span>
+              <input v-model.trim="partForm.name" type="text" placeholder="예: 예약/결제 연동, 인플루언서 운영" />
+            </label>
+
+            <div class="team-task-form__grid">
+              <label>
+                <span>기준 마일스톤</span>
+                <select v-model="partForm.milestone">
+                  <option v-for="milestone in milestoneRows" :key="milestone.id" :value="milestone.id">
+                    {{ milestone.label }} ({{ milestone.sub }})
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>기본 검수 흐름</span>
+                <select v-model="partForm.reviewFlow">
+                  <option value="검수 요청 → 본사 승인 대기 → 수정 중 → 완료">
+                    검수 요청 → 본사 승인 대기 → 수정 중 → 완료
+                  </option>
+                  <option value="초안 작성 → 검수 요청 → 수정 중 → 완료">
+                    초안 작성 → 검수 요청 → 수정 중 → 완료
+                  </option>
+                  <option value="QA → 본사 승인 대기 → 완료">QA → 본사 승인 대기 → 완료</option>
+                  <option value="운영 확인 → 검수 요청 → 완료">운영 확인 → 검수 요청 → 완료</option>
+                </select>
+              </label>
+
+              <label>
+                <span>기본 우선순위</span>
+                <select v-model="partForm.priority">
+                  <option v-for="option in taskPriorityOptions" :key="option.id" :value="option.id">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>선행 업무/의존성</span>
+                <input
+                  v-model.trim="partForm.dependency"
+                  type="text"
+                  placeholder="예: 브랜드 가이드 확정, 타겟 명단 확정"
+                />
+              </label>
+
+              <label>
+                <span>산출물 기준</span>
+                <input
+                  v-model.trim="partForm.deliverable"
+                  type="text"
+                  placeholder="예: 배너 3종, 운영 체크리스트, QA 결과표"
+                />
+              </label>
+            </div>
+
+            <label class="team-task-form__wide">
+              <span>파트 설명</span>
+              <textarea
+                v-model.trim="partForm.description"
+                rows="3"
+                placeholder="이 파트에서 관리할 업무 범위, 검수 포인트, 참여사 역할을 간단히 적어주세요."
+              />
+            </label>
+
+            <p v-if="partFormError" class="team-task-form__error">{{ partFormError }}</p>
+
+            <footer class="team-task-modal__actions">
+              <button type="button" class="btn btn--secondary" @click="closePartCreateModal">취소</button>
+              <button type="submit" class="btn btn--primary">파트 생성하기</button>
+            </footer>
+          </form>
+
+          <!-- 마일스톤 폼 -->
+          <form v-else class="team-task-form" @submit.prevent="addMilestone">
+            <label class="team-task-form__wide">
+              <span>마일스톤명</span>
+              <input v-model.trim="milestoneForm.label" type="text" placeholder="예: 기획 확정, 런칭 준비, 운영 완료" />
+            </label>
+
+            <div class="team-task-form__grid">
+              <label>
+                <span>시작일</span>
+                <input v-model="milestoneForm.startDate" type="date" />
+              </label>
+
+              <label>
+                <span>종료(목표)일</span>
+                <input v-model="milestoneForm.endDate" type="date" />
+              </label>
+            </div>
+
+            <label class="team-task-form__wide">
+              <span>마일스톤 설명</span>
+              <textarea
+                v-model.trim="milestoneForm.description"
+                rows="3"
+                placeholder="이 마일스톤에서 달성해야 할 목표, 산출물 기준, 완료 조건을 적어주세요."
+              />
+            </label>
+
+            <p v-if="milestoneFormError" class="team-task-form__error">{{ milestoneFormError }}</p>
+
+            <footer class="team-task-modal__actions">
+              <button type="button" class="btn btn--secondary" @click="closePartCreateModal">취소</button>
+              <button type="submit" class="btn btn--primary">마일스톤 생성하기</button>
+            </footer>
+          </form>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <Transition name="cd-detail">
+        <div
+          v-if="taskDetailOpen && taskDetailItem"
+          class="cd-detail-overlay"
+          role="presentation"
+          @click.self="closeTaskDetail"
+          @keydown.esc="closeTaskDetail"
+        >
+          <aside
+            class="cd-detail-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cd-detail-title"
+            tabindex="-1"
+          >
+            <header class="cd-detail-header">
+              <div class="cd-detail-header__top">
+                <div class="cd-detail-badges">
+                  <span class="cd-badge" :class="`cd-badge--${getTaskTone(taskDetailItem)}`">
+                    {{ statusLabelById(taskDetailItem.status) }}
+                  </span>
+                </div>
+                <button type="button" class="cd-detail-close" aria-label="닫기" @click="closeTaskDetail">✕</button>
+              </div>
+              <h2 id="cd-detail-title">{{ taskDetailItem.title }}</h2>
+            </header>
+
+            <div class="cd-detail-tracker">
+              <div
+                v-for="step in statusColumns"
+                :key="step.id"
+                class="cd-tracker-step"
+                :class="{
+                  'cd-tracker-step--active': step.id === taskDetailItem.status,
+                  'cd-tracker-step--done': isStepDone(step.id, taskDetailItem.status),
+                }"
+              >
+                <div class="cd-tracker-dot" />
+                <span>{{ step.label }}</span>
+              </div>
+            </div>
+
+            <div class="cd-detail-body">
+              <dl class="cd-detail-grid">
+                <div class="cd-detail-item">
+                  <dt>업무 파트</dt>
+                  <dd>{{ taskDetailItem.part ?? '-' }}</dd>
+                </div>
+                <div class="cd-detail-item">
+                  <dt>마일스톤</dt>
+                  <dd>{{ milestoneLabelById(taskDetailItem.milestone) ?? '-' }}</dd>
+                </div>
+                <div class="cd-detail-item">
+                  <dt>업무 유형</dt>
+                  <dd>{{ taskDetailItem.type ?? '-' }}</dd>
+                </div>
+                <div class="cd-detail-item">
+                  <dt>우선순위</dt>
+                  <dd class="cd-priority" :data-priority="taskDetailItem.priority">
+                    {{ priorityLabelById(taskDetailItem.priority) ?? '-' }}
+                  </dd>
+                </div>
+                <div class="cd-detail-item">
+                  <dt>마감일</dt>
+                  <dd>{{ taskDetailItem.dueDate ?? '미정' }}</dd>
+                </div>
+              </dl>
+
+              <div class="cd-detail-section">
+                <h3>담당자</h3>
+                <div class="cd-assignee">
+                  <span class="cd-assignee__avatar">{{ createOwnerInitial(taskDetailItem) }}</span>
+                  <div>
+                    <strong>{{ taskDetailItem.ownerName || createOwnerInitial(taskDetailItem) }}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="taskDetailItem.description" class="cd-detail-section">
+                <h3>업무 메모</h3>
+                <p class="cd-memo">{{ taskDetailItem.description }}</p>
+              </div>
+            </div>
+
+            <footer class="cd-detail-footer">
+              <button type="button" class="btn btn--secondary" @click="closeTaskDetail">닫기</button>
+              <button type="button" class="btn btn--primary" @click="editFromDetail">업무 수정</button>
+            </footer>
+          </aside>
+        </div>
+      </Transition>
+    </Teleport>
   </section>
 </template>
 
@@ -996,10 +1800,8 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
   --campaign-table-row-hover: color-mix(in srgb, var(--panel-muted) 58%, var(--panel-color));
   display: flex;
   width: 100%;
-  max-width: var(--content-max-width);
   flex-direction: column;
   gap: 18px;
-  margin: 0 auto;
   z-index: 0;
 }
 
@@ -1257,7 +2059,8 @@ label {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--border-color);
@@ -1268,7 +2071,8 @@ textarea {
   padding: 10px 12px;
 }
 
-input {
+input,
+select {
   min-height: 38px;
 }
 
@@ -1674,6 +2478,20 @@ textarea:disabled {
   padding: 12px;
 }
 
+.board-context-pill {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
 .segmented-control {
   display: inline-flex;
   gap: 4px;
@@ -1706,8 +2524,8 @@ textarea:disabled {
 .board-grid__head,
 .board-grid__row {
   display: grid;
-  min-width: 1080px;
-  grid-template-columns: 190px repeat(4, minmax(205px, 1fr));
+  min-width: 1420px;
+  grid-template-columns: 190px repeat(var(--board-column-count, 4), minmax(205px, 1fr));
 }
 
 .board-grid__head {
@@ -1742,6 +2560,15 @@ textarea:disabled {
   margin-top: 4px;
   color: var(--muted-text);
   font-size: 12px;
+}
+
+.team-cell small {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.35;
 }
 
 .board-cell {
@@ -1790,6 +2617,193 @@ textarea:disabled {
   color: var(--muted-text);
   font-size: 12px;
   font-weight: 800;
+}
+
+.task-card__meta {
+  display: grid;
+  gap: 3px;
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.task-card__company {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.task-card__foot {
+  flex-wrap: wrap;
+}
+
+.task-priority {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+}
+
+.task-modal-backdrop {
+  --campaign-primary-surface: var(--color-primary-100);
+  --campaign-primary-text: var(--color-primary-700);
+  --campaign-warning-surface: var(--color-warning-light);
+  --campaign-warning-text: var(--color-warning-dark);
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.46);
+  padding: 24px;
+}
+
+:global(:root[data-theme='dark']) .task-modal-backdrop {
+  --campaign-primary-surface: rgba(139, 92, 246, 0.18);
+  --campaign-primary-text: #ddd6fe;
+  --campaign-warning-surface: rgba(245, 158, 11, 0.16);
+  --campaign-warning-text: #fcd34d;
+}
+
+.team-task-modal {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-color);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
+}
+
+.team-task-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid var(--border-color);
+  padding: 22px 24px 18px;
+}
+
+.team-task-modal__header h2 {
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 850;
+}
+
+.team-task-modal__header p {
+  margin-top: 5px;
+  color: var(--muted-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.team-task-modal__close {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.part-modal-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--panel-muted);
+}
+
+.part-modal-tab {
+  position: relative;
+  padding: 11px 20px;
+  border: none;
+  background: transparent;
+  color: var(--muted-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition: color 0.15s;
+}
+
+.part-modal-tab::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.part-modal-tab--active {
+  color: var(--color-primary-500);
+}
+
+.part-modal-tab--active::after {
+  background: var(--color-primary-500);
+}
+
+.team-task-form {
+  display: grid;
+  gap: 16px;
+  padding: 22px 24px 24px;
+}
+
+.team-task-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.team-task-form__wide {
+  min-width: 0;
+}
+
+.team-task-form__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  color: var(--text-secondary);
+}
+
+.team-task-form__checkbox input {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  accent-color: var(--color-primary-500);
+}
+
+.team-task-form__error {
+  border: 1px solid color-mix(in srgb, var(--color-warning) 34%, var(--border-color));
+  border-radius: var(--radius-sm);
+  background: var(--campaign-warning-surface);
+  color: var(--campaign-warning-text);
+  font-size: 13px;
+  font-weight: 750;
+  padding: 10px 12px;
+}
+
+.team-task-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 16px;
 }
 
 .reference-grid {
@@ -2017,8 +3031,398 @@ textarea:disabled {
   .reference-grid,
   .candidate-list,
   .performance-grid,
-  .form-grid {
+  .form-grid,
+  .team-task-form__grid {
     grid-template-columns: 1fr;
   }
+
+  .task-modal-backdrop {
+    align-items: start;
+    padding: 14px;
+  }
+
+  .team-task-modal__header,
+  .team-task-form {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+}
+
+/* ── Task Detail Drawer ─────────────────────────── */
+.task-card {
+  cursor: pointer;
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.task-card:hover {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-primary-500) 18%, transparent);
+  transform: translateY(-1px);
+}
+
+.task-card:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
+.cd-detail-overlay {
+  --campaign-primary-surface: var(--color-primary-100);
+  --campaign-primary-text: var(--color-primary-700);
+  --campaign-success-surface: var(--color-success-light);
+  --campaign-success-text: var(--color-success-dark);
+  --campaign-warning-surface: var(--color-warning-light);
+  --campaign-warning-text: var(--color-warning-dark);
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(2px);
+}
+
+:global(:root[data-theme='dark']) .cd-detail-overlay {
+  --campaign-primary-surface: rgba(139, 92, 246, 0.18);
+  --campaign-primary-text: #ddd6fe;
+  --campaign-warning-surface: rgba(245, 158, 11, 0.16);
+  --campaign-warning-text: #fcd34d;
+}
+
+.cd-detail-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(460px, 100vw);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-color);
+  border-left: 1px solid var(--border-color);
+  box-shadow: -20px 0 60px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.cd-detail-header {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border-color);
+  padding: 22px 24px 18px;
+  background: color-mix(in srgb, var(--panel-color) 95%, var(--color-primary-500));
+}
+
+.cd-detail-header__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.cd-detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cd-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 750;
+  padding: 0 9px;
+}
+
+.cd-badge--info,
+.cd-badge--primary {
+  background: var(--campaign-primary-surface);
+  color: var(--campaign-primary-text);
+}
+
+.cd-badge--success {
+  background: var(--campaign-success-surface);
+  color: var(--campaign-success-text);
+}
+
+.cd-badge--warning {
+  background: var(--campaign-warning-surface);
+  color: var(--campaign-warning-text);
+}
+
+.cd-badge--risk {
+  background: color-mix(in srgb, var(--color-danger) 13%, transparent);
+  color: var(--danger-text-strong);
+}
+
+.cd-detail-close {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-muted);
+  color: var(--muted-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.cd-detail-close:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+.cd-detail-header h2 {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 850;
+  line-height: 1.3;
+}
+
+.cd-detail-sub {
+  margin-top: 5px;
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Status tracker */
+.cd-detail-tracker {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--panel-muted);
+  overflow-x: auto;
+  gap: 0;
+}
+
+.cd-tracker-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  position: relative;
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--muted-text);
+  text-align: center;
+  white-space: nowrap;
+  min-width: 60px;
+}
+
+.cd-tracker-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--border-color);
+  z-index: 0;
+}
+
+.cd-tracker-step--done:not(:last-child)::after {
+  background: var(--color-primary-500);
+}
+
+.cd-tracker-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background: var(--panel-color);
+  position: relative;
+  z-index: 1;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.cd-tracker-step--done .cd-tracker-dot {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
+}
+
+.cd-tracker-step--active {
+  color: var(--campaign-primary-text);
+  font-weight: 800;
+}
+
+.cd-tracker-step--active .cd-tracker-dot {
+  border-color: var(--color-primary-500);
+  background: var(--panel-color);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary-500) 20%, transparent);
+}
+
+/* Body */
+.cd-detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 24px;
+  display: grid;
+  align-content: start;
+  gap: 22px;
+}
+
+/* Property grid */
+.cd-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+}
+
+.cd-detail-item {
+  display: grid;
+  gap: 5px;
+}
+
+.cd-detail-item dt {
+  font-size: 10px;
+  font-weight: 750;
+  color: var(--muted-text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cd-detail-item dd {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* Section */
+.cd-detail-section {
+  display: grid;
+  gap: 8px;
+}
+
+.cd-detail-section h3 {
+  font-size: 10px;
+  font-weight: 750;
+  color: var(--muted-text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cd-detail-section p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Assignee */
+.cd-assignee {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--panel-muted);
+}
+
+.cd-assignee__avatar {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--campaign-primary-surface);
+  color: var(--campaign-primary-text);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.cd-assignee strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cd-assignee small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted-text);
+  margin-top: 2px;
+}
+
+/* Deliverable */
+.cd-deliverable {
+  font-size: 12px;
+  background: var(--panel-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font-weight: 600;
+}
+
+/* Memo */
+.cd-memo {
+  background: color-mix(in srgb, var(--color-primary-500) 6%, var(--panel-muted));
+  border-left: 3px solid var(--color-primary-500);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Priority */
+.cd-priority[data-priority='critical'] { color: var(--danger-text-strong); font-weight: 750; }
+.cd-priority[data-priority='high'] { color: var(--campaign-warning-text); font-weight: 750; }
+.cd-priority[data-priority='medium'] { color: var(--campaign-primary-text); }
+.cd-priority[data-priority='low'] { color: var(--muted-text); }
+
+/* Footer */
+.cd-detail-footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--border-color);
+  padding: 16px 24px;
+  background: color-mix(in srgb, var(--panel-color) 96%, var(--panel-muted));
+}
+
+/* Transition */
+.cd-detail-enter-active {
+  transition: opacity 0.22s ease;
+}
+
+.cd-detail-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.cd-detail-enter-from,
+.cd-detail-leave-to {
+  opacity: 0;
+}
+
+.cd-detail-enter-active .cd-detail-panel {
+  animation: cd-panel-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.cd-detail-leave-active .cd-detail-panel {
+  animation: cd-panel-out 0.2s ease-in forwards;
+}
+
+@keyframes cd-panel-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes cd-panel-out {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
 }
 </style>

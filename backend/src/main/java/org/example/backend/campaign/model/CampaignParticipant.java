@@ -28,16 +28,14 @@ public class CampaignParticipant {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idx;
 
-    @Setter
-    @Column(name = "campaign_id", nullable = false)
-    private Long campaignId;
-
-    @Setter
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organization_id", nullable = false)
+    @JoinColumn(name = "campaign_idx", nullable = false)
+    private Campaign campaign;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organization_idx", nullable = false)
     private Organization organization;
 
-    @Setter
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)

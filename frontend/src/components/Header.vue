@@ -84,7 +84,7 @@ const profileCardStyle = computed(() => ({
 const appMenuItems = computed(() => [
   {
     key: 'provisioning',
-    label: '계정 발급',
+    label: '인사관리',
     kind: 'route',
     to: { name: 'user-provisioning' },
     creatorOnly: true,
@@ -363,51 +363,8 @@ onBeforeUnmount(() => {
 <template>
   <header data-header-root="true" class="callog-header">
     <div class="callog-header__inner">
-      <!-- 왼쪽: 토글 버튼 + 브레드크럼 -->
+      <!-- 왼쪽: 브레드크럼 -->
       <div class="callog-header__left">
-        <button
-          type="button"
-          class="callog-header__toggle"
-          :aria-label="store.sidebarCollapsed ? '사이드바 열기' : '사이드바 닫기'"
-          :aria-expanded="!store.sidebarCollapsed"
-          @click="store.toggleSidebar"
-        >
-          <!-- 열림 상태: PanelLeftClose -->
-          <svg
-            v-if="!store.sidebarCollapsed"
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect width="18" height="18" x="3" y="3" rx="2" />
-            <path d="M9 3v18" />
-            <path d="m16 15-3-3 3-3" />
-          </svg>
-          <!-- 닫힘 상태: PanelLeftOpen -->
-          <svg
-            v-else
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect width="18" height="18" x="3" y="3" rx="2" />
-            <path d="M9 3v18" />
-            <path d="m14 9 3 3-3 3" />
-          </svg>
-        </button>
-
         <div class="callog-header__breadcrumb">
           <p class="callog-header__section">{{ sectionTitle }}</p>
           <h1 class="callog-header__title">{{ pageTitle }}</h1>

@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping({"/administrator/users", "/admin/users"})
+@RequestMapping("/auth/usercreate")
 public class AdministratorUserController {
     private final UserService userService;
 

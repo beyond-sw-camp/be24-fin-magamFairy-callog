@@ -19,6 +19,8 @@ public class AuthUserDetails implements UserDetails {
     private Boolean enable;
     private String role;
     private String name;
+    private String companyName;
+    private String department;
     private UserAccountStatus accountStatus;
 
     public static AuthUserDetails from(User entity) {
@@ -27,6 +29,8 @@ public class AuthUserDetails implements UserDetails {
                 .id(entity.getId())
                 .email(entity.getEmail())
                 .name(entity.getName())
+                .companyName(entity.getCompanyName())
+                .department(entity.getDepartment())
                 .password(entity.getPassword())
                 .enable(entity.getEnable())
                 .role(entity.getRole())

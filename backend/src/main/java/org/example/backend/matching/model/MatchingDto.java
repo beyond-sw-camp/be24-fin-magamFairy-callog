@@ -13,6 +13,102 @@ public class MatchingDto {
 
     @Getter
     @Builder
+    public static class ProposalRes{
+        private Long idx;
+        private String partnerName;
+        private String logo; //URL 혹은 쌩 String
+        private String benefitSummary;
+        private Integer totalScore;
+        private String grade;
+        private String date;
+        private String owner;
+        private String status;
+        private String condition;
+        private List<String> scoreBreakDown;
+        private List<String> risks;
+        private List<String> actions;
+
+    }
+
+    @Getter
+    @Builder
+    public static class Added{
+
+    }
+
+    @Getter
+    @Builder
+    public static class AddBenefit {
+        private String name;
+        private String type;
+        private String scale;
+        private String target;
+        private String cost;
+        private String status;
+
+        public PartnerBenefits toEntity(Organization organization) {
+            return PartnerBenefits.builder()
+                    .name(this.name)
+                    .type(this.type)
+                    .scale(this.scale)
+                    .target(this.target)
+                    .status(this.status)
+                    .cost(this.cost)
+                    .organization(organization)
+                    .build();
+        }
+    }
+
+    @Getter
+    @Builder
+    public static class BenefitList{
+        private List<BenefitRes> benefitList;
+        private Integer page;
+        private Integer size;
+        private Long totalElements;
+        private Integer totalPages;
+
+        public static BenefitList toDto(Page<PartnerBenefits> result){
+            return BenefitList.builder()
+                    .benefitList(result.getContent().stream()
+                            .map(BenefitRes::toDto)
+                            .toList())
+                    .page(result.getNumber())
+                    .size(result.getSize())
+                    .totalElements(result.getTotalElements())
+                    .totalPages(result.getTotalPages())
+                    .build();
+        }
+    }
+
+    @Getter
+    @Builder
+    public static class BenefitRes {
+        private Long idx;
+        private String name;
+        private String type;
+        private String affiliate;
+        private String scale;
+        private String target;
+        private String cost;
+        private String status;
+
+        public static BenefitRes toDto(PartnerBenefits entity){
+            return BenefitRes.builder()
+                    .idx(entity.getIdx())
+                    .name(entity.getName())
+                    .type(entity.getType())
+                    .affiliate(entity.getOrganization().getName())
+                    .scale(entity.getScale())
+                    .target(entity.getTarget())
+                    .cost(entity.getCost())
+                    .status(entity.getStatus())
+                    .build();
+        }
+    }
+
+    @Getter
+    @Builder
     public static class AddAsset {
         private String target;
         private String type;

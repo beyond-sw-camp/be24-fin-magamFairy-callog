@@ -21,7 +21,7 @@ public class CampaignService {
 
     private final CampaignRepository campaignRepository;
 
-    public List<CampaignDto.Res> getCampaigns(String ownerLoginId) {
+    public List<CampaignDto.Res> listCampaigns(String ownerLoginId) {
         return campaignRepository.findAllByOwnerLoginIdOrderByIdxDesc(ownerLoginId).stream()
                 .map(CampaignDto.Res::from)
                 .toList();
