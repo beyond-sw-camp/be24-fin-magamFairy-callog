@@ -59,6 +59,7 @@ public class SecurityConfig {
                         "/api/sse/**",
                         "/sse/**"
                 ).permitAll()
+                .requestMatchers("/campaigns/**").authenticated()
                 .requestMatchers("/matching/**", "/matching/evaluation/**").authenticated()
                 .anyRequest().authenticated()
         );
