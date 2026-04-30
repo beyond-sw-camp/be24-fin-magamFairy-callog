@@ -59,6 +59,21 @@ export async function logoutRequest() {
 }
 
 export async function createUserRequest(payload) {
-  const response = await api.post('/admin/users', payload)
+  const response = await api.post('/auth/usercreate', payload)
+  return unwrapResponse(response)
+}
+
+export async function SignupRequest(payload) {
+  const response = await api.post('/auth/signup', payload)
+  return unwrapResponse(response)
+}
+
+export async function resetPasswordRequest(payload) {
+  const response = await api.post('/auth/resetpassword', payload)
+  return unwrapResponse(response)
+}
+
+export async function deleteUserRequest(payload) {
+  const response = await api.post('/auth/userdelete', payload)
   return unwrapResponse(response)
 }

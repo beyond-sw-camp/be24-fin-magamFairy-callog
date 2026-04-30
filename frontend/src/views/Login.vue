@@ -51,19 +51,8 @@ const handleLogin = async () => {
   <section class="login-view min-h-screen px-6 py-10">
     <div class="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center">
       <div class="mb-10 flex flex-col items-center fade-in">
-        <div
-          class="login-brand-mark mb-4 inline-flex h-16 w-16 items-center justify-center shadow-sm"
-        >
-          <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M8 2v4M16 2v4M3 10h18M5 6h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"
-            />
-          </svg>
-        </div>
-        <h1 class="login-brand-title text-4xl font-bold tracking-tight">CALLOG</h1>
+        <img src="@/assets/callog.png" alt="CALLOG" class="login-brand-icon mb-4" />
+        <img src="@/assets/callog2.png" alt="CALLOG" class="login-brand-wordmark" />
       </div>
 
       <div class="slide-up w-full max-w-3xl">
@@ -171,6 +160,13 @@ const handleLogin = async () => {
             </div>
           </form>
         </div>
+
+        <p class="login-signup-hint mt-5 text-center text-sm">
+          제휴사 계정이 없으신가요?
+          <RouterLink :to="{ name: 'partner-signup' }" class="login-signup-link font-semibold">
+            회원가입
+          </RouterLink>
+        </p>
       </div>
     </div>
   </section>
@@ -185,18 +181,23 @@ const handleLogin = async () => {
     color var(--transition-normal);
 }
 
-.login-brand-mark {
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  background: var(--accent-strong);
-  color: var(--toggle-thumb);
-  transition:
-    background var(--transition-normal),
-    border-color var(--transition-normal),
-    color var(--transition-normal);
+.login-brand-icon {
+  display: block;
+  margin: 0 auto;
+  height: 64px;
+  width: auto;
+  object-fit: contain;
+  transform: translateX(7px);
 }
 
-.login-brand-title,
+.login-brand-wordmark {
+  display: block;
+  margin: 0 auto;
+  height: 80px;
+  width: auto;
+  object-fit: contain;
+}
+
 .login-title {
   color: var(--text-heading);
   transition: color var(--transition-normal);
@@ -274,6 +275,19 @@ const handleLogin = async () => {
 .login-spinner {
   border-color: color-mix(in srgb, var(--toggle-thumb) 28%, transparent);
   border-top-color: var(--toggle-thumb);
+}
+
+.login-signup-hint {
+  color: var(--text-muted);
+}
+
+.login-signup-link {
+  color: var(--accent-color);
+  text-decoration: none;
+}
+
+.login-signup-link:hover {
+  text-decoration: underline;
 }
 
 .fade-in {
