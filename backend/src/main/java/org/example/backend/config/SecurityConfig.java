@@ -42,7 +42,14 @@ public class SecurityConfig {
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/login", "/login", "/error").permitAll()
                 .requestMatchers("/auth/reissue", "/auth/logout").permitAll()
-                .requestMatchers("/administrator/users", "/admin/users").hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
+                .requestMatchers("/auth/signup").permitAll()
+                .requestMatchers(
+                        "/auth/usercreate",
+                        "/auth/userdelete",
+                        "/auth/resetpassword",
+                        "/administrator/users",
+                        "/admin/users"
+                ).hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
                 .requestMatchers("/administrator/**", "/admin/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers(
                         "/workspace/**",
@@ -52,7 +59,8 @@ public class SecurityConfig {
                         "/api/sse/**",
                         "/sse/**"
                 ).permitAll()
-                .requestMatchers("/matching/**").permitAll() // 임시
+                .requestMatchers("/campaigns/**").authenticated()
+                .requestMatchers("/matching/**", "/matching/evaluation/**").authenticated()
                 .anyRequest().authenticated()
         );
 
