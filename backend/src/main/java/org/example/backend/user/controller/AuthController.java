@@ -4,12 +4,17 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.example.backend.common.model.BaseResponse;
 import org.example.backend.user.model.TokenDto;
+import org.example.backend.user.model.UserDto;
 import org.example.backend.user.service.AuthService;
+import org.example.backend.user.service.UserService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,9 +26,28 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final UserService userService;
 
     @Value("${app.secure-cookie}")
     private boolean secureCookie;
+
+    @PostMapping("/signup")
+    public ResponseEntity<?> partnerSignup(@RequestBody UserDto.PartnerSignupReq dto) {
+        UserDto.PartnerSignupRes result = userService.partnerSignup(dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(result));
+    }
+
+    @PostMapping("/resetpassword")
+    public ResponseEntity<?> resetPassword(@RequestBody UserDto.ResetPasswordReq dto, Authentication authentication) {
+        UserDto.ResetPasswordRes result = userService.resetPassword(dto, authentication);
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
+    @PostMapping("/userdelete")
+    public ResponseEntity<?> deleteUser(@RequestBody UserDto.DeleteUserReq dto, Authentication authentication) {
+        UserDto.DeleteUserRes result = userService.deleteUser(dto, authentication);
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
 
     @PostMapping("/reissue")
     public ResponseEntity<?> reissue(HttpServletRequest request, HttpServletResponse response) {
