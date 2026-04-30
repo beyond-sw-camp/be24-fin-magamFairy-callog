@@ -16,7 +16,7 @@ import java.util.NoSuchElementException;
 @RestController
 @RequestMapping("/matching")
 @RequiredArgsConstructor
-public class MatchingController {
+public class AssetController {
     private final AssetService assetService;
 
     @GetMapping("/asset/{idx}")
@@ -54,49 +54,6 @@ public class MatchingController {
         try {
             assetService.addAsset(dto, user);
             return  ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.ASSET_ADD_SUCCESS));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.OK)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
-    }
-
-    private final BenefitService benefitService;
-
-    @GetMapping("/benefit/{idx}")
-    public ResponseEntity getBenefit(@PathVariable Long idx) {
-        try {
-            MatchingDto.BenefitRes dto = benefitService.getBenefit(idx);
-            return ResponseEntity.ok(BaseResponse.success(dto));
-        }
-        catch (NoSuchElementException e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT, null));
-        }
-    }
-
-    @GetMapping("/benefit/list")
-    public ResponseEntity getBenefitList(
-            @RequestParam(required = true, defaultValue = "0") int page,
-            @RequestParam(required = true, defaultValue = "10") int size
-    ) {
-        try {
-            MatchingDto.BenefitList dto = benefitService.getBenefitList(page, size);
-            return ResponseEntity.status(HttpStatus.OK)
-                    .body(BaseResponse.success(BaseResponseStatus.LIST_SUCCESS, dto));
-        }
-        catch (NoSuchElementException e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
-        }
-    }
-
-    @PostMapping("/benefit/add")
-    public ResponseEntity addBenefit(@RequestBody MatchingDto.AddBenefit dto,
-                                   @AuthenticationPrincipal AuthUserDetails user){
-        try {
-            benefitService.addBenefit(dto, user);
-            return  ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.BENEFIT_ADD_SUCCESS,null));
         }
         catch (Exception e){
             return ResponseEntity.status(HttpStatus.OK)
