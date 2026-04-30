@@ -54,7 +54,9 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
                 user.getId(),
                 user.getEmail(),
                 user.getName(),
-                user.getRole()
+                user.getRole(),
+                user.getCompanyName(),
+                user.getDepartment()
         );
 
         response.setHeader("Authorization", "Bearer " + tokens.accessToken());
@@ -73,6 +75,8 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
         body.put("email", user.getEmail());
         body.put("name", user.getName());
         body.put("role", user.getRole());
+        if (user.getCompanyName() != null) body.put("companyName", user.getCompanyName());
+        if (user.getDepartment() != null) body.put("department", user.getDepartment());
         new ObjectMapper().writeValue(response.getWriter(), body);
     }
 
