@@ -151,10 +151,12 @@ function grade(score) {
         <aside class="eval-note">
           <h4>추천 사유</h4>
           <p>{{ selectedProposal.reason }}</p>
-          <h4>검토 필요</h4>
-          <ul>
-            <li v-for="warning in selectedProposal.warnings" :key="warning">{{ warning }}</li>
-          </ul>
+          <div class="eval-risk-box">
+            <h4>리스크 ({{ selectedProposal.warnings.length }}건)</h4>
+            <ul>
+              <li v-for="warning in selectedProposal.warnings" :key="warning">{{ warning }}</li>
+            </ul>
+          </div>
         </aside>
       </div>
 
@@ -165,7 +167,11 @@ function grade(score) {
             <span>Review brief</span>
           </div>
           <div class="review-brief">
-            <div v-for="item in reviewBrief" :key="item.label">
+            <div
+              v-for="item in reviewBrief"
+              :key="item.label"
+              :class="{ 'review-brief__risk': item.label === '리스크' }"
+            >
               <span>{{ item.label }}</span>
               <strong>{{ item.value }}</strong>
             </div>
@@ -416,11 +422,26 @@ function grade(score) {
   padding: 0.7rem;
 }
 
-.eval-note ul {
+.eval-risk-box {
+  display: grid;
+  gap: 0.35rem;
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.55rem;
+}
+
+.eval-risk-box h4 {
+  color: var(--accent-color);
+}
+
+.eval-risk-box ul {
   display: grid;
   gap: 0.35rem;
   margin: 0;
   padding-left: 1rem;
+}
+
+.eval-risk-box li::marker {
+  color: var(--accent-color);
 }
 
 .eval-review-grid {
@@ -494,6 +515,11 @@ function grade(score) {
   color: var(--accent-color);
   font-size: 0.84rem;
   line-height: 1.15;
+}
+
+.review-brief__risk {
+  border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border-color)) !important;
+  background: color-mix(in srgb, var(--accent-color) 7%, var(--panel-color)) !important;
 }
 
 .review-kpi-list small {
