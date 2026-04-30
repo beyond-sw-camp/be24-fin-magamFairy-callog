@@ -1,5 +1,34 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { ListAllTasks } from '@/api/teamboard'
+
+const STATUS_MAP = {
+  BACKLOG: 'backlog',
+  TODO: 'backlog',
+  IN_PROGRESS: 'in_progress',
+  REVIEW: 'review',
+  BLOCKED: 'blocked',
+  DONE: 'done',
+}
+
+const PRIORITY_MAP = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  CRITICAL: 'critical',
+}
+
+function formatDueDateLabel(iso) {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '-'
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const overdue = d < today
+  return overdue ? `${mm}.${dd} 지연` : `${mm}.${dd}`
+}
 
 const statusColumns = [
   { id: 'backlog', label: '백로그', sub: 'Backlog' },
@@ -9,191 +38,9 @@ const statusColumns = [
   { id: 'done', label: '완료', sub: 'Done' },
 ]
 
-const companies = [
-  {
-    id: 'hq',
-    name: '한화 본사',
-    role: '총괄 기획 및 최종 검수',
-    scope: '전체 캠페인',
-    progress: 78,
-    color: 'primary',
-  },
-  {
-    id: 'galleria',
-    name: '갤러리아',
-    role: 'VIP 타겟 및 오프라인 운영',
-    scope: '프리미엄 라이프스타일',
-    progress: 64,
-    color: 'green',
-  },
-  {
-    id: 'hotel',
-    name: '호텔앤드리조트',
-    role: '예약 페이지 및 패키지 운영',
-    scope: '프리미엄 라이프스타일',
-    progress: 58,
-    color: 'blue',
-  },
-  {
-    id: 'agency',
-    name: '대행사 A',
-    role: '콘텐츠 제작 및 매체 집행',
-    scope: '공통 운영',
-    progress: 71,
-    color: 'pink',
-  },
-  {
-    id: 'media',
-    name: '미디어 랩 B',
-    role: '광고 세팅 및 성과 리포트',
-    scope: '디지털 캠페인',
-    progress: 49,
-    color: 'amber',
-  },
-]
+const companies = []
 
-const tasks = [
-  {
-    id: 'main-01',
-    companyId: 'hq',
-    campaign: '프리미엄 라이프스타일',
-    status: 'review',
-    title: '총괄 기획안 최종 검수',
-    part: '마케팅',
-    dueDate: '05.18 지연',
-    ownerInitial: '한',
-    priority: 'critical',
-    comments: 6,
-    attachments: 2,
-    blockedReason: '',
-  },
-  {
-    id: 'main-02',
-    companyId: 'hq',
-    campaign: '친환경 브랜드 위크',
-    status: 'backlog',
-    title: '본사 승인 기준 정리',
-    part: '검수 정책',
-    dueDate: '05.24',
-    ownerInitial: '본',
-    priority: 'medium',
-    comments: 1,
-    attachments: 1,
-    blockedReason: '',
-  },
-  {
-    id: 'main-03',
-    companyId: 'galleria',
-    campaign: '프리미엄 라이프스타일',
-    status: 'in_progress',
-    title: 'VIP 고객 타겟팅 명단 추출',
-    part: 'CRM',
-    dueDate: '05.21',
-    ownerInitial: 'G',
-    priority: 'high',
-    comments: 4,
-    attachments: 1,
-    blockedReason: '',
-  },
-  {
-    id: 'main-04',
-    companyId: 'galleria',
-    campaign: '프리미엄 라이프스타일',
-    status: 'review',
-    title: '오프라인 초청장 문구 검수',
-    part: '콘텐츠',
-    dueDate: '05.23',
-    ownerInitial: 'G',
-    priority: 'medium',
-    comments: 8,
-    attachments: 3,
-    blockedReason: '',
-  },
-  {
-    id: 'main-05',
-    companyId: 'hotel',
-    campaign: '프리미엄 라이프스타일',
-    status: 'blocked',
-    title: '예약 페이지 객실 재고 연동',
-    part: '시스템 개발',
-    dueDate: '05.19 지연',
-    ownerInitial: 'H',
-    priority: 'critical',
-    comments: 9,
-    attachments: 2,
-    blockedReason: '갤러리아 타겟 명단 확정 필요',
-  },
-  {
-    id: 'main-06',
-    companyId: 'hotel',
-    campaign: '프리미엄 라이프스타일',
-    status: 'done',
-    title: '패키지 상세 이미지 업로드',
-    part: '온오프라인 운영',
-    dueDate: '완료',
-    ownerInitial: 'H',
-    priority: 'low',
-    comments: 2,
-    attachments: 4,
-    blockedReason: '',
-  },
-  {
-    id: 'main-07',
-    companyId: 'agency',
-    campaign: '프리미엄 라이프스타일',
-    status: 'in_progress',
-    title: 'SNS 카드뉴스 1차 시안',
-    part: '디자인',
-    dueDate: '05.22',
-    ownerInitial: 'A',
-    priority: 'high',
-    comments: 5,
-    attachments: 5,
-    blockedReason: '',
-  },
-  {
-    id: 'main-08',
-    companyId: 'agency',
-    campaign: '친환경 브랜드 위크',
-    status: 'done',
-    title: '브랜드 키비주얼 확정본 전달',
-    part: '디자인',
-    dueDate: '완료',
-    ownerInitial: 'A',
-    priority: 'medium',
-    comments: 3,
-    attachments: 6,
-    blockedReason: '',
-  },
-  {
-    id: 'main-09',
-    companyId: 'media',
-    campaign: '디지털 전환 프로모션',
-    status: 'backlog',
-    title: '성과 리포트 템플릿 합의',
-    part: '리포트',
-    dueDate: '05.27',
-    ownerInitial: 'M',
-    priority: 'medium',
-    comments: 0,
-    attachments: 1,
-    blockedReason: '',
-  },
-  {
-    id: 'main-10',
-    companyId: 'media',
-    campaign: '프리미엄 라이프스타일',
-    status: 'review',
-    title: '전환 캠페인 소재 세트 검수',
-    part: '광고',
-    dueDate: '05.26',
-    ownerInitial: 'M',
-    priority: 'high',
-    comments: 7,
-    attachments: 3,
-    blockedReason: '',
-  },
-]
+const tasks = ref([])
 
 const priorityLabels = {
   low: '낮음',
@@ -211,10 +58,10 @@ const selectedCompany = computed(() => companies.find((company) => company.id ==
 const filteredTasks = computed(() => {
   const query = searchText.value.trim().toLowerCase()
 
-  return tasks.filter((task) => {
+  return tasks.value.filter((task) => {
     const matchesQuery =
       !query ||
-      [task.title, task.part, task.campaign, task.blockedReason].some((value) =>
+      [task.title, task.part].some((value) =>
         String(value ?? '').toLowerCase().includes(query),
       )
     const matchesPriority = selectedPriority.value === 'all' || task.priority === selectedPriority.value
@@ -224,9 +71,9 @@ const filteredTasks = computed(() => {
 })
 
 const boardMetrics = computed(() => ({
-  active: tasks.filter((task) => task.status === 'in_progress').length,
-  review: tasks.filter((task) => task.status === 'review').length,
-  blocked: tasks.filter((task) => task.status === 'blocked').length,
+  active: tasks.value.filter((task) => task.status === 'in_progress').length,
+  review: tasks.value.filter((task) => task.status === 'review').length,
+  blocked: tasks.value.filter((task) => task.status === 'blocked').length,
 }))
 
 function getTasks(companyId, statusId, source = filteredTasks.value) {
@@ -238,8 +85,29 @@ function getCompanyTasks(statusId) {
     return []
   }
 
-  return getTasks(selectedCompany.value.id, statusId, tasks)
+  return getTasks(selectedCompany.value.id, statusId, tasks.value)
 }
+
+async function loadTasksFromBackend() {
+  try {
+    const data = await ListAllTasks()
+    if (!Array.isArray(data)) return
+
+    tasks.value = data.map((task) => ({
+      id: String(task.idx),
+      status: STATUS_MAP[task.status] ?? 'backlog',
+      title: task.name ?? '',
+      part: task.taskPartName ?? '-',
+      dueDate: formatDueDateLabel(task.dueDate),
+      ownerInitial: task.assigneeName ? task.assigneeName.charAt(0) : '?',
+      priority: PRIORITY_MAP[task.priority] ?? 'medium',
+    }))
+  } catch (error) {
+    console.error('팀보드 Task 로딩 실패:', error)
+  }
+}
+
+onMounted(loadTasksFromBackend)
 
 function openCompanyBoard(companyId) {
   selectedCompanyId.value = companyId
@@ -328,12 +196,9 @@ function getStatusTone(statusId) {
               <small>{{ priorityLabels[task.priority] }}</small>
             </div>
             <strong>{{ task.title }}</strong>
-            <p>{{ task.campaign }}</p>
-            <p v-if="task.blockedReason" class="board-task__risk">선행: {{ task.blockedReason }}</p>
             <footer>
               <span :class="{ warning: task.dueDate.includes('지연') }">{{ task.dueDate }}</span>
               <em>{{ task.ownerInitial }}</em>
-              <small>댓글 {{ task.comments }} · 파일 {{ task.attachments }}</small>
             </footer>
           </article>
         </div>
@@ -365,12 +230,9 @@ function getStatusTone(statusId) {
                   <small>{{ priorityLabels[task.priority] }}</small>
                 </div>
                 <strong>{{ task.title }}</strong>
-                <p>{{ task.campaign }}</p>
-                <p v-if="task.blockedReason" class="board-task__risk">선행: {{ task.blockedReason }}</p>
                 <footer>
                   <span :class="{ warning: task.dueDate.includes('지연') }">{{ task.dueDate }}</span>
                   <em>{{ task.ownerInitial }}</em>
-                  <small>댓글 {{ task.comments }} · 파일 {{ task.attachments }}</small>
                 </footer>
               </article>
             </section>

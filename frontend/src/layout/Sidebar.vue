@@ -82,6 +82,7 @@ const visualSidebarCampaigns = computed(() => {
 })
 const folderCampaignCount = computed(() => store.campaignFolderCount)
 const isFolderRoute = computed(() => route.name === 'campaign-folder')
+const isDashboardRoute = computed(() => route.name === 'dashboard')
 const draggedCampaign = computed(
   () => store.campaigns.find((campaign) => campaign.id === draggedCampaignId.value) ?? null,
 )
@@ -322,6 +323,11 @@ function selectCampaign(campaignId) {
   closeFloatingPanels()
   store.setActiveCampaign(campaignId)
   router.push({ name: 'campaign-detail', params: { campaignId } })
+}
+
+function goToDashboard() {
+  closeFloatingPanels()
+  store.activeCampaignId = null
 }
 
 function openFolderPage() {
@@ -652,8 +658,11 @@ onBeforeUnmount(() => {
     <RouterLink
       to="/dashboard"
       class="campaign-rail__logo"
+      :class="{ active: isDashboardRoute }"
       :aria-label="campaignSidebarText.goToDashboard"
+      @click="goToDashboard"
     >
+      <span class="campaign-rail__campaign-indicator" />
       <span class="campaign-rail__logo-mark">C</span>
     </RouterLink>
 
@@ -918,10 +927,16 @@ onBeforeUnmount(() => {
 }
 
 .campaign-rail__logo {
+  position: relative;
   border-radius: var(--radius-lg);
   background: var(--color-primary-500);
   text-decoration: none;
   transition: background var(--transition-fast);
+}
+
+.campaign-rail__logo.active .campaign-rail__campaign-indicator {
+  height: 28px;
+  background: var(--color-primary-500);
 }
 
 .campaign-rail__logo:hover {

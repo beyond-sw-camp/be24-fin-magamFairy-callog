@@ -1,8 +1,65 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { GetCampaignDetails } from '@/api/campaigns'
+import {
+  ListMilestones,
+  ListTaskParts,
+  ListTasksByCampaign,
+  CreateMilestone,
+  CreateTaskPart,
+  CreateTask,
+  UpdateTask,
+} from '@/api/teamboard'
+
+const TEAMBOARD_STATUS_MAP = {
+  BACKLOG: 'backlog',
+  TODO: 'backlog',
+  IN_PROGRESS: 'in_progress',
+  REVIEW: 'review',
+  BLOCKED: 'revision',
+  DONE: 'done',
+}
+
+const TEAMBOARD_PRIORITY_MAP = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  CRITICAL: 'critical',
+}
+
+const STATUS_TO_BACKEND = {
+  backlog: 'BACKLOG',
+  in_progress: 'IN_PROGRESS',
+  review: 'REVIEW',
+  approval_wait: 'REVIEW',
+  revision: 'BLOCKED',
+  done: 'DONE',
+}
+
+const TYPE_TO_BACKEND = {
+  '문서': 'DOCUMENT',
+  '이미지': 'DESIGN',
+  '영상': 'VIDEO',
+  '웹': 'OTHER',
+  '광고': 'OTHER',
+  '브리프': 'DOCUMENT',
+  '기타': 'OTHER',
+}
+
+function toIsoDateTime(dateStr) {
+  return dateStr ? `${dateStr}T00:00:00` : null
+}
+
+function formatTeamboardDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}.${dd}`
+}
 
 const route = useRoute()
 const store = usePlannerStore()
@@ -102,220 +159,14 @@ const statusColumns = [
   { id: 'done', label: '완료', sub: 'Done' },
 ]
 
-const dateColumns = [
-  { id: '2024-06-10', label: '~ 06.10' },
-  { id: '2024-06-20', label: '~ 06.20' },
-  { id: '2024-07-10', label: '~ 07.10' },
-  { id: '2024-07-30', label: '~ 07.30' },
-]
+const milestoneRows = ref([])
 
-const milestoneRows = ref([
-  { id: 'planning', label: '기획 확정', sub: '~ 06.10' },
-  { id: 'production', label: '에셋 제작', sub: '~ 06.20' },
-  { id: 'launch', label: '런칭 준비', sub: '~ 07.10' },
-  { id: 'operation', label: '운영/성과 정리', sub: '~ 07.30' },
-])
+const teams = []
 
-const teams = [
-  {
-    id: 'hq',
-    name: '본사 마케팅팀',
-    role: '기획 및 총괄',
-    progress: 75,
-    color: 'primary',
-  },
-  {
-    id: 'design',
-    name: '디자인 스튜디오 A',
-    role: '에셋 제작',
-    progress: 85,
-    color: 'blue',
-  },
-  {
-    id: 'media',
-    name: '미디어 랩 B',
-    role: '퍼포먼스 마케팅',
-    progress: 60,
-    color: 'green',
-  },
-  {
-    id: 'pr',
-    name: 'PR 에이전시 C',
-    role: '보도자료 및 인플루언서',
-    progress: 92,
-    color: 'pink',
-  },
-]
-
-const teamTasks = ref([
-  {
-    id: 'task-guide',
-    teamId: 'hq',
-    status: 'review',
-    dateColumn: '2024-06-10',
-    title: '캠페인 전체 가이드라인 V2',
-    type: '문서',
-    dueDate: 'D-2',
-    review: '검수요청',
-    ownerInitial: '김',
-    ownerName: '김본사',
-    part: '마케팅',
-    priority: 'high',
-    reviewer: '본사 마케팅팀',
-    dependency: '캠페인 킥오프 완료',
-    deliverable: 'guide-v2.docx',
-    milestone: 'planning',
-  },
-  {
-    id: 'task-storyboard',
-    teamId: 'hq',
-    status: 'done',
-    dateColumn: '2024-06-20',
-    title: '티저 영상 스토리보드',
-    type: '영상',
-    dueDate: '완료',
-    review: '승인완료',
-    ownerInitial: '이',
-    part: '마케팅',
-    priority: 'medium',
-    milestone: 'production',
-  },
-  {
-    id: 'task-story-banner',
-    teamId: 'partner-0',
-    status: 'in_progress',
-    dateColumn: '2024-06-10',
-    title: '인스타그램 스토리 배너 (3종)',
-    type: '이미지',
-    dueDate: '06.10',
-    review: '작성중',
-    ownerInitial: 'A',
-    part: '디자인',
-    priority: 'medium',
-    milestone: 'production',
-  },
-  {
-    id: 'task-hero',
-    teamId: 'partner-0',
-    status: 'revision',
-    dateColumn: '2024-06-20',
-    title: '메인 랜딩페이지 히어로 이미지',
-    type: '이미지',
-    dueDate: '지연됨',
-    review: '수정요청',
-    ownerInitial: 'A',
-    part: '디자인',
-    priority: 'critical',
-    milestone: 'production',
-    urgent: true,
-  },
-  {
-    id: 'task-landing',
-    teamId: 'partner-1',
-    status: 'done',
-    dateColumn: '2024-07-10',
-    title: '사전예약 랜딩페이지 디자인',
-    type: '웹',
-    dueDate: '라이브',
-    review: '라이브',
-    ownerInitial: 'A',
-    part: '시스템 개발',
-    priority: 'high',
-    milestone: 'launch',
-  },
-  {
-    id: 'task-media',
-    teamId: 'partner-1',
-    status: 'review',
-    dateColumn: '2024-07-10',
-    title: '전환 캠페인 소재 세트',
-    type: '광고',
-    dueDate: 'D-5',
-    review: '검수요청',
-    ownerInitial: 'B',
-    part: '마케팅',
-    priority: 'high',
-    milestone: 'launch',
-  },
-  {
-    id: 'task-pr',
-    teamId: 'partner-2',
-    status: 'done',
-    dateColumn: '2024-07-30',
-    title: '인플루언서 브리프 문서',
-    type: '문서',
-    dueDate: '완료',
-    review: '승인완료',
-    ownerInitial: 'C',
-    part: 'PR/콘텐츠',
-    priority: 'medium',
-    milestone: 'operation',
-  },
-])
+const teamTasks = ref([])
 
 const taskTypeOptions = ['문서', '이미지', '영상', '웹', '광고', '브리프', '기타']
-const taskPartRecords = ref([
-  {
-    id: 'part-marketing',
-    name: '마케팅',
-    ownerTeamId: 'hq',
-    milestone: 'planning',
-    reviewFlow: '검수 요청 → 본사 승인 대기',
-    dependency: '캠페인 킥오프 완료',
-    deliverable: '가이드라인, 카피, 캠페인 메시지',
-    description: '캠페인 목적, 타겟, 메시지 기준을 정리하는 파트',
-  },
-  {
-    id: 'part-design',
-    name: '디자인',
-    ownerTeamId: 'partner-0',
-    milestone: 'production',
-    reviewFlow: '검수 요청 → 수정 중 → 본사 승인 대기',
-    dependency: '브랜드 가이드 확정',
-    deliverable: '배너, 상세 이미지, 키비주얼',
-    description: '채널별 시각 산출물을 제작하고 검수받는 파트',
-  },
-  {
-    id: 'part-system',
-    name: '시스템 개발',
-    ownerTeamId: 'partner-1',
-    milestone: 'launch',
-    reviewFlow: 'QA → 본사 승인 대기 → 완료',
-    dependency: '예약/타겟 데이터 확정',
-    deliverable: '랜딩페이지, 예약 페이지, 추적 태그',
-    description: '온라인 전환과 데이터 연동을 담당하는 파트',
-  },
-  {
-    id: 'part-operation',
-    name: '온오프라인 운영',
-    ownerTeamId: 'partner-1',
-    milestone: 'operation',
-    reviewFlow: '운영 확인 → 검수 요청 → 완료',
-    dependency: '현장 운영안 확정',
-    deliverable: '운영 체크리스트, 현장 세팅표',
-    description: '오프라인 현장, 고객 응대, 운영 리스크를 관리하는 파트',
-  },
-  {
-    id: 'part-pr',
-    name: 'PR/콘텐츠',
-    ownerTeamId: 'partner-2',
-    milestone: 'operation',
-    reviewFlow: '초안 작성 → 검수 요청 → 수정 중 → 완료',
-    dependency: '캠페인 메시지 확정',
-    deliverable: '보도자료, 인플루언서 브리프, 콘텐츠 캘린더',
-    description: '외부 커뮤니케이션과 콘텐츠 배포를 담당하는 파트',
-  },
-  {
-    id: 'part-etc',
-    name: '기타',
-    ownerTeamId: 'hq',
-    milestone: 'planning',
-    reviewFlow: '검수 요청 → 완료',
-    dependency: '',
-    deliverable: '별도 정의',
-    description: '아직 분류되지 않은 업무를 임시로 관리하는 파트',
-  },
-])
+const taskPartRecords = ref([])
 const taskPartOptions = computed(() => taskPartRecords.value.map((part) => part.name))
 const taskPriorityOptions = [
   { id: 'low', label: '낮음' },
@@ -323,7 +174,6 @@ const taskPriorityOptions = [
   { id: 'high', label: '높음' },
   { id: 'critical', label: '긴급' },
 ]
-const taskReviewerOptions = ['본사 마케팅팀', '브랜드 담당자', '법무/컴플라이언스', '캠페인 PM']
 const isTaskModalOpen = ref(false)
 const isPartModalOpen = ref(false)
 const taskFormError = ref('')
@@ -334,27 +184,22 @@ const partCreateType = ref('part')
 const milestoneFormError = ref('')
 
 const campaignTeams = computed(() => [
-  teams[0],
-  ...partnerNames.value.map((partnerName, index) => {
-    const fallback = teams[index + 1]
-
-    return {
-      id: `partner-${index}`,
-      name: partnerName,
-      role: fallback?.role ?? '캠페인 협력 업무',
-      progress: fallback?.progress ?? 50,
-      color: fallback?.color ?? 'blue',
-    }
-  }),
+  ...(teams[0] ? [teams[0]] : []),
+  ...partnerNames.value.map((partnerName, index) => ({
+    id: `partner-${index}`,
+    name: partnerName,
+    role: '캠페인 협력 업무',
+    progress: 50,
+    color: 'blue',
+  })),
 ])
 
-const campaignTeamIds = computed(() => new Set(campaignTeams.value.map((team) => team.id)))
 
 const taskPartRows = computed(() =>
   taskPartRecords.value.map((part) => ({
     id: part.name,
     label: part.name,
-    sub: `${getTasksByPart(part.name).length}건 · ${getCampaignTeamById(part.ownerTeamId)?.name ?? '담당 미정'}`,
+    sub: `${getTasksByPart(part.name).length}건`,
     meta: part,
   })),
 )
@@ -363,21 +208,16 @@ const campaignBoardRows = computed(() => (currentBoardView.value === 'milestone'
 
 function createDefaultTaskForm() {
   return {
+    id: null,
     title: '',
-    teamId: campaignTeams.value[0]?.id ?? '',
     status: statusColumns[0]?.id ?? 'backlog',
-    dateColumn: dateColumns[0]?.id ?? '',
     milestone: milestoneRows.value[0]?.id ?? '',
-    dueDate: dateColumns[0]?.id ?? '',
+    dueDate: '',
     part: taskPartOptions.value[0],
     type: taskTypeOptions[0],
     priority: 'medium',
     ownerName: '',
     ownerInitial: '',
-    reviewer: taskReviewerOptions[0],
-    dependency: '',
-    deliverable: '',
-    urgent: false,
     description: '',
   }
 }
@@ -387,7 +227,6 @@ const taskForm = ref(createDefaultTaskForm())
 function createDefaultPartForm() {
   return {
     name: '',
-    ownerTeamId: campaignTeams.value[0]?.id ?? '',
     milestone: milestoneRows.value[0]?.id ?? '',
     reviewFlow: '검수 요청 → 본사 승인 대기 → 수정 중 → 완료',
     priority: 'medium',
@@ -569,7 +408,7 @@ const overviewStats = computed(() => [
 ])
 
 const avgProgress = computed(() =>
-  Math.round(teams.reduce((sum, team) => sum + team.progress, 0) / teams.length),
+  teams.length ? Math.round(teams.reduce((sum, team) => sum + team.progress, 0) / teams.length) : 0,
 )
 
 const circumference = 251.2
@@ -584,24 +423,12 @@ const kpiSummary = computed(() => [
   { label: '적시성 준수율 (협력사)', value: '92%', sub: '일부 지연 발생', tone: 'warning' },
 ])
 
-function getTasksByStatus(teamId, statusId) {
-  return teamTasks.value.filter((task) => task.teamId === teamId && task.status === statusId)
-}
-
-function getTasksByDate(teamId, dateColumnId) {
-  return teamTasks.value.filter((task) => task.teamId === teamId && task.dateColumn === dateColumnId)
-}
-
 function getTasksByPart(partId) {
-  return teamTasks.value.filter((task) => campaignTeamIds.value.has(task.teamId) && (task.part ?? '기타') === partId)
+  return teamTasks.value.filter((task) => (task.part ?? '기타') === partId)
 }
 
 function getTasksForBoardRow(rowId, statusId) {
   return teamTasks.value.filter((task) => {
-    if (!campaignTeamIds.value.has(task.teamId)) {
-      return false
-    }
-
     const rowMatches =
       currentBoardView.value === 'milestone'
         ? (task.milestone ?? milestoneRows.value[0]?.id) === rowId
@@ -611,9 +438,6 @@ function getTasksForBoardRow(rowId, statusId) {
   })
 }
 
-function getCampaignTeamById(teamId) {
-  return campaignTeams.value.find((team) => team.id === teamId)
-}
 
 function openTaskCreateModal() {
   taskForm.value = createDefaultTaskForm()
@@ -661,16 +485,31 @@ function milestoneLabelById(milestoneId) {
 
 function editFromDetail() {
   if (!taskDetailItem.value) return
+  const t = taskDetailItem.value
+
+  const milestoneRow = milestoneRows.value.find((m) => m.label === t.milestone)
+  const partRow = taskPartRecords.value.find((p) => p.name === t.part)
+
   taskForm.value = {
     ...createDefaultTaskForm(),
-    ...taskDetailItem.value,
+    id: t.id ?? null,
+    title: t.title ?? '',
+    status: t.status ?? statusColumns[0]?.id ?? 'backlog',
+    milestone: milestoneRow?.id ?? '',
+    part: partRow?.name ?? taskPartOptions.value[0] ?? '',
+    type: t.type || taskTypeOptions[0],
+    priority: t.priority ?? 'medium',
+    dueDate: t.dueDateRaw ? String(t.dueDateRaw).slice(0, 10) : '',
+    ownerName: t.ownerName ?? '',
+    ownerInitial: t.ownerInitial ?? '',
+    description: t.description ?? '',
   }
   taskFormError.value = ''
   closeTaskDetail()
   isTaskModalOpen.value = true
 }
 
-function addTaskPart() {
+async function addTaskPart() {
   const name = partForm.value.name.trim()
 
   if (!name) {
@@ -685,26 +524,48 @@ function addTaskPart() {
     return
   }
 
-  taskPartRecords.value = [
-    ...taskPartRecords.value,
-    {
-      id: `part-${Date.now()}`,
-      name,
-      ownerTeamId: partForm.value.ownerTeamId,
-      milestone: partForm.value.milestone,
-      reviewFlow: partForm.value.reviewFlow.trim(),
-      priority: partForm.value.priority,
-      dependency: partForm.value.dependency.trim(),
-      deliverable: partForm.value.deliverable.trim(),
-      description: partForm.value.description.trim(),
-    },
-  ]
+  const milestoneId = Number(partForm.value.milestone) || null
+  if (!milestoneId) {
+    partFormError.value = '기준 마일스톤을 선택해주세요.'
+    return
+  }
 
-  currentBoardView.value = 'part'
-  closePartCreateModal()
+  const campaignId = route.params.campaignId
+  if (!campaignId) return
+
+  try {
+    const result = await CreateTaskPart(campaignId, milestoneId, {
+      name,
+      reviewFlow: partForm.value.reviewFlow.trim() || null,
+      taskPriority: (partForm.value.priority ?? 'medium').toUpperCase(),
+      dependency: partForm.value.dependency.trim() || null,
+      deliverable: partForm.value.deliverable.trim() || null,
+      description: partForm.value.description.trim() || null,
+      sortOrder: taskPartRecords.value.length,
+    })
+
+    taskPartRecords.value = [
+      ...taskPartRecords.value,
+      {
+        id: `part-${result.idx}`,
+        name: result.name,
+        milestone: partForm.value.milestone,
+        reviewFlow: result.reviewFlow ?? '',
+        priority: (result.taskPriority ?? 'MEDIUM').toLowerCase(),
+        dependency: result.dependency ?? '',
+        deliverable: result.deliverable ?? '',
+        description: result.description ?? '',
+      },
+    ]
+
+    currentBoardView.value = 'part'
+    closePartCreateModal()
+  } catch (error) {
+    partFormError.value = error?.message ?? '업무 파트 생성에 실패했습니다.'
+  }
 }
 
-function addMilestone() {
+async function addMilestone() {
   const label = milestoneForm.value.label.trim()
 
   if (!label) {
@@ -718,26 +579,41 @@ function addMilestone() {
     return
   }
 
-  let sub = ''
-  if (milestoneForm.value.endDate) {
-    const parts = milestoneForm.value.endDate.split('-')
-    sub = parts.length === 3 ? `~ ${parts[1]}.${parts[2]}` : ''
+  const campaignId = route.params.campaignId
+  if (!campaignId) return
+
+  try {
+    const result = await CreateMilestone(campaignId, {
+      name: label,
+      startDate: toIsoDateTime(milestoneForm.value.startDate),
+      endDate: toIsoDateTime(milestoneForm.value.endDate),
+      description: milestoneForm.value.description.trim() || null,
+      sortOrder: milestoneRows.value.length,
+    })
+
+    let sub = ''
+    if (milestoneForm.value.endDate) {
+      const parts = milestoneForm.value.endDate.split('-')
+      sub = parts.length === 3 ? `~ ${parts[1]}.${parts[2]}` : ''
+    }
+
+    milestoneRows.value = [
+      ...milestoneRows.value,
+      {
+        id: String(result.idx),
+        label: result.name,
+        sub,
+        startDate: milestoneForm.value.startDate,
+        endDate: milestoneForm.value.endDate,
+        description: milestoneForm.value.description.trim(),
+      },
+    ]
+
+    currentBoardView.value = 'milestone'
+    closePartCreateModal()
+  } catch (error) {
+    milestoneFormError.value = error?.message ?? '마일스톤 생성에 실패했습니다.'
   }
-
-  milestoneRows.value = [
-    ...milestoneRows.value,
-    {
-      id: `milestone-${Date.now()}`,
-      label,
-      sub,
-      startDate: milestoneForm.value.startDate,
-      endDate: milestoneForm.value.endDate,
-      description: milestoneForm.value.description.trim(),
-    },
-  ]
-
-  currentBoardView.value = 'milestone'
-  closePartCreateModal()
 }
 
 function formatTaskDueLabel(value) {
@@ -764,9 +640,6 @@ function priorityLabelById(priorityId) {
   return taskPriorityOptions.find((option) => option.id === priorityId)?.label ?? '보통'
 }
 
-function dateColumnLabelById(dateColumnId) {
-  return dateColumns.find((column) => column.id === dateColumnId)?.label?.replace('~ ', '') ?? '일정 미정'
-}
 
 function createOwnerInitial(task) {
   const explicitInitial = task.ownerInitial?.trim()
@@ -781,13 +654,11 @@ function createOwnerInitial(task) {
     return ownerName.slice(0, 1)
   }
 
-  const team = teams.find((item) => item.id === task.teamId)
-  const campaignTeam = getCampaignTeamById(task.teamId)
-  return campaignTeam?.name?.trim()?.[0] || team?.name?.trim()?.[0] || 'N'
+  return 'N'
 }
 
 function getTaskTone(task) {
-  if (task.urgent || task.status === 'blocked' || task.status === 'revision') {
+  if (task.status === 'blocked' || task.status === 'revision') {
     return 'warning'
   }
 
@@ -798,7 +669,7 @@ function getTaskTone(task) {
   return 'info'
 }
 
-function addTeamTask() {
+async function addTeamTask() {
   const title = taskForm.value.title.trim()
 
   if (!title) {
@@ -806,37 +677,67 @@ function addTeamTask() {
     return
   }
 
-  const team = getCampaignTeamById(taskForm.value.teamId)
-  const dueDateLabel = taskForm.value.dueDate
-    ? formatTaskDueLabel(taskForm.value.dueDate)
-    : dateColumnLabelById(taskForm.value.dateColumn)
+  const campaignId = route.params.campaignId
+  if (!campaignId) return
 
-  teamTasks.value.unshift({
-    id: `task-${Date.now()}`,
-    teamId: taskForm.value.teamId,
-    status: taskForm.value.status,
-    dateColumn: taskForm.value.dateColumn,
-    milestone: taskForm.value.milestone,
-    title,
-    part: taskForm.value.part,
-    type: taskForm.value.type,
-    priority: taskForm.value.priority,
-    dueDate: taskForm.value.urgent && !taskForm.value.dueDate ? '지연됨' : dueDateLabel,
-    review: taskForm.value.urgent ? '주의 필요' : statusLabelById(taskForm.value.status),
-    ownerName: taskForm.value.ownerName.trim(),
-    ownerInitial:
-      taskForm.value.ownerInitial.trim() ||
-      taskForm.value.ownerName.trim().slice(0, 1) ||
-      team?.name?.trim()?.[0] ||
-      'N',
-    reviewer: taskForm.value.reviewer,
-    dependency: taskForm.value.dependency.trim(),
-    deliverable: taskForm.value.deliverable.trim(),
-    urgent: taskForm.value.urgent,
-    description: taskForm.value.description.trim(),
-  })
+  const partRecord = taskPartRecords.value.find((p) => p.name === taskForm.value.part)
+  const taskPartId = partRecord ? Number(partRecord.id.replace('part-', '')) || null : null
+  const milestoneId = Number(taskForm.value.milestone) || null
 
-  closeTaskCreateModal()
+  const payload = {
+    name: title,
+    participantId: null,
+    dueDate: toIsoDateTime(taskForm.value.dueDate),
+    taskType: TYPE_TO_BACKEND[taskForm.value.type] ?? 'OTHER',
+    status: STATUS_TO_BACKEND[taskForm.value.status] ?? 'BACKLOG',
+    taskPartId,
+    milestoneId,
+    assigneeId: null,
+    priority: (taskForm.value.priority ?? 'medium').toUpperCase(),
+    memo: taskForm.value.description.trim() || null,
+  }
+
+  const existingId = Number(taskForm.value.id) || null
+
+  try {
+    const result = existingId
+      ? await UpdateTask(existingId, payload)
+      : await CreateTask(campaignId, payload)
+
+    const mapped = {
+      id: String(result.idx),
+      status: TEAMBOARD_STATUS_MAP[result.status] ?? 'backlog',
+      milestone: result.milestoneName ?? '',
+      title: result.name,
+      part: result.taskPartName ?? taskForm.value.part ?? '',
+      type: taskForm.value.type,
+      priority: TEAMBOARD_PRIORITY_MAP[result.priority] ?? 'medium',
+      dueDate: result.dueDate ? formatTeamboardDate(result.dueDate) : '',
+      dueDateRaw: result.dueDate ?? '',
+      ownerName: result.assigneeName ?? taskForm.value.ownerName.trim(),
+      ownerInitial:
+        result.assigneeName?.charAt(0) ||
+        taskForm.value.ownerInitial.trim() ||
+        taskForm.value.ownerName.trim().slice(0, 1) ||
+        'N',
+      description: result.memo ?? taskForm.value.description.trim(),
+    }
+
+    if (existingId) {
+      const idx = teamTasks.value.findIndex((t) => t.id === String(existingId))
+      if (idx !== -1) {
+        teamTasks.value.splice(idx, 1, mapped)
+      } else {
+        teamTasks.value.unshift(mapped)
+      }
+    } else {
+      teamTasks.value.unshift(mapped)
+    }
+
+    closeTaskCreateModal()
+  } catch (error) {
+    taskFormError.value = error?.message ?? '업무 저장에 실패했습니다.'
+  }
 }
 
 function getAchievement(row) {
@@ -947,6 +848,72 @@ watch(
 )
 
 watch(activeCampaign, syncMetadataDraft, { immediate: true })
+
+async function loadCampaignTeamboard(campaignId) {
+  if (!campaignId) return
+
+  try {
+    const [milestonesData, taskPartsData, tasksData] = await Promise.all([
+      ListMilestones(campaignId),
+      ListTaskParts(campaignId),
+      ListTasksByCampaign(campaignId),
+    ])
+
+    if (Array.isArray(milestonesData) && milestonesData.length > 0) {
+      milestoneRows.value = milestonesData.map((m) => ({
+        id: String(m.idx),
+        label: m.name,
+        sub: m.endDate ? `~ ${formatTeamboardDate(m.endDate)}` : '',
+      }))
+    }
+
+    if (Array.isArray(taskPartsData) && taskPartsData.length > 0) {
+      taskPartRecords.value = taskPartsData.map((p) => ({
+        id: `part-${p.idx}`,
+        name: p.name,
+        milestone: p.milestoneIdx != null ? String(p.milestoneIdx) : '',
+        reviewFlow: p.reviewFlow ?? '',
+        dependency: p.dependency ?? '',
+        deliverable: p.deliverable ?? '',
+        description: p.description ?? '',
+      }))
+    }
+
+    if (Array.isArray(tasksData) && tasksData.length > 0) {
+      teamTasks.value = tasksData.map((t) => ({
+        id: String(t.idx),
+        status: TEAMBOARD_STATUS_MAP[t.status] ?? 'backlog',
+        title: t.name ?? '',
+        type: t.taskType ?? '',
+        dueDate: t.dueDate ? formatTeamboardDate(t.dueDate) : '',
+        dueDateRaw: t.dueDate ?? '',
+        ownerInitial: t.assigneeName ? t.assigneeName.charAt(0) : '?',
+        ownerName: t.assigneeName ?? '',
+        part: t.taskPartName ?? '',
+        priority: TEAMBOARD_PRIORITY_MAP[t.priority] ?? 'medium',
+        milestone: t.milestoneName ?? '',
+      }))
+    }
+  } catch (error) {
+    console.error('캠페인 팀보드 로딩 실패:', error)
+  }
+}
+
+onMounted(() => {
+  const initialCampaignId = route.params.campaignId
+  if (initialCampaignId) {
+    loadCampaignTeamboard(String(initialCampaignId))
+  }
+})
+
+watch(
+  () => route.params.campaignId,
+  (campaignId) => {
+    if (campaignId) {
+      loadCampaignTeamboard(String(campaignId))
+    }
+  },
+)
 </script>
 
 <template>
@@ -1260,7 +1227,6 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
               v-for="task in getTasksForBoardRow(row.id, column.id)"
               :key="task.id"
               class="task-card"
-              :class="{ 'task-card--urgent': task.urgent }"
               role="button"
               tabindex="0"
               @click="openTaskDetail(task)"
@@ -1268,18 +1234,13 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
             >
               <div class="task-card__top">
                 <span class="status-pill" :class="`status-pill--${getTaskTone(task)}`">
-                  {{ task.review }}
+                  {{ statusLabelById(task.status) }}
                 </span>
                 <small>{{ task.part ?? task.type }}</small>
               </div>
               <strong>{{ task.title }}</strong>
-              <small class="task-card__company">{{ getCampaignTeamById(task.teamId)?.name ?? '참여사 미정' }}</small>
-              <p v-if="task.dependency || task.deliverable" class="task-card__meta">
-                <span v-if="task.dependency">선행: {{ task.dependency }}</span>
-                <span v-if="task.deliverable">산출물: {{ task.deliverable }}</span>
-              </p>
               <div class="task-card__foot">
-                <span :class="{ warning: task.urgent }">{{ task.dueDate }}</span>
+                <span>{{ task.dueDate }}</span>
                 <small v-if="task.priority" class="task-priority">{{ priorityLabelById(task.priority) }}</small>
                 <em>{{ createOwnerInitial(task) }}</em>
               </div>
@@ -1470,15 +1431,6 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
 
             <div class="team-task-form__grid">
               <label>
-                <span>참여사</span>
-                <select v-model="taskForm.teamId">
-                  <option v-for="team in campaignTeams" :key="team.id" :value="team.id">
-                    {{ team.name }}
-                  </option>
-                </select>
-              </label>
-
-              <label>
                 <span>상태</span>
                 <select v-model="taskForm.status">
                   <option v-for="column in statusColumns" :key="column.id" :value="column.id">
@@ -1492,15 +1444,6 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
                 <select v-model="taskForm.part">
                   <option v-for="part in taskPartOptions" :key="part" :value="part">
                     {{ part }}
-                  </option>
-                </select>
-              </label>
-
-              <label>
-                <span>보드 기간</span>
-                <select v-model="taskForm.dateColumn">
-                  <option v-for="column in dateColumns" :key="column.id" :value="column.id">
-                    {{ column.label }}
                   </option>
                 </select>
               </label>
@@ -1559,33 +1502,6 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
                   placeholder="김"
                 />
               </label>
-
-              <label>
-                <span>검수/승인 담당</span>
-                <select v-model="taskForm.reviewer">
-                  <option v-for="reviewer in taskReviewerOptions" :key="reviewer" :value="reviewer">
-                    {{ reviewer }}
-                  </option>
-                </select>
-              </label>
-
-              <label>
-                <span>선행 업무</span>
-                <input
-                  v-model.trim="taskForm.dependency"
-                  type="text"
-                  placeholder="예: 타겟 명단 확정"
-                />
-              </label>
-
-              <label>
-                <span>산출물 링크/파일명</span>
-                <input
-                  v-model.trim="taskForm.deliverable"
-                  type="text"
-                  placeholder="예: banner-guide-v1.pdf"
-                />
-              </label>
             </div>
 
             <label class="team-task-form__wide">
@@ -1595,11 +1511,6 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
                 rows="3"
                 placeholder="산출물 기준, 검수 포인트, 파트너 요청사항을 간단히 남겨주세요."
               />
-            </label>
-
-            <label class="team-task-form__checkbox">
-              <input v-model="taskForm.urgent" type="checkbox" />
-              <span>일정 리스크 업무로 표시</span>
             </label>
 
             <p v-if="taskFormError" class="team-task-form__error">{{ taskFormError }}</p>
@@ -1669,15 +1580,6 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
             </label>
 
             <div class="team-task-form__grid">
-              <label>
-                <span>대표 담당 참여사</span>
-                <select v-model="partForm.ownerTeamId">
-                  <option v-for="team in campaignTeams" :key="team.id" :value="team.id">
-                    {{ team.name }}
-                  </option>
-                </select>
-              </label>
-
               <label>
                 <span>기준 마일스톤</span>
                 <select v-model="partForm.milestone">
@@ -1805,14 +1707,12 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
               <div class="cd-detail-header__top">
                 <div class="cd-detail-badges">
                   <span class="cd-badge" :class="`cd-badge--${getTaskTone(taskDetailItem)}`">
-                    {{ taskDetailItem.review }}
+                    {{ statusLabelById(taskDetailItem.status) }}
                   </span>
-                  <span v-if="taskDetailItem.urgent" class="cd-badge cd-badge--risk">⚡ 일정 리스크</span>
                 </div>
                 <button type="button" class="cd-detail-close" aria-label="닫기" @click="closeTaskDetail">✕</button>
               </div>
               <h2 id="cd-detail-title">{{ taskDetailItem.title }}</h2>
-              <p class="cd-detail-sub">{{ getCampaignTeamById(taskDetailItem.teamId)?.name ?? '참여사 미정' }}</p>
             </header>
 
             <div class="cd-detail-tracker">
@@ -1854,10 +1754,6 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
                   <dt>마감일</dt>
                   <dd>{{ taskDetailItem.dueDate ?? '미정' }}</dd>
                 </div>
-                <div v-if="taskDetailItem.reviewer" class="cd-detail-item">
-                  <dt>검수 담당</dt>
-                  <dd>{{ taskDetailItem.reviewer }}</dd>
-                </div>
               </dl>
 
               <div class="cd-detail-section">
@@ -1866,19 +1762,8 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
                   <span class="cd-assignee__avatar">{{ createOwnerInitial(taskDetailItem) }}</span>
                   <div>
                     <strong>{{ taskDetailItem.ownerName || createOwnerInitial(taskDetailItem) }}</strong>
-                    <small>{{ getCampaignTeamById(taskDetailItem.teamId)?.name ?? '' }}</small>
                   </div>
                 </div>
-              </div>
-
-              <div v-if="taskDetailItem.dependency" class="cd-detail-section">
-                <h3>선행 업무</h3>
-                <p>{{ taskDetailItem.dependency }}</p>
-              </div>
-
-              <div v-if="taskDetailItem.deliverable" class="cd-detail-section">
-                <h3>산출물</h3>
-                <p class="cd-deliverable">📎 {{ taskDetailItem.deliverable }}</p>
               </div>
 
               <div v-if="taskDetailItem.description" class="cd-detail-section">

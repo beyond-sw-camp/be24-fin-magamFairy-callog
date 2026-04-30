@@ -31,19 +31,22 @@ public class MileStonesDto {
             LocalDateTime startDate,
             LocalDateTime endDate,
             String description,
-            Integer sortOrder
+            Integer sortOrder,
+            LocalDateTime createdAt
     ) {
-        public ResMileStones from(MileStones entity) {
+        public static ResMileStones from(MileStones entity) {
             return new ResMileStones(
                     entity.getIdx(),
                     entity.getName(),
                     entity.getStartDate(),
                     entity.getEndDate(),
                     entity.getDescription(),
-                    entity.getSortOrder()
+                    entity.getSortOrder(),
+                    entity.getCreatedAt()
             );
         }
     }
+
     public record ResList(
             Long idx,
             String name,

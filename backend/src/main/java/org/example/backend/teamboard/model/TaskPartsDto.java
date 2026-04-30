@@ -25,6 +25,7 @@ public class TaskPartsDto {
                     .reviewFlow(this.reviewFlow)
                     .taskPriority(this.taskPriority)
                     .dependency(this.dependency)
+                    .deliverable(this.deliverable)
                     .description(this.description)
                     .sortOrder(sortOrder != null ? this.sortOrder : 0)
                     .build();
