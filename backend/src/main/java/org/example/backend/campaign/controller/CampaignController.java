@@ -4,9 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.CampaignDto;
 import org.example.backend.campaign.service.CampaignService;
 import org.example.backend.common.model.BaseResponse;
+import org.example.backend.user.model.AuthUserDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,19 +25,19 @@ public class CampaignController {
     private final CampaignService campaignService;
 
     @GetMapping
-    public ResponseEntity<BaseResponse> listCampaigns(Authentication authentication) {
+    public ResponseEntity<BaseResponse> listCampaigns(@AuthenticationPrincipal AuthUserDetails user) {
         return ResponseEntity.ok(BaseResponse.success(
-                campaignService.getCampaigns(currentUser(authentication))
+                campaignService.listCampaigns(currentUser(user))
         ));
     }
 
     @PostMapping("/new")
     public ResponseEntity<BaseResponse> createCampaign(
             @RequestBody CampaignDto.UpsertReq dto,
-            Authentication authentication
+            @AuthenticationPrincipal AuthUserDetails user
     ) {
         return ResponseEntity.ok(BaseResponse.success(
-                campaignService.createCampaign(currentUser(authentication), dto)
+                campaignService.createCampaign(currentUser(user), dto)
         ));
     }
 
@@ -44,10 +45,10 @@ public class CampaignController {
     public ResponseEntity<BaseResponse> updateCampaign(
             @PathVariable Long campaignId,
             @RequestBody CampaignDto.UpsertReq dto,
-            Authentication authentication
+            @AuthenticationPrincipal AuthUserDetails user
     ) {
         return ResponseEntity.ok(BaseResponse.success(
-                campaignService.updateCampaign(currentUser(authentication), campaignId, dto)
+                campaignService.updateCampaign(currentUser(user), campaignId, dto)
         ));
     }
 
@@ -55,10 +56,10 @@ public class CampaignController {
     public ResponseEntity<BaseResponse> updateCampaignStatus(
             @PathVariable Long campaignId,
             @RequestBody CampaignDto.StatusReq dto,
-            Authentication authentication
+            @AuthenticationPrincipal AuthUserDetails user
     ) {
         return ResponseEntity.ok(BaseResponse.success(
-                campaignService.updateStatus(currentUser(authentication), campaignId, dto)
+                campaignService.updateStatus(currentUser(user), campaignId, dto)
         ));
     }
 
@@ -66,18 +67,19 @@ public class CampaignController {
     public ResponseEntity<BaseResponse> inviteCampaignPartners(
             @PathVariable Long campaignId,
             @RequestBody CampaignDto.PartnerInviteReq dto,
-            Authentication authentication
+            @AuthenticationPrincipal AuthUserDetails user
     ) {
         return ResponseEntity.ok(BaseResponse.success(
-                campaignService.invitePartners(currentUser(authentication), campaignId, dto)
+                campaignService.invitePartners(currentUser(user), campaignId, dto)
         ));
     }
 
-    private String currentUser(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication is required.");
+    private String currentUser(AuthUserDetails user) {
+        if (user == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유저 정보가 없습니다.");
         }
+        // 이곳에 한화랑 한화의 그룹사의 권한이 아니면 에러 터지는 로직 짜기
 
-        return authentication.getName();
+        return user.getId();
     }
 }
