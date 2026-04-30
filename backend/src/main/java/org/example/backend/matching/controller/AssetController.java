@@ -56,7 +56,7 @@ public class AssetController {
             return  ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.ASSET_ADD_SUCCESS));
         }
         catch (Exception e){
-            return ResponseEntity.status(HttpStatus.OK)
+            return ResponseEntity.status(HttpStatus.CREATED)
                     .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
         }
     }

@@ -13,6 +13,25 @@ public class MatchingDto {
 
     @Getter
     @Builder
+    public static class ProposalRes{
+        private Long idx;
+        private String partnerName;
+        private String logo; //URL 혹은 쌩 String
+        private String benefitSummary;
+        private Integer totalScore;
+        private String grade;
+        private String date;
+        private String owner;
+        private String status;
+        private String condition;
+        private List<String> scoreBreakDown;
+        private List<String> risks;
+        private List<String> actions;
+
+    }
+
+    @Getter
+    @Builder
     public static class Added{
 
     }

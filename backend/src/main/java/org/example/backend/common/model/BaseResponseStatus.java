@@ -9,8 +9,9 @@ public enum BaseResponseStatus {
     // 2000번대 성공
     SUCCESS(true, 2000, "요청이 성공했습니다."),
     LIST_SUCCESS(true, 2001, "목록 가져오기에 성공했습니다."),
-    ASSET_ADD_SUCCESS(true, 2002 , "자산 등록에 성공했습니다."),
-    BENEFIT_ADD_SUCCESS(true, 2003,"혜택 등록에 성공했습니다."),
+    ASSET_ADD_SUCCESS(true, 2002 , "새로운 자산을 등록했습니다."),
+    BENEFIT_ADD_SUCCESS(true, 2003,"새로운 혜택을 등록했습니다."),
+    PROPOSAL_ADD_SUCCESS(true,2004 ,"새로운 제안을 보냈습니다." ),
 
 
     // 3000번대 클라이언트 입력 오류, 입력값 검증 오류

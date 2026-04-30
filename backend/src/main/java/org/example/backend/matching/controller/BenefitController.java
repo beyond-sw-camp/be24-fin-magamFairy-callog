@@ -27,7 +27,7 @@ public class BenefitController {
             return ResponseEntity.ok(BaseResponse.success(dto));
         }
         catch (NoSuchElementException e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
+            return ResponseEntity.status(HttpStatus.OK)
                     .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT, null));
         }
     }
@@ -43,7 +43,7 @@ public class BenefitController {
                     .body(BaseResponse.success(BaseResponseStatus.LIST_SUCCESS, dto));
         }
         catch (NoSuchElementException e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
+            return ResponseEntity.status(HttpStatus.OK)
                     .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
         }
     }
@@ -56,7 +56,7 @@ public class BenefitController {
             return  ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.BENEFIT_ADD_SUCCESS,null));
         }
         catch (Exception e){
-            return ResponseEntity.status(HttpStatus.OK)
+            return ResponseEntity.status(HttpStatus.CREATED)
                     .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
         }
     }
