@@ -16,26 +16,44 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Builder
 @Getter
-public class MarketingAsset {
+public class Evaluation {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idx;
 
     @ManyToOne(fetch=FetchType.LAZY)
-    @JoinColumn(name = "affiliate_idx")
+    @JoinColumn(name = "owner_id")
     private Organization organization;
 
     @ManyToOne(fetch=FetchType.LAZY)
     @JoinColumn(name = "campaign_idx")
     private Campaign campaign;
 
-    private String target;
-    private String type;
-    private String scale;
-    private String conditions;
-    private Boolean isActive;
+    @ManyToOne(fetch=FetchType.LAZY)
+    @JoinColumn(name = "benefits_idx")
+    private PartnerBenefits benefits;
+
+    // 점수
+    private Integer customerFit;
+    private Integer revenue;
+    private Integer cost;
+    private Integer operation;
+    private Integer brand;
+    // 상세 데이터
+    private String benefitSummary;
+    private String reason;
+    private String warnings;
+    private String kpis;
+    private String evidence;
+    private String nextActions;
+    private String manualScore;
+
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime evaluationDate;
+
+    @CreationTimestamp
+    @Column(nullable = false)
+    private LocalDateTime lastUpdate;
 }
