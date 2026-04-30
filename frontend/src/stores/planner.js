@@ -21,7 +21,8 @@ import editorApi from '@/api/editor/editorApi'
 import { ListCampaign } from '@/api/campaigns'
 import { readStoredToken } from '@/authStorage'
 
-const themeStorageKey = 'kellog-theme'
+const themeStorageKey = 'callog-theme'
+const legacyThemeStorageKey = 'kellog-theme'
 const tasksStorageKey = 'kellog-tasks'
 const campaignsStorageKey = 'callog-campaigns'
 const activeCampaignIdStorageKey = 'callog-active-campaign-id'
@@ -63,6 +64,29 @@ const defaultCampaigns = [
 
 function cloneValue(value) {
   return JSON.parse(JSON.stringify(value))
+}
+
+function normalizeTheme(value) {
+  return value === 'light' || value === 'dark' ? value : null
+}
+
+function readStoredTheme() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  return (
+    normalizeTheme(window.localStorage.getItem(themeStorageKey)) ??
+    normalizeTheme(window.localStorage.getItem(legacyThemeStorageKey))
+  )
+}
+
+function getPreferredTheme() {
+  if (typeof window === 'undefined') {
+    return 'light'
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
 function createDefaultTask(dateKey, nextIndex) {
@@ -184,7 +208,7 @@ export const usePlannerStore = defineStore('planner', () => {
     period: '2026.05.01 - 2026.06.15',
     status: 'live',
   })
-  const theme = ref('light')
+  const theme = ref(readStoredTheme() ?? getPreferredTheme())
   const activeMode = ref('personal')
   const calendarView = ref('month')
   const calendarTab = ref('calendar')
@@ -355,15 +379,15 @@ export const usePlannerStore = defineStore('planner', () => {
       return
     }
 
-    const storedTheme = window.localStorage.getItem(themeStorageKey)
+    const storedTheme = readStoredTheme()
     const storedTasks = window.localStorage.getItem(tasksStorageKey)
     const storedCampaigns = window.localStorage.getItem(campaignsStorageKey)
     const storedActiveCampaignId = window.localStorage.getItem(activeCampaignIdStorageKey)
 
-    if (storedTheme === 'light' || storedTheme === 'dark') {
+    if (storedTheme) {
       theme.value = storedTheme
     } else {
-      theme.value = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      theme.value = getPreferredTheme()
     }
 
     if (storedTasks) {
@@ -713,8 +737,18 @@ export const usePlannerStore = defineStore('planner', () => {
     sidebarCollapsed.value = !sidebarCollapsed.value
   }
 
+  function setTheme(nextTheme) {
+    const normalizedTheme = normalizeTheme(nextTheme)
+
+    if (!normalizedTheme) {
+      return
+    }
+
+    theme.value = normalizedTheme
+  }
+
   function toggleTheme() {
-    theme.value = theme.value === 'light' ? 'dark' : 'light'
+    setTheme(theme.value === 'light' ? 'dark' : 'light')
   }
 
   function setToday() {
@@ -877,6 +911,7 @@ export const usePlannerStore = defineStore('planner', () => {
     setCalendarView,
     setSearchQuery,
     setToday,
+    setTheme,
     shiftPeriod,
     sidebarCampaigns,
     sidebarCollapsed,

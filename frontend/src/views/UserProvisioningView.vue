@@ -116,36 +116,34 @@ async function copyAllToClipboard() {
 </script>
 
 <template>
-  <section class="min-h-[calc(100vh-7rem)] px-6 py-10">
+  <section class="account-provisioning-page ui-page min-h-[calc(100vh-7rem)] px-6 py-10">
     <div class="mx-auto w-full max-w-3xl">
       <div class="mb-8">
-        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+        <p class="provisioning-eyebrow text-xs font-semibold uppercase tracking-[0.24em]">
           Account provisioning
         </p>
-        <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-          계정 발급
-        </h1>
-        <p class="mt-2 text-sm text-slate-500">
+        <h1 class="provisioning-title mt-2 text-3xl font-bold tracking-tight">계정 발급</h1>
+        <p class="provisioning-description mt-2 text-sm">
           ADMIN은 MANAGER와 USER를 만들 수 있고, MANAGER는 USER만 만들 수 있습니다.
         </p>
       </div>
 
-      <div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+      <div class="provisioning-card rounded-[2rem] p-6 md:p-8">
         <p
           v-if="errorMessage"
-          class="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600"
+          class="provisioning-alert mb-4 rounded-xl px-4 py-3 text-sm font-medium"
         >
           {{ errorMessage }}
         </p>
 
         <form class="grid gap-4" @submit.prevent="handleCreateUser">
           <label class="grid gap-2">
-            <span class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+            <span class="provisioning-label text-[11px] font-semibold uppercase tracking-[0.22em]">
               Role
             </span>
             <select
               v-model="newUser.role"
-              class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-900/5"
+              class="provisioning-control w-full rounded-xl px-4 py-3.5 text-sm font-medium outline-none transition"
             >
               <option v-for="role in roleOptions" :key="role.value" :value="role.value">
                 {{ role.label }}
@@ -154,7 +152,7 @@ async function copyAllToClipboard() {
           </label>
 
           <label class="grid gap-2">
-            <span class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+            <span class="provisioning-label text-[11px] font-semibold uppercase tracking-[0.22em]">
               Team code
             </span>
             <input
@@ -162,13 +160,15 @@ async function copyAllToClipboard() {
               type="text"
               required
               placeholder="team1"
-              class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-900/5"
+              class="provisioning-control w-full rounded-xl px-4 py-3.5 text-sm font-medium outline-none transition"
             />
           </label>
 
           <div class="grid gap-4 md:grid-cols-2">
             <label class="grid gap-2">
-              <span class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+              <span
+                class="provisioning-label text-[11px] font-semibold uppercase tracking-[0.22em]"
+              >
                 Name
               </span>
               <input
@@ -176,41 +176,47 @@ async function copyAllToClipboard() {
                 type="text"
                 required
                 placeholder="홍길동"
-                class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-900/5"
+                class="provisioning-control w-full rounded-xl px-4 py-3.5 text-sm font-medium outline-none transition"
               />
             </label>
 
             <label class="grid gap-2">
-              <span class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+              <span
+                class="provisioning-label text-[11px] font-semibold uppercase tracking-[0.22em]"
+              >
                 Email
               </span>
               <input
                 v-model="newUser.email"
                 type="email"
                 placeholder="user@company.com"
-                class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-900/5"
+                class="provisioning-control w-full rounded-xl px-4 py-3.5 text-sm font-medium outline-none transition"
               />
             </label>
           </div>
 
-          <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+          <div class="provisioning-preview rounded-xl px-4 py-3 text-sm">
             발급 권한:
-            <strong class="font-semibold text-slate-900">{{ selectedRoleLabel }}</strong>
-            <span class="mx-2 text-slate-300">/</span>
+            <strong class="provisioning-preview__strong font-semibold">{{
+              selectedRoleLabel
+            }}</strong>
+            <span class="provisioning-separator mx-2">/</span>
             발급 아이디 예시:
-            <strong class="font-semibold text-slate-900">{{ getPreviewId() }}</strong>
+            <strong class="provisioning-preview__strong font-semibold">{{ getPreviewId() }}</strong>
           </div>
 
           <button
             type="submit"
             :disabled="isSubmitting"
-            class="mt-2 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+            class="provisioning-submit mt-2 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70"
           >
             <template v-if="!isSubmitting">
               <span>계정 생성</span>
             </template>
             <template v-else>
-              <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+              <span
+                class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+              ></span>
               <span>생성 중</span>
             </template>
           </button>
@@ -220,39 +226,43 @@ async function copyAllToClipboard() {
 
     <div
       v-if="showResultModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm"
+      class="provisioning-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
     >
-      <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-        <div class="border-b border-slate-200 pb-5">
-          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+      <div class="provisioning-modal w-full max-w-md rounded-2xl p-6">
+        <div class="provisioning-modal__header pb-5">
+          <p class="provisioning-eyebrow text-xs font-semibold uppercase tracking-[0.24em]">
             Provisioning complete
           </p>
-          <h3 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-            계정 발급 완료
-          </h3>
-          <p class="mt-2 text-sm text-slate-500">
+          <h3 class="provisioning-title mt-2 text-2xl font-bold tracking-tight">계정 발급 완료</h3>
+          <p class="provisioning-description mt-2 text-sm">
             발급된 권한, 아이디, 임시 비밀번호를 사용자에게 전달해 주세요.
           </p>
         </div>
 
         <div class="mt-5 grid gap-3">
-          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Role</p>
-            <strong class="mt-2 block break-all font-mono text-sm font-semibold text-slate-900">
+          <div class="provisioning-result rounded-xl p-4">
+            <p class="provisioning-label text-xs font-semibold uppercase tracking-[0.22em]">Role</p>
+            <strong
+              class="provisioning-result__value mt-2 block break-all font-mono text-sm font-semibold"
+            >
               {{ resultData.role }}
             </strong>
           </div>
-          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">ID</p>
-            <strong class="mt-2 block break-all font-mono text-sm font-semibold text-slate-900">
+          <div class="provisioning-result rounded-xl p-4">
+            <p class="provisioning-label text-xs font-semibold uppercase tracking-[0.22em]">ID</p>
+            <strong
+              class="provisioning-result__value mt-2 block break-all font-mono text-sm font-semibold"
+            >
               {{ resultData.id }}
             </strong>
           </div>
-          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+          <div class="provisioning-result rounded-xl p-4">
+            <p class="provisioning-label text-xs font-semibold uppercase tracking-[0.22em]">
               Password
             </p>
-            <strong class="mt-2 block break-all font-mono text-sm font-semibold text-slate-900">
+            <strong
+              class="provisioning-result__value mt-2 block break-all font-mono text-sm font-semibold"
+            >
               {{ resultData.password }}
             </strong>
           </div>
@@ -261,19 +271,15 @@ async function copyAllToClipboard() {
         <div class="mt-5 grid gap-2">
           <button
             type="button"
-            class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition"
-            :class="
-              copySuccess
-                ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'bg-slate-900 text-white hover:bg-slate-800'
-            "
+            class="provisioning-copy-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition"
+            :class="copySuccess ? 'is-success' : 'is-primary'"
             @click="copyAllToClipboard"
           >
             <span>{{ copySuccess ? '계정 정보가 복사되었습니다' : '계정 정보 복사' }}</span>
           </button>
           <button
             type="button"
-            class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            class="provisioning-close-button rounded-xl px-4 py-3 text-sm font-semibold transition"
             @click="resetForm"
           >
             닫기
@@ -283,3 +289,124 @@ async function copyAllToClipboard() {
     </div>
   </section>
 </template>
+
+<style scoped>
+.account-provisioning-page {
+  color: var(--text-body);
+}
+
+.provisioning-eyebrow,
+.provisioning-label {
+  color: var(--text-muted);
+}
+
+.provisioning-title {
+  color: var(--text-heading);
+}
+
+.provisioning-description {
+  color: var(--text-muted);
+}
+
+.provisioning-card,
+.provisioning-modal {
+  border: 1px solid var(--line-soft);
+  background: var(--surface-card);
+  color: var(--text-body);
+  box-shadow: var(--shadow-soft);
+  transition:
+    background var(--transition-normal),
+    border-color var(--transition-normal),
+    color var(--transition-normal),
+    box-shadow var(--transition-normal);
+}
+
+.provisioning-alert {
+  border: 1px solid color-mix(in srgb, var(--danger-color) 28%, transparent);
+  background: color-mix(in srgb, var(--danger-color) 12%, var(--surface-card));
+  color: var(--danger-text-strong);
+}
+
+.provisioning-control {
+  border: 1px solid var(--line-soft);
+  background: var(--surface-control);
+  color: var(--text-heading);
+}
+
+.provisioning-control:focus {
+  border-color: var(--line-strong);
+  background: var(--control-focus-color);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-color) 13%, transparent);
+}
+
+.provisioning-control::placeholder {
+  color: var(--text-muted);
+  opacity: 0.72;
+}
+
+.provisioning-control option {
+  background: var(--surface-card);
+  color: var(--text-heading);
+}
+
+.provisioning-preview,
+.provisioning-result {
+  border: 1px solid var(--line-soft);
+  background: var(--surface-card-muted);
+  color: var(--text-muted);
+}
+
+.provisioning-preview__strong,
+.provisioning-result__value {
+  color: var(--text-heading);
+}
+
+.provisioning-separator {
+  color: var(--line-strong);
+}
+
+.provisioning-submit,
+.provisioning-copy-button.is-primary {
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-strong));
+  color: #fff;
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--accent-color) 22%, transparent);
+}
+
+.provisioning-submit:hover,
+.provisioning-copy-button.is-primary:hover {
+  filter: brightness(1.04);
+}
+
+.provisioning-modal-backdrop {
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.provisioning-modal {
+  box-shadow: var(--shadow-elevated);
+}
+
+.provisioning-modal__header {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.provisioning-copy-button.is-success {
+  border: 1px solid color-mix(in srgb, var(--success-color) 38%, transparent);
+  background: color-mix(in srgb, var(--success-color) 14%, var(--surface-card));
+  color: var(--success-color);
+}
+
+.provisioning-close-button {
+  border: 1px solid var(--line-soft);
+  background: var(--surface-card);
+  color: var(--text-body);
+}
+
+.provisioning-close-button:hover {
+  background: var(--surface-control-hover);
+}
+
+:global(:root[data-theme='dark']) .provisioning-modal-backdrop {
+  background: rgba(0, 0, 0, 0.58);
+}
+</style>

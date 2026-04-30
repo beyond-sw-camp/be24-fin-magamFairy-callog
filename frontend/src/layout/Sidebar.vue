@@ -321,7 +321,7 @@ function closeCreateModal() {
 function selectCampaign(campaignId) {
   closeFloatingPanels()
   store.setActiveCampaign(campaignId)
-  router.push({ name: 'dashboard' })
+  router.push({ name: 'campaign-detail', params: { campaignId } })
 }
 
 function openFolderPage() {
