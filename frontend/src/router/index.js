@@ -31,6 +31,15 @@ const routes = [
         },
       },
       {
+        path: 'campaigns/:campaignId',
+        name: 'campaign-detail',
+        component: () => import('@/views/CampaignDetailView.vue'),
+        meta: {
+          title: '캠페인 상세',
+          section: '캠페인 운영 보드',
+        },
+      },
+      {
         path: 'content/new',
         name: 'content-create',
         component: () => import('@/views/ContentEditorView.vue'),
@@ -61,7 +70,7 @@ const routes = [
         component: () => import('@/views/OverView.vue'),
         meta: {
           title: '오버뷰',
-          section: '전체 일정 톺아보기',
+          section: '전체 일정 모아보기',
         },
       },
       {
@@ -106,7 +115,7 @@ const routes = [
         name: 'frames',
         component: () => import('@/views/FramesView.vue'),
         meta: {
-          title: '??? ???',
+          title: '캠페인 프레임',
           section: '??? ?? ??',
         
         },
@@ -115,6 +124,28 @@ const routes = [
         path: '/references',
         name: 'references',
         component: () => import('@/views/ReferencesView.vue'),
+        meta: {
+          title: '레퍼런스',
+          section: '캠페인 레퍼런스',
+        },
+      },
+      {
+        path: 'resources',
+        name: 'resources',
+        component: () => import('@/views/CampaignResourcesView.vue'),
+        meta: {
+          title: '자료실',
+          section: '가이드라인 · 톤앤매너 · 위험요소 · 운영자료',
+        },
+      },
+      {
+        path: 'review-approval',
+        name: 'review-approval',
+        component: () => import('@/views/ReviewApprovalView.vue'),
+        meta: {
+          title: '검수/승인',
+          section: '검수 대기 · 승인 요청 · 오픈 차단',
+        },
       },
       {
         path: 'reports',
@@ -143,6 +174,15 @@ const routes = [
           section: '알림 전체를 확인하고 관리하는 곳',
         },
       },
+      {
+        path: 'matching',
+        name: 'matching',
+        component: () => import('@/views/MatchOverview.vue'),
+        meta: {
+          title: '매칭',
+          section: '매치 엔진',
+        },
+      },
     ],
   },
   {
@@ -169,7 +209,7 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const authStore = useAuthStore()
 
   if (!authStore.isHydrated) {
@@ -179,6 +219,19 @@ router.beforeEach((to) => {
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
   const requiresAccountCreator = to.matched.some((record) => record.meta.requiresAccountCreator)
   const guestOnly = to.matched.some((record) => record.meta.guestOnly)
+
+  if (requiresAuth || requiresAccountCreator) {
+    const isAuthenticated = await authStore.ensureAuthenticated()
+
+    if (!isAuthenticated) {
+      return {
+        name: 'login',
+        query: {
+          redirect: to.fullPath,
+        },
+      }
+    }
+  }
 
   if ((requiresAuth || requiresAccountCreator) && !authStore.isAuthenticated) {
     return {
@@ -193,7 +246,7 @@ router.beforeEach((to) => {
     return { name: 'dashboard' }
   }
 
-  if (guestOnly && authStore.isAuthenticated) {
+  if (guestOnly && authStore.hasFreshAccessToken()) {
     return { name: 'dashboard' }
   }
 

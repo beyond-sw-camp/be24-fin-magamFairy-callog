@@ -62,12 +62,7 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found."));
         String userId = resolveUserId(user, refreshToken);
 
-        RefreshToken dbToken = refreshTokenRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Refresh token is not registered."));
-
-        if (!dbToken.getToken().equals(refreshToken)) {
-            throw new IllegalArgumentException("Refresh token does not match.");
-        }
+        resolveRegisteredRefreshToken(userId, refreshToken);
 
         if (!Boolean.TRUE.equals(user.getEnable()) || resolveStatus(user) != UserAccountStatus.ACTIVE) {
             refreshTokenRepository.deleteByUserId(userId);
@@ -81,21 +76,19 @@ public class AuthService {
                 user.getEmail(),
                 user.getName(),
                 user.getRole(),
-                600000L
+                60000L
         );
-        String newRefresh = jwtUtil.createToken(
-                "refresh",
-                user.getIdx(),
-                userId,
-                user.getEmail(),
-                user.getName(),
-                user.getRole(),
-                1209600000L
-        );
+        return new TokenDto.AuthTokenResponse(newAccess, refreshToken);
+    }
 
-        dbToken.updateToken(newRefresh, LocalDateTime.now().plusDays(14));
-
-        return new TokenDto.AuthTokenResponse(newAccess, newRefresh);
+    private RefreshToken resolveRegisteredRefreshToken(String userId, String refreshToken) {
+        return refreshTokenRepository.findByToken(refreshToken)
+                .or(() -> refreshTokenRepository.findByUserId(userId)
+                        .map(existingToken -> {
+                            existingToken.updateToken(refreshToken, LocalDateTime.now().plusDays(14));
+                            return existingToken;
+                        }))
+                .orElseThrow(() -> new IllegalArgumentException("Refresh token is not registered."));
     }
 
     @Transactional
