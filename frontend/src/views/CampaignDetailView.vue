@@ -109,12 +109,12 @@ const dateColumns = [
   { id: '2024-07-30', label: '~ 07.30' },
 ]
 
-const milestoneRows = [
+const milestoneRows = ref([
   { id: 'planning', label: '기획 확정', sub: '~ 06.10' },
   { id: 'production', label: '에셋 제작', sub: '~ 06.20' },
   { id: 'launch', label: '런칭 준비', sub: '~ 07.10' },
   { id: 'operation', label: '운영/성과 정리', sub: '~ 07.30' },
-]
+])
 
 const teams = [
   {
@@ -327,7 +327,11 @@ const taskReviewerOptions = ['본사 마케팅팀', '브랜드 담당자', '법�
 const isTaskModalOpen = ref(false)
 const isPartModalOpen = ref(false)
 const taskFormError = ref('')
+const taskDetailOpen = ref(false)
+const taskDetailItem = ref(null)
 const partFormError = ref('')
+const partCreateType = ref('part')
+const milestoneFormError = ref('')
 
 const campaignTeams = computed(() => [
   teams[0],
@@ -355,7 +359,7 @@ const taskPartRows = computed(() =>
   })),
 )
 
-const campaignBoardRows = computed(() => (currentBoardView.value === 'milestone' ? milestoneRows : taskPartRows.value))
+const campaignBoardRows = computed(() => (currentBoardView.value === 'milestone' ? milestoneRows.value : taskPartRows.value))
 
 function createDefaultTaskForm() {
   return {
@@ -363,7 +367,7 @@ function createDefaultTaskForm() {
     teamId: campaignTeams.value[0]?.id ?? '',
     status: statusColumns[0]?.id ?? 'backlog',
     dateColumn: dateColumns[0]?.id ?? '',
-    milestone: milestoneRows[0]?.id ?? '',
+    milestone: milestoneRows.value[0]?.id ?? '',
     dueDate: dateColumns[0]?.id ?? '',
     part: taskPartOptions.value[0],
     type: taskTypeOptions[0],
@@ -384,7 +388,7 @@ function createDefaultPartForm() {
   return {
     name: '',
     ownerTeamId: campaignTeams.value[0]?.id ?? '',
-    milestone: milestoneRows[0]?.id ?? '',
+    milestone: milestoneRows.value[0]?.id ?? '',
     reviewFlow: '검수 요청 → 본사 승인 대기 → 수정 중 → 완료',
     priority: 'medium',
     dependency: '',
@@ -394,6 +398,16 @@ function createDefaultPartForm() {
 }
 
 const partForm = ref(createDefaultPartForm())
+
+function createDefaultMilestoneForm() {
+  return {
+    label: '',
+    startDate: '',
+    endDate: '',
+    description: '',
+  }
+}
+const milestoneForm = ref(createDefaultMilestoneForm())
 
 const references = [
   {
@@ -590,7 +604,7 @@ function getTasksForBoardRow(rowId, statusId) {
 
     const rowMatches =
       currentBoardView.value === 'milestone'
-        ? (task.milestone ?? milestoneRows[0]?.id) === rowId
+        ? (task.milestone ?? milestoneRows.value[0]?.id) === rowId
         : (task.part ?? '기타') === rowId
 
     return rowMatches && task.status === statusId
@@ -613,14 +627,47 @@ function closeTaskCreateModal() {
 }
 
 function openPartCreateModal() {
+  partCreateType.value = 'part'
   partForm.value = createDefaultPartForm()
   partFormError.value = ''
+  milestoneForm.value = createDefaultMilestoneForm()
+  milestoneFormError.value = ''
   isPartModalOpen.value = true
 }
 
 function closePartCreateModal() {
   isPartModalOpen.value = false
   partFormError.value = ''
+  milestoneFormError.value = ''
+}
+
+function openTaskDetail(task) {
+  taskDetailItem.value = task
+  taskDetailOpen.value = true
+}
+
+function closeTaskDetail() {
+  taskDetailOpen.value = false
+}
+
+function isStepDone(stepId, currentStatus) {
+  const order = ['backlog', 'in_progress', 'review', 'approval_wait', 'revision', 'done']
+  return order.indexOf(stepId) < order.indexOf(currentStatus)
+}
+
+function milestoneLabelById(milestoneId) {
+  return milestoneRows.value.find((m) => m.id === milestoneId)?.label ?? milestoneId
+}
+
+function editFromDetail() {
+  if (!taskDetailItem.value) return
+  taskForm.value = {
+    ...createDefaultTaskForm(),
+    ...taskDetailItem.value,
+  }
+  taskFormError.value = ''
+  closeTaskDetail()
+  isTaskModalOpen.value = true
 }
 
 function addTaskPart() {
@@ -654,6 +701,42 @@ function addTaskPart() {
   ]
 
   currentBoardView.value = 'part'
+  closePartCreateModal()
+}
+
+function addMilestone() {
+  const label = milestoneForm.value.label.trim()
+
+  if (!label) {
+    milestoneFormError.value = '마일스톤명을 입력해주세요.'
+    return
+  }
+
+  const isDuplicated = milestoneRows.value.some((m) => m.label.toLowerCase() === label.toLowerCase())
+  if (isDuplicated) {
+    milestoneFormError.value = '이미 등록된 마일스톤입니다.'
+    return
+  }
+
+  let sub = ''
+  if (milestoneForm.value.endDate) {
+    const parts = milestoneForm.value.endDate.split('-')
+    sub = parts.length === 3 ? `~ ${parts[1]}.${parts[2]}` : ''
+  }
+
+  milestoneRows.value = [
+    ...milestoneRows.value,
+    {
+      id: `milestone-${Date.now()}`,
+      label,
+      sub,
+      startDate: milestoneForm.value.startDate,
+      endDate: milestoneForm.value.endDate,
+      description: milestoneForm.value.description.trim(),
+    },
+  ]
+
+  currentBoardView.value = 'milestone'
   closePartCreateModal()
 }
 
@@ -1146,7 +1229,7 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
           <span class="board-context-pill">본사 + 캠페인 참여사 {{ campaignTeams.length }}곳</span>
           <input type="search" placeholder="업무 검색..." />
           <button type="button" class="btn btn--primary" @click="openTaskCreateModal">업무 추가</button>
-          <button type="button" class="btn btn--secondary" @click="openPartCreateModal">업무 파트 생성하기</button>
+          <button type="button" class="btn btn--secondary" @click="openPartCreateModal">업무 파트 / 마일스톤 생성하기</button>
         </div>
       </div>
 
@@ -1178,6 +1261,10 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
               :key="task.id"
               class="task-card"
               :class="{ 'task-card--urgent': task.urgent }"
+              role="button"
+              tabindex="0"
+              @click="openTaskDetail(task)"
+              @keydown.enter="openTaskDetail(task)"
             >
               <div class="task-card__top">
                 <span class="status-pill" :class="`status-pill--${getTaskTone(task)}`">
@@ -1543,21 +1630,39 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
         >
           <header class="team-task-modal__header">
             <div>
-              <span class="requirement-badge">TEAM_BOARD_PART</span>
-              <h2 id="team-part-modal-title">업무 파트 생성하기</h2>
-              <p>캠페인 내부 보드에서 새 행으로 관리할 업무 도메인과 검수 기준을 정의합니다.</p>
+              <span class="requirement-badge">{{ partCreateType === 'part' ? 'TEAM_BOARD_PART' : 'TEAM_BOARD_MILESTONE' }}</span>
+              <h2 id="team-part-modal-title">{{ partCreateType === 'part' ? '업무 파트 생성하기' : '마일스톤 생성하기' }}</h2>
+              <p>{{ partCreateType === 'part' ? '캠페인 내부 보드에서 새 행으로 관리할 업무 도메인과 검수 기준을 정의합니다.' : '캠페인의 주요 진행 단계와 기준 일정을 설정합니다.' }}</p>
             </div>
             <button
               type="button"
               class="team-task-modal__close"
-              aria-label="업무 파트 생성 모달 닫기"
+              aria-label="모달 닫기"
               @click="closePartCreateModal"
             >
               X
             </button>
           </header>
 
-          <form class="team-task-form" @submit.prevent="addTaskPart">
+          <div class="part-modal-tabs">
+            <button
+              type="button"
+              :class="['part-modal-tab', { 'part-modal-tab--active': partCreateType === 'part' }]"
+              @click="partCreateType = 'part'"
+            >
+              업무 파트
+            </button>
+            <button
+              type="button"
+              :class="['part-modal-tab', { 'part-modal-tab--active': partCreateType === 'milestone' }]"
+              @click="partCreateType = 'milestone'"
+            >
+              마일스톤
+            </button>
+          </div>
+
+          <!-- 업무 파트 폼 -->
+          <form v-if="partCreateType === 'part'" class="team-task-form" @submit.prevent="addTaskPart">
             <label class="team-task-form__wide">
               <span>업무 파트명</span>
               <input v-model.trim="partForm.name" type="text" placeholder="예: 예약/결제 연동, 인플루언서 운영" />
@@ -1637,11 +1742,158 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
 
             <footer class="team-task-modal__actions">
               <button type="button" class="btn btn--secondary" @click="closePartCreateModal">취소</button>
-              <button type="submit" class="btn btn--primary">생성하기</button>
+              <button type="submit" class="btn btn--primary">파트 생성하기</button>
+            </footer>
+          </form>
+
+          <!-- 마일스톤 폼 -->
+          <form v-else class="team-task-form" @submit.prevent="addMilestone">
+            <label class="team-task-form__wide">
+              <span>마일스톤명</span>
+              <input v-model.trim="milestoneForm.label" type="text" placeholder="예: 기획 확정, 런칭 준비, 운영 완료" />
+            </label>
+
+            <div class="team-task-form__grid">
+              <label>
+                <span>시작일</span>
+                <input v-model="milestoneForm.startDate" type="date" />
+              </label>
+
+              <label>
+                <span>종료(목표)일</span>
+                <input v-model="milestoneForm.endDate" type="date" />
+              </label>
+            </div>
+
+            <label class="team-task-form__wide">
+              <span>마일스톤 설명</span>
+              <textarea
+                v-model.trim="milestoneForm.description"
+                rows="3"
+                placeholder="이 마일스톤에서 달성해야 할 목표, 산출물 기준, 완료 조건을 적어주세요."
+              />
+            </label>
+
+            <p v-if="milestoneFormError" class="team-task-form__error">{{ milestoneFormError }}</p>
+
+            <footer class="team-task-modal__actions">
+              <button type="button" class="btn btn--secondary" @click="closePartCreateModal">취소</button>
+              <button type="submit" class="btn btn--primary">마일스톤 생성하기</button>
             </footer>
           </form>
         </section>
       </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <Transition name="cd-detail">
+        <div
+          v-if="taskDetailOpen && taskDetailItem"
+          class="cd-detail-overlay"
+          role="presentation"
+          @click.self="closeTaskDetail"
+          @keydown.esc="closeTaskDetail"
+        >
+          <aside
+            class="cd-detail-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cd-detail-title"
+            tabindex="-1"
+          >
+            <header class="cd-detail-header">
+              <div class="cd-detail-header__top">
+                <div class="cd-detail-badges">
+                  <span class="cd-badge" :class="`cd-badge--${getTaskTone(taskDetailItem)}`">
+                    {{ taskDetailItem.review }}
+                  </span>
+                  <span v-if="taskDetailItem.urgent" class="cd-badge cd-badge--risk">⚡ 일정 리스크</span>
+                </div>
+                <button type="button" class="cd-detail-close" aria-label="닫기" @click="closeTaskDetail">✕</button>
+              </div>
+              <h2 id="cd-detail-title">{{ taskDetailItem.title }}</h2>
+              <p class="cd-detail-sub">{{ getCampaignTeamById(taskDetailItem.teamId)?.name ?? '참여사 미정' }}</p>
+            </header>
+
+            <div class="cd-detail-tracker">
+              <div
+                v-for="step in statusColumns"
+                :key="step.id"
+                class="cd-tracker-step"
+                :class="{
+                  'cd-tracker-step--active': step.id === taskDetailItem.status,
+                  'cd-tracker-step--done': isStepDone(step.id, taskDetailItem.status),
+                }"
+              >
+                <div class="cd-tracker-dot" />
+                <span>{{ step.label }}</span>
+              </div>
+            </div>
+
+            <div class="cd-detail-body">
+              <dl class="cd-detail-grid">
+                <div class="cd-detail-item">
+                  <dt>업무 파트</dt>
+                  <dd>{{ taskDetailItem.part ?? '-' }}</dd>
+                </div>
+                <div class="cd-detail-item">
+                  <dt>마일스톤</dt>
+                  <dd>{{ milestoneLabelById(taskDetailItem.milestone) ?? '-' }}</dd>
+                </div>
+                <div class="cd-detail-item">
+                  <dt>업무 유형</dt>
+                  <dd>{{ taskDetailItem.type ?? '-' }}</dd>
+                </div>
+                <div class="cd-detail-item">
+                  <dt>우선순위</dt>
+                  <dd class="cd-priority" :data-priority="taskDetailItem.priority">
+                    {{ priorityLabelById(taskDetailItem.priority) ?? '-' }}
+                  </dd>
+                </div>
+                <div class="cd-detail-item">
+                  <dt>마감일</dt>
+                  <dd>{{ taskDetailItem.dueDate ?? '미정' }}</dd>
+                </div>
+                <div v-if="taskDetailItem.reviewer" class="cd-detail-item">
+                  <dt>검수 담당</dt>
+                  <dd>{{ taskDetailItem.reviewer }}</dd>
+                </div>
+              </dl>
+
+              <div class="cd-detail-section">
+                <h3>담당자</h3>
+                <div class="cd-assignee">
+                  <span class="cd-assignee__avatar">{{ createOwnerInitial(taskDetailItem) }}</span>
+                  <div>
+                    <strong>{{ taskDetailItem.ownerName || createOwnerInitial(taskDetailItem) }}</strong>
+                    <small>{{ getCampaignTeamById(taskDetailItem.teamId)?.name ?? '' }}</small>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="taskDetailItem.dependency" class="cd-detail-section">
+                <h3>선행 업무</h3>
+                <p>{{ taskDetailItem.dependency }}</p>
+              </div>
+
+              <div v-if="taskDetailItem.deliverable" class="cd-detail-section">
+                <h3>산출물</h3>
+                <p class="cd-deliverable">📎 {{ taskDetailItem.deliverable }}</p>
+              </div>
+
+              <div v-if="taskDetailItem.description" class="cd-detail-section">
+                <h3>업무 메모</h3>
+                <p class="cd-memo">{{ taskDetailItem.description }}</p>
+              </div>
+            </div>
+
+            <footer class="cd-detail-footer">
+              <button type="button" class="btn btn--secondary" @click="closeTaskDetail">닫기</button>
+              <button type="button" class="btn btn--primary" @click="editFromDetail">업무 수정</button>
+            </footer>
+          </aside>
+        </div>
+      </Transition>
     </Teleport>
   </section>
 </template>
@@ -1663,10 +1915,8 @@ watch(activeCampaign, syncMetadataDraft, { immediate: true })
   --campaign-table-row-hover: color-mix(in srgb, var(--panel-muted) 58%, var(--panel-color));
   display: flex;
   width: 100%;
-  max-width: var(--content-max-width);
   flex-direction: column;
   gap: 18px;
-  margin: 0 auto;
   z-index: 0;
 }
 
@@ -2582,6 +2832,46 @@ textarea:disabled {
   font-weight: 900;
 }
 
+.part-modal-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--panel-muted);
+}
+
+.part-modal-tab {
+  position: relative;
+  padding: 11px 20px;
+  border: none;
+  background: transparent;
+  color: var(--muted-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition: color 0.15s;
+}
+
+.part-modal-tab::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.part-modal-tab--active {
+  color: var(--color-primary-500);
+}
+
+.part-modal-tab--active::after {
+  background: var(--color-primary-500);
+}
+
 .team-task-form {
   display: grid;
   gap: 16px;
@@ -2871,5 +3161,383 @@ textarea:disabled {
     padding-right: 18px;
     padding-left: 18px;
   }
+}
+
+/* ── Task Detail Drawer ─────────────────────────── */
+.task-card {
+  cursor: pointer;
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.task-card:hover {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-primary-500) 18%, transparent);
+  transform: translateY(-1px);
+}
+
+.task-card:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
+.cd-detail-overlay {
+  --campaign-primary-surface: var(--color-primary-100);
+  --campaign-primary-text: var(--color-primary-700);
+  --campaign-success-surface: var(--color-success-light);
+  --campaign-success-text: var(--color-success-dark);
+  --campaign-warning-surface: var(--color-warning-light);
+  --campaign-warning-text: var(--color-warning-dark);
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(2px);
+}
+
+:global(:root[data-theme='dark']) .cd-detail-overlay {
+  --campaign-primary-surface: rgba(139, 92, 246, 0.18);
+  --campaign-primary-text: #ddd6fe;
+  --campaign-warning-surface: rgba(245, 158, 11, 0.16);
+  --campaign-warning-text: #fcd34d;
+}
+
+.cd-detail-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(460px, 100vw);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-color);
+  border-left: 1px solid var(--border-color);
+  box-shadow: -20px 0 60px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.cd-detail-header {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border-color);
+  padding: 22px 24px 18px;
+  background: color-mix(in srgb, var(--panel-color) 95%, var(--color-primary-500));
+}
+
+.cd-detail-header__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.cd-detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cd-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 750;
+  padding: 0 9px;
+}
+
+.cd-badge--info,
+.cd-badge--primary {
+  background: var(--campaign-primary-surface);
+  color: var(--campaign-primary-text);
+}
+
+.cd-badge--success {
+  background: var(--campaign-success-surface);
+  color: var(--campaign-success-text);
+}
+
+.cd-badge--warning {
+  background: var(--campaign-warning-surface);
+  color: var(--campaign-warning-text);
+}
+
+.cd-badge--risk {
+  background: color-mix(in srgb, var(--color-danger) 13%, transparent);
+  color: var(--danger-text-strong);
+}
+
+.cd-detail-close {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-muted);
+  color: var(--muted-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.cd-detail-close:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+.cd-detail-header h2 {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 850;
+  line-height: 1.3;
+}
+
+.cd-detail-sub {
+  margin-top: 5px;
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Status tracker */
+.cd-detail-tracker {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--panel-muted);
+  overflow-x: auto;
+  gap: 0;
+}
+
+.cd-tracker-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  position: relative;
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--muted-text);
+  text-align: center;
+  white-space: nowrap;
+  min-width: 60px;
+}
+
+.cd-tracker-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--border-color);
+  z-index: 0;
+}
+
+.cd-tracker-step--done:not(:last-child)::after {
+  background: var(--color-primary-500);
+}
+
+.cd-tracker-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background: var(--panel-color);
+  position: relative;
+  z-index: 1;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.cd-tracker-step--done .cd-tracker-dot {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
+}
+
+.cd-tracker-step--active {
+  color: var(--campaign-primary-text);
+  font-weight: 800;
+}
+
+.cd-tracker-step--active .cd-tracker-dot {
+  border-color: var(--color-primary-500);
+  background: var(--panel-color);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary-500) 20%, transparent);
+}
+
+/* Body */
+.cd-detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 24px;
+  display: grid;
+  align-content: start;
+  gap: 22px;
+}
+
+/* Property grid */
+.cd-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+}
+
+.cd-detail-item {
+  display: grid;
+  gap: 5px;
+}
+
+.cd-detail-item dt {
+  font-size: 10px;
+  font-weight: 750;
+  color: var(--muted-text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cd-detail-item dd {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* Section */
+.cd-detail-section {
+  display: grid;
+  gap: 8px;
+}
+
+.cd-detail-section h3 {
+  font-size: 10px;
+  font-weight: 750;
+  color: var(--muted-text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cd-detail-section p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Assignee */
+.cd-assignee {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--panel-muted);
+}
+
+.cd-assignee__avatar {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--campaign-primary-surface);
+  color: var(--campaign-primary-text);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.cd-assignee strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cd-assignee small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted-text);
+  margin-top: 2px;
+}
+
+/* Deliverable */
+.cd-deliverable {
+  font-size: 12px;
+  background: var(--panel-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font-weight: 600;
+}
+
+/* Memo */
+.cd-memo {
+  background: color-mix(in srgb, var(--color-primary-500) 6%, var(--panel-muted));
+  border-left: 3px solid var(--color-primary-500);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Priority */
+.cd-priority[data-priority='critical'] { color: var(--danger-text-strong); font-weight: 750; }
+.cd-priority[data-priority='high'] { color: var(--campaign-warning-text); font-weight: 750; }
+.cd-priority[data-priority='medium'] { color: var(--campaign-primary-text); }
+.cd-priority[data-priority='low'] { color: var(--muted-text); }
+
+/* Footer */
+.cd-detail-footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--border-color);
+  padding: 16px 24px;
+  background: color-mix(in srgb, var(--panel-color) 96%, var(--panel-muted));
+}
+
+/* Transition */
+.cd-detail-enter-active {
+  transition: opacity 0.22s ease;
+}
+
+.cd-detail-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.cd-detail-enter-from,
+.cd-detail-leave-to {
+  opacity: 0;
+}
+
+.cd-detail-enter-active .cd-detail-panel {
+  animation: cd-panel-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.cd-detail-leave-active .cd-detail-panel {
+  animation: cd-panel-out 0.2s ease-in forwards;
+}
+
+@keyframes cd-panel-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes cd-panel-out {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
 }
 </style>
