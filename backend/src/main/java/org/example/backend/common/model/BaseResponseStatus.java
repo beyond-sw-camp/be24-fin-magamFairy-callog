@@ -7,8 +7,10 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum BaseResponseStatus {
     // 2000번대 성공
-    SUCCESS(true, 2000, "요청이 성공했습니다"),
-    ASSET_ADD_SUCCESS(true, 2001 , "자산 등록에 성공했습니다."),
+    SUCCESS(true, 2000, "요청이 성공했습니다."),
+    LIST_SUCCESS(true, 2001, "목록 가져오기에 성공했습니다."),
+    ASSET_ADD_SUCCESS(true, 2002 , "자산 등록에 성공했습니다."),
+    BENEFIT_ADD_SUCCESS(true, 2003,"혜택 등록에 성공했습니다."),
 
 
     // 3000번대 클라이언트 입력 오류, 입력값 검증 오류
@@ -21,7 +23,8 @@ public enum BaseResponseStatus {
 
 
     // 5000번대 실패
-    FAIL(false, 5000, "요청이 실패했습니다");
+    FAIL(false, 5000, "요청이 실패했습니다."),
+    NO_SUCH_ELEMENT(false, 5001, "요청하신 정보가 없습니다.");
 
     private final boolean success;
     private final int code;
