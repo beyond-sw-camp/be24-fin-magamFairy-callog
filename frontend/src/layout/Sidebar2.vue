@@ -40,6 +40,14 @@ const viewMode = ref('compact') // 'compact' | 'kpi'
 
 const contextMenuPosition = reactive({ top: FLOAT_MARGIN, left: FLOAT_MARGIN })
 
+// 캠페인 호버 패널
+const hoveredCampaignId = ref(null)
+const hoverPanelPosition = reactive({ top: FLOAT_MARGIN, left: FLOAT_MARGIN })
+let hoverCloseTimer = null
+const HOVER_OPEN_DELAY_MS = 200
+const HOVER_CLOSE_DELAY_MS = 120
+let hoverOpenTimer = null
+
 const sidebarStyle = computed(() => ({ '--sidebar2-width': `${sidebarWidth.value}px` }))
 
 const sidebarCampaigns = computed(() => store.sidebarCampaigns)
@@ -78,6 +86,13 @@ const contextCampaign = computed(
 const editingCampaign = computed(
   () => store.campaigns.find((c) => c.id === editingCampaignId.value) ?? null,
 )
+const hoveredCampaign = computed(
+  () => store.campaigns.find((c) => c.id === hoveredCampaignId.value) ?? null,
+)
+const hoverPanelStyle = computed(() => ({
+  top: `${hoverPanelPosition.top}px`,
+  left: `${hoverPanelPosition.left}px`,
+}))
 
 const contextMenuStyle = computed(() => ({
   top: `${contextMenuPosition.top}px`,
@@ -242,6 +257,58 @@ function isServerCampaignId(campaignId) {
 
 function closeCampaignMenu() {
   contextCampaignId.value = null
+}
+
+const HOVER_PANEL_WIDTH = 300
+const HOVER_PANEL_HEIGHT_ESTIMATE = 320
+
+function clearHoverTimers() {
+  if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null }
+  if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null }
+}
+
+function handleCampaignMouseEnter(campaign, event) {
+  clearHoverTimers()
+  if (draggedCampaignId.value || contextCampaignId.value) return
+  const target = event.currentTarget
+  if (!(target instanceof HTMLElement)) return
+  const rect = target.getBoundingClientRect()
+  hoverOpenTimer = window.setTimeout(() => {
+    const left = clamp(rect.right + 12, FLOAT_MARGIN, window.innerWidth - HOVER_PANEL_WIDTH - FLOAT_MARGIN)
+    const top = clamp(rect.top, FLOAT_MARGIN, window.innerHeight - HOVER_PANEL_HEIGHT_ESTIMATE - FLOAT_MARGIN)
+    hoverPanelPosition.left = left
+    hoverPanelPosition.top = top
+    hoveredCampaignId.value = campaign.id
+  }, HOVER_OPEN_DELAY_MS)
+}
+
+function handleCampaignMouseLeave() {
+  if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null }
+  hoverCloseTimer = window.setTimeout(() => {
+    hoveredCampaignId.value = null
+  }, HOVER_CLOSE_DELAY_MS)
+}
+
+function handleHoverPanelEnter() {
+  if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null }
+}
+
+function handleHoverPanelLeave() {
+  hoveredCampaignId.value = null
+}
+
+function closeHoverPanel() {
+  clearHoverTimers()
+  hoveredCampaignId.value = null
+}
+
+function formatCampaignPeriod(startDate, endDate) {
+  const fmt = (d) => {
+    if (!d) return ''
+    return String(d).replaceAll('-', '.')
+  }
+  if (!startDate && !endDate) return '기간 미정'
+  return `${fmt(startDate)} - ${fmt(endDate)}`
 }
 
 function closeCreateModal() {
@@ -432,6 +499,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', handleGlobalPointerDown)
   window.removeEventListener('keydown', handleGlobalKeydown)
   resetDragState()
+  clearHoverTimers()
 })
 </script>
 
@@ -501,7 +569,9 @@ onBeforeUnmount(() => {
           draggable="true"
           @click="selectCampaign(campaign.id)"
           @contextmenu="openCampaignMenu(campaign, $event)"
-          @dragstart="handleCampaignDragStart(campaign, $event)"
+          @mouseenter="handleCampaignMouseEnter(campaign, $event)"
+          @mouseleave="handleCampaignMouseLeave"
+          @dragstart="handleCampaignDragStart(campaign, $event); closeHoverPanel()"
           @dragend="handleCampaignDragEnd"
           @dragover="handleCampaignDragOver(campaign, $event)"
           @drop="handleCampaignDrop(campaign, $event)"
@@ -668,6 +738,65 @@ onBeforeUnmount(() => {
             </span>
           </button>
         </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <Teleport to="body">
+    <Transition name="campaign-float">
+      <div
+        v-if="hoveredCampaign && !contextCampaign && !draggedCampaignId"
+        class="campaign-hover-panel"
+        :style="hoverPanelStyle"
+        role="tooltip"
+        @mouseenter="handleHoverPanelEnter"
+        @mouseleave="handleHoverPanelLeave"
+      >
+        <header class="campaign-hover-panel__head">
+          <span class="campaign-hover-panel__dot" :style="{ background: hoveredCampaign.color }" />
+          <div class="campaign-hover-panel__title">
+            <strong>{{ hoveredCampaign.name }}</strong>
+            <span
+              class="campaign-list__status"
+              :class="`campaign-list__status--${getCampaignStatusMeta(hoveredCampaign.status).tone}`"
+            >
+              {{ getCampaignStatusMeta(hoveredCampaign.status).label }}
+            </span>
+          </div>
+        </header>
+
+        <p class="campaign-hover-panel__period">
+          {{ formatCampaignPeriod(hoveredCampaign.startDate, hoveredCampaign.endDate) }}
+        </p>
+
+        <section v-if="hoveredCampaign.purpose" class="campaign-hover-panel__section">
+          <h4>목적</h4>
+          <p>{{ hoveredCampaign.purpose }}</p>
+        </section>
+
+        <section v-if="hoveredCampaign.tags?.length" class="campaign-hover-panel__section">
+          <h4>태그</h4>
+          <div class="campaign-hover-panel__chips">
+            <span v-for="tag in hoveredCampaign.tags" :key="tag" class="campaign-hover-panel__chip campaign-hover-panel__chip--soft">#{{ tag }}</span>
+          </div>
+        </section>
+
+        <section v-if="hoveredCampaign.partners?.length" class="campaign-hover-panel__section">
+          <h4>파트너</h4>
+          <div class="campaign-hover-panel__chips">
+            <span v-for="p in hoveredCampaign.partners" :key="p" class="campaign-hover-panel__chip">{{ p }}</span>
+          </div>
+        </section>
+
+        <section v-if="hoveredCampaign.goals" class="campaign-hover-panel__section">
+          <h4>목표</h4>
+          <p>{{ hoveredCampaign.goals }}</p>
+        </section>
+
+        <section v-if="hoveredCampaign.mainMessage" class="campaign-hover-panel__section">
+          <h4>핵심 메시지</h4>
+          <p>{{ hoveredCampaign.mainMessage }}</p>
+        </section>
       </div>
     </Transition>
   </Teleport>
@@ -1199,6 +1328,99 @@ onBeforeUnmount(() => {
 .campaign-list--collapsed .campaign-list__resize-handle {
   opacity: 0;
   pointer-events: none;
+}
+
+/* Hover panel */
+.campaign-hover-panel {
+  position: fixed;
+  z-index: 55;
+  width: 300px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--panel-color);
+  box-shadow: var(--shadow-elevated, 0 24px 70px rgba(15, 23, 42, 0.26));
+  padding: 14px 16px 12px;
+  color: var(--text-primary);
+}
+
+.campaign-hover-panel__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.campaign-hover-panel__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.campaign-hover-panel__title {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+.campaign-hover-panel__title strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+.campaign-hover-panel__title .campaign-list__status {
+  justify-self: flex-start;
+}
+
+.campaign-hover-panel__period {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.campaign-hover-panel__section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+.campaign-hover-panel__section h4 {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-text);
+  margin-bottom: 6px;
+}
+.campaign-hover-panel__section p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+.campaign-hover-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.campaign-hover-panel__chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--panel-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-primary);
+}
+.campaign-hover-panel__chip--soft {
+  background: color-mix(in srgb, var(--color-primary-500) 8%, transparent);
+  color: var(--color-primary-600, var(--color-primary-700));
+  border-color: color-mix(in srgb, var(--color-primary-500) 18%, transparent);
 }
 
 /* Context menu */

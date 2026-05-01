@@ -5,6 +5,7 @@ import { usePlannerStore } from '@/stores/planner'
 import { GetCampaignDetails } from '@/api/campaigns'
 import CampaignResourcesView from '@/views/CampaignResourcesView.vue'
 import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
+import CampaignMembersPanel from '@/components/campaign/CampaignMembersPanel.vue'
 import {
   ListMilestones,
   ListTaskParts,
@@ -69,7 +70,6 @@ const store = usePlannerStore()
 const activeTab = ref('캠페인 오버뷰')
 const currentBoardView = ref('part')
 const metadataEditing = ref(false)
-const selectedMemberIds = ref([])
 
 const metadataDraft = ref({
   name: '',
@@ -92,9 +92,11 @@ const handleTabClick = async (tabName) => {
   }
 };
 
+const campaignId = computed(() => route.params.campaignId)
+
 const activeCampaign = computed(() => {
-  const campaignId = String(route.params.campaignId ?? '')
-  const routeCampaign = store.campaigns.find((campaign) => campaign.id === campaignId)
+  const cid = String(route.params.campaignId ?? '')
+  const routeCampaign = store.campaigns.find((campaign) => campaign.id === cid)
 
   return routeCampaign ?? store.activeCampaign
 })
@@ -282,42 +284,6 @@ const references = [
     icon: 'PDF',
   },
 ]
-
-const participantCandidates = [
-  { id: 'hq-kim', name: '김본사', team: '글로벌 본사', role: '본사 관리자' },
-  { id: 'design-park', name: '박디자인', team: '디자인 스튜디오 A', role: '협력사 매니저' },
-  { id: 'media-lee', name: '이마켓', team: '미디어 랩 B', role: '협력사 팀원' },
-]
-
-const campaignParticipants = ref([
-  {
-    id: 'hq-kim',
-    name: '김본사',
-    email: 'kim.hq@callog.com',
-    team: '글로벌 본사',
-    role: '본사 관리자',
-    access: '읽기/수정',
-    addedAt: '2024.04.10',
-  },
-  {
-    id: 'design-park',
-    name: '박디자인',
-    email: 'park@studio-a.com',
-    team: '디자인 스튜디오 A',
-    role: '협력사 매니저',
-    access: '당사 업무 수정',
-    addedAt: '2024.04.12',
-  },
-  {
-    id: 'media-lee',
-    name: '이마켓',
-    email: 'lee@media-b.com',
-    team: '미디어 랩 B',
-    role: '협력사 팀원',
-    access: '당사 업무 조회',
-    addedAt: '2024.04.15',
-  },
-])
 
 const kpiRows = ref([
   {
@@ -824,21 +790,6 @@ function removeScheduleItem(scheduleId) {
   scheduleItems.value = scheduleItems.value.filter((item) => item.id !== scheduleId)
 }
 
-function addSelectedParticipants() {
-  const existingIds = new Set(campaignParticipants.value.map((participant) => participant.id))
-  const additions = participantCandidates
-    .filter((candidate) => selectedMemberIds.value.includes(candidate.id) && !existingIds.has(candidate.id))
-    .map((candidate) => ({
-      ...candidate,
-      email: `${candidate.id}@callog.com`,
-      access: candidate.team === '글로벌 본사' ? '읽기/수정' : '당사 업무 수정',
-      addedAt: '2024.05.18',
-    }))
-
-  campaignParticipants.value = [...campaignParticipants.value, ...additions]
-  selectedMemberIds.value = []
-}
-
 watch(
   () => route.params.campaignId,
   (campaignId) => {
@@ -920,43 +871,41 @@ watch(
 
 <template>
   <section class="campaign-detail">
-    <div class="campaign-sticky-bar">
-      <header class="campaign-hero" aria-label="캠페인 메인 페이지 헤더">
-        <div class="campaign-hero__copy">
-          <div class="campaign-hero__title">
-            <h1>{{ activeCampaign?.name ?? '2024 글로벌 썸머 프로모션 캠페인' }}</h1>
-            <span class="status-chip status-chip--primary">
-              <i aria-hidden="true"></i>
-              {{ campaignStatusLabel }}
-            </span>
-          </div>
-          <div class="campaign-hero__meta" aria-label="캠페인 메타데이터 요약">
-            <span>{{ activeCampaign?.period ?? '2024.06.01 - 2024.08.31' }}</span>
-            <span>본사 관리자 (수정 가능)</span>
-          </div>
+    <header class="campaign-hero" aria-label="캠페인 메인 페이지 헤더">
+      <div class="campaign-hero__copy">
+        <div class="campaign-hero__title">
+          <h1>{{ activeCampaign?.name ?? '2024 글로벌 썸머 프로모션 캠페인' }}</h1>
+          <span class="status-chip status-chip--primary">
+            <i aria-hidden="true"></i>
+            {{ campaignStatusLabel }}
+          </span>
         </div>
-
-        <div class="campaign-hero__actions">
-          <button type="button" class="btn btn--secondary">내보내기</button>
-          <button type="button" class="btn btn--primary" @click="activeTab = 'metadata'; metadataEditing = true">
-            캠페인 편집
-          </button>
+        <div class="campaign-hero__meta" aria-label="캠페인 메타데이터 요약">
+          <span>{{ activeCampaign?.period ?? '2024.06.01 - 2024.08.31' }}</span>
+          <span>본사 관리자 (수정 가능)</span>
         </div>
-      </header>
+      </div>
 
-      <nav class="campaign-tabs" aria-label="캠페인 상세 탭">
-        <button
-          v-for="tab in tabs"
-          :key="tab"
-          type="button"
-          class="campaign-tabs__button"
-          :class="{ active: activeTab === tab }"
-          @click="handleTabClick(tab)"
-        >
-          {{ tab }}
+      <div class="campaign-hero__actions">
+        <button type="button" class="btn btn--secondary">내보내기</button>
+        <button type="button" class="btn btn--primary" @click="activeTab = 'metadata'; metadataEditing = true">
+          캠페인 편집
         </button>
-      </nav>
-    </div>
+      </div>
+    </header>
+
+    <nav class="campaign-tabs" aria-label="캠페인 상세 탭">
+      <button
+        v-for="tab in tabs"
+        :key="tab"
+        type="button"
+        class="campaign-tabs__button"
+        :class="{ active: activeTab === tab }"
+        @click="handleTabClick(tab)"
+      >
+        {{ tab }}
+      </button>
+    </nav>
 
     <section v-if="activeTab === 'metadata'" class="tab-surface">
       <div class="metadata-layout">
@@ -1293,51 +1242,7 @@ watch(
     </section>
 
     <section v-else-if="activeTab === '참여자 설정'" class="tab-surface">
-      <article class="panel">
-        <div class="panel__header">
-          <div>
-            <span class="requirement-badge">CAMPAIGN_005</span>
-            <h2>캠페인 참여자 관리</h2>
-          </div>
-          <button type="button" class="btn btn--primary" @click="addSelectedParticipants">참가자 추가</button>
-        </div>
-
-        <div class="candidate-list">
-          <label v-for="candidate in participantCandidates" :key="candidate.id">
-            <input v-model="selectedMemberIds" type="checkbox" :value="candidate.id" />
-            <span>{{ candidate.name }}</span>
-            <small>{{ candidate.team }} · {{ candidate.role }}</small>
-          </label>
-        </div>
-
-        <div class="data-table data-table--participants">
-          <div class="data-table__head">
-            <span>이름 / 이메일</span>
-            <span>소속 회사</span>
-            <span>역할 (권한)</span>
-            <span>추가된 날짜</span>
-            <span>관리</span>
-          </div>
-          <div v-for="participant in campaignParticipants" :key="participant.id" class="data-table__row">
-            <div class="person-cell">
-              <span>{{ participant.name.slice(0, 1) }}</span>
-              <div>
-                <strong>{{ participant.name }}</strong>
-                <small>{{ participant.email }}</small>
-              </div>
-            </div>
-            <span>{{ participant.team }}</span>
-            <span class="status-pill status-pill--info">{{ participant.role }}</span>
-            <span>{{ participant.addedAt }}</span>
-            <button type="button" class="table-action">관리</button>
-          </div>
-        </div>
-      </article>
-
-      <p class="info-callout">
-        참가자로 추가된 인원은 기본적으로 캠페인 조회 권한을 가집니다. 본사 관리자는 수정 권한을 가지며,
-        협력사는 자신에게 할당된 업무 및 직접 추가한 레퍼런스만 수정할 수 있습니다.
-      </p>
+      <CampaignMembersPanel :campaign-id="campaignId" />
     </section>
 
     <section v-else-if="activeTab === '캠페인 성과/KPI'" class="tab-surface">
@@ -1829,14 +1734,6 @@ watch(
   --campaign-muted-fill: #4b5563;
   --campaign-elevated-tint: rgba(139, 92, 246, 0.08);
   --campaign-table-row-hover: color-mix(in srgb, var(--panel-muted) 72%, var(--panel-color));
-}
-
-.campaign-sticky-bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: var(--app-bg);
-  padding-bottom: 10px;
 }
 
 .campaign-hero {
