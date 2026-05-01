@@ -149,6 +149,7 @@ const operationTasks = [
         <span class="match-row__main">
           <strong>{{ combo.title }}</strong>
           <small>{{ combo.partner }} · {{ combo.target }}</small>
+          <em>{{ combo.asset }} · {{ combo.offer }}</em>
         </span>
         <span class="match-badge" :class="scoreTone(combo.score)">{{ combo.grade }}</span>
       </button>
@@ -252,7 +253,7 @@ const operationTasks = [
 <style scoped>
 .matching-workspace {
   display: grid;
-  grid-template-columns: minmax(180px, 0.55fr) minmax(380px, 1.35fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(220px, 0.48fr) minmax(320px, 0.62fr) minmax(520px, 1.55fr);
   gap: 0.7rem;
   height: 100%;
   min-height: 0;
@@ -342,6 +343,7 @@ const operationTasks = [
 
 .match-goal span,
 .match-row__main small,
+.match-row__main em,
 .match-detail__title p {
   color: var(--muted-text);
   font-size: 0.74rem;
@@ -358,10 +360,10 @@ const operationTasks = [
 
 .match-row {
   display: grid;
-  grid-template-columns: 2.7rem minmax(0, 1fr) auto;
+  grid-template-columns: 2.7rem minmax(0, 1fr);
   align-items: center;
   gap: 0.65rem;
-  min-height: 4.35rem;
+  min-height: 5.2rem;
   padding: 0.65rem;
 }
 
@@ -372,10 +374,17 @@ const operationTasks = [
 }
 
 .match-row__main strong,
-.match-row__main small {
+.match-row__main small,
+.match-row__main em {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.match-row__main em {
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 700;
 }
 
 .match-score {
@@ -390,6 +399,8 @@ const operationTasks = [
 
 .match-badge {
   display: inline-flex;
+  grid-column: 2;
+  justify-self: start;
   min-height: 1.55rem;
   align-items: center;
   justify-content: center;

@@ -221,7 +221,7 @@ function deleteTask() {
 
 <template>
   <Teleport to="body">
-    <div v-if="false" class="task-modal">
+    <div v-if="isOpen && form" class="task-modal">
       <div class="task-modal__backdrop" @click="closeModal" />
 
       <section class="task-modal__dialog">
