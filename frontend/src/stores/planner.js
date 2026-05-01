@@ -11,11 +11,9 @@ import {
 import {
   currentUserId,
   priorityLabels,
-  reportCards,
   seedTasks,
   statusLabels,
   teamMembers,
-  templateLibrary,
 } from '@/data/scheduleSeed'
 import editorApi from '@/api/editor/editorApi'
 import { ListCampaign } from '@/api/campaigns'
@@ -320,9 +318,22 @@ export const usePlannerStore = defineStore('planner', () => {
 
       if (Array.isArray(loadedCampaigns)) {
         const nextCampaigns = loadedCampaigns.map((campaign) => normalizeCampaignRecord(campaign))
-
         campaigns.value = nextCampaigns
-        campaignOrder.value = nextCampaigns.map((campaign) => campaign.id)
+
+        const nextIds = nextCampaigns.map((c) => c.id)
+        const savedOrder = safeParseCampaigns(
+          typeof window !== 'undefined'
+            ? window.localStorage.getItem(getCampaignUiStorageKey(campaignOrderStorageKey))
+            : null,
+        )
+        if (Array.isArray(savedOrder) && savedOrder.length > 0) {
+          const preserved = savedOrder.filter((id) => nextIds.includes(id))
+          const added = nextIds.filter((id) => !preserved.includes(id))
+          campaignOrder.value = [...preserved, ...added]
+        } else {
+          campaignOrder.value = nextIds
+        }
+
         activeCampaignId.value = nextCampaigns.some((campaign) => campaign.id === activeCampaignId.value)
           ? activeCampaignId.value
           : nextCampaigns[0]?.id ?? null
@@ -424,8 +435,6 @@ export const usePlannerStore = defineStore('planner', () => {
   })
 
   const members = computed(() => teamMembers)
-  const templates = computed(() => templateLibrary)
-  const reports = computed(() => reportCards)
 
   const memberMap = computed(() =>
     members.value.reduce((accumulator, member) => {
@@ -581,10 +590,6 @@ export const usePlannerStore = defineStore('planner', () => {
     return true
   }
 
-  function isCampaignInFolder(campaignId) {
-    return campaignFolderIds.value.includes(campaignId)
-  }
-
   function createCampaign(payload) {
     const nextIndex = campaigns.value.length + 1
     const name = payload.name?.trim() || `새 캠페인 ${nextIndex}`
@@ -700,10 +705,6 @@ export const usePlannerStore = defineStore('planner', () => {
 
   function setCalendarTab(tab) {
     calendarTab.value = tab
-  }
-
-  function setSidebarCollapsed(value) {
-    sidebarCollapsed.value = value
   }
 
   function toggleSidebar() {
@@ -861,7 +862,6 @@ export const usePlannerStore = defineStore('planner', () => {
     filteredTasks,
     findMember,
     initialize,
-    isCampaignInFolder,
     loadCampaignsFromServer,
     resetCampaigns,
     members,
@@ -874,7 +874,6 @@ export const usePlannerStore = defineStore('planner', () => {
     orderedCampaigns,
     periodLabel,
     priorityLabels,
-    reports,
     reorderCampaign,
     restoreCampaignFromFolder,
     searchQuery,
@@ -895,12 +894,12 @@ export const usePlannerStore = defineStore('planner', () => {
     statusFilter,
     statusLabels,
     tasks,
-    templates,
     taskOpenToken,
     theme,
     toggleSidebar,
     toggleSpanMode,
     toggleTheme,
+
     updateCampaign,
     updateCampaignStatus,
     updateTask,

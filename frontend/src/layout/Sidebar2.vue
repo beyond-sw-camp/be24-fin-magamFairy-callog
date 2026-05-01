@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useUserSettingsStore } from '@/stores/userSettings'
 import CampaignCreateModal from '@/components/campaign/CampaignCreateModal.vue'
 import { campaignLabels, campaignSidebarText, campaignStatusMeta } from '@/constants/campaignText'
 import { CreateCampaign, UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
@@ -11,6 +12,7 @@ const route = useRoute()
 const router = useRouter()
 const store = usePlannerStore()
 const authStore = useAuthStore()
+const userSettingsStore = useUserSettingsStore()
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'callog-sidebar2-width'
 const SIDEBAR_DEFAULT_WIDTH = 240
@@ -752,51 +754,78 @@ onBeforeUnmount(() => {
         @mouseenter="handleHoverPanelEnter"
         @mouseleave="handleHoverPanelLeave"
       >
-        <header class="campaign-hover-panel__head">
-          <span class="campaign-hover-panel__dot" :style="{ background: hoveredCampaign.color }" />
-          <div class="campaign-hover-panel__title">
-            <strong>{{ hoveredCampaign.name }}</strong>
-            <span
-              class="campaign-list__status"
-              :class="`campaign-list__status--${getCampaignStatusMeta(hoveredCampaign.status).tone}`"
-            >
-              {{ getCampaignStatusMeta(hoveredCampaign.status).label }}
-            </span>
+        <!-- 상단 커버 영역 -->
+        <div
+          class="chp-cover"
+          :style="{ background: `linear-gradient(135deg, ${hoveredCampaign.color}dd 0%, ${hoveredCampaign.color}66 100%)` }"
+        >
+          <div class="chp-cover__gradient" />
+
+          <!-- 회사 로고 원형 -->
+          <div class="chp-cover__logo">
+            <img
+              v-if="userSettingsStore.profile.companyLogoDataUrl"
+              :src="userSettingsStore.profile.companyLogoDataUrl"
+              alt="logo"
+            />
+            <span v-else>{{ hoveredCampaign.initials }}</span>
           </div>
-        </header>
 
-        <p class="campaign-hover-panel__period">
-          {{ formatCampaignPeriod(hoveredCampaign.startDate, hoveredCampaign.endDate) }}
-        </p>
-
-        <section v-if="hoveredCampaign.purpose" class="campaign-hover-panel__section">
-          <h4>목적</h4>
-          <p>{{ hoveredCampaign.purpose }}</p>
-        </section>
-
-        <section v-if="hoveredCampaign.tags?.length" class="campaign-hover-panel__section">
-          <h4>태그</h4>
-          <div class="campaign-hover-panel__chips">
-            <span v-for="tag in hoveredCampaign.tags" :key="tag" class="campaign-hover-panel__chip campaign-hover-panel__chip--soft">#{{ tag }}</span>
+          <!-- 기간 배지 -->
+          <div class="chp-cover__date">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            {{ formatCampaignPeriod(hoveredCampaign.startDate, hoveredCampaign.endDate) }}
           </div>
-        </section>
+        </div>
 
-        <section v-if="hoveredCampaign.partners?.length" class="campaign-hover-panel__section">
-          <h4>파트너</h4>
-          <div class="campaign-hover-panel__chips">
-            <span v-for="p in hoveredCampaign.partners" :key="p" class="campaign-hover-panel__chip">{{ p }}</span>
+        <!-- 본문 영역 -->
+        <div class="chp-body">
+          <!-- 상태 + 제목 -->
+          <div class="chp-title-block">
+            <div class="chp-status">
+              <span class="chp-status__dot" />
+              <span class="chp-status__label">{{ getCampaignStatusMeta(hoveredCampaign.status).label }}</span>
+            </div>
+            <h2 class="chp-title">{{ hoveredCampaign.name }}</h2>
           </div>
-        </section>
 
-        <section v-if="hoveredCampaign.goals" class="campaign-hover-panel__section">
-          <h4>목표</h4>
-          <p>{{ hoveredCampaign.goals }}</p>
-        </section>
+          <div class="chp-divider" />
 
-        <section v-if="hoveredCampaign.mainMessage" class="campaign-hover-panel__section">
-          <h4>핵심 메시지</h4>
-          <p>{{ hoveredCampaign.mainMessage }}</p>
-        </section>
+          <!-- 목적 및 목표 -->
+          <div v-if="hoveredCampaign.purpose || hoveredCampaign.goals" class="chp-row">
+            <div class="chp-icon chp-icon--amber">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />
+              </svg>
+            </div>
+            <div class="chp-row__content">
+              <p class="chp-row__label">목적 및 목표</p>
+              <p v-if="hoveredCampaign.purpose" class="chp-row__text">{{ hoveredCampaign.purpose }}</p>
+              <p v-if="hoveredCampaign.goals" class="chp-row__goal">🎯 {{ hoveredCampaign.goals }}</p>
+            </div>
+          </div>
+
+          <!-- 파트너 및 태그 -->
+          <div v-if="hoveredCampaign.partners?.length || hoveredCampaign.tags?.length" class="chp-row">
+            <div class="chp-icon chp-icon--emerald">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            <div class="chp-row__content">
+              <p class="chp-row__label">파트너 및 태그</p>
+              <p v-if="hoveredCampaign.partners?.length" class="chp-row__text chp-row__text--bold">{{ hoveredCampaign.partners.join(', ') }}</p>
+              <div v-if="hoveredCampaign.tags?.length" class="chp-chips">
+                <span v-for="tag in hoveredCampaign.tags" :key="tag" class="chp-chip">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" /><line x1="10" y1="3" x2="8" y2="21" /><line x1="16" y1="3" x2="14" y2="21" /></svg>
+                  {{ tag }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </Transition>
   </Teleport>
@@ -1334,93 +1363,179 @@ onBeforeUnmount(() => {
 .campaign-hover-panel {
   position: fixed;
   z-index: 55;
-  width: 300px;
+  width: 280px;
   max-height: calc(100vh - 32px);
   overflow-y: auto;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: 16px;
   background: var(--panel-color);
-  box-shadow: var(--shadow-elevated, 0 24px 70px rgba(15, 23, 42, 0.26));
-  padding: 14px 16px 12px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
   color: var(--text-primary);
 }
 
-.campaign-hover-panel__head {
+/* 커버 */
+.chp-cover {
+  position: relative;
+  height: 120px;
+  flex-shrink: 0;
+}
+.chp-cover__gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 55%);
+}
+.chp-cover__logo {
+  position: absolute;
+  bottom: -24px;
+  left: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 3px solid var(--panel-color);
+  background: var(--panel-color);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+  z-index: 1;
+}
+.chp-cover__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.chp-cover__date {
+  position: absolute;
+  bottom: 10px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: rgba(220, 38, 38, 0.82);
+  backdrop-filter: blur(4px);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  z-index: 1;
+}
+
+/* 본문 */
+.chp-body {
+  padding: 36px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 상태 + 제목 */
+.chp-title-block { display: flex; flex-direction: column; gap: 4px; }
+.chp-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chp-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-primary-500);
+  flex-shrink: 0;
+}
+.chp-status__label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-primary-600, var(--color-primary-500));
+}
+.chp-title {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.chp-divider {
+  height: 1px;
+  background: var(--border-color);
+}
+
+/* 아이콘 행 */
+.chp-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
 }
-.campaign-hover-panel__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+.chp-icon {
   flex-shrink: 0;
-  margin-top: 5px;
+  margin-top: 1px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.campaign-hover-panel__title {
-  flex: 1;
-  display: grid;
-  gap: 4px;
+.chp-icon--amber {
+  background: rgba(251, 191, 36, 0.12);
+  color: #d97706;
 }
-.campaign-hover-panel__title strong {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  line-height: 1.3;
+.chp-icon--emerald {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
 }
-.campaign-hover-panel__title .campaign-list__status {
-  justify-self: flex-start;
-}
-
-.campaign-hover-panel__period {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--muted-text);
-  font-variant-numeric: tabular-nums;
-}
-
-.campaign-hover-panel__section {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-color);
-}
-.campaign-hover-panel__section h4 {
-  font-size: 11px;
+.chp-row__content { flex: 1; min-width: 0; }
+.chp-row__label {
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted-text);
-  margin-bottom: 6px;
+  margin: 0 0 4px;
 }
-.campaign-hover-panel__section p {
-  font-size: 13px;
-  line-height: 1.5;
+.chp-row__text {
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text-primary);
-  white-space: pre-line;
+  line-height: 1.5;
+  margin: 0 0 4px;
   word-break: break-word;
 }
+.chp-row__text--bold { font-weight: 700; }
+.chp-row__goal {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-primary-600, var(--color-primary-500));
+  margin: 2px 0 0;
+}
 
-.campaign-hover-panel__chips {
+/* 태그 칩 */
+.chp-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  margin-top: 6px;
 }
-.campaign-hover-panel__chip {
+.chp-chip {
   display: inline-flex;
   align-items: center;
-  height: 22px;
-  padding: 0 8px;
-  font-size: 11px;
-  font-weight: 600;
+  gap: 3px;
+  height: 20px;
+  padding: 0 7px;
+  font-size: 10px;
+  font-weight: 700;
   background: var(--panel-muted);
   border: 1px solid var(--border-color);
-  border-radius: 999px;
-  color: var(--text-primary);
-}
-.campaign-hover-panel__chip--soft {
-  background: color-mix(in srgb, var(--color-primary-500) 8%, transparent);
-  color: var(--color-primary-600, var(--color-primary-700));
-  border-color: color-mix(in srgb, var(--color-primary-500) 18%, transparent);
+  border-radius: 5px;
+  color: var(--muted-text);
 }
 
 /* Context menu */
