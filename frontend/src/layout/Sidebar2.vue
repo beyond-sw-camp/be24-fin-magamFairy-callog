@@ -35,6 +35,9 @@ const dropTargetCampaignId = ref(null)
 const dropPlacement = ref('before')
 const folderDropState = ref('idle')
 
+const VIEW_MODE_STORAGE_KEY = 'callog-sidebar2-view-mode'
+const viewMode = ref('compact') // 'compact' | 'kpi'
+
 const contextMenuPosition = reactive({ top: FLOAT_MARGIN, left: FLOAT_MARGIN })
 
 const sidebarStyle = computed(() => ({ '--sidebar2-width': `${sidebarWidth.value}px` }))
@@ -142,6 +145,45 @@ const userStorageKey = computed(
 
 function getCampaignStatusMeta(status) {
   return campaignStatusMeta[status] ?? { label: campaignStatusMeta.draft.label, tone: 'draft' }
+}
+
+function toggleViewMode() {
+  viewMode.value = viewMode.value === 'compact' ? 'kpi' : 'compact'
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode.value)
+  }
+}
+
+function getDaysLeft(endDate) {
+  if (!endDate) return null
+  const end = new Date(endDate)
+  if (Number.isNaN(end.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  end.setHours(0, 0, 0, 0)
+  return Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function formatDDay(daysLeft) {
+  if (daysLeft === null || daysLeft === undefined) return ''
+  if (daysLeft > 0) return `D-${daysLeft}`
+  if (daysLeft === 0) return 'D-DAY'
+  return `D+${Math.abs(daysLeft)}`
+}
+
+function getProgressPercent(campaign) {
+  if (typeof campaign.progress === 'number') {
+    return Math.max(0, Math.min(100, Math.round(campaign.progress)))
+  }
+  // store에 progress가 없을 때 status 기반 placeholder
+  const fallbackByStatus = { draft: 10, review: 70, live: 50, paused: 30, completed: 100 }
+  return fallbackByStatus[campaign.status] ?? 0
+}
+
+function getTaskCount(campaign) {
+  const list = store.tasks
+  if (!Array.isArray(list)) return 0
+  return list.filter((task) => task?.campaignId === campaign.id).length
 }
 
 function clamp(value, min, max) {
@@ -356,7 +398,7 @@ function handleFolderDrop(event) {
 function handleGlobalPointerDown(event) {
   const target = event.target
   if (!(target instanceof HTMLElement)) { closeCampaignMenu(); return }
-  if (contextCampaignId.value && !target.closest('.campaign-list__context-menu') && !target.closest('.campaign-list__item')) {
+  if (contextCampaignId.value && !target.closest('.campaign-list__context-menu') && !target.closest('.campaign-card')) {
     closeCampaignMenu()
   }
 }
@@ -377,6 +419,10 @@ onMounted(() => {
   const storedWidth = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)
   const parsedWidth = Number(storedWidth)
   if (Number.isFinite(parsedWidth)) setSidebarWidth(parsedWidth)
+  const storedViewMode = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY)
+  if (storedViewMode === 'compact' || storedViewMode === 'kpi') {
+    viewMode.value = storedViewMode
+  }
   window.addEventListener('pointerdown', handleGlobalPointerDown)
   window.addEventListener('keydown', handleGlobalKeydown)
 })
@@ -403,17 +449,28 @@ onBeforeUnmount(() => {
     <div class="campaign-list__inner">
       <div class="campaign-list__header">
         <span class="campaign-list__header-title">Campaigns</span>
-        <button
-          type="button"
-          class="campaign-list__create-btn"
-          :title="campaignLabels.createCampaign"
-          :aria-label="campaignLabels.createCampaign"
-          @click="openCreateModal"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
+        <div class="campaign-list__header-actions">
+          <button
+            type="button"
+            class="campaign-list__view-toggle"
+            :aria-pressed="viewMode === 'kpi'"
+            :title="viewMode === 'compact' ? '확장 보기로 전환' : '간단 보기로 전환'"
+            @click="toggleViewMode"
+          >
+            {{ viewMode === 'compact' ? '확장' : '간단' }}
+          </button>
+          <button
+            type="button"
+            class="campaign-list__create-btn"
+            :title="campaignLabels.createCampaign"
+            :aria-label="campaignLabels.createCampaign"
+            @click="openCreateModal"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="campaign-list__divider" />
@@ -422,19 +479,24 @@ onBeforeUnmount(() => {
         tag="nav"
         name="campaign-list-anim"
         class="campaign-list__nav"
+        :class="`campaign-list__nav--${viewMode}`"
         :aria-label="campaignSidebarText.campaignList"
       >
         <button
           v-for="campaign in visualSidebarCampaigns"
           :key="campaign.id"
           type="button"
-          class="campaign-list__item"
-          :class="{
-            active: store.activeCampaignId === campaign.id,
-            'campaign-list__item--dragging': draggedCampaignId === campaign.id,
-            'campaign-list__item--drop-before': dropTargetCampaignId === campaign.id && dropPlacement === 'before',
-            'campaign-list__item--drop-after': dropTargetCampaignId === campaign.id && dropPlacement === 'after',
-          }"
+          class="campaign-card"
+          :class="[
+            `campaign-card--${viewMode}`,
+            {
+              active: store.activeCampaignId === campaign.id,
+              'campaign-card--dragging': draggedCampaignId === campaign.id,
+              'campaign-card--drop-before': dropTargetCampaignId === campaign.id && dropPlacement === 'before',
+              'campaign-card--drop-after': dropTargetCampaignId === campaign.id && dropPlacement === 'after',
+            },
+          ]"
+          :style="{ '--campaign-color': campaign.color }"
           :aria-current="store.activeCampaignId === campaign.id ? 'page' : undefined"
           draggable="true"
           @click="selectCampaign(campaign.id)"
@@ -444,15 +506,68 @@ onBeforeUnmount(() => {
           @dragover="handleCampaignDragOver(campaign, $event)"
           @drop="handleCampaignDrop(campaign, $event)"
         >
-          <span class="campaign-list__item-dot" :style="{ background: campaign.color }" />
-          <span class="campaign-list__item-name">{{ campaign.name }}</span>
-          <span
-            v-if="campaign.status === 'paused' || campaign.status === 'completed'"
-            class="campaign-list__item-badge"
-            :class="`campaign-list__item-badge--${getCampaignStatusMeta(campaign.status).tone}`"
-          >
-            {{ getCampaignStatusMeta(campaign.status).label }}
-          </span>
+          <!-- compact (E2) -->
+          <template v-if="viewMode === 'compact'">
+            <span class="campaign-card__bar" />
+            <span class="campaign-card__body">
+              <span class="campaign-card__top">
+                <span class="campaign-card__title">{{ campaign.name }}</span>
+                <span v-if="getDaysLeft(campaign.endDate) !== null" class="campaign-card__dday">
+                  {{ formatDDay(getDaysLeft(campaign.endDate)) }}
+                </span>
+              </span>
+              <span class="campaign-card__bottom">
+                <span class="campaign-card__pct">{{ getProgressPercent(campaign) }}%</span>
+                <span class="campaign-card__progress">
+                  <i :style="{ width: `${getProgressPercent(campaign)}%` }" />
+                </span>
+                <span
+                  class="campaign-card__chip"
+                  :class="`campaign-card__chip--${getCampaignStatusMeta(campaign.status).tone}`"
+                >
+                  {{ getCampaignStatusMeta(campaign.status).label }}
+                </span>
+              </span>
+            </span>
+          </template>
+
+          <!-- kpi (E3) -->
+          <template v-else>
+            <span class="campaign-card__head">
+              <span class="campaign-card__title">{{ campaign.name }}</span>
+              <span
+                class="campaign-card__chip"
+                :class="`campaign-card__chip--${getCampaignStatusMeta(campaign.status).tone}`"
+              >
+                {{ getCampaignStatusMeta(campaign.status).label }}
+              </span>
+            </span>
+            <span class="campaign-card__kpis">
+              <span class="campaign-card__kpi">
+                <b>{{ getProgressPercent(campaign) }}<i>%</i></b>
+                <em>진행</em>
+              </span>
+              <span class="campaign-card__kpi-sep" />
+              <span class="campaign-card__kpi">
+                <template v-if="getDaysLeft(campaign.endDate) !== null">
+                  <b>{{ Math.abs(getDaysLeft(campaign.endDate)) }}<i>d</i></b>
+                  <em>{{ getDaysLeft(campaign.endDate) >= 0 ? '남은 일수' : '초과' }}</em>
+                </template>
+                <template v-else>
+                  <b>-</b>
+                  <em>일정 미정</em>
+                </template>
+              </span>
+              <span class="campaign-card__kpi-sep" />
+              <span class="campaign-card__kpi">
+                <b>{{ getTaskCount(campaign) }}</b>
+                <em>작업</em>
+              </span>
+            </span>
+            <span class="campaign-card__progress campaign-card__progress--full">
+              <i :style="{ width: `${getProgressPercent(campaign)}%` }" />
+            </span>
+          </template>
         </button>
       </TransitionGroup>
 
@@ -490,7 +605,7 @@ onBeforeUnmount(() => {
       :aria-label="store.sidebarCollapsed ? '캠페인 목록 열기' : '캠페인 목록 닫기'"
       @click="store.toggleSidebar"
     >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <path v-if="store.sidebarCollapsed" d="m9 18 6-6-6-6" />
         <path v-else d="m15 18-6-6 6-6" />
       </svg>
@@ -603,16 +718,16 @@ onBeforeUnmount(() => {
 
 .campaign-list__toggle {
   position: absolute;
-  right: -12px;
+  right: -16px;
   top: 50%;
   transform: translateY(-50%);
   z-index: 25;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--panel-color);
   border: 1px solid var(--border-color);
-  color: var(--muted-text);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -642,6 +757,42 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.campaign-list__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.campaign-list__view-toggle {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.campaign-list__view-toggle:hover {
+  background: var(--panel-muted);
+  color: var(--text-primary);
+  border-color: var(--border-strong, var(--color-primary-500));
+}
+
+.campaign-list__view-toggle[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--color-primary-500) 12%, transparent);
+  color: var(--color-primary-600);
+  border-color: color-mix(in srgb, var(--color-primary-500) 22%, transparent);
 }
 
 .campaign-list__create-btn {
@@ -684,11 +835,12 @@ onBeforeUnmount(() => {
 .campaign-list__nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0 8px;
   flex: 1;
   overflow-y: auto;
 }
+
+.campaign-list__nav--compact { padding: 6px 8px; gap: 0; }
+.campaign-list__nav--kpi { padding: 8px; gap: 0; }
 
 .campaign-list__nav::-webkit-scrollbar {
   width: 4px;
@@ -699,42 +851,36 @@ onBeforeUnmount(() => {
   border-radius: 4px;
 }
 
-.campaign-list__item {
+/* 캠페인 카드 공통 */
+.campaign-card {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
   width: 100%;
-  min-height: 34px;
-  padding: 6px 10px;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--muted-text);
-  border: none;
+  background: var(--panel-color);
+  border: 1px solid var(--border-color);
   cursor: pointer;
   text-align: left;
-  font-size: 13px;
-  font-weight: 500;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.campaign-list__item:hover {
-  background: var(--panel-muted);
+  font-family: inherit;
   color: var(--text-primary);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
-.campaign-list__item.active {
-  background: color-mix(in srgb, var(--color-primary-500) 10%, transparent);
-  color: var(--color-primary-600);
-  box-shadow: inset 3px 0 0 var(--color-primary-500);
+.campaign-card:hover {
+  border-color: var(--border-strong, var(--color-primary-500));
+  background: var(--panel-muted);
 }
 
-.campaign-list__item--dragging { opacity: 0.4; }
+.campaign-card.active {
+  border-color: var(--campaign-color, var(--color-primary-500));
+  background: color-mix(in srgb, var(--campaign-color, var(--color-primary-500)) 8%, var(--panel-color));
+}
 
-.campaign-list__item--drop-before::before,
-.campaign-list__item--drop-after::after {
+.campaign-card--dragging { opacity: 0.4; }
+
+.campaign-card--drop-before::before,
+.campaign-card--drop-after::after {
   content: '';
   position: absolute;
   left: 6px;
@@ -745,39 +891,217 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.campaign-list__item--drop-before::before { top: -3px; }
-.campaign-list__item--drop-after::after { bottom: -3px; }
+.campaign-card--drop-before::before { top: -3px; }
+.campaign-card--drop-after::after { bottom: -3px; }
 
-.campaign-list__item-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+/* compact (E2) */
+.campaign-card--compact {
+  display: flex;
+  align-items: stretch;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 5px;
+  padding: 0;
+}
+
+.campaign-card--compact .campaign-card__bar {
+  width: 3px;
+  background: var(--campaign-color, var(--color-primary-500));
   flex-shrink: 0;
 }
 
-.campaign-list__item-name {
+.campaign-card--compact .campaign-card__body {
   flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.campaign-card--compact .campaign-card__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.campaign-card--compact .campaign-card__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.campaign-card--compact .campaign-card__dday {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--muted-text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.campaign-card--compact .campaign-card__bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.campaign-card--compact .campaign-card__pct {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-secondary, var(--text-primary));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 30px;
+}
+
+.campaign-card__progress {
+  flex: 1;
+  height: 3px;
+  background: var(--panel-muted);
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.campaign-card__progress i {
+  display: block;
+  height: 100%;
+  background: var(--campaign-color, var(--color-primary-500));
+  border-radius: 2px;
+}
+
+/* kpi (E3) */
+.campaign-card--kpi {
+  display: block;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+}
+
+.campaign-card--kpi:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.campaign-card--kpi.active {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--campaign-color, var(--color-primary-500)) 18%, transparent);
+}
+
+.campaign-card--kpi .campaign-card__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.campaign-card--kpi .campaign-card__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.campaign-card--kpi .campaign-card__kpis {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.campaign-card--kpi .campaign-card__kpi {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.campaign-card--kpi .campaign-card__kpi b {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.campaign-card--kpi .campaign-card__kpi b i {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted-text);
+  margin-left: 1px;
+}
+
+.campaign-card--kpi .campaign-card__kpi em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-text);
   white-space: nowrap;
 }
 
-.campaign-list__item-badge {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: var(--radius-full);
+.campaign-card--kpi.active .campaign-card__kpi b {
+  color: var(--campaign-color, var(--color-primary-500));
 }
 
-.campaign-list__item-badge--completed {
+.campaign-card--kpi .campaign-card__kpi-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  flex-shrink: 0;
+}
+
+.campaign-card--kpi .campaign-card__progress--full {
+  display: block;
+  width: 100%;
+}
+
+/* 상태 칩 (공통) */
+.campaign-card__chip {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.campaign-card__chip--live {
   background: var(--color-success-light);
   color: var(--color-success-dark);
 }
 
-.campaign-list__item-badge--paused {
+.campaign-card__chip--review {
   background: var(--color-warning-light);
   color: var(--color-warning-dark);
+}
+
+.campaign-card__chip--paused {
+  background: var(--panel-muted);
+  color: var(--muted-text);
+}
+
+.campaign-card__chip--draft {
+  background: var(--color-primary-100, var(--panel-muted));
+  color: var(--color-primary-700, var(--text-primary));
+}
+
+.campaign-card__chip--completed {
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
 }
 
 .campaign-list__footer {

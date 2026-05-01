@@ -3,6 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { GetCampaignDetails } from '@/api/campaigns'
+import CampaignResourcesView from '@/views/CampaignResourcesView.vue'
+import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
 import {
   ListMilestones,
   ListTaskParts,
@@ -77,7 +79,7 @@ const metadataDraft = ref({
   partnersText: '',
 })
 
-const tabs = ["캠페인 오버뷰", "팀 보드 보기", "레퍼런스 탭", "참여자 설정", "캠페인 성과/KPI"];
+const tabs = ["캠페인 오버뷰", "팀 보드 보기", "레퍼런스 탭", "자료실", "검수/승인", "참여자 설정", "캠페인 성과/KPI"];
 
 const handleTabClick = async (tabName) => {
   activeTab.value = tabName;
@@ -1282,6 +1284,14 @@ watch(
       </div>
     </section>
 
+    <section v-else-if="activeTab === '자료실'" class="tab-surface">
+      <CampaignResourcesView />
+    </section>
+
+    <section v-else-if="activeTab === '검수/승인'" class="tab-surface">
+      <ReviewApprovalView />
+    </section>
+
     <section v-else-if="activeTab === '참여자 설정'" class="tab-surface">
       <article class="panel">
         <div class="panel__header">
@@ -1527,7 +1537,7 @@ watch(
     <Teleport to="body">
       <div
         v-if="isPartModalOpen"
-        class="task-modal-backdrop"
+        class="task-modal-backdrop task-modal-backdrop--anchor-top"
         role="presentation"
         @click.self="closePartCreateModal"
         @keydown.esc="closePartCreateModal"
@@ -2661,6 +2671,11 @@ textarea:disabled {
   overflow-y: auto;
   background: rgba(15, 23, 42, 0.46);
   padding: 24px;
+}
+
+.task-modal-backdrop--anchor-top {
+  align-items: start;
+  padding-top: 80px;
 }
 
 :global(:root[data-theme='dark']) .task-modal-backdrop {

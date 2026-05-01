@@ -4,6 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignDto;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.organization.model.OrganizationType;
+import org.example.backend.user.model.User;
+import org.example.backend.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +23,7 @@ public class CampaignService {
     private static final List<String> ALLOWED_STATUSES = List.of("draft", "review", "live", "paused", "completed");
 
     private final CampaignRepository campaignRepository;
+    private final UserRepository userRepository;
 
     public List<CampaignDto.Res> listCampaigns(String ownerLoginId) {
         return campaignRepository.findAllByOwnerLoginIdOrderByIdxDesc(ownerLoginId).stream()
@@ -29,6 +33,14 @@ public class CampaignService {
 
     @Transactional
     public CampaignDto.Res createCampaign(String ownerLoginId, CampaignDto.UpsertReq dto) {
+        User owner = userRepository.findUserById(ownerLoginId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found."));
+
+        if (owner.getOrganization() != null
+                && owner.getOrganization().getType() == OrganizationType.EXTERNAL_PARTNER) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "외부 파트너는 캠페인을 생성할 수 없습니다.");
+        }
+
         String name = normalizeRequired(dto.name(), "Campaign name is required.");
 
         Campaign campaign = Campaign.builder()
