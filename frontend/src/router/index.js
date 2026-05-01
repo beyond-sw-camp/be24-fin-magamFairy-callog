@@ -65,6 +65,15 @@ const routes = [
         },
       },
       {
+        path: 'team-board',
+        name: 'team-board',
+        component: () => import('@/views/TeamBoardView.vue'),
+        meta: {
+          title: '팀 보드',
+          section: '전체 협업 팀보드',
+        },
+      },
+      {
         path: 'overview',
         name: 'overview',
         component: () => import('@/views/OverView.vue'),
@@ -83,13 +92,13 @@ const routes = [
         },
       },
       {
-        path: 'admin/user',
+        path: 'usercreate',
         name: 'user-provisioning',
         component: () => import('@/views/UserProvisioningView.vue'),
         meta: {
           requiresAccountCreator: true,
-          title: 'USER 계정 발급',
-          section: '관리자',
+          title: '인사관리',
+          section: '계정 생성 · 계정 삭제 · 비밀번호 재발급',
         },
       },
       {
@@ -198,6 +207,14 @@ const routes = [
           guestOnly: true,
           title: '로그인',
           section: '로그인',
+        },
+      },
+      {
+        path: 'signup',
+        name: 'partner-signup',
+        component: () => import('@/views/SignupView.vue'),
+        meta: {
+          title: '제휴사 회원가입',
         },
       },
     ],

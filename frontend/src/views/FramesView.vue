@@ -1,709 +1,851 @@
 <script setup>
 import { computed, ref } from 'vue'
 
-const tabs = [
-  { value: 'library', label: '\uD504\uB808\uC784 \uB77C\uC774\uBE0C\uB7EC\uB9AC', hint: '\uC804\uCCB4 \uAE30\uC900' },
-  { value: 'reference', label: '\uB808\uD37C\uB7F0\uC2A4 \uAE30\uBC18 \uC0DD\uC131', hint: '\uC0DD\uC131 \uD6C4\uBCF4' },
-  { value: 'standard', label: '\uD45C\uC900 \uD504\uB808\uC784', hint: '\uACF5\uC2DD \uAE30\uC900' },
-]
-
-const workTypes = [
-  { value: 'all', label: '\uC804\uCCB4' },
-  { value: 'planning', label: '\uAE30\uD68D' },
-  { value: 'workorder', label: '\uC6CC\uD06C\uC624\uB354' },
-  { value: 'review', label: '\uAC80\uC218 \uC694\uCCAD' },
-  { value: 'report', label: '\uACB0\uACFC \uBCF4\uACE0' },
-]
-
-const statusLabels = {
-  approved: '\uC2B9\uC778 \uC644\uB8CC',
-  draft: '\uCD08\uC548',
-  review: '\uAC80\uC218 \uC911',
-}
-
-const sourceLabels = {
-  basic: '\uAE30\uBCF8 \uC81C\uACF5',
-  reference: '\uB808\uD37C\uB7F0\uC2A4 \uC0DD\uC131',
+const t = {
+  eyebrow: '\uCEA0\uD398\uC778 \uC2E4\uD589 \uAE30\uC900',
+  title: '\uCEA0\uD398\uC778 \uD504\uB808\uC784 \uB77C\uC774\uBE0C\uB7EC\uB9AC',
+  desc: '\uBCF8\uC0AC, \uD611\uB825\uC0AC, \uB300\uD589\uC0AC\uAC00 \uAC19\uC740 \uAE30\uC900\uC73C\uB85C \uCEA0\uD398\uC778 \uBB38\uC11C\uB97C \uC791\uC131\uD558\uACE0 \uAC80\uC218\uD558\uB294 \uC2E4\uD589 \uAD6C\uC870\uC785\uB2C8\uB2E4.',
+  all: '\uC804\uCCB4',
+  newFrame: '\uC0C8 \uD504\uB808\uC784',
+  aiDraft: 'AI \uCD08\uC548',
+  standardZone: '\uD45C\uC900 \uD504\uB808\uC784\uC874',
+  referenceZone: '\uB808\uD37C\uB7F0\uC2A4 \uAE30\uBC18 \uD504\uB808\uC784\uC874',
+  draftZone: '\uAC80\uD1A0 \uC911 \uD504\uB808\uC784\uC874',
+  standardDesc: '\uBCF8\uC0AC \uC2B9\uC778\uC744 \uAC70\uCE5C \uACF5\uC2DD \uAE30\uC900',
+  referenceDesc: '\uC644\uB8CC \uCEA0\uD398\uC778 \uC0B0\uCD9C\uBB3C\uC5D0\uC11C \uCD94\uCD9C\uD55C \uC7AC\uC0AC\uC6A9 \uAD6C\uC870',
+  draftDesc: '\uC544\uC9C1 \uAC80\uD1A0\uB098 \uC2B9\uC778\uC774 \uD544\uC694\uD55C \uD504\uB808\uC784',
+  detail: '\uD504\uB808\uC784 \uAD6C\uC131',
+  structureInfo: '\uD504\uB808\uC784 \uAD6C\uC131 \uBCF4\uAE30',
+  close: '\uB2EB\uAE30',
+  purpose: '\uC0AC\uC6A9 \uBAA9\uC801',
+  required: '\uD544\uC218 \uC785\uB825 \uD56D\uBAA9',
+  tone: '\uC0AC\uB0B4 \uD1A4\uC564\uB9E4\uB108',
+  banned: '\uAE08\uC9C0\uC5B4 / \uAE08\uC9C0 \uD45C\uD604',
+  evidence: '\uADFC\uAC70 / \uC81C\uCD9C \uC790\uB8CC',
+  channel: '\uCC44\uB110 / \uC81C\uCD9C \uADDC\uACA9',
+  review: '\uAC80\uC218 \uB2E8\uACC4',
+  approver: '\uC2B9\uC778 \uAD8C\uD55C',
+  reuse: '\uC7AC\uC0AC\uC6A9 \uAE30\uC900',
+  judge: 'AI \uD310\uC0AC',
+  judgeDesc: '\uBB38\uC11C\uB97C \uC62C\uB9AC\uBA74 \uC120\uD0DD\uD55C \uD504\uB808\uC784\uC758 \uD544\uC218 \uD56D\uBAA9, \uD1A4\uC564\uB9E4\uB108, \uAE08\uC9C0\uC5B4, \uC81C\uCD9C \uADDC\uACA9\uC744 \uAE30\uC900\uC73C\uB85C \uC801\uD569\uC131\uC744 \uD310\uC815\uD569\uB2C8\uB2E4.',
+  upload: '\uBB38\uC11C \uC5C5\uB85C\uB4DC',
+  waiting: '\uAC80\uD1A0 \uB300\uAE30',
+  pass: '\uC801\uD569',
+  caution: '\uBCF4\uC644 \uD544\uC694',
+  apply: '\uCEA0\uD398\uC778\uC5D0 \uC801\uC6A9',
+  makeStandard: '\uD45C\uC900\uC73C\uB85C \uC2B9\uACA9',
+  createFromReference: '\uB808\uD37C\uB7F0\uC2A4\uC5D0\uC11C \uC0DD\uC131',
 }
 
 const frames = [
   {
-    id: 'frame-vip-talk',
-    name: 'VIP \uCD08\uCCAD \uC54C\uB9BC\uD1A1 \uCEA0\uD398\uC778 \uD504\uB808\uC784',
-    type: 'review',
-    typeLabel: '\uAC80\uC218 \uC694\uCCAD',
-    source: 'basic',
-    status: 'approved',
-    standard: true,
+    id: 'vip-talk-standard',
+    zone: 'standard',
+    type: '\uAC80\uC218 \uC694\uCCAD',
+    name: 'VIP \uCD08\uCCAD \uC54C\uB9BC\uD1A1 \uD45C\uC900 \uD504\uB808\uC784',
+    status: '\uACF5\uC2DD',
     version: 'v2.1',
+    used: 18,
     updatedAt: '2026.04.24',
-    campaigns: 12,
-    completion: 100,
-    summary: 'VIP \uACE0\uAC1D\uAD70 \uB300\uC0C1 \uC54C\uB9BC\uD1A1\uC5D0 \uD544\uC694\uD55C \uD544\uC218 \uBB38\uAD6C, \uAE08\uC9C0 \uD45C\uD604, \uC2B9\uC778\uC790\uB97C \uACE0\uC815\uD569\uB2C8\uB2E4.',
-    purpose: '\uBA54\uC2DC\uC9C0\uB85C \uD769\uC5B4\uC9C0\uB294 \uD53C\uB4DC\uBC31\uC744 \uC904\uC774\uACE0 \uC2B9\uC778 \uC774\uB825\uC744 \uCEA0\uD398\uC778 \uC548\uC5D0 \uB0A8\uAE41\uB2C8\uB2E4.',
-    recommend: '\uC6CC\uD06C\uC624\uB354 \uC0C1\uD0DC\uAC00 \uC791\uC131 \uC911\uC5D0\uC11C \uAC80\uC218 \uC694\uCCAD\uC73C\uB85C \uBCC0\uACBD\uB420 \uB54C \uC790\uB3D9 \uC801\uC6A9',
-    required: ['\uB300\uC0C1 \uACE0\uAC1D\uAD70', '\uD575\uC2EC \uD61C\uD0DD', '\uBC1C\uC1A1 \uC77C\uC815', '\uBC84\uD2BC \uB9C1\uD06C'],
-    rules: ['\uBCF8\uBB38 900\uC790 \uC774\uB0B4', '\uBC84\uD2BC \uCD5C\uB300 2\uAC1C', '\uD61C\uD0DD \uC870\uAC74 \uD45C\uAE30 \uD544\uC218'],
-    review: ['\uB2F4\uB2F9\uC790 \uAC80\uC218 \uC694\uCCAD', '\uAC80\uC218\uC790 \uC218\uC815/\uC2B9\uC778', '\uBCF8\uC0AC \uCD5C\uC885 \uC2B9\uC778', '\uCD5C\uC885\uBCF8 \uC7A0\uAE08'],
-    approvers: ['\uBCF8\uC0AC \uBE0C\uB79C\uB4DC \uB2F4\uB2F9', '\uAC24\uB7EC\uB9AC\uC544 CRM \uB2F4\uB2F9'],
-    history: ['v2.1: \uBC84\uD2BC \uB9C1\uD06C \uAC80\uC218 \uD56D\uBAA9 \uCD94\uAC00', 'v2.0: VIP \uC138\uADF8\uBA3C\uD2B8 \uAE30\uC900 \uCD94\uAC00', 'v1.5: \uAE08\uC9C0 \uD45C\uD604 \uBAA9\uB85D \uC815\uB9AC'],
+    score: 96,
+    summary: 'VIP \uACE0\uAC1D \uB300\uC0C1 \uC54C\uB9BC\uD1A1\uC758 \uBB38\uAD6C, \uD61C\uD0DD \uD45C\uAE30, \uAC80\uC218 \uB77C\uC6B0\uD305\uC744 \uD45C\uC900\uD654\uD569\uB2C8\uB2E4.',
+    purpose: '\uCD08\uCCAD \uCF58\uD150\uCE20\uAC00 \uBE0C\uB79C\uB4DC \uD1A4\uACFC \uD61C\uD0DD \uACE0\uC9C0 \uAE30\uC900\uC744 \uB3D9\uC2DC\uC5D0 \uB9CC\uC871\uD558\uB3C4\uB85D \uAD00\uB9AC',
+    required: ['\uB300\uC0C1 \uACE0\uAC1D\uAD70', '\uCD08\uCCAD \uD61C\uD0DD', '\uC774\uC6A9 \uAE30\uAC04', '\uBC84\uD2BC \uB9C1\uD06C', '\uC720\uC758\uC0AC\uD56D'],
+    tone: ['\uD504\uB9AC\uBBF8\uC5C4\uD558\uB418 \uACFC\uC7A5\uD558\uC9C0 \uC54A\uC74C', '\uD61C\uD0DD\uBCF4\uB2E4 \uACE0\uAC1D \uACBD\uD5D8\uC744 \uBA3C\uC800 \uC124\uBA85', '\uBCF8\uC0AC \uD1B5\uD569 \uBA54\uC2DC\uC9C0\uC640 \uD45C\uD604 \uC77C\uCE58'],
+    banned: ['\uCD5C\uACE0', '\uBB34\uC870\uAC74', '\uB2E8\uB3C5 \uD61C\uD0DD', '\uD655\uC815 \uC218\uC775', '\uACFC\uB3C4\uD55C \uAE34\uAE09\uC131'],
+    evidence: ['\uCD5C\uC885 \uBB38\uAD6C \uD30C\uC77C', '\uD61C\uD0DD \uC870\uAC74 \uADFC\uAC70', '\uBC1C\uC1A1 \uB300\uC0C1 \uC138\uADF8\uBA3C\uD2B8', '\uAC80\uC218 \uC694\uCCAD \uB9C1\uD06C'],
+    channel: ['\uC54C\uB9BC\uD1A1 \uBCF8\uBB38 900\uC790 \uC774\uB0B4', '\uBC84\uD2BC \uCD5C\uB300 2\uAC1C', '\uD61C\uD0DD \uC870\uAC74 \uD45C\uAE30 \uD544\uC218'],
+    review: ['\uB2F4\uB2F9\uC790 \uCD08\uC548', '\uD611\uB825\uC0AC \uD655\uC778', '\uBCF8\uC0AC \uBE0C\uB79C\uB4DC \uAC80\uC218', '\uCD5C\uC885 \uC2B9\uC778'],
+    approver: ['\uBCF8\uC0AC \uBE0C\uB79C\uB4DC \uB9E4\uB2C8\uC800', '\uD611\uB825\uC0AC CRM \uB2F4\uB2F9'],
+    reuse: ['\uB3D9\uC77C VIP \uB300\uC0C1 \uCEA0\uD398\uC778', '\uC54C\uB9BC\uD1A1 \uCC44\uB110', '\uD61C\uD0DD \uC548\uB0B4\uD615 \uCF58\uD150\uCE20'],
   },
   {
-    id: 'frame-banner-workorder',
-    name: '\uACF5\uB3D9 \uBC30\uB108 \uC81C\uC791 \uC6CC\uD06C\uC624\uB354 \uD504\uB808\uC784',
-    type: 'workorder',
-    typeLabel: '\uC6CC\uD06C\uC624\uB354',
-    source: 'basic',
-    status: 'approved',
-    standard: true,
+    id: 'banner-standard',
+    zone: 'standard',
+    type: '\uC6CC\uD06C\uC624\uB354',
+    name: '\uACF5\uB3D9 \uBC30\uB108 \uC81C\uC791 \uD45C\uC900 \uD504\uB808\uC784',
+    status: '\uACF5\uC2DD',
     version: 'v1.8',
+    used: 11,
     updatedAt: '2026.04.22',
-    campaigns: 9,
-    completion: 92,
-    summary: '\uBC30\uB108 \uC81C\uC791 \uC694\uCCAD \uC2DC \uC0AC\uC774\uC988, CTA, \uC81C\uCD9C \uD30C\uC77C, \uB514\uC790\uC778 \uAC80\uC218 \uAE30\uC900\uC744 \uD1B5\uC77C\uD569\uB2C8\uB2E4.',
-    purpose: '\uBCF8\uC0AC, \uD611\uB825\uC0AC, \uB300\uD589\uC0AC\uAC00 \uAC19\uC740 \uC81C\uC791 \uC694\uCCAD \uAE30\uC900\uC73C\uB85C \uC6C0\uC9C1\uC774\uAC8C \uD569\uB2C8\uB2E4.',
-    recommend: '\uBC30\uB108/\uB514\uC790\uC778 \uC5C5\uBB34 \uC0DD\uC131 \uC2DC \uC6B0\uC120 \uCD94\uCC9C',
-    required: ['\uBC30\uB108 \uC704\uCE58', '\uC0AC\uC774\uC988', 'CTA', '\uC774\uBBF8\uC9C0 \uB808\uD37C\uB7F0\uC2A4'],
-    rules: ['PC 1920x640', 'MO 750x900', '\uC6D0\uBCF8 \uD30C\uC77C \uC81C\uCD9C', '\uB85C\uACE0 \uC138\uC774\uD504\uC874 \uC900\uC218'],
+    score: 92,
+    summary: '\uBC30\uB108 \uC81C\uC791 \uC694\uCCAD\uC5D0 \uD544\uC694\uD55C \uC0AC\uC774\uC988, CTA, \uB85C\uACE0 \uC0AC\uC6A9, \uC81C\uCD9C \uD30C\uC77C \uAE30\uC900\uC744 \uACE0\uC815\uD569\uB2C8\uB2E4.',
+    purpose: '\uB300\uD589\uC0AC\uC640 \uD611\uB825\uC0AC\uAC00 \uCC98\uC74C\uBD80\uD130 \uAC19\uC740 \uC81C\uC791 \uC694\uCCAD \uAE30\uC900\uC73C\uB85C \uC0B0\uCD9C\uBB3C\uC744 \uB9CC\uB4E4\uB3C4\uB85D \uAD00\uB9AC',
+    required: ['\uB178\uCD9C \uC704\uCE58', '\uC0AC\uC774\uC988', 'CTA', '\uC774\uBBF8\uC9C0 \uB808\uD37C\uB7F0\uC2A4', '\uCD5C\uC885 \uC0AC\uC6A9 \uCC44\uB110'],
+    tone: ['\uBA54\uC2DC\uC9C0\uB294 \uC9E7\uACE0 \uBA85\uD655\uD558\uAC8C', '\uD61C\uD0DD\uC740 \uC870\uAC74\uACFC \uD568\uAED8 \uD45C\uAE30', '\uBE0C\uB79C\uB4DC \uC2DC\uC120 \uD750\uB984 \uC720\uC9C0'],
+    banned: ['\uB85C\uACE0 \uBCC0\uD615', '\uC800\uD574\uC0C1\uB3C4 \uC774\uBBF8\uC9C0', '\uD61C\uD0DD \uC870\uAC74 \uC0DD\uB7B5', '\uBC84\uD2BC \uC5C6\uB294 CTA'],
+    evidence: ['\uC81C\uC791 \uC694\uCCAD\uC11C', '\uC0AC\uC774\uC988 \uBA85\uC138', '\uB85C\uACE0 \uC6D0\uBCF8', '\uCD5C\uC885 PSD/Figma \uB9C1\uD06C'],
+    channel: ['PC 1920x640', 'MO 750x900', '\uC6D0\uBCF8 \uD30C\uC77C \uC81C\uCD9C', '\uB85C\uACE0 \uC138\uC774\uD504\uC874 \uC900\uC218'],
     review: ['\uC81C\uC791 \uC694\uCCAD', '\uB514\uC790\uC778 \uAC80\uC218', '\uBB38\uAD6C \uAC80\uC218', '\uC2B9\uC778 \uC644\uB8CC'],
-    approvers: ['\uBCF8\uC0AC \uBE0C\uB79C\uB4DC \uB2F4\uB2F9', '\uB300\uD589\uC0AC AD'],
-    history: ['v1.8: \uBAA8\uBC14\uC77C \uBC30\uB108 \uADDC\uACA9 \uCD94\uAC00', 'v1.6: \uC6D0\uBCF8 \uD30C\uC77C \uC81C\uCD9C \uAE30\uC900 \uCD94\uAC00', 'v1.2: CTA \uAC80\uC218 \uAE30\uC900 \uCD94\uAC00'],
+    approver: ['\uBCF8\uC0AC \uBE0C\uB79C\uB4DC \uB2F4\uB2F9', '\uB300\uD589\uC0AC AD'],
+    reuse: ['\uACF5\uB3D9 \uBC30\uB108', '\uB79C\uB529 \uD788\uC5B4\uB85C', '\uC774\uBCA4\uD2B8 \uB178\uCD9C \uC601\uC5ED'],
   },
   {
-    id: 'frame-premium-ref',
-    name: '\uD504\uB9AC\uBBF8\uC5C4 \uB77C\uC774\uD504\uC2A4\uD0C0\uC77C \uCEA0\uD398\uC778 \uD504\uB808\uC784',
-    type: 'planning',
-    typeLabel: '\uAE30\uD68D',
-    source: 'reference',
-    status: 'review',
-    standard: false,
+    id: 'premium-reference',
+    zone: 'reference',
+    type: '\uAE30\uD68D',
+    name: '\uD504\uB9AC\uBBF8\uC5C4 \uB77C\uC774\uD504\uC2A4\uD0C0\uC77C \uB808\uD37C\uB7F0\uC2A4 \uD504\uB808\uC784',
+    status: '\uC2B9\uC778 \uD6C4\uBCF4',
     version: 'v0.9',
+    used: 1,
     updatedAt: '2026.04.26',
-    campaigns: 1,
-    completion: 76,
-    summary: '\uC774\uC804 VIP \uCD08\uCCAD \uCEA0\uD398\uC778 \uB808\uD37C\uB7F0\uC2A4\uC5D0\uC11C \uACE0\uAC1D\uAD70, \uD61C\uD0DD, \uCC44\uB110, \uC5ED\uD560 \uAD6C\uC870\uB97C \uCD94\uCD9C\uD588\uC2B5\uB2C8\uB2E4.',
-    purpose: '\uC131\uACF5\uD55C \uACF5\uB3D9 \uCEA0\uD398\uC778\uC758 \uAD6C\uC870\uB97C \uB2E4\uC74C \uCEA0\uD398\uC778 \uC2DC\uC791 \uAE30\uC900\uC73C\uB85C \uC7AC\uC0AC\uC6A9\uD569\uB2C8\uB2E4.',
-    recommend: '\uD504\uB9AC\uBBF8\uC5C4 \uACE0\uAC1D\uAD70\uACFC \uBCF5\uC218 \uD611\uB825\uC0AC\uAC00 \uD3EC\uD568\uB41C \uCEA0\uD398\uC778\uC5D0 \uCD94\uCC9C',
-    required: ['\uCEA0\uD398\uC778 \uBAA9\uC801', '\uCC38\uC5EC \uD611\uB825\uC0AC', '\uACE0\uAC1D \uC138\uADF8\uBA3C\uD2B8', '\uD575\uC2EC \uD61C\uD0DD'],
-    rules: ['\uD611\uB825\uC0AC\uBCC4 \uCC45\uC784\uC790 \uC9C0\uC815', '\uC131\uACFC \uC9C0\uD45C 3\uAC1C \uC774\uD558', '\uC77C\uC815 \uC8FC\uCC28 \uB2E8\uC704 \uD45C\uAE30'],
-    review: ['AI \uCD08\uC548', '\uBCF8\uC0AC \uAC80\uD1A0', '\uD611\uB825\uC0AC \uD655\uC778', '\uC800\uC7A5'],
-    approvers: ['\uBCF8\uC0AC PM', '\uD611\uB825\uC0AC \uAD00\uB9AC\uC790'],
-    history: ['v0.9: \uC131\uACFC \uC9C0\uD45C \uD56D\uBAA9 \uBCF4\uAC15', 'v0.6: \uD611\uB825\uC0AC \uC5ED\uD560 \uBD84\uB9AC', 'v0.3: \uB808\uD37C\uB7F0\uC2A4 \uCD08\uC548 \uC0DD\uC131'],
+    score: 78,
+    summary: '\uC644\uB8CC\uB41C VIP \uD504\uB9AC\uBDF0 \uCEA0\uD398\uC778\uC5D0\uC11C \uACE0\uAC1D\uAD70, \uD61C\uD0DD, \uD611\uB825\uC0AC \uC5ED\uD560\uC744 \uCD94\uCD9C\uD55C \uD504\uB808\uC784\uC785\uB2C8\uB2E4.',
+    purpose: '\uC131\uACF5 \uCEA0\uD398\uC778\uC758 \uC2E4\uD589 \uAD6C\uC870\uB97C \uB2E4\uC74C \uACF5\uB3D9 \uCEA0\uD398\uC778\uC758 \uCD08\uAE30 \uAE30\uD68D \uAE30\uC900\uC73C\uB85C \uC7AC\uC0AC\uC6A9',
+    required: ['\uCEA0\uD398\uC778 \uBAA9\uC801', '\uCC38\uC5EC \uD611\uB825\uC0AC', '\uACE0\uAC1D \uC138\uADF8\uBA3C\uD2B8', '\uD575\uC2EC \uD61C\uD0DD', '\uC131\uACFC \uC9C0\uD45C'],
+    tone: ['\uACC4\uC5F4\uC0AC\uBCC4 \uD61C\uD0DD\uC744 \uD558\uB098\uC758 \uACBD\uD5D8\uC73C\uB85C \uC5F0\uACB0', '\uC2E4\uD589 \uC8FC\uCCB4\uBCF4\uB2E4 \uACE0\uAC1D \uAC00\uCE58 \uC911\uC2EC', '\uD504\uB9AC\uBBF8\uC5C4 \uD1A4 \uC720\uC9C0'],
+    banned: ['\uD611\uB825\uC0AC \uAC04 \uC6B0\uC5F4 \uD45C\uD604', '\uD655\uC815\uB418\uC9C0 \uC54A\uC740 \uD61C\uD0DD', '\uBE44\uAD50 \uAD11\uACE0\uC131 \uBB38\uAD6C'],
+    evidence: ['\uC774\uC804 \uCEA0\uD398\uC778 \uACB0\uACFC \uBCF4\uACE0\uC11C', '\uCD5C\uC885 \uC0B0\uCD9C\uBB3C', '\uAC80\uC218 \uB85C\uADF8', '\uD611\uB825\uC0AC \uC5ED\uD560\uD45C'],
+    channel: ['\uC77C\uC815\uC740 \uC8FC\uCC28 \uB2E8\uC704\uB85C \uD45C\uAE30', '\uC131\uACFC \uC9C0\uD45C 3\uAC1C \uC774\uD558', '\uD611\uB825\uC0AC\uBCC4 \uCC45\uC784\uC790 \uD544\uC218'],
+    review: ['AI \uCD08\uC548', '\uBCF8\uC0AC PM \uAC80\uD1A0', '\uD611\uB825\uC0AC \uD655\uC778', '\uD45C\uC900 \uC2B9\uACA9 \uD310\uB2E8'],
+    approver: ['\uBCF8\uC0AC PM', '\uD611\uB825\uC0AC \uAD00\uB9AC\uC790'],
+    reuse: ['\uD504\uB9AC\uBBF8\uC5C4 \uACE0\uAC1D \uB300\uC0C1', '\uBCF5\uC218 \uD611\uB825\uC0AC \uCC38\uC5EC', '\uC624\uD504\uB77C\uC778 \uD589\uC0AC \uC5F0\uACC4'],
+  },
+  {
+    id: 'report-draft',
+    zone: 'draft',
+    type: '\uACB0\uACFC \uBCF4\uACE0',
+    name: '\uC131\uACFC \uAE30\uB85D \uBC0F \uC7AC\uC0AC\uC6A9 \uD504\uB808\uC784',
+    status: '\uAC80\uD1A0 \uC911',
+    version: 'v0.4',
+    used: 2,
+    updatedAt: '2026.04.23',
+    score: 64,
+    summary: '\uC885\uB8CC\uB41C \uCEA0\uD398\uC778\uC758 \uC131\uACFC, \uC774\uC288, \uCD5C\uC885 \uC0B0\uCD9C\uBB3C\uC744 \uB2E4\uC74C \uCEA0\uD398\uC778 \uC790\uC0B0\uC73C\uB85C \uC800\uC7A5\uD569\uB2C8\uB2E4.',
+    purpose: '\uCEA0\uD398\uC778 \uC885\uB8CC \uD6C4 \uCD5C\uC885 \uC790\uB8CC\uC640 \uC131\uACFC \uADFC\uAC70\uB97C \uCD95\uC801\uD574 \uD504\uB808\uC784 \uC0DD\uC131 \uC18C\uC2A4\uB85C \uC0AC\uC6A9',
+    required: ['\uC131\uACFC \uC9C0\uD45C', '\uCD5C\uC885 \uC0B0\uCD9C\uBB3C', '\uAC80\uC218 \uC774\uC288', '\uC7AC\uC0AC\uC6A9 \uD56D\uBAA9'],
+    tone: ['\uC131\uACFC\uB294 \uADFC\uAC70 \uC911\uC2EC\uC73C\uB85C \uAE30\uB85D', '\uC774\uC288\uB294 \uC6D0\uC778\uACFC \uC870\uCE58\uB97C \uBD84\uB9AC', '\uC7AC\uC0AC\uC6A9 \uAC00\uB2A5\uD55C \uAE30\uC900\uB9CC \uBA85\uD655\uD788 \uD45C\uAE30'],
+    banned: ['\uADFC\uAC70 \uC5C6\uB294 \uC131\uACFC \uD45C\uD604', '\uAC1C\uC778 \uD0D3 \uC911\uC2EC \uC774\uC288', '\uCD5C\uC885\uBCF8 \uB9C1\uD06C \uB204\uB77D'],
+    evidence: ['\uCD5C\uC885\uBCF8 \uB9C1\uD06C', '\uC131\uACFC \uB370\uC774\uD130', '\uAC80\uC218 \uC774\uC288 \uB85C\uADF8', '\uD68C\uACE0 \uBA54\uBAA8'],
+    channel: ['\uC9C0\uD45C \uADFC\uAC70 \uD544\uC218', '\uC774\uC288\uBCC4 \uC6D0\uC778/\uC870\uCE58 \uBD84\uB9AC', '\uD30C\uC77C \uB9C1\uD06C \uC720\uD6A8\uC131 \uD655\uC778'],
+    review: ['\uACB0\uACFC \uC785\uB825', '\uC131\uACFC \uD655\uC778', '\uB808\uD37C\uB7F0\uC2A4 \uBD84\uB958', '\uBCF4\uAD00'],
+    approver: ['\uBCF8\uC0AC PM', '\uB370\uC774\uD130 \uB2F4\uB2F9'],
+    reuse: ['\uACB0\uACFC \uBCF4\uACE0', '\uB808\uD37C\uB7F0\uC2A4 \uC800\uC7A5', 'AI \uD504\uB808\uC784 \uD559\uC2B5 \uC18C\uC2A4'],
   },
 ]
 
-const activeTab = ref('library')
-const activeType = ref('all')
 const selectedFrameId = ref(frames[0].id)
+const selectedZone = ref('all')
+const uploadedFileName = ref('')
+const showStructureInfo = ref(false)
 
-const libraryFrames = computed(() => {
-  if (activeTab.value === 'standard') return frames.filter((frame) => frame.standard)
-  if (activeTab.value === 'reference') return frames.filter((frame) => frame.source === 'reference')
-  return frames
-})
-
-const filteredFrames = computed(() => {
-  if (activeType.value === 'all') return libraryFrames.value
-  return libraryFrames.value.filter((frame) => frame.type === activeType.value)
-})
-
-const selectedFrame = computed(() => {
-  const available = filteredFrames.value
-  return available.find((frame) => frame.id === selectedFrameId.value) ?? available[0] ?? frames[0]
-})
-
-const checkItems = computed(() => [
-  { label: '\uD544\uC218 \uD56D\uBAA9', value: selectedFrame.value.required.length + '\uAC1C' },
-  { label: '\uAC80\uC218 \uAE30\uC900', value: selectedFrame.value.review.length + '\uAC1C' },
-  { label: '\uC2B9\uC778\uC790', value: selectedFrame.value.approvers.length + '\uBA85' },
-  { label: '\uC0AC\uC6A9 \uCEA0\uD398\uC778', value: selectedFrame.value.campaigns + '\uAC74' },
+const zones = computed(() => [
+  { id: 'standard', title: t.standardZone, desc: t.standardDesc, icon: 'verified', frames: frames.filter((frame) => frame.zone === 'standard') },
+  { id: 'reference', title: t.referenceZone, desc: t.referenceDesc, icon: 'auto_awesome', frames: frames.filter((frame) => frame.zone === 'reference') },
+  { id: 'draft', title: t.draftZone, desc: t.draftDesc, icon: 'rate_review', frames: frames.filter((frame) => frame.zone === 'draft') },
 ])
 
-function selectTab(tab) {
-  activeTab.value = tab
-  activeType.value = 'all'
-  selectedFrameId.value = libraryFrames.value[0]?.id ?? frames[0].id
+const visibleZones = computed(() => {
+  if (selectedZone.value === 'all') return zones.value
+  return zones.value.filter((zone) => zone.id === selectedZone.value)
+})
+
+const selectedFrame = computed(() => frames.find((frame) => frame.id === selectedFrameId.value) ?? frames[0])
+
+const structureGroups = computed(() => [
+  { title: t.required, icon: 'fact_check', items: selectedFrame.value.required },
+  { title: t.tone, icon: 'record_voice_over', items: selectedFrame.value.tone },
+  { title: t.banned, icon: 'block', items: selectedFrame.value.banned },
+  { title: t.evidence, icon: 'attach_file', items: selectedFrame.value.evidence },
+  { title: t.channel, icon: 'rule', items: selectedFrame.value.channel },
+  { title: t.reuse, icon: 'history', items: selectedFrame.value.reuse },
+])
+
+const judgeItems = computed(() => [
+  { label: t.required, result: selectedFrame.value.score >= 80 ? t.pass : t.caution },
+  { label: t.tone, result: selectedFrame.value.score >= 70 ? t.pass : t.caution },
+  { label: t.banned, result: selectedFrame.value.banned.length ? t.caution : t.pass },
+  { label: t.channel, result: selectedFrame.value.channel.length >= 3 ? t.pass : t.caution },
+])
+
+function selectFrame(frame) {
+  selectedFrameId.value = frame.id
+  showStructureInfo.value = false
 }
 
-function selectType(type) {
-  activeType.value = type
-  selectedFrameId.value = filteredFrames.value[0]?.id ?? frames[0].id
+function updateFile(event) {
+  uploadedFileName.value = event.target.files?.[0]?.name ?? ''
 }
 </script>
 
 <template>
-  <section class="campaign-frame-console">
-    <aside class="frame-left">
-      <div class="brand-card">
-        <div class="brand-mark">F</div>
-        <div>
-          <p>CAMPAIGN FRAME</p>
-          <h2>캠페인 프레임 관리</h2>
-        </div>
+  <section class="frames-page">
+    <header class="frames-hero">
+      <div>
+        <p class="section-eyebrow">{{ t.eyebrow }}</p>
+        <h2>{{ t.title }}</h2>
+        <span>{{ t.desc }}</span>
       </div>
-      <section class="definition-card">
-        <p>정의</p>
-        <strong>캠페인 프레임은 공동 캠페인의 실행 기준입니다.</strong>
-        <span>필수 항목, 금지 표현, 제출 규격, 승인 라우팅을 구조화합니다.</span>
-      </section>
-      <section class="side-panel">
-        <div class="side-title">
-          <h3>프레임 유형</h3>
-          <button type="button">+ 새 프레임</button>
-        </div>
-        <button
-          v-for="type in workTypes"
-          :key="type.value"
-          type="button"
-          :class="['type-row', { active: activeType === type.value }]"
-          @click="selectType(type.value)"
-        >
-          <span>{{ type.label }}</span>
-          <em>{{ type.value === 'all' ? frames.length : frames.filter((frame) => frame.type === type.value).length }}</em>
+      <div class="hero-actions">
+        <button type="button" class="soft-action">
+          <span class="material-symbols-outlined">auto_awesome</span>
+          {{ t.aiDraft }}
         </button>
-      </section>
-      <section class="frame-stack">
-        <button
-          v-for="frame in filteredFrames"
-          :key="frame.id"
-          type="button"
-          :class="['library-card', { active: selectedFrame.id === frame.id }]"
-          @click="selectedFrameId = frame.id"
-        >
-          <span>{{ frame.typeLabel }}</span>
-          <strong>{{ frame.name }}</strong>
-          <small>{{ sourceLabels[frame.source] }} · {{ frame.version }} · {{ frame.campaigns }}회 사용</small>
+        <button type="button" class="primary-action">
+          <span class="material-symbols-outlined">add</span>
+          {{ t.newFrame }}
         </button>
-      </section>
-    </aside>
+      </div>
+    </header>
 
-    <main class="frame-main">
-      <section class="hero-card">
-        <div>
-          <p>CONTROL STANDARD</p>
-          <h1>{{ selectedFrame.name }}</h1>
-          <span>{{ selectedFrame.summary }}</span>
-        </div>
-        <div class="completion-card">
-          <span>프레임 완성도</span>
-          <strong>{{ selectedFrame.completion }}%</strong>
-          <em>{{ selectedFrame.standard ? '공식 프레임' : '검토 프레임' }} · {{ selectedFrame.updatedAt }}</em>
-        </div>
-      </section>
-      <section class="top-tabs">
-        <button
-          v-for="tab in tabs"
-          :key="tab.value"
-          type="button"
-          :class="['top-tab', { active: activeTab === tab.value }]"
-          @click="selectTab(tab.value)"
-        >
-          <strong>{{ tab.label }}</strong>
-          <span>{{ tab.hint }}</span>
-        </button>
-      </section>
-      <section class="summary-grid">
-        <article>
-          <p>PURPOSE</p>
-          <h3>이 프레임의 역할</h3>
-          <span>{{ selectedFrame.purpose }}</span>
-        </article>
-        <article>
-          <p>AUTO RECOMMEND</p>
-          <h3>추천 조건</h3>
-          <span>{{ selectedFrame.recommend }}</span>
-        </article>
-        <article>
-          <p>APPLIES TO</p>
-          <h3>적용 대상</h3>
-          <div class="tag-list">
-            <em>{{ selectedFrame.typeLabel }}</em>
-            <em>{{ sourceLabels[selectedFrame.source] }}</em>
-            <em>{{ statusLabels[selectedFrame.status] }}</em>
-          </div>
-        </article>
-      </section>
-      <section class="detail-grid">
-        <article class="large-panel">
-          <div class="panel-head">
-            <div>
-              <p>VERSION HISTORY</p>
-              <h3>버전 이력</h3>
-            </div>
-            <span>{{ selectedFrame.version }}</span>
-          </div>
-          <ul class="soft-list">
-            <li v-for="item in selectedFrame.history" :key="item">{{ item }}</li>
-          </ul>
-        </article>
-        <article class="large-panel">
-          <div class="panel-head">
-            <div>
-              <p>STRUCTURE</p>
-              <h3>필수 구조</h3>
-            </div>
-          </div>
-          <div class="mini-grid">
-            <div>
-              <strong>필수 입력</strong>
-              <ul>
-                <li v-for="item in selectedFrame.required" :key="item">{{ item }}</li>
-              </ul>
-            </div>
-            <div>
-              <strong>제출 기준</strong>
-              <ul>
-                <li v-for="item in selectedFrame.rules" :key="item">{{ item }}</li>
-              </ul>
-            </div>
-          </div>
-        </article>
-      </section>
-    </main>
-
-    <aside class="frame-right">
-      <section class="approval-card">
-        <p>APPROVAL ROUTE</p>
-        <h3>승인 라우팅</h3>
+    <section class="review-strip" aria-label="frame review steps">
+      <article class="review-metric">
+        <h3>{{ t.review }}</h3>
         <ol>
           <li v-for="(step, index) in selectedFrame.review" :key="step">
             <span>{{ index + 1 }}</span>
-            <strong>{{ step }}</strong>
+            {{ step }}
           </li>
         </ol>
-      </section>
-      <section class="right-panel">
-        <p>FRAME CHECK</p>
-        <h3>프레임 품질 점검</h3>
-        <dl>
-          <div v-for="item in checkItems" :key="item.label">
+      </article>
+    </section>
+
+    <section class="frames-layout">
+      <main class="library-column">
+        <div class="library-head">
+          <div>
+            <p class="section-eyebrow">FRAME LIBRARY</p>
+            <h3>{{ t.title }}</h3>
+          </div>
+          <div class="zone-filter" aria-label="frame zone filter">
+            <button type="button" :class="{ active: selectedZone === 'all' }" @click="selectedZone = 'all'">
+              {{ t.all }} ({{ frames.length }})
+            </button>
+            <button
+              v-for="zone in zones"
+              :key="zone.id"
+              type="button"
+              :class="{ active: selectedZone === zone.id }"
+              @click="selectedZone = zone.id"
+            >
+              {{ zone.title }} ({{ zone.frames.length }})
+            </button>
+          </div>
+        </div>
+
+        <section v-for="zone in visibleZones" :key="zone.id" class="frame-zone">
+          <div class="zone-head">
+            <span class="material-symbols-outlined">{{ zone.icon }}</span>
+            <div>
+              <h4>{{ zone.title }}</h4>
+              <p>{{ zone.desc }}</p>
+            </div>
+            <strong>{{ zone.frames.length }}</strong>
+          </div>
+
+          <div class="zone-card-grid">
+            <button
+              v-for="frame in zone.frames"
+              :key="frame.id"
+              type="button"
+              class="frame-card"
+              :class="{ active: selectedFrame.id === frame.id }"
+              @click="selectFrame(frame)"
+            >
+              <span>{{ frame.type }} / {{ frame.status }}</span>
+              <strong>{{ frame.name }}</strong>
+              <p>{{ frame.summary }}</p>
+              <div>
+                <small>{{ frame.version }} / {{ frame.updatedAt }}</small>
+                <em>{{ frame.used }} used</em>
+              </div>
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <aside class="judge-panel">
+        <div class="judge-head">
+          <span class="material-symbols-outlined">gavel</span>
+          <div>
+            <p class="section-eyebrow">{{ t.judge }}</p>
+            <h3>{{ t.judge }}</h3>
+          </div>
+        </div>
+        <p class="judge-desc">{{ t.judgeDesc }}</p>
+
+        <label class="upload-box">
+          <input type="file" @change="updateFile" />
+          <span class="material-symbols-outlined">upload_file</span>
+          <strong>{{ uploadedFileName || t.upload }}</strong>
+          <small>{{ selectedFrame.name }}</small>
+        </label>
+
+        <div class="judge-score">
+          <span>{{ uploadedFileName ? t.caution : t.waiting }}</span>
+          <strong>{{ uploadedFileName ? selectedFrame.score : '--' }}</strong>
+        </div>
+
+        <dl class="judge-checks">
+          <div v-for="item in judgeItems" :key="item.label">
             <dt>{{ item.label }}</dt>
-            <dd>{{ item.value }}</dd>
+            <dd :class="{ caution: item.result === t.caution }">{{ uploadedFileName ? item.result : t.waiting }}</dd>
           </div>
         </dl>
-      </section>
-      <section class="right-panel">
-        <p>ACTIONS</p>
-        <h3>운영 액션</h3>
-        <button type="button" class="dark-action">캠페인에 적용</button>
-        <button type="button">공식 프레임 지정</button>
-        <button type="button">새 버전 저장</button>
-      </section>
-    </aside>
+      </aside>
+    </section>
+
+    <section class="detail-grid" :class="{ 'detail-grid--single': !showStructureInfo }">
+      <article class="selected-summary">
+        <div class="summary-top">
+          <div>
+            <span>{{ selectedFrame.type }} / {{ selectedFrame.status }}</span>
+            <h3>{{ selectedFrame.name }}</h3>
+            <p>{{ selectedFrame.purpose }}</p>
+          </div>
+          <div class="summary-actions">
+            <button
+              type="button"
+              class="info-button"
+              :aria-label="t.structureInfo"
+              @click="showStructureInfo = !showStructureInfo"
+            >
+              <span class="material-symbols-outlined">info</span>
+            </button>
+            <div class="score-pill">
+              <small>FRAME SCORE</small>
+              <strong>{{ selectedFrame.score }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="approver-list">
+          <h4>{{ t.approver }}</h4>
+          <span v-for="item in selectedFrame.approver" :key="item">{{ item }}</span>
+        </div>
+      </article>
+
+      <article v-if="showStructureInfo" class="structure-panel">
+        <div class="panel-title">
+          <div>
+            <p class="section-eyebrow">{{ t.detail }}</p>
+            <h3>{{ t.detail }}</h3>
+          </div>
+          <button type="button" class="info-button" :aria-label="t.close" @click="showStructureInfo = false">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="structure-card-grid">
+          <section v-for="group in structureGroups" :key="group.title" class="structure-card">
+            <div>
+              <span class="material-symbols-outlined">{{ group.icon }}</span>
+              <h4>{{ group.title }}</h4>
+            </div>
+            <ul>
+              <li v-for="item in group.items" :key="item">{{ item }}</li>
+            </ul>
+          </section>
+        </div>
+      </article>
+    </section>
   </section>
 </template>
 
 <style scoped>
-.campaign-frame-console {
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 308px;
+.frames-page {
+  display: flex;
+  width: 100%;
+  max-width: var(--content-max-width);
+  flex-direction: column;
   gap: 16px;
+  margin: 0 auto;
   color: var(--text-primary);
 }
 
-.frame-left,
-.frame-main,
-.frame-right {
-  display: grid;
-  align-content: start;
-  gap: 16px;
-}
-
-.brand-card,
-.definition-card,
-.side-panel,
-.library-card,
-.hero-card,
-.top-tab,
-.summary-grid article,
-.large-panel,
-.approval-card,
-.right-panel {
+.frames-hero,
+.review-strip,
+.library-column,
+.judge-panel,
+.selected-summary,
+.structure-panel {
   border: 1px solid var(--border-color);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: var(--panel-color);
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-sm);
 }
 
-.brand-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 18px;
-}
-
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: #111827;
-  color: #fff;
-  font-weight: 900;
-}
-
-.brand-card p,
-.definition-card p,
-.hero-card p,
-.summary-grid p,
-.panel-head p,
-.approval-card p,
-.right-panel p {
-  margin: 0;
-  color: #7b8497;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-}
-
-.brand-card h2,
-.side-title h3,
-.summary-grid h3,
-.panel-head h3,
-.approval-card h3,
-.right-panel h3 {
-  margin: 0;
-}
-
-.definition-card {
-  display: grid;
-  gap: 14px;
-  padding: 18px;
-  background: linear-gradient(135deg, #111827, #1f2937 55%, #4a281e);
-  color: #fff;
-}
-
-.definition-card strong {
-  font-size: 17px;
-  line-height: 1.45;
-}
-
-.definition-card span,
-.hero-card span {
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.summary-grid span {
-  color: #667085;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.side-panel,
-.large-panel,
-.right-panel {
-  display: grid;
-  gap: 14px;
-  padding: 18px;
-}
-
-.side-title,
-.panel-head {
+.frames-hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
+  padding: 22px 24px;
 }
 
-.side-title button {
-  border: 0;
-  border-radius: 999px;
-  background: #111827;
-  color: #fff;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.type-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 42px;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: var(--panel-muted);
-  padding: 0 12px;
-  color: var(--text-primary);
+.frames-hero h2,
+.library-head h3,
+.judge-head h3,
+.summary-top h3,
+.panel-title h3 {
+  margin: 4px 0 0;
+  font-size: 24px;
   font-weight: 800;
+  letter-spacing: 0;
 }
 
-.type-row.active,
-.library-card.active,
-.top-tab.active {
-  border-color: #ff8a3d;
-  background: #fff7ed;
+.frames-hero span:not(.material-symbols-outlined),
+.frame-card p,
+.zone-head p,
+.judge-desc,
+.summary-top p,
+.upload-box small {
+  color: var(--muted-text);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
-.type-row em,
-.library-card span {
-  color: #f97316;
-  font-style: normal;
-  font-weight: 900;
+.hero-actions {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
 }
 
-.frame-stack {
-  display: grid;
-  gap: 10px;
-}
-
-.library-card {
-  display: grid;
+.primary-action,
+.soft-action {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 16px;
-  text-align: left;
-  color: var(--text-primary);
-}
-
-.library-card strong {
-  font-size: 15px;
-}
-
-.library-card small {
-  color: #64748b;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0 14px;
   font-weight: 800;
 }
 
-.hero-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  min-height: 186px;
-  padding: 24px;
-  background: linear-gradient(135deg, #111827, #1f2937);
+.primary-action {
+  border-color: transparent;
+  background: var(--accent-color);
   color: #fff;
 }
 
-.hero-card h1 {
-  margin: 10px 0 12px;
-  font-size: clamp(32px, 4vw, 56px);
-  line-height: 1.05;
-}
-
-.completion-card {
-  min-width: 196px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 18px;
-}
-
-.completion-card span,
-.completion-card em {
-  display: block;
-  color: rgba(255, 255, 255, 0.72);
-  font-style: normal;
-  font-weight: 800;
-}
-
-.completion-card strong {
-  display: block;
-  margin: 8px 0;
-  font-size: 38px;
-}
-
-.top-tabs,
-.summary-grid,
-.detail-grid {
-  display: grid;
-  gap: 12px;
-}
-
-.top-tabs,
-.summary-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.top-tab {
-  display: grid;
-  gap: 8px;
-  padding: 18px;
-  text-align: left;
+.soft-action {
+  background: var(--panel-muted);
   color: var(--text-primary);
 }
 
-.top-tab span {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 800;
+.review-strip {
+  padding: 14px 16px;
 }
 
-.summary-grid article {
+.review-metric {
   display: grid;
-  gap: 14px;
-  padding: 18px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
 }
 
-.tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tag-list em {
-  border-radius: 999px;
-  background: #eef2f7;
-  color: #475467;
-  padding: 6px 10px;
+.frame-card span,
+.summary-top span,
+.score-pill small {
+  color: var(--muted-text);
   font-size: 12px;
-  font-style: normal;
   font-weight: 800;
 }
 
-.detail-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-
-.panel-head span {
-  border-radius: 999px;
-  background: #eef2f7;
-  color: #475467;
-  padding: 8px 10px;
-  font-size: 12px;
+.review-metric h3 {
+  margin: 0;
+  font-size: 14px;
   font-weight: 900;
+  white-space: nowrap;
 }
 
-.soft-list,
-.mini-grid ul {
+.review-metric ol {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.soft-list li,
-.mini-grid div {
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
+.review-metric li {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-md);
   background: var(--panel-muted);
-  padding: 12px;
-  color: #475467;
-  font-size: 13px;
+  padding: 0 9px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.review-metric li span {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 11px;
+}
+
+.frames-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.library-column,
+.judge-panel,
+.selected-summary,
+.structure-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.library-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.zone-filter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.zone-filter button {
+  min-height: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--panel-muted);
+  padding: 0 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.zone-filter button.active {
+  border-color: color-mix(in srgb, var(--accent-color) 35%, var(--border-color));
+  background: var(--badge-bg);
+  color: var(--badge-text);
+}
+
+.frame-zone {
+  display: grid;
+  gap: 10px;
+}
+
+.zone-head {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.zone-head > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.zone-head h4,
+.zone-head p,
+.structure-card h4,
+.approver-list h4 {
+  margin: 0;
+}
+
+.zone-head strong {
+  display: inline-flex;
+  min-width: 28px;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.zone-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.frame-card {
+  display: grid;
+  gap: 8px;
+  min-height: 148px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 14px;
+  text-align: left;
+}
+
+.frame-card.active {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 8%, var(--panel-color));
+}
+
+.frame-card strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.frame-card div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.frame-card small,
+.frame-card em {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-style: normal;
   font-weight: 700;
 }
 
-.mini-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.mini-grid strong {
-  display: block;
-  margin-bottom: 10px;
-}
-
-.mini-grid li {
-  color: #64748b;
-  font-size: 13px;
-}
-
-.approval-card {
-  display: grid;
-  gap: 14px;
-  padding: 18px;
-  background: linear-gradient(135deg, #111827, #1f2937 55%, #4a281e);
-  color: #fff;
-}
-
-.approval-card ol {
-  display: grid;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.approval-card li {
+.judge-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 12px;
 }
 
-.approval-card li span {
+.judge-head > span {
   display: grid;
+  width: 42px;
+  height: 42px;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: #f97316;
-  color: #fff;
-  font-weight: 900;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-100);
+  color: var(--accent-strong);
 }
 
-.right-panel dl {
+.upload-box {
   display: grid;
-  gap: 10px;
-  margin: 0;
+  min-height: 138px;
+  place-items: center;
+  gap: 6px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 18px;
+  text-align: center;
+  cursor: pointer;
 }
 
-.right-panel dl div {
+.upload-box input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.upload-box .material-symbols-outlined {
+  color: var(--accent-strong);
+  font-size: 30px;
+}
+
+.judge-score {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: var(--panel-muted);
-  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-50);
+  padding: 14px;
+  color: var(--color-primary-800);
 }
 
-.right-panel dt {
-  color: #64748b;
+.judge-score span {
+  font-size: 12px;
   font-weight: 800;
 }
 
-.right-panel dd {
+.judge-score strong {
+  font-size: 30px;
+}
+
+.judge-checks {
+  display: grid;
+  gap: 8px;
   margin: 0;
-  font-weight: 900;
 }
 
-.right-panel button {
-  min-height: 42px;
+.judge-checks div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--panel-muted);
-  color: var(--text-primary);
+  padding: 10px 12px;
+}
+
+.judge-checks dt {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.judge-checks dd {
+  margin: 0;
+  color: var(--success-color);
+  font-size: 12px;
   font-weight: 900;
 }
 
-.right-panel .dark-action {
-  border-color: #111827;
-  background: #111827;
-  color: #fff;
+.judge-checks dd.caution {
+  color: var(--warning-color);
 }
 
-@media (max-width: 1280px) {
-  .campaign-frame-console {
-    grid-template-columns: 260px minmax(0, 1fr);
-  }
-
-  .frame-right {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+.detail-grid {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
 }
 
-@media (max-width: 980px) {
-  .campaign-frame-console,
-  .top-tabs,
-  .summary-grid,
+.detail-grid--single {
+  grid-template-columns: 1fr;
+}
+
+.summary-top {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.summary-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.info-button {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.score-pill {
+  display: grid;
+  min-width: 82px;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 10px;
+}
+
+.score-pill strong {
+  color: var(--accent-strong);
+  font-size: 28px;
+}
+
+.approver-list {
+  display: grid;
+  gap: 10px;
+}
+
+.approver-list {
+  grid-template-columns: 1fr;
+}
+
+.approver-list span {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--panel-muted);
+  padding: 7px 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.structure-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.panel-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.structure-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 14px;
+}
+
+.structure-card > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.structure-card .material-symbols-outlined {
+  color: var(--accent-strong);
+  font-size: 20px;
+}
+
+.structure-card ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted-text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1180px) {
+  .frames-layout,
   .detail-grid,
-  .frame-right,
-  .mini-grid {
+  .structure-card-grid {
     grid-template-columns: 1fr;
   }
+}
 
-  .hero-card {
-    align-items: stretch;
+@media (max-width: 780px) {
+  .frames-hero,
+  .library-head,
+  .summary-top {
     flex-direction: column;
+  }
+
+  .hero-actions,
+  .zone-filter {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .zone-card-grid,
+  .review-metric,
+  .review-metric ol {
+    grid-template-columns: 1fr;
   }
 }
 </style>

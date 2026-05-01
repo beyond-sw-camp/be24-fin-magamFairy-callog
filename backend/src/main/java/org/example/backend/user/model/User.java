@@ -46,6 +46,14 @@ public class User {
     private String name;
 
     @Setter
+    @Column
+    private String companyName;
+
+    @Setter
+    @Column
+    private String department;
+
+    @Setter
     @Column(nullable = false)
     private String password;
 
