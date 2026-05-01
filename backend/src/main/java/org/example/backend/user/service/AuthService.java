@@ -4,6 +4,8 @@ import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.example.backend.organization.model.OrganizationType;
+import org.example.backend.organization.repository.OrganizationRepository;
 import org.example.backend.user.model.RefreshToken;
 import org.example.backend.user.model.TokenDto;
 import org.example.backend.user.model.User;
@@ -14,6 +16,7 @@ import org.example.backend.user.utils.JwtUtil;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.NoSuchElementException;
 
 @Service
 @RequiredArgsConstructor
@@ -21,12 +24,15 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
+    private final OrganizationRepository organizationRepository;
 
     @Transactional
     public TokenDto.AuthTokenResponse issueTokens(Long userIdx, String id, String email, String name, String role, String companyName, String department) {
         String userId = requireId(id, email);
-        String access = jwtUtil.createToken("access", userIdx, userId, email, name, role, companyName, department, 600000L);
-        String refresh = jwtUtil.createToken("refresh", userIdx, userId, email, name, role, companyName, department, 1209600000L);
+        OrganizationType organizationType = userRepository.findById(userIdx).orElseThrow(NoSuchElementException::new).getOrganization().getType();
+
+        String access = jwtUtil.createToken("access", userIdx, userId, email, name, role, companyName, department, 600000L, organizationType);
+        String refresh = jwtUtil.createToken("refresh", userIdx, userId, email, name, role, companyName, department, 1209600000L, organizationType);
         LocalDateTime expiryDate = LocalDateTime.now().plusDays(14);
 
         refreshTokenRepository.findByUserId(userId)
@@ -68,7 +74,7 @@ public class AuthService {
             refreshTokenRepository.deleteByUserId(userId);
             throw new IllegalArgumentException("User is not allowed to access.");
         }
-
+        OrganizationType organizationType = userRepository.findById(userIdx).orElseThrow(NoSuchElementException::new).getOrganization().getType();
         String newAccess = jwtUtil.createToken(
                 "access",
                 user.getIdx(),
@@ -78,7 +84,8 @@ public class AuthService {
                 user.getRole(),
                 user.getCompanyName(),
                 user.getDepartment(),
-                60000L
+                60000L,
+                organizationType
         );
         return new TokenDto.AuthTokenResponse(newAccess, refreshToken);
     }
