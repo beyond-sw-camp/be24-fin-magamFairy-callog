@@ -97,8 +97,9 @@ export const useAuthStore = defineStore('auth', () => {
   const isHydrated = ref(false)
   const isAuthenticated = computed(() => isLogin.value && Boolean(token.value))
   const isAdmin = computed(() => normalizeRole(user.value?.role) === 'ROLE_ADMIN')
+  const isGeneralManager = computed(() => normalizeRole(user.value?.role) === 'ROLE_GENERAL_MANAGER')
   const isManager = computed(() => normalizeRole(user.value?.role) === 'ROLE_MANAGER')
-  const canCreateUsers = computed(() => isAdmin.value || isManager.value)
+  const canCreateUsers = computed(() => isAdmin.value || isGeneralManager.value || isManager.value)
 
   function applyAuth(accessToken, rawUser = null) {
     if (!accessToken) {
@@ -284,6 +285,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     isAuthenticated,
     isAdmin,
+    isGeneralManager,
     isManager,
     canCreateUsers,
     isHydrated,
