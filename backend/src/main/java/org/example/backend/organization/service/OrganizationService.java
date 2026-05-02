@@ -31,6 +31,31 @@ public class OrganizationService {
     }
 
     @Transactional
+    public Organization ensureAffiliateOrganization(String companyName) {
+        return organizationRepository.findByNameIgnoreCase(companyName)
+                .orElseGet(() -> {
+                    String base = companyName.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
+                    if (base.length() > 20) {
+                        base = base.substring(0, 20);
+                    }
+                    String code = base;
+                    int suffix = 2;
+                    while (organizationRepository.existsByCode(code)) {
+                        code = base + suffix;
+                        suffix += 1;
+                    }
+                    return organizationRepository.save(
+                            Organization.builder()
+                                    .code(code)
+                                    .name(companyName)
+                                    .type(OrganizationType.AFFILIATE)
+                                    .canCreateCampaign(false)
+                                    .build()
+                    );
+                });
+    }
+
+    @Transactional
     public Organization createPartnerOrganization(String companyName) {
         String base = companyName.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
         if (base.length() > 20) {
