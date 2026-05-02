@@ -19,22 +19,10 @@ const navItems = [
     icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>`,
   },
   {
-    id: 'tasks',
-    to: '/tasks',
-    label: 'Content Cards',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>`,
-  },
-  {
-    id: 'reports',
-    to: '/reports',
-    label: 'Reports',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>`,
-  },
-  {
-    id: 'operations',
-    to: '/operations',
-    label: 'Partners',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+    id: 'team-board',
+    to: '/team-board',
+    label: '팀 보드',
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>`,
   },
   {
     id: 'matching',
@@ -54,18 +42,6 @@ const navItems = [
     label: '레퍼런스',
     icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>`,
   },
-  {
-    id: 'resources',
-    to: '/resources',
-    label: '자료실',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
-  },
-  {
-    id: 'review-approval',
-    to: '/review-approval',
-    label: '검수/승인',
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
-  },
 ]
 
 function isActive(item) {
@@ -75,20 +51,7 @@ function isActive(item) {
 
 <template>
   <aside class="global-nav" aria-label="글로벌 네비게이션">
-    <RouterLink to="/dashboard" class="global-nav__logo" aria-label="대시보드로 이동">
-      <span class="global-nav__logo-mark">C</span>
-    </RouterLink>
-
     <nav class="global-nav__nav">
-      <div class="global-nav__item-wrap">
-      
-        <span class="global-nav__tooltip" role="tooltip">
-          {{ store.sidebarCollapsed ? '캠페인 목록 열기' : '캠페인 목록 닫기' }}
-        </span>
-      </div>
-
-      <div class="global-nav__divider" style="margin: 4px 0;" />
-
       <div
         v-for="item in navItems"
         :key="item.id"
@@ -120,45 +83,11 @@ function isActive(item) {
   flex-direction: column;
   align-items: center;
   padding: 14px 0;
-  height: 100vh;
-  position: sticky;
-  top: 0;
+  height: 100%;
   z-index: 20;
   transition:
     background var(--transition-normal),
     border-color var(--transition-normal);
-}
-
-.global-nav__logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-lg);
-  background: var(--color-primary-500);
-  text-decoration: none;
-  flex-shrink: 0;
-  transition: background var(--transition-fast);
-}
-
-.global-nav__logo:hover {
-  background: var(--color-primary-600);
-}
-
-.global-nav__logo-mark {
-  color: #ffffff;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.global-nav__divider {
-  width: 100%;
-  height: 1px;
-  background: var(--border-color);
-  margin: 12px 0;
-  flex-shrink: 0;
 }
 
 .global-nav__nav {

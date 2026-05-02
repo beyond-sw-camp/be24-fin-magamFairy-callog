@@ -24,11 +24,16 @@ public class BenefitController {
     public ResponseEntity getBenefit(@PathVariable Long idx) {
         try {
             MatchingDto.BenefitRes dto = benefitService.getBenefit(idx);
-            return ResponseEntity.ok(BaseResponse.success(dto));
+            return ResponseEntity.status(HttpStatus.OK)
+                    .body(BaseResponse.success(dto));
         }
         catch (NoSuchElementException e) {
-            return ResponseEntity.status(HttpStatus.OK)
+            return ResponseEntity.status(HttpStatus.NO_CONTENT)
                     .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT, null));
+        }
+        catch (Exception e){
+            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
+                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
         }
     }
 
@@ -43,8 +48,12 @@ public class BenefitController {
                     .body(BaseResponse.success(BaseResponseStatus.LIST_SUCCESS, dto));
         }
         catch (NoSuchElementException e){
-            return ResponseEntity.status(HttpStatus.OK)
+            return ResponseEntity.status(HttpStatus.NO_CONTENT)
                     .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
+        }
+        catch (Exception e){
+            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
+                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
         }
     }
 
@@ -53,10 +62,11 @@ public class BenefitController {
                                    @AuthenticationPrincipal AuthUserDetails user){
         try {
             benefitService.addBenefit(dto, user);
-            return  ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.BENEFIT_ADD_SUCCESS,null));
+            return  ResponseEntity.status(HttpStatus.CREATED)
+                    .body(BaseResponse.success(BaseResponseStatus.BENEFIT_ADD_SUCCESS));
         }
         catch (Exception e){
-            return ResponseEntity.status(HttpStatus.CREATED)
+            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
                     .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
         }
     }

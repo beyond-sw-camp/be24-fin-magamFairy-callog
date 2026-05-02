@@ -1,6 +1,5 @@
 package org.example.backend.user.repository;
 
-
 import org.example.backend.user.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -15,4 +14,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findAllByEmailIn(List<String> emails);
     Optional<User> findByName(String name);
     Optional<User> findByIdx(Long idx);
+
+    List<User> findAllByOrganizationIdx(Long organizationIdx);
+
+    List<User> findAllByCompanyNameAndDepartment(String companyName, String department);
+
+    List<User> findAllByRole(String role);
 }
