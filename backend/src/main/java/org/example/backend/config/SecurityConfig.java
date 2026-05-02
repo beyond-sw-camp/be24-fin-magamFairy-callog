@@ -43,13 +43,14 @@ public class SecurityConfig {
                 .requestMatchers("/auth/login", "/login", "/error").permitAll()
                 .requestMatchers("/auth/reissue", "/auth/logout").permitAll()
                 .requestMatchers("/auth/signup").permitAll()
+                .requestMatchers("/auth/usercreate").hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
+                .requestMatchers("/auth/promote").hasAnyAuthority("ROLE_GENERAL_MANAGER")
                 .requestMatchers(
-                        "/auth/usercreate",
                         "/auth/userdelete",
                         "/auth/resetpassword",
                         "/administrator/users",
                         "/admin/users"
-                ).hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
+                ).hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
                 .requestMatchers("/administrator/**", "/admin/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers(
                         "/workspace/**",

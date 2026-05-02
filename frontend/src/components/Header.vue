@@ -363,6 +363,11 @@ onBeforeUnmount(() => {
 <template>
   <header data-header-root="true" class="callog-header">
     <div class="callog-header__inner">
+      <!-- 로고: 사이드바 너비 영역 좌상단 -->
+      <RouterLink to="/dashboard" class="callog-header__logo" aria-label="대시보드로 이동">
+        <img src="@/assets/callog-symbol.png" alt="callog" class="callog-header__logo-img" />
+      </RouterLink>
+
       <!-- 왼쪽: 브레드크럼 -->
       <div class="callog-header__left">
         <div class="callog-header__breadcrumb">
@@ -676,8 +681,33 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 20px 0 0;
   gap: 12px;
+}
+
+.callog-header__logo {
+  flex: 0 0 var(--sidebar-icon-width, 64px);
+  width: var(--sidebar-icon-width, 64px);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.callog-header__logo-img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  display: block;
+  padding: 4px;
+  background: color-mix(in srgb, var(--color-primary-500) 10%, transparent);
+  border-radius: var(--radius-lg);
+  transition: background var(--transition-fast);
+}
+
+.callog-header__logo:hover .callog-header__logo-img {
+  background: color-mix(in srgb, var(--color-primary-500) 18%, transparent);
 }
 
 .callog-header__left {
@@ -685,6 +715,8 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  padding-left: 8px;
+  margin-right: auto;
 }
 
 .callog-header__toggle {

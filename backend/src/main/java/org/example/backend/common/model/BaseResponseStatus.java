@@ -12,6 +12,7 @@ public enum BaseResponseStatus {
     ASSET_ADD_SUCCESS(true, 2002 , "새로운 자산을 등록했습니다."),
     BENEFIT_ADD_SUCCESS(true, 2003,"새로운 혜택을 등록했습니다."),
     PROPOSAL_ADD_SUCCESS(true,2004 ,"새로운 제안을 보냈습니다." ),
+    SUCCESSFULY_EVALUATED(true,2005 ,"평가 생성에 성공했습니다." ),
 
 
     // 3000번대 클라이언트 입력 오류, 입력값 검증 오류

@@ -200,62 +200,11 @@ const upcomingDeadlines = computed(() => {
     <div class="campaign-calendar__body">
       <transition name="view-fade" mode="out-in">
 
-        <!-- Calendar view: two-panel -->
-        <div v-if="currentView === 'calendar'" key="calendar" class="campaign-calendar__body-inner">
+        <!-- Calendar view -->
+        <div v-if="currentView === 'calendar'" key="calendar" class="campaign-calendar__body-inner campaign-calendar__body-inner--full">
           <main class="campaign-calendar__main">
             <MainCalendar :eventsData="filteredEvents" />
           </main>
-
-          <aside class="campaign-calendar__sidebar">
-            <div class="deadlines-panel">
-              <div class="deadlines-panel__header">
-                <h3>Deadlines</h3>
-                <button class="deadlines-panel__more-btn">
-                  <span class="material-symbols-outlined">more_horiz</span>
-                </button>
-              </div>
-
-              <div class="deadlines-panel__tabs">
-                <button
-                  class="deadlines-panel__tab"
-                  :class="{ 'deadlines-panel__tab--active': sidebarTab === 'upcoming' }"
-                  @click="sidebarTab = 'upcoming'"
-                >Upcoming</button>
-                <button
-                  class="deadlines-panel__tab"
-                  :class="{ 'deadlines-panel__tab--active': sidebarTab === 'timeline' }"
-                  @click="sidebarTab = 'timeline'"
-                >Timeline View</button>
-              </div>
-
-              <div class="deadlines-panel__list">
-                <div
-                  v-for="item in upcomingDeadlines"
-                  :key="item.id"
-                  class="deadline-item"
-                >
-                  <div class="deadline-item__date">
-                    <span class="deadline-item__month">{{ parseDateBadge(item.date).month }}</span>
-                    <span class="deadline-item__day">{{ parseDateBadge(item.date).day }}</span>
-                  </div>
-                  <div class="deadline-item__content">
-                    <p class="deadline-item__title">{{ item.title }}</p>
-                    <p class="deadline-item__subtitle">{{ item.subtitle }}</p>
-                    <div class="deadline-item__status">
-                      <span class="deadline-item__dot" :data-status="item.statusKey" :data-category="item.category"></span>
-                      <span class="deadline-item__status-label">{{ DEADLINE_STATUS_META[item.statusKey]?.label ?? '예정' }}</span>
-                    </div>
-                    <div class="deadline-item__bar" :data-status="item.statusKey" :data-category="item.category"></div>
-                  </div>
-                </div>
-
-                <div v-if="upcomingDeadlines.length === 0" class="deadlines-panel__empty">
-                  <span class="material-symbols-outlined">event_available</span>
-                  <p>예정된 마감 일정이 없습니다</p>
-                </div>
-              </div>
-            </div>
-          </aside>
         </div>
 
         <!-- Timeline view -->

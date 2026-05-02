@@ -2,8 +2,15 @@ package org.example.backend.matching.model;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 
 public class EvaluationDto {
+
+    @Getter
+    @Builder
+    public static class NewEvaluation {
+
+    }
 
     @Getter
     @Builder
@@ -48,4 +55,5 @@ public class EvaluationDto {
                     .build();
         }
     }
+
 }

@@ -65,6 +65,13 @@ public class UserDto {
     public record ResetPasswordRes(String id, String password) {
     }
 
+    public record PromoteToManagerReq(String id) {
+    }
+
+    @Builder
+    public record PromoteToManagerRes(String id, String name, String role) {
+    }
+
     public record DeleteUserReq(String id) {
     }
 

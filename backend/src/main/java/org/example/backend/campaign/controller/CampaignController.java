@@ -27,7 +27,7 @@ public class CampaignController {
     @GetMapping
     public ResponseEntity<BaseResponse> listCampaigns(@AuthenticationPrincipal AuthUserDetails user) {
         return ResponseEntity.ok(BaseResponse.success(
-                campaignService.listCampaigns(currentUser(user))
+                campaignService.listCampaigns(user.getIdx())
         ));
     }
 

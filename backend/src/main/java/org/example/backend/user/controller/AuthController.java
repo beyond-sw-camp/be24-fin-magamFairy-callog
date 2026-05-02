@@ -31,6 +31,18 @@ public class AuthController {
     @Value("${app.secure-cookie}")
     private boolean secureCookie;
 
+    @PostMapping("/usercreate")
+    public ResponseEntity<?> createUser(@RequestBody UserDto.CreateUserReq dto, Authentication authentication) {
+        UserDto.CreateUserRes result = userService.createUser(dto, authentication);
+        return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(result));
+    }
+
+    @PostMapping("/promote")
+    public ResponseEntity<?> promoteToManager(@RequestBody UserDto.PromoteToManagerReq dto, Authentication authentication) {
+        UserDto.PromoteToManagerRes result = userService.promoteToManager(dto, authentication);
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
     @PostMapping("/signup")
     public ResponseEntity<?> partnerSignup(@RequestBody UserDto.PartnerSignupReq dto) {
         UserDto.PartnerSignupRes result = userService.partnerSignup(dto);
