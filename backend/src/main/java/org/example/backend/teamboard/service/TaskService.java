@@ -2,6 +2,7 @@ package org.example.backend.teamboard.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.CampaignParticipant;
+import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.teamboard.model.MileStones;
 import org.example.backend.teamboard.model.Task;
@@ -29,10 +30,18 @@ public class TaskService {
     private final MileStonesRepository mileStonesRepository;
     private final UserRepository userRepository;
     private final CampaignParticipantRepository participantRepository;
+    private final CampaignMemberRepository campaignMemberRepository;
 
-    /** 메인 팀 보드 - 모든 Task */
-    public List<TaskDto.ResList> listAll() {
-        return taskRepository.findAllByOrderByIdxDesc().stream()
+    /** 메인 팀 보드 - 내가 참여한 캠페인의 Task */
+    public List<TaskDto.ResList> listAll(Long userIdx) {
+        List<Long> campaignIds = campaignMemberRepository.findAllWithCampaignByUserIdx(userIdx)
+                .stream()
+                .map(cm -> cm.getCampaign().getIdx())
+                .toList();
+        if (campaignIds.isEmpty()) {
+            return List.of();
+        }
+        return taskRepository.findAllByTaskPart_Campaign_IdxInOrderByIdxDesc(campaignIds).stream()
                 .map(TaskDto.ResList::from)
                 .toList();
     }

@@ -3,6 +3,7 @@ package org.example.backend.teamboard.repository;
 import org.example.backend.teamboard.model.Task;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
@@ -11,4 +12,6 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findAllByOrderByIdxDesc();
 
     List<Task> findAllByAssignee_IdxOrderByIdxDesc(Long assigneeIdx);
+
+    List<Task> findAllByTaskPart_Campaign_IdxInOrderByIdxDesc(Collection<Long> campaignIds);
 }
