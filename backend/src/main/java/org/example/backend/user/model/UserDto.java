@@ -75,6 +75,7 @@ public class UserDto {
                     .id(entity.getId())
                     .build();
         }
+    }
     public record ManageRoleReq(String id, String role) {
     }
 

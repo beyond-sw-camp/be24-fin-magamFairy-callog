@@ -493,7 +493,7 @@ public class UserService implements UserDetailsService {
         }
 
         if (MANAGER_ROLE.equals(creatorRole)) {
-            return userRepository.findAllByCompanyNameAndDepartment(actor.getCompanyName(), actor.getDepartment());
+            return userRepository.findAllByCompanyName(actor.getCompanyName());
         }
 
         throw new IllegalArgumentException("구성원 목록을 조회할 권한이 없습니다.");
