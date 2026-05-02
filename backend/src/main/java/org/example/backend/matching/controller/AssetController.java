@@ -26,8 +26,12 @@ public class AssetController {
                     .body(BaseResponse.success(dto));
         }
         catch (NoSuchElementException e) {
-            return ResponseEntity.status(HttpStatus.OK)
+            return ResponseEntity.status(HttpStatus.NO_CONTENT)
                     .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
+        }
+        catch (Exception e){
+            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
+                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
         }
     }
 
@@ -42,8 +46,12 @@ public class AssetController {
                     .body(BaseResponse.success(BaseResponseStatus.LIST_SUCCESS, dto));
         }
         catch (NoSuchElementException e){
-            return ResponseEntity.status(HttpStatus.OK)
+            return ResponseEntity.status(HttpStatus.NO_CONTENT)
                     .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
+        }
+        catch (Exception e){
+            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
+                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
         }
     }
 
@@ -52,10 +60,11 @@ public class AssetController {
                                    @AuthenticationPrincipal AuthUserDetails user){
         try {
             assetService.addAsset(dto, user);
-            return  ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.ASSET_ADD_SUCCESS));
+            return  ResponseEntity.status(HttpStatus.CREATED)
+                    .body(BaseResponse.success(BaseResponseStatus.ASSET_ADD_SUCCESS));
         }
         catch (Exception e){
-            return ResponseEntity.status(HttpStatus.CREATED)
+            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
                     .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
         }
     }
