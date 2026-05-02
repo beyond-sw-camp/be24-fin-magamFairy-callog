@@ -7,6 +7,7 @@ import org.example.backend.matching.model.Evaluation;
 import org.example.backend.matching.model.EvaluationDto;
 import org.example.backend.matching.repository.EvaluationRepository;
 import org.example.backend.organization.model.Organization;
+import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,5 +46,8 @@ public class EvaluationService {
 
             return EvaluationDto.EvaluationRes.toDto(evaluation);
         }
+    }
+
+    public void newEvaluation(EvaluationDto.NewEvaluation dto, AuthUserDetails user) {
     }
 }
