@@ -8,72 +8,6 @@ import {
   updateReference,
 } from '@/api/references/index.js'
 
-const initialReferences = [
-  {
-    id: 1,
-    type: 'image',
-    title: '멤버십 론칭 배너 레퍼런스',
-    description: '혜택 금액, 기간, CTA가 한 화면에서 바로 읽히는 프로모션 배너 구조입니다.',
-    tags: ['배너', 'CTA', '혜택표기'],
-    url: 'https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&q=80&w=900',
-    thumbnail: 'https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&q=80&w=900',
-    date: '2026-04-27',
-    channel: '랜딩',
-    objective: '전환',
-    status: '검토완료',
-  },
-  {
-    id: 2,
-    type: 'link',
-    title: '공동 프로모션 랜딩 흐름',
-    description: '파트너 로고, 쿠폰 조건, 하단 FAQ를 연결하는 랜딩 페이지 흐름 참고 자료입니다.',
-    tags: ['랜딩', 'FAQ', '공동캠페인'],
-    url: 'https://example.com/promotion-flow',
-    date: '2026-04-25',
-    channel: '랜딩',
-    objective: '전환',
-    status: '참고',
-  },
-  {
-    id: 3,
-    type: 'video',
-    title: '숏폼 티저 컷 편집톤',
-    description: '첫 3초 후킹과 자막 리듬을 확인하기 좋은 15초 숏폼 레퍼런스입니다.',
-    tags: ['숏폼', '자막', '후킹'],
-    url: 'https://example.com/shorts-reference',
-    thumbnail: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?auto=format&fit=crop&q=80&w=900',
-    date: '2026-04-23',
-    channel: 'SNS',
-    objective: '인지',
-    status: '참고',
-  },
-  {
-    id: 4,
-    type: 'image',
-    title: '알림톡 쿠폰 안내 이미지',
-    description: '작은 화면에서도 기간, 조건, 버튼 문구가 무너지지 않는 모바일 우선 이미지입니다.',
-    tags: ['알림톡', '쿠폰', '모바일'],
-    url: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=900',
-    thumbnail: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=900',
-    date: '2026-04-20',
-    channel: '메시지',
-    objective: '재방문',
-    status: '사용중',
-  },
-  {
-    id: 5,
-    type: 'link',
-    title: '금지 표현 대체 문구 모음',
-    description: '보장형 표현, 과장 혜택 문구를 캠페인 심사 기준에 맞춰 바꾼 문장 모음입니다.',
-    tags: ['심사', '문구', '리스크'],
-    url: 'https://example.com/copy-risk-check',
-    date: '2026-04-18',
-    channel: '공통',
-    objective: '리스크관리',
-    status: '필수',
-  },
-]
-
 const typeOptions = [
   { value: 'all', label: '전체', icon: 'dashboard' },
   { value: 'link', label: '링크', icon: 'link' },
@@ -85,7 +19,9 @@ const channels = ['전체', '랜딩', 'SNS', '메시지', '공통']
 const objectives = ['전체', '전환', '인지', '재방문', '리스크관리']
 const statuses = ['전체', '필수', '사용중', '검토완료', '참고']
 
-const references = ref([...initialReferences])
+const references = ref([])
+const isLoading = ref(false)
+const loadError = ref('')
 const activeType = ref('all')
 const searchQuery = ref('')
 const selectedChannel = ref('전체')
@@ -109,44 +45,43 @@ function createBlankForm() {
   }
 }
 
-function normalizeReference(item, index = 0) {
-  const fallback = initialReferences[index % initialReferences.length]
-
+function normalizeReference(item = {}) {
   return {
-    ...fallback,
-    ...item,
-    id: item.id ?? Date.now() + index,
-    type: item.type || fallback.type || 'link',
+    id: item.id,
+    type: item.type || 'link',
     title: item.title || '제목 없는 레퍼런스',
     description: item.description || '',
     tags: Array.isArray(item.tags) ? item.tags : [],
     url: item.url || '',
-    thumbnail: item.thumbnail || item.url || fallback.thumbnail || fallback.url || '',
-    date: item.date || item.createdAt?.slice?.(0, 10) || new Date().toISOString().slice(0, 10),
-    channel: item.channel || inferField(item.tags, channels, fallback.channel),
-    objective: item.objective || inferField(item.tags, objectives, fallback.objective),
-    status: item.status || inferField(item.tags, statuses, fallback.status),
+    thumbnail: item.thumbnail || (item.type !== 'link' ? item.url : '') || '',
+    date: item.date || item.createdAt?.slice?.(0, 10) || '',
+    channel: item.channel || '공통',
+    objective: item.objective || '전환',
+    status: item.status || '참고',
   }
 }
 
-function inferField(tags = [], options, fallback) {
-  return tags.find((tag) => options.includes(tag)) || fallback
+function unwrapApiPayload(payload) {
+  if (Array.isArray(payload)) return payload
+  if (payload && typeof payload === 'object') {
+    return payload.data || payload.content || payload.result || payload.list || []
+  }
+  return []
 }
 
 async function fetchReferencesData() {
+  isLoading.value = true
+  loadError.value = ''
   try {
     const response = await getReferences()
-    let apiList = response?.data
-
-    if (apiList && typeof apiList === 'object' && !Array.isArray(apiList)) {
-      apiList = apiList.data || apiList.content || apiList.result || []
-    }
-
-    if (Array.isArray(apiList) && apiList.length > 0) {
-      references.value = apiList.map(normalizeReference)
-    }
+    const apiList = unwrapApiPayload(response?.data)
+    references.value = Array.isArray(apiList) ? apiList.map(normalizeReference) : []
   } catch (error) {
-    console.warn('레퍼런스 API 연결 실패. 로컬 기본 데이터를 사용합니다.', error)
+    console.error('레퍼런스 목록 조회 실패', error)
+    loadError.value = '레퍼런스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
+    references.value = []
+  } finally {
+    isLoading.value = false
   }
 }
 
@@ -156,7 +91,6 @@ const filteredReferences = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
 
   return references.value
-    .map(normalizeReference)
     .filter((item) => activeType.value === 'all' || item.type === activeType.value)
     .filter((item) => selectedChannel.value === '전체' || item.channel === selectedChannel.value)
     .filter((item) => selectedObjective.value === '전체' || item.objective === selectedObjective.value)
@@ -210,13 +144,18 @@ async function openModal(mode, item = null) {
   if (mode === 'view') {
     try {
       const response = await getReferenceById(item.id)
-      let apiData = response?.data
-      if (apiData && typeof apiData === 'object' && !Array.isArray(apiData)) {
-        apiData = apiData.data || apiData.result || apiData
+      const payload = response?.data
+      const apiData =
+        payload && typeof payload === 'object' && !Array.isArray(payload)
+          ? payload.data || payload.result || payload
+          : payload
+      if (apiData && typeof apiData === 'object') {
+        viewData = normalizeReference({ ...viewData, ...apiData, id: item.id })
       }
-      viewData = normalizeReference({ ...viewData, ...apiData, id: item.id })
     } catch (error) {
-      console.warn('상세 조회 API 연결 실패. 목록 데이터를 사용합니다.', error)
+      console.error('레퍼런스 상세 조회 실패', error)
+      alert('상세 정보를 불러오지 못했습니다.')
+      return
     }
   }
 
@@ -242,7 +181,8 @@ async function handleSave() {
 
   try {
     if (modalState.value.mode === 'create') {
-      await createReference(saveData)
+      const { id, ...payload } = saveData
+      await createReference(payload)
     } else {
       await updateReference(saveData.id, saveData)
     }
@@ -250,15 +190,8 @@ async function handleSave() {
     await fetchReferencesData()
     closeModal()
   } catch (error) {
-    console.warn('저장 API 연결 실패. 현재 화면 데이터에만 반영합니다.', error)
-
-    if (modalState.value.mode === 'create') {
-      references.value = [{ ...saveData, id: Date.now() }, ...references.value]
-    } else {
-      references.value = references.value.map((item) => (item.id === saveData.id ? saveData : item))
-    }
-
-    closeModal()
+    console.error('레퍼런스 저장 실패', error)
+    alert('저장에 실패했습니다. 잠시 후 다시 시도해 주세요.')
   }
 }
 
@@ -268,12 +201,11 @@ async function handleDelete(id) {
   try {
     await deleteReference(id)
     await fetchReferencesData()
+    closeModal()
   } catch (error) {
-    console.warn('삭제 API 연결 실패. 현재 화면 데이터에서만 제거합니다.', error)
-    references.value = references.value.filter((item) => item.id !== id)
+    console.error('레퍼런스 삭제 실패', error)
+    alert('삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.')
   }
-
-  closeModal()
 }
 
 function handleTagAdd(event) {
@@ -359,10 +291,21 @@ function removeFormTag(tagToRemove) {
           <p class="section-eyebrow">Library</p>
           <h3>레퍼런스 목록</h3>
         </div>
-        <span class="result-count">{{ filteredReferences.length }}개</span>
+        <span v-if="!isLoading && !loadError" class="result-count">{{ filteredReferences.length }}개</span>
       </div>
 
-      <div v-if="filteredReferences.length" class="reference-grid">
+      <div v-if="isLoading" class="empty-state">
+        <span class="material-symbols-outlined" aria-hidden="true">hourglass_empty</span>
+        <strong>레퍼런스를 불러오는 중입니다.</strong>
+      </div>
+
+      <div v-else-if="loadError" class="empty-state">
+        <span class="material-symbols-outlined" aria-hidden="true">error</span>
+        <strong>{{ loadError }}</strong>
+        <button type="button" @click="fetchReferencesData">다시 시도</button>
+      </div>
+
+      <div v-else-if="filteredReferences.length" class="reference-grid">
         <article
           v-for="item in filteredReferences"
           :key="item.id"
