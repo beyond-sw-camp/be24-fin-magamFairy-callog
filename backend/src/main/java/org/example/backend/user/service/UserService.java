@@ -156,35 +156,6 @@ public class UserService implements UserDetailsService {
     }
 
     @Transactional
-    public UserDto.PromoteToManagerRes promoteToManager(UserDto.PromoteToManagerReq dto, Authentication authentication) {
-        if (dto == null) {
-            throw new IllegalArgumentException("request body is required.");
-        }
-
-        User actor = resolveAuthenticatedUser(authentication);
-        String id = requireText(dto.id(), "id");
-        User target = findUserByIdOrEmail(id)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 계정입니다."));
-
-        if (!USER_ROLE.equals(normalizeRole(target.getRole()))) {
-            throw new IllegalArgumentException("USER만 MANAGER로 승격할 수 있습니다.");
-        }
-
-        if (actor.getOrganization() == null || target.getOrganization() == null
-                || !actor.getOrganization().getIdx().equals(target.getOrganization().getIdx())) {
-            throw new IllegalArgumentException("같은 조직의 사용자만 승격할 수 있습니다.");
-        }
-
-        target.setRole(MANAGER_ROLE);
-
-        return UserDto.PromoteToManagerRes.builder()
-                .id(target.getId())
-                .name(target.getName())
-                .role(target.getRole())
-                .build();
-    }
-
-    @Transactional
     public UserDto.ResetPasswordRes resetPassword(UserDto.ResetPasswordReq dto, Authentication authentication) {
         if (dto == null) {
             throw new IllegalArgumentException("request body is required.");

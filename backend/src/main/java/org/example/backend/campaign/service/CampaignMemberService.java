@@ -40,6 +40,12 @@ public class CampaignMemberService {
 
     // ========== 조회 ==========
 
+    public List<CampaignMemberDto.ParticipantRes> listParticipants(Long campaignId) {
+        return participantRepository.findAllByCampaignIdx(campaignId).stream()
+                .map(CampaignMemberDto.ParticipantRes::from)
+                .toList();
+    }
+
     public CampaignMemberDto.ListRes listMembers(Long campaignId, String callerLoginId) {
         User caller = findUser(callerLoginId);
         CampaignMember meMember = memberRepository
@@ -108,7 +114,7 @@ public class CampaignMemberService {
         CampaignMember me = memberRepository
                 .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
                 .orElse(null);
-        CampaignMemberGuard.requireCampaignManager(me);
+        CampaignMemberGuard.requireMember(me);
 
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Campaign not found."));
@@ -181,7 +187,7 @@ public class CampaignMemberService {
         CampaignMember me = memberRepository
                 .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
                 .orElse(null);
-        CampaignMemberGuard.requireCampaignManager(me);
+        CampaignMemberGuard.requireMember(me);
 
         List<User> pool = me.getCampaignRole() == CampaignMemberRole.GENERAL_MANAGER
                 ? userRepository.findAllByOrganizationIdx(caller.getOrganization() != null
@@ -224,7 +230,7 @@ public class CampaignMemberService {
         CampaignMember me = memberRepository
                 .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
                 .orElse(null);
-        CampaignMemberGuard.requireCampaignManager(me);
+        CampaignMemberGuard.requireMember(me);
 
         if (!isPmOrganization(campaignId, caller)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PM사 소속만 협력사를 초대할 수 있습니다.");
@@ -274,7 +280,7 @@ public class CampaignMemberService {
         CampaignMember me = memberRepository
                 .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
                 .orElse(null);
-        CampaignMemberGuard.requireCampaignManager(me);
+        CampaignMemberGuard.requireMember(me);
 
         if (!isPmOrganization(campaignId, caller)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PM사 소속만 협력사 후보를 조회할 수 있습니다.");
@@ -308,7 +314,7 @@ public class CampaignMemberService {
         CampaignMember me = memberRepository
                 .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
                 .orElse(null);
-        CampaignMemberGuard.requireCampaignGM(me);
+        CampaignMemberGuard.requireMember(me);
 
         CampaignMember target = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found."));
@@ -333,7 +339,7 @@ public class CampaignMemberService {
         CampaignMember me = memberRepository
                 .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
                 .orElse(null);
-        CampaignMemberGuard.requireCampaignManager(me);
+        CampaignMemberGuard.requireMember(me);
 
         CampaignMember target = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found."));
