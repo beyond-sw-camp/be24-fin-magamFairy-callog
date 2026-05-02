@@ -73,23 +73,20 @@ public class CampaignMemberService {
                     if (r == CampaignMemberRole.GENERAL_MANAGER || r == CampaignMemberRole.MANAGER) {
                         return true;
                     }
-                    return sameCompanyAndDepartment(caller, m.getUser());
+                    return sameCompany(caller, m.getUser());
                 }).toList();
             case USER:
             default:
                 return all.stream().filter(m ->
-                        sameCompanyAndDepartment(caller, m.getUser())
+                        sameCompany(caller, m.getUser())
                 ).toList();
         }
     }
 
-    private boolean sameCompanyAndDepartment(User a, User b) {
+    private boolean sameCompany(User a, User b) {
         String aCompany = normalize(a.getCompanyName());
-        String aDept = normalize(a.getDepartment());
         String bCompany = normalize(b.getCompanyName());
-        String bDept = normalize(b.getDepartment());
-        return !aCompany.isEmpty() && !aDept.isEmpty()
-                && aCompany.equals(bCompany) && aDept.equals(bDept);
+        return !aCompany.isEmpty() && aCompany.equals(bCompany);
     }
 
     private boolean isPmOrganization(Long campaignId, User caller) {
@@ -148,9 +145,9 @@ public class CampaignMemberService {
 
     private void validateAddCandidate(CampaignMember me, User caller, User target) {
         if (me.getCampaignRole() == CampaignMemberRole.MANAGER) {
-            if (!sameCompanyAndDepartment(caller, target)) {
+            if (!sameCompany(caller, target)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                        "MANAGER는 자기 회사·부서의 사용자만 추가할 수 있습니다.");
+                        "MANAGER는 자기 회사의 사용자만 추가할 수 있습니다.");
             }
             String role = target.getRole();
             if (!Roles.USER.equals(role) && !Roles.MANAGER.equals(role)) {
@@ -189,8 +186,7 @@ public class CampaignMemberService {
         List<User> pool = me.getCampaignRole() == CampaignMemberRole.GENERAL_MANAGER
                 ? userRepository.findAllByOrganizationIdx(caller.getOrganization() != null
                     ? caller.getOrganization().getIdx() : -1L)
-                : userRepository.findAllByCompanyNameAndDepartment(
-                    normalize(caller.getCompanyName()), normalize(caller.getDepartment()));
+                : userRepository.findAllByCompanyName(normalize(caller.getCompanyName()));
 
         Set<Long> existingUserIdx = memberRepository.findAllByCampaignIdx(campaignId)
                 .stream()
@@ -325,7 +321,7 @@ public class CampaignMemberService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "GM은 변경 대상이 아닙니다.");
         }
 
-        CampaignMemberGuard.requireSameDepartment(caller, target.getUser());
+        CampaignMemberGuard.requireSameCompany(caller, target.getUser());
 
         target.setCampaignRole(nextRole);
         return CampaignMemberDto.Res.from(target);
@@ -354,7 +350,7 @@ public class CampaignMemberService {
             if (target.getCampaignRole() != CampaignMemberRole.USER) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "MANAGER는 USER만 추방할 수 있습니다.");
             }
-            CampaignMemberGuard.requireSameDepartment(caller, target.getUser());
+            CampaignMemberGuard.requireSameCompany(caller, target.getUser());
         }
 
         memberRepository.delete(target);

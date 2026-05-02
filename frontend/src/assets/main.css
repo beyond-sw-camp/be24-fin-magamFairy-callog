@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @import './base.css';
 
 #app {
@@ -45,7 +45,7 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 24px;
+  padding: var(--ui-page-padding);
 }
 /* ─────────────────────────────────────────────────────── */
 
@@ -60,7 +60,7 @@
 
 .ui-card {
   border: 1px solid var(--line-soft);
-  border-radius: 24px;
+  border-radius: var(--radius-md);
   background: var(--surface-card);
   box-shadow: var(--shadow-soft);
   color: var(--text-body);
@@ -163,7 +163,7 @@
 .ghost-button,
 .soft-button,
 .icon-button {
-  min-height: 2.7rem;
+  min-height: var(--ui-control-height);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 0 0.95rem;

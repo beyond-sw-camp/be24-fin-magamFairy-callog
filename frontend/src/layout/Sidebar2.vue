@@ -530,6 +530,7 @@ onBeforeUnmount(() => {
             {{ viewMode === 'compact' ? '확장' : '간단' }}
           </button>
           <button
+            v-if="authStore.canCreateCampaign"
             type="button"
             class="campaign-list__create-btn"
             :title="campaignLabels.createCampaign"

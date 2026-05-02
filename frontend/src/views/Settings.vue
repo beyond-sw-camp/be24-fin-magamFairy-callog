@@ -1,7 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSettings, updateSettings } from '@/api/settings/index.js'
+import { changePasswordRequest } from '@/authApi'
 import { getMyProfile, updateMyProfile } from '@/api/userProfiles/index.js'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePlannerStore } from '@/stores/planner'
@@ -30,7 +30,7 @@ const tabs = [
     id: 'security',
     label: '계정/보안',
     icon: 'lock',
-    summary: '로그인 계정과 보안 진입 정보를 확인합니다.',
+    summary: '세션과 비밀번호를 직접 관리합니다.',
   },
 ]
 
@@ -54,19 +54,71 @@ const feedback = reactive({
   profile: '',
   profileError: '',
 })
+const passwordForm = reactive({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+})
+const securityFeedback = reactive({
+  success: '',
+  error: '',
+})
 const isImageGenerationModalOpen = ref(false)
 const imageGenerationPrompt = ref('')
+const isRefreshingSession = ref(false)
+const isLoggingOut = ref(false)
+const isChangingPassword = ref(false)
 
 const activeTab = computed(() => {
   const requestedTab = String(route.query.tab || 'profile')
 
   return tabIds.has(requestedTab) ? requestedTab : 'profile'
 })
-
 const currentTab = computed(() => tabs.find((tab) => tab.id === activeTab.value) ?? tabs[0])
 const isDarkMode = computed(() => plannerStore.theme === 'dark')
 const accountEmail = computed(() => profileForm.email || userSettingsStore.profile.email)
 const userKey = computed(() => resolveUserKey(authStore.user))
+const accountId = computed(
+  () => readFirstString(authStore.user, ['id', 'loginId', 'userId', 'sub']) || '-',
+)
+const accountName = computed(
+  () => profileForm.name || readFirstString(authStore.user, ['name', 'username']) || 'Callog User',
+)
+const accountRole = computed(
+  () =>
+    profileForm.role || readFirstString(authStore.user, ['roleName', 'role', 'authority']) || '-',
+)
+const sessionStatus = computed(() => (authStore.hasFreshAccessToken() ? '활성' : '갱신 필요'))
+const themePreviewTitle = computed(() =>
+  isDarkMode.value ? '다크 모드 미리보기' : '라이트 모드 미리보기',
+)
+const isPasswordPolicyValid = computed(() => passwordPolicyChecks.value.every((item) => item.valid))
+
+const passwordPolicyChecks = computed(() => {
+  const value = passwordForm.newPassword
+
+  return [
+    { id: 'length', label: '8~20자', valid: value.length >= 8 && value.length <= 20 },
+    { id: 'upper', label: '대문자 포함', valid: /[A-Z]/.test(value) },
+    { id: 'lower', label: '소문자 포함', valid: /[a-z]/.test(value) },
+    { id: 'digit', label: '숫자 포함', valid: /\d/.test(value) },
+    { id: 'special', label: '특수문자 포함', valid: /[^A-Za-z0-9]/.test(value) },
+    { id: 'space', label: '공백 없음', valid: value.length > 0 && !/\s/.test(value) },
+  ]
+})
+
+function readFirstString(source, keys) {
+  if (!source || typeof source !== 'object') {
+    return ''
+  }
+
+  return (
+    keys
+      .map((key) => source[key])
+      .find((value) => typeof value === 'string' && value.trim())
+      ?.trim() ?? ''
+  )
+}
 
 function resolveUserKey(user) {
   return (
@@ -79,14 +131,6 @@ function resolveUserKey(user) {
     plannerStore.currentUserId ??
     'guest'
   )
-}
-
-function normalizeTheme(value) {
-  return value === 'light' || value === 'dark' ? value : null
-}
-
-function resolveSettingsPayload(payload) {
-  return payload?.result ?? payload?.data ?? payload ?? {}
 }
 
 function resolveProfilePayload(payload) {
@@ -115,18 +159,6 @@ function selectTab(tabId) {
   })
 }
 
-function applyRemoteSettings(payload) {
-  const source = resolveSettingsPayload(payload)
-  const nextTheme =
-    normalizeTheme(source.theme) ??
-    (typeof source.darkMode === 'boolean' ? (source.darkMode ? 'dark' : 'light') : null)
-
-  if (nextTheme) {
-    plannerStore.setTheme(nextTheme)
-    userSettingsStore.updateThemeUi({ theme: nextTheme })
-  }
-}
-
 function applyRemoteProfile(payload) {
   const source = resolveProfilePayload(payload)
   const nextProfile = {
@@ -145,36 +177,23 @@ function applyRemoteProfile(payload) {
   userSettingsStore.updateProfile(nextProfile)
 }
 
-async function syncSettingToServer(body) {
-  try {
-    await updateSettings(body)
-  } catch (error) {
-    console.warn('설정 저장 API 호출에 실패했습니다. 로컬 설정은 유지됩니다.', error)
-  }
-}
-
 function setTheme(nextTheme) {
   plannerStore.setTheme(nextTheme)
-  userSettingsStore.updateThemeUi({ theme: nextTheme })
-
-  void syncSettingToServer({
-    theme: nextTheme,
-    darkMode: nextTheme === 'dark',
-  })
 }
 
 function setDensity(value) {
   userSettingsStore.updateThemeUi({ density: value })
-  void syncSettingToServer({ density: value })
 }
 
 function toggleThemeUiValue(key) {
-  const nextValue = !userSettingsStore.themeUi[key]
-
   userSettingsStore.updateThemeUi({
-    [key]: nextValue,
+    [key]: !userSettingsStore.themeUi[key],
   })
-  void syncSettingToServer({ [key]: nextValue })
+}
+
+function resetDisplaySettings() {
+  plannerStore.setTheme('light')
+  userSettingsStore.resetThemeUi()
 }
 
 function handleProfileImageUpload(event) {
@@ -293,6 +312,92 @@ async function loadRemoteProfile() {
   }
 }
 
+async function refreshSession() {
+  securityFeedback.success = ''
+  securityFeedback.error = ''
+  isRefreshingSession.value = true
+
+  try {
+    const refreshed = await authStore.refreshSession()
+
+    if (!refreshed) {
+      securityFeedback.error = '세션을 갱신하지 못했습니다. 다시 로그인해 주세요.'
+      await router.replace({ name: 'login' })
+      return
+    }
+
+    securityFeedback.success = '세션이 갱신되었습니다.'
+  } finally {
+    isRefreshingSession.value = false
+  }
+}
+
+async function logout() {
+  securityFeedback.success = ''
+  securityFeedback.error = ''
+  isLoggingOut.value = true
+
+  try {
+    await authStore.logout()
+    await router.replace({ name: 'login' })
+  } finally {
+    isLoggingOut.value = false
+  }
+}
+
+function validatePasswordForm() {
+  if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+    return '현재 비밀번호와 새 비밀번호를 모두 입력해 주세요.'
+  }
+
+  if (!isPasswordPolicyValid.value) {
+    return '새 비밀번호 정책을 모두 만족해야 합니다.'
+  }
+
+  if (passwordForm.currentPassword === passwordForm.newPassword) {
+    return '새 비밀번호는 현재 비밀번호와 달라야 합니다.'
+  }
+
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    return '새 비밀번호 확인이 일치하지 않습니다.'
+  }
+
+  return ''
+}
+
+async function changePassword() {
+  securityFeedback.success = ''
+  securityFeedback.error = ''
+
+  const validationMessage = validatePasswordForm()
+
+  if (validationMessage) {
+    securityFeedback.error = validationMessage
+    return
+  }
+
+  isChangingPassword.value = true
+
+  try {
+    await changePasswordRequest({
+      currentPassword: passwordForm.currentPassword,
+      newPassword: passwordForm.newPassword,
+    })
+
+    passwordForm.currentPassword = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+    securityFeedback.success = '비밀번호가 변경되었습니다. 다시 로그인해 주세요.'
+    await authStore.logout()
+    await router.replace({ name: 'login' })
+  } catch (error) {
+    console.error('비밀번호 변경 API 호출에 실패했습니다.', error)
+    securityFeedback.error = error?.message || '비밀번호를 변경하지 못했습니다.'
+  } finally {
+    isChangingPassword.value = false
+  }
+}
+
 watch(
   () => [userKey.value, authStore.user],
   () => {
@@ -311,27 +416,10 @@ watch(
 )
 
 watch(
-  () => plannerStore.theme,
-  (nextTheme) => {
-    userSettingsStore.updateThemeUi({ theme: nextTheme })
-  },
-  { immediate: true },
-)
-
-watch(
   () => authStore.isAuthenticated,
   async (isAuthenticated) => {
-    if (!isAuthenticated) {
-      return
-    }
-
-    await loadRemoteProfile()
-
-    try {
-      const response = await getSettings()
-      applyRemoteSettings(response.data)
-    } catch (error) {
-      console.warn('설정 정보를 불러오지 못해 로컬 설정을 사용합니다.', error)
+    if (isAuthenticated) {
+      await loadRemoteProfile()
     }
   },
   { immediate: true },
@@ -490,10 +578,10 @@ watch(
         </form>
 
         <div v-else-if="activeTab === 'theme'" class="settings-pane">
-          <section class="settings-block">
+          <section class="settings-block settings-block--inline">
             <div>
               <strong>테마</strong>
-              <p>선택 즉시 전체 UI에 반영됩니다.</p>
+              <p>선택 즉시 전체 UI에 반영되며 브라우저 로컬 저장소에 유지됩니다.</p>
             </div>
             <div class="settings-segmented" role="group" aria-label="테마 선택">
               <button
@@ -509,10 +597,10 @@ watch(
             </div>
           </section>
 
-          <section class="settings-block">
+          <section class="settings-block settings-block--inline">
             <div>
               <strong>화면 밀도</strong>
-              <p>반복 작업에 맞춰 정보 간격을 조정합니다.</p>
+              <p>대시보드와 설정 카드의 여백, 행 높이, 버튼 높이를 조정합니다.</p>
             </div>
             <div class="settings-segmented" role="group" aria-label="화면 밀도 선택">
               <button
@@ -531,7 +619,7 @@ watch(
             <div class="settings-row">
               <div>
                 <strong>모션 줄이기</strong>
-                <p>전환 애니메이션을 더 차분하게 표시합니다.</p>
+                <p>전환 애니메이션을 최소화해 반복 작업 중 움직임 부담을 줄입니다.</p>
               </div>
               <button
                 type="button"
@@ -547,7 +635,7 @@ watch(
             <div class="settings-row">
               <div>
                 <strong>고대비 표시</strong>
-                <p>텍스트와 경계 대비를 높이는 표시 옵션입니다.</p>
+                <p>텍스트와 경계 대비를 높여 카드와 입력 영역을 더 또렷하게 표시합니다.</p>
               </div>
               <button
                 type="button"
@@ -561,27 +649,149 @@ watch(
               </button>
             </div>
           </section>
+
+          <section class="settings-preview">
+            <div class="settings-preview__head">
+              <div>
+                <strong>{{ themePreviewTitle }}</strong>
+                <p>현재 화면 설정이 카드, 행, 버튼에 어떻게 반영되는지 확인합니다.</p>
+              </div>
+              <button
+                type="button"
+                class="settings-button settings-button--ghost"
+                @click="resetDisplaySettings"
+              >
+                화면 설정 초기화
+              </button>
+            </div>
+            <div class="settings-preview__body">
+              <div class="settings-preview__card">
+                <span class="settings-chip">작업 카드</span>
+                <strong>콘텐츠 검수 요청</strong>
+                <p>밀도, 고대비, 모션 설정은 새로고침 후에도 유지됩니다.</p>
+              </div>
+              <div class="settings-preview__list">
+                <span>상태</span>
+                <strong>{{
+                  userSettingsStore.themeUi.density === 'compact' ? '촘촘하게' : '기본'
+                }}</strong>
+              </div>
+              <div class="settings-preview__list">
+                <span>표시 옵션</span>
+                <strong>
+                  {{ userSettingsStore.themeUi.highContrast ? '고대비' : '표준 대비' }} ·
+                  {{ userSettingsStore.themeUi.reduceMotion ? '모션 최소화' : '표준 모션' }}
+                </strong>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div v-else class="settings-pane">
           <section class="settings-account">
             <div class="settings-account__row">
-              <span>로그인 계정</span>
+              <span>로그인 ID</span>
+              <strong>{{ accountId }}</strong>
+            </div>
+            <div class="settings-account__row">
+              <span>이름</span>
+              <strong>{{ accountName }}</strong>
+            </div>
+            <div class="settings-account__row">
+              <span>이메일</span>
               <strong>{{ accountEmail }}</strong>
             </div>
             <div class="settings-account__row">
               <span>권한</span>
-              <strong>{{ userSettingsStore.profile.role }}</strong>
+              <strong>{{ accountRole }}</strong>
             </div>
             <div class="settings-account__row">
               <span>세션 상태</span>
-              <strong>{{ userSettingsStore.security.sessionStatus }}</strong>
-            </div>
-            <div class="settings-account__row">
-              <span>비밀번호</span>
-              <strong>별도 기능에서 변경</strong>
+              <strong>{{ sessionStatus }}</strong>
             </div>
           </section>
+
+          <section class="settings-security-actions">
+            <button
+              type="button"
+              class="settings-button settings-button--ghost"
+              :disabled="isRefreshingSession"
+              @click="refreshSession"
+            >
+              {{ isRefreshingSession ? '갱신 중' : '세션 갱신' }}
+            </button>
+            <button
+              type="button"
+              class="settings-button settings-button--danger"
+              :disabled="isLoggingOut"
+              @click="logout"
+            >
+              {{ isLoggingOut ? '로그아웃 중' : '로그아웃' }}
+            </button>
+          </section>
+
+          <form class="settings-password" @submit.prevent="changePassword">
+            <div>
+              <strong>내 비밀번호 변경</strong>
+              <p>변경이 완료되면 보안을 위해 다시 로그인해야 합니다.</p>
+            </div>
+
+            <section class="settings-form-grid">
+              <label class="settings-field">
+                <span>현재 비밀번호</span>
+                <input
+                  v-model="passwordForm.currentPassword"
+                  type="password"
+                  autocomplete="current-password"
+                />
+              </label>
+              <label class="settings-field">
+                <span>새 비밀번호</span>
+                <input
+                  v-model="passwordForm.newPassword"
+                  type="password"
+                  autocomplete="new-password"
+                />
+              </label>
+              <label class="settings-field">
+                <span>새 비밀번호 확인</span>
+                <input
+                  v-model="passwordForm.confirmPassword"
+                  type="password"
+                  autocomplete="new-password"
+                />
+              </label>
+            </section>
+
+            <ul class="settings-policy" aria-label="비밀번호 정책">
+              <li
+                v-for="item in passwordPolicyChecks"
+                :key="item.id"
+                :class="{ 'is-valid': item.valid }"
+              >
+                <span class="material-symbols-outlined">{{
+                  item.valid ? 'check_circle' : 'radio_button_unchecked'
+                }}</span>
+                {{ item.label }}
+              </li>
+            </ul>
+
+            <footer class="settings-actions">
+              <p v-if="securityFeedback.error" class="settings-error">
+                {{ securityFeedback.error }}
+              </p>
+              <p v-else-if="securityFeedback.success" class="settings-success">
+                {{ securityFeedback.success }}
+              </p>
+              <button
+                type="submit"
+                class="settings-button settings-button--primary"
+                :disabled="isChangingPassword"
+              >
+                {{ isChangingPassword ? '변경 중' : '비밀번호 변경' }}
+              </button>
+            </footer>
+          </form>
         </div>
       </article>
     </div>
@@ -663,9 +873,9 @@ watch(
   display: grid;
   width: min(1180px, 100%);
   max-width: 1180px;
-  gap: 16px;
+  gap: var(--ui-section-gap);
   margin: 0 auto;
-  padding: 24px;
+  padding: var(--ui-page-padding);
   scrollbar-gutter: stable;
 }
 
@@ -775,10 +985,6 @@ watch(
   color: var(--text-heading);
 }
 
-.settings-tab.is-active {
-  box-shadow: none;
-}
-
 .settings-tab.is-active::before {
   background: var(--accent-color);
 }
@@ -856,7 +1062,7 @@ watch(
 .settings-pane {
   display: grid;
   gap: 18px;
-  padding: 20px;
+  padding: var(--ui-card-padding);
 }
 
 .settings-profile {
@@ -875,15 +1081,21 @@ watch(
   gap: 14px;
 }
 
-.settings-logo-panel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.settings-logo-panel,
+.settings-preview,
+.settings-password {
+  display: grid;
   gap: 16px;
   padding: 16px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
   background: var(--surface-card-muted);
+}
+
+.settings-logo-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .company-logo-preview {
@@ -940,7 +1152,9 @@ watch(
   object-fit: cover;
 }
 
-.profile-preview strong {
+.profile-preview strong,
+.settings-preview strong,
+.settings-password strong {
   display: block;
   color: var(--text-heading);
   font-size: 18px;
@@ -950,7 +1164,9 @@ watch(
 .profile-preview p,
 .company-logo-preview p,
 .settings-row p,
-.settings-block p {
+.settings-block p,
+.settings-preview p,
+.settings-password p {
   margin-top: 4px;
   color: var(--text-muted);
   font-size: 13px;
@@ -964,10 +1180,15 @@ watch(
 }
 
 .profile-actions,
-.settings-actions {
+.settings-actions,
+.settings-security-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.settings-security-actions {
+  justify-content: flex-end;
 }
 
 .settings-file {
@@ -990,7 +1211,7 @@ watch(
 
 .settings-field input {
   width: 100%;
-  min-height: 40px;
+  min-height: var(--ui-control-height);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
   background: var(--surface-control);
@@ -1016,6 +1237,11 @@ watch(
   background: var(--surface-card-muted);
 }
 
+.settings-block--inline {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
 .settings-block strong,
 .settings-row strong {
   color: var(--text-heading);
@@ -1023,15 +1249,10 @@ watch(
   font-weight: 800;
 }
 
-.settings-message,
 .settings-success,
 .settings-error {
   font-size: 13px;
   font-weight: 700;
-}
-
-.settings-message {
-  color: var(--text-muted);
 }
 
 .settings-success {
@@ -1044,7 +1265,7 @@ watch(
 
 .settings-actions {
   justify-content: flex-end;
-  min-height: 40px;
+  min-height: var(--ui-control-height);
 }
 
 .settings-actions p {
@@ -1053,7 +1274,7 @@ watch(
 
 .settings-button {
   display: inline-flex;
-  min-height: 38px;
+  min-height: var(--ui-control-height);
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -1083,6 +1304,158 @@ watch(
 .settings-button--ghost:hover {
   border-color: var(--line-strong);
   background: var(--surface-control-hover);
+}
+
+.settings-button--danger {
+  border: 1px solid color-mix(in srgb, var(--danger-color) 42%, var(--line-soft));
+  background: var(--danger-surface);
+  color: var(--danger-text-strong);
+}
+
+.settings-list,
+.settings-account {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+}
+
+.settings-row,
+.settings-account__row {
+  display: flex;
+  min-height: var(--ui-row-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-card);
+}
+
+.settings-row:last-child,
+.settings-account__row:last-child {
+  border-bottom: 0;
+}
+
+.settings-segmented {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-self: start;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+}
+
+.settings-segmented button {
+  min-width: 96px;
+  min-height: var(--ui-control-height);
+  padding: 0 14px;
+  color: var(--text-body);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.settings-segmented button.is-active {
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+.settings-preview__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-preview__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.settings-preview__card,
+.settings-preview__list {
+  display: grid;
+  gap: 5px;
+  min-height: var(--ui-row-height);
+  align-content: center;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+
+.settings-preview__card strong,
+.settings-preview__list strong {
+  color: var(--text-heading);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.settings-preview__list span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settings-chip {
+  width: fit-content;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-account__row span {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-account__row strong {
+  color: var(--text-heading);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.settings-policy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-policy li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-full);
+  background: var(--surface-control);
+  color: var(--text-muted);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-policy li.is-valid {
+  border-color: color-mix(in srgb, var(--success-color) 58%, var(--line-soft));
+  color: var(--success-color);
+}
+
+.settings-policy .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .settings-modal {
@@ -1171,13 +1544,14 @@ watch(
   font-weight: 800;
 }
 
-.settings-modal__preview small {
+.settings-modal__preview small,
+.settings-modal__note {
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 800;
 }
 
 .settings-modal__note {
-  color: var(--text-muted);
   font-size: 13px;
   font-weight: 600;
 }
@@ -1210,90 +1584,6 @@ watch(
   transform: translateY(8px) scale(0.98);
 }
 
-.settings-list {
-  display: grid;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 74px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--surface-card);
-}
-
-.settings-row:last-child {
-  border-bottom: 0;
-}
-
-.settings-segmented {
-  display: inline-grid;
-  grid-auto-flow: column;
-  align-self: start;
-  overflow: hidden;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  background: var(--surface-control);
-}
-
-.settings-segmented button {
-  min-width: 96px;
-  min-height: 38px;
-  padding: 0 14px;
-  color: var(--text-body);
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.settings-segmented button.is-active {
-  background: var(--accent-strong);
-  color: #ffffff;
-}
-
-.settings-account {
-  display: grid;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.settings-account__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 58px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.settings-account__row:last-child {
-  border-bottom: 0;
-}
-
-.settings-account__row span {
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.settings-account__row strong {
-  color: var(--text-heading);
-  font-size: 14px;
-  font-weight: 800;
-  text-align: right;
-}
-
 @media (max-width: 960px) {
   .settings-shell {
     grid-template-columns: 1fr;
@@ -1302,25 +1592,29 @@ watch(
   .settings-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .settings-preview__body {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 680px) {
-  .settings-page {
-    padding: 16px;
-  }
-
   .settings-header,
   .settings-profile,
   .settings-logo-panel,
   .settings-row,
-  .settings-account__row {
+  .settings-account__row,
+  .settings-preview__head,
+  .settings-block--inline {
     align-items: stretch;
     flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .settings-status,
   .settings-segmented,
   .settings-actions,
+  .settings-security-actions,
   .profile-actions {
     width: 100%;
   }
@@ -1330,7 +1624,8 @@ watch(
     grid-template-columns: 1fr;
   }
 
-  .settings-actions {
+  .settings-actions,
+  .settings-security-actions {
     justify-content: stretch;
   }
 

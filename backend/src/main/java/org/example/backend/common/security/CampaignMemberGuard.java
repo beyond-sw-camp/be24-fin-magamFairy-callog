@@ -36,15 +36,12 @@ public final class CampaignMemberGuard {
         return member;
     }
 
-    public static void requireSameDepartment(User actor, User target) {
+    public static void requireSameCompany(User actor, User target) {
         String aCompany = normalize(actor.getCompanyName());
-        String aDept = normalize(actor.getDepartment());
         String tCompany = normalize(target.getCompanyName());
-        String tDept = normalize(target.getDepartment());
-        if (aCompany.isEmpty() || aDept.isEmpty()
-                || !aCompany.equals(tCompany) || !aDept.equals(tDept)) {
+        if (aCompany.isEmpty() || !aCompany.equals(tCompany)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "같은 회사·부서의 사용자만 처리할 수 있습니다.");
+                    "같은 회사의 사용자만 처리할 수 있습니다.");
         }
     }
 
