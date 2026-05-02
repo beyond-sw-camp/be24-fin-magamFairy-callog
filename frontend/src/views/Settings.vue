@@ -81,12 +81,12 @@ function resolveUserKey(user) {
   )
 }
 
-function normalizeTheme(value) {
-  return value === 'light' || value === 'dark' ? value : null
-}
-
 function resolveSettingsPayload(payload) {
   return payload?.result ?? payload?.data ?? payload ?? {}
+}
+
+function normalizeDensity(value) {
+  return densityOptions.some((option) => option.value === value) ? value : null
 }
 
 function resolveProfilePayload(payload) {
@@ -117,13 +117,23 @@ function selectTab(tabId) {
 
 function applyRemoteSettings(payload) {
   const source = resolveSettingsPayload(payload)
-  const nextTheme =
-    normalizeTheme(source.theme) ??
-    (typeof source.darkMode === 'boolean' ? (source.darkMode ? 'dark' : 'light') : null)
+  const nextThemeUi = {}
+  const nextDensity = normalizeDensity(source.density)
 
-  if (nextTheme) {
-    plannerStore.setTheme(nextTheme)
-    userSettingsStore.updateThemeUi({ theme: nextTheme })
+  if (nextDensity) {
+    nextThemeUi.density = nextDensity
+  }
+
+  if (typeof source.reduceMotion === 'boolean') {
+    nextThemeUi.reduceMotion = source.reduceMotion
+  }
+
+  if (typeof source.highContrast === 'boolean') {
+    nextThemeUi.highContrast = source.highContrast
+  }
+
+  if (Object.keys(nextThemeUi).length > 0) {
+    userSettingsStore.updateThemeUi(nextThemeUi)
   }
 }
 
@@ -156,11 +166,6 @@ async function syncSettingToServer(body) {
 function setTheme(nextTheme) {
   plannerStore.setTheme(nextTheme)
   userSettingsStore.updateThemeUi({ theme: nextTheme })
-
-  void syncSettingToServer({
-    theme: nextTheme,
-    darkMode: nextTheme === 'dark',
-  })
 }
 
 function setDensity(value) {
