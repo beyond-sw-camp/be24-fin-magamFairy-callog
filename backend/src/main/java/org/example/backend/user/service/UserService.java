@@ -164,6 +164,31 @@ public class UserService implements UserDetailsService {
     }
 
     @Transactional
+    public UserDto.ChangePasswordRes changeMyPassword(
+            UserDto.ChangePasswordReq dto,
+            Authentication authentication
+    ) {
+        if (dto == null) {
+            throw new IllegalArgumentException("request body is required.");
+        }
+
+        User user = resolveAuthenticatedUser(authentication);
+        String currentPassword = requireText(dto.currentPassword(), "currentPassword");
+        String newPassword = requireText(dto.newPassword(), "newPassword");
+
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new IllegalArgumentException("currentPassword is invalid.");
+        }
+
+        validateNewPassword(currentPassword, newPassword);
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        refreshTokenRepository.deleteByUserId(user.getId());
+
+        return UserDto.ChangePasswordRes.from(user);
+    }
+
+    @Transactional
     public UserDto.DeleteUserRes deleteUser(UserDto.DeleteUserReq dto, Authentication authentication) {
         if (dto == null) {
             throw new IllegalArgumentException("request body is required.");
@@ -217,6 +242,32 @@ public class UserService implements UserDetailsService {
             password.append(PASSWORD_CHARACTERS.charAt(randomIndex));
         }
         return password.toString();
+    }
+
+    private void validateNewPassword(String currentPassword, String newPassword) {
+        if (newPassword.length() < 8 || newPassword.length() > 20) {
+            throw new IllegalArgumentException("newPassword must be 8 to 20 characters.");
+        }
+
+        if (newPassword.chars().anyMatch(Character::isWhitespace)) {
+            throw new IllegalArgumentException("newPassword must not contain whitespace.");
+        }
+
+        if (newPassword.equals(currentPassword)) {
+            throw new IllegalArgumentException("newPassword must be different from currentPassword.");
+        }
+
+        boolean hasUpperCase = newPassword.chars().anyMatch(Character::isUpperCase);
+        boolean hasLowerCase = newPassword.chars().anyMatch(Character::isLowerCase);
+        boolean hasDigit = newPassword.chars().anyMatch(Character::isDigit);
+        boolean hasSpecial = newPassword.chars()
+                .anyMatch(character -> !Character.isLetterOrDigit(character));
+
+        if (!hasUpperCase || !hasLowerCase || !hasDigit || !hasSpecial) {
+            throw new IllegalArgumentException(
+                    "newPassword must include uppercase, lowercase, number, and special character."
+            );
+        }
     }
 
     private String resolveCreatorRole(Authentication authentication) {
