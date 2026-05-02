@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,10 +38,15 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(result));
     }
 
-    @PostMapping("/promote")
-    public ResponseEntity<?> promoteToManager(@RequestBody UserDto.PromoteToManagerReq dto, Authentication authentication) {
-        UserDto.PromoteToManagerRes result = userService.promoteToManager(dto, authentication);
+    @PostMapping("/manage")
+    public ResponseEntity<?> manageUserRole(@RequestBody UserDto.ManageRoleReq dto, Authentication authentication) {
+        UserDto.ManageRoleRes result = userService.manageUserRole(dto, authentication);
         return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
+    @GetMapping("/manage/users")
+    public ResponseEntity<?> listManageableUsers(Authentication authentication) {
+        return ResponseEntity.ok(BaseResponse.success(userService.listManageableUsers(authentication)));
     }
 
     @PostMapping("/signup")

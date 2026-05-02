@@ -44,7 +44,8 @@ public class SecurityConfig {
                 .requestMatchers("/auth/reissue", "/auth/logout").permitAll()
                 .requestMatchers("/auth/signup").permitAll()
                 .requestMatchers("/auth/usercreate").hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
-                .requestMatchers("/auth/promote").hasAnyAuthority("ROLE_GENERAL_MANAGER")
+                .requestMatchers("/auth/manage").hasAnyAuthority("ROLE_GENERAL_MANAGER")
+                .requestMatchers("/auth/manage/users").hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
                 .requestMatchers(
                         "/auth/userdelete",
                         "/auth/resetpassword",
