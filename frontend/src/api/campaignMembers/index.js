@@ -3,6 +3,7 @@ import api from '/plugins/interceptor'
 const base = (campaignId) => `/campaigns/${campaignId}/members`
 
 export const getCampaignMembers = (campaignId) => api.get(base(campaignId))
+export const listCampaignParticipants = (campaignId) => api.get(`${base(campaignId)}/participants`)
 export const getTeamCandidates = (campaignId) => api.get(`${base(campaignId)}/candidates/team`)
 export const getPartnerGmCandidates = (campaignId) => api.get(`${base(campaignId)}/candidates/partner-gm`)
 export const addTeamMembers = (campaignId, userIdxList) =>

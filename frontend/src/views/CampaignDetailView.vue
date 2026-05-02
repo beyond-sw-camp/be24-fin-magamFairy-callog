@@ -6,6 +6,7 @@ import { GetCampaignDetails } from '@/api/campaigns'
 import CampaignResourcesView from '@/views/CampaignResourcesView.vue'
 import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
 import CampaignMembersPanel from '@/components/campaign/CampaignMembersPanel.vue'
+import CampaignKpiTab from '@/components/campaign/kpi/CampaignKpiTab.vue'
 import {
   ListMilestones,
   ListTaskParts,
@@ -15,6 +16,7 @@ import {
   CreateTask,
   UpdateTask,
 } from '@/api/teamboard'
+import { getCampaignMembers, listCampaignParticipants } from '@/api/campaignMembers'
 
 const TEAMBOARD_STATUS_MAP = {
   BACKLOG: 'backlog',
@@ -166,6 +168,8 @@ const statusColumns = [
 const milestoneRows = ref([])
 
 const teams = []
+const campaignMemberOptions = ref([])
+const campaignParticipantOptions = ref([])
 
 const teamTasks = ref([])
 
@@ -220,8 +224,8 @@ function createDefaultTaskForm() {
     part: taskPartOptions.value[0],
     type: taskTypeOptions[0],
     priority: 'medium',
-    ownerName: '',
-    ownerInitial: '',
+    assigneeId: null,
+    participantId: null,
     description: '',
   }
 }
@@ -237,6 +241,7 @@ function createDefaultPartForm() {
     dependency: '',
     deliverable: '',
     description: '',
+    participantId: null,
   }
 }
 
@@ -468,8 +473,8 @@ function editFromDetail() {
     type: t.type || taskTypeOptions[0],
     priority: t.priority ?? 'medium',
     dueDate: t.dueDateRaw ? String(t.dueDateRaw).slice(0, 10) : '',
-    ownerName: t.ownerName ?? '',
-    ownerInitial: t.ownerInitial ?? '',
+    assigneeId: t.assigneeIdx ?? null,
+    participantId: t.participantIdx ?? null,
     description: t.description ?? '',
   }
   taskFormError.value = ''
@@ -510,6 +515,7 @@ async function addTaskPart() {
       deliverable: partForm.value.deliverable.trim() || null,
       description: partForm.value.description.trim() || null,
       sortOrder: taskPartRecords.value.length,
+      participantId: partForm.value.participantId ?? null,
     })
 
     taskPartRecords.value = [
@@ -654,13 +660,13 @@ async function addTeamTask() {
 
   const payload = {
     name: title,
-    participantId: null,
+    participantId: taskForm.value.participantId ?? null,
     dueDate: toIsoDateTime(taskForm.value.dueDate),
     taskType: TYPE_TO_BACKEND[taskForm.value.type] ?? 'OTHER',
     status: STATUS_TO_BACKEND[taskForm.value.status] ?? 'BACKLOG',
     taskPartId,
     milestoneId,
-    assigneeId: null,
+    assigneeId: taskForm.value.assigneeId ?? null,
     priority: (taskForm.value.priority ?? 'medium').toUpperCase(),
     memo: taskForm.value.description.trim() || null,
   }
@@ -682,12 +688,10 @@ async function addTeamTask() {
       priority: TEAMBOARD_PRIORITY_MAP[result.priority] ?? 'medium',
       dueDate: result.dueDate ? formatTeamboardDate(result.dueDate) : '',
       dueDateRaw: result.dueDate ?? '',
-      ownerName: result.assigneeName ?? taskForm.value.ownerName.trim(),
-      ownerInitial:
-        result.assigneeName?.charAt(0) ||
-        taskForm.value.ownerInitial.trim() ||
-        taskForm.value.ownerName.trim().slice(0, 1) ||
-        'N',
+      ownerName: result.assigneeName ?? '',
+      ownerInitial: result.assigneeName?.charAt(0) ?? '?',
+      assigneeIdx: result.assigneeIdx ?? null,
+      participantIdx: result.participantIdx ?? null,
       description: result.memo ?? taskForm.value.description.trim(),
     }
 
@@ -806,11 +810,20 @@ async function loadCampaignTeamboard(campaignId) {
   if (!campaignId) return
 
   try {
-    const [milestonesData, taskPartsData, tasksData] = await Promise.all([
+    const [milestonesData, taskPartsData, tasksData, membersRes, participantsRes] = await Promise.all([
       ListMilestones(campaignId),
       ListTaskParts(campaignId),
       ListTasksByCampaign(campaignId),
+      getCampaignMembers(campaignId).then((r) => r.data?.data?.members ?? []).catch(() => []),
+      listCampaignParticipants(campaignId).then((r) => r.data?.data ?? []).catch(() => []),
     ])
+
+    campaignMemberOptions.value = Array.isArray(membersRes)
+      ? membersRes.map((m) => ({ userIdx: m.userIdx, name: m.name, companyName: m.companyName }))
+      : []
+    campaignParticipantOptions.value = Array.isArray(participantsRes)
+      ? participantsRes.map((p) => ({ idx: p.idx, organizationName: p.organizationName }))
+      : []
 
     if (Array.isArray(milestonesData) && milestonesData.length > 0) {
       milestoneRows.value = milestonesData.map((m) => ({
@@ -842,6 +855,8 @@ async function loadCampaignTeamboard(campaignId) {
         dueDateRaw: t.dueDate ?? '',
         ownerInitial: t.assigneeName ? t.assigneeName.charAt(0) : '?',
         ownerName: t.assigneeName ?? '',
+        assigneeIdx: t.assigneeIdx ?? null,
+        participantIdx: t.participantIdx ?? null,
         part: t.taskPartName ?? '',
         priority: TEAMBOARD_PRIORITY_MAP[t.priority] ?? 'medium',
         milestone: t.milestoneName ?? '',
@@ -1246,65 +1261,7 @@ watch(
     </section>
 
     <section v-else-if="activeTab === '캠페인 성과/KPI'" class="tab-surface">
-      <div class="metric-grid">
-        <article v-for="item in kpiSummary" :key="item.label" class="kpi-card" :class="`tone-${item.tone}`">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-          <small>{{ item.sub }}</small>
-        </article>
-      </div>
-
-      <article class="panel kpi-panel">
-        <div class="panel__header">
-          <div>
-            <span class="requirement-badge">CAMPAIGN_006</span>
-            <h2>세부 KPI 목록</h2>
-          </div>
-          <div>
-            <button type="button" class="btn btn--secondary">프레임워크 불러오기</button>
-            <button type="button" class="btn btn--primary">지표 추가</button>
-          </div>
-        </div>
-
-        <div class="data-table data-table--kpi">
-          <div class="data-table__head">
-            <span>KPI 항목</span>
-            <span>분류</span>
-            <span>목표값</span>
-            <span>실제값</span>
-            <span>단위</span>
-            <span>달성률</span>
-            <span>상태</span>
-            <span>담당자</span>
-            <span>동작</span>
-          </div>
-          <div v-for="row in kpiRows" :key="row.id" class="data-table__row">
-            <strong>{{ row.name }}</strong>
-            <span class="type-badge">{{ row.category }}</span>
-            <span class="number-cell">{{ row.target.toLocaleString() }}</span>
-            <span class="number-cell">{{ row.actual ? row.actual.toLocaleString() : '-' }}</span>
-            <span>{{ row.unit }}</span>
-            <div class="achievement-cell">
-              <div class="progress-track">
-                <i :class="`fill-${getKpiTone(row)}`" :style="{ width: `${Math.min(getAchievement(row), 100)}%` }"></i>
-              </div>
-              <span>{{ getAchievement(row) }}%</span>
-            </div>
-            <span class="status-pill" :class="`status-pill--${getKpiTone(row)}`">{{ getKpiStatus(row) }}</span>
-            <span>{{ row.owner }}</span>
-            <button type="button" class="table-action">메모</button>
-          </div>
-        </div>
-
-        <div class="kpi-note-box">
-          <h3>성과 분석 및 개선 액션</h3>
-          <textarea
-            rows="3"
-            value="노출 목표는 초과 달성하였으나, 랜딩페이지 내 이탈률이 높아 전환율이 목표에 미달함. 다음 캠페인에서는 랜딩페이지 최상단에 CTA 버튼을 명확히 배치하고 로딩 속도를 최적화하는 액션 필요."
-          />
-          <button type="button" class="btn btn--secondary">저장하기</button>
-        </div>
-      </article>
+      <CampaignKpiTab :campaign-id="campaignId" />
     </section>
 
     <Teleport to="body">
@@ -1401,21 +1358,22 @@ watch(
 
               <label>
                 <span>담당자</span>
-                <input
-                  v-model.trim="taskForm.ownerName"
-                  type="text"
-                  placeholder="예: 김본사"
-                />
+                <select v-model="taskForm.assigneeId">
+                  <option :value="null">— 미지정 —</option>
+                  <option v-for="m in campaignMemberOptions" :key="m.userIdx" :value="m.userIdx">
+                    {{ m.name }} ({{ m.companyName ?? '본사' }})
+                  </option>
+                </select>
               </label>
 
               <label>
-                <span>담당자 이니셜</span>
-                <input
-                  v-model.trim="taskForm.ownerInitial"
-                  type="text"
-                  maxlength="2"
-                  placeholder="김"
-                />
+                <span>담당 참여사</span>
+                <select v-model="taskForm.participantId">
+                  <option :value="null">— 미지정 —</option>
+                  <option v-for="p in campaignParticipantOptions" :key="p.idx" :value="p.idx">
+                    {{ p.organizationName }}
+                  </option>
+                </select>
               </label>
             </div>
 
@@ -1500,6 +1458,16 @@ watch(
                 <select v-model="partForm.milestone">
                   <option v-for="milestone in milestoneRows" :key="milestone.id" :value="milestone.id">
                     {{ milestone.label }} ({{ milestone.sub }})
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>담당 참여사</span>
+                <select v-model="partForm.participantId">
+                  <option :value="null">— 미지정 —</option>
+                  <option v-for="p in campaignParticipantOptions" :key="p.idx" :value="p.idx">
+                    {{ p.organizationName }}
                   </option>
                 </select>
               </label>

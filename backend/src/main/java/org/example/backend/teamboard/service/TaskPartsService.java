@@ -3,6 +3,7 @@ package org.example.backend.teamboard.service;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignParticipant;
+import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.teamboard.model.MileStones;
 import org.example.backend.teamboard.model.TaskParts;
@@ -24,6 +25,7 @@ public class TaskPartsService {
     private final TaskPartsRepository taskPartsRepository;
     private final MileStonesRepository mileStonesRepository;
     private final CampaignRepository campaignRepository;
+    private final CampaignParticipantRepository participantRepository;
 
     public List<TaskPartsDto.ResList> listByCampaign(Long campaignIdx) {
         return taskPartsRepository.findAllByCampaign_IdxOrderBySortOrderAscIdxAsc(campaignIdx).stream()
@@ -43,8 +45,10 @@ public class TaskPartsService {
     ) {
         Campaign campaign = getCampaignOrThrow(campaignIdx);
         MileStones milestone = getMilestoneOrThrow(milestoneIdx);
-        // CampaignParticipant 매핑은 추후 확장 (현재 nullable 허용)
-        CampaignParticipant participant = null;
+        CampaignParticipant participant = req.participantId() != null
+                ? participantRepository.findById(req.participantId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "참여사를 찾을 수 없습니다."))
+                : null;
 
         TaskParts saved = taskPartsRepository.save(req.toEntity(campaign, milestone, participant));
         return TaskPartsDto.ResTaskParts.from(saved);
@@ -58,10 +62,14 @@ public class TaskPartsService {
     ) {
         TaskParts taskPart = getTaskPartOrThrow(taskPartIdx);
         MileStones milestone = milestoneIdx != null ? getMilestoneOrThrow(milestoneIdx) : taskPart.getMileStones();
+        CampaignParticipant participant = req.participantId() != null
+                ? participantRepository.findById(req.participantId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "참여사를 찾을 수 없습니다."))
+                : taskPart.getParticipant();
 
         taskPart.update(
                 milestone,
-                taskPart.getParticipant(),
+                participant,
                 req.name(),
                 req.reviewFlow(),
                 req.taskPriority(),

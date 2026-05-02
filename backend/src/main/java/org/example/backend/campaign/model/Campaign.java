@@ -67,6 +67,17 @@ public class Campaign extends BaseEntity {
     @Column(nullable = false, length = 30)
     private String status = "draft";
 
+    @Column(columnDefinition = "TEXT")
+    private String kpiAnalysis;
+
+    public void updateKpiAnalysis(String kpiAnalysis) {
+        this.kpiAnalysis = kpiAnalysis;
+    }
+
+    public boolean isClosed() {
+        return "closed".equals(this.status);
+    }
+
     @Column(nullable = false, length = 20)
     private String initials;
 

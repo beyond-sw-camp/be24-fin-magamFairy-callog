@@ -2,6 +2,7 @@ package org.example.backend.teamboard.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.CampaignParticipant;
+import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.teamboard.model.MileStones;
 import org.example.backend.teamboard.model.Task;
 import org.example.backend.teamboard.model.TaskDto;
@@ -27,6 +28,7 @@ public class TaskService {
     private final TaskPartsRepository taskPartsRepository;
     private final MileStonesRepository mileStonesRepository;
     private final UserRepository userRepository;
+    private final CampaignParticipantRepository participantRepository;
 
     /** 메인 팀 보드 - 모든 Task */
     public List<TaskDto.ResList> listAll() {
@@ -55,7 +57,8 @@ public class TaskService {
 
         MileStones milestone = req.milestoneId() != null ? getMilestoneOrThrow(req.milestoneId()) : null;
         User assignee = req.assigneeId() != null ? getUserOrThrow(req.assigneeId()) : null;
-        CampaignParticipant participant = null; // 참여사 매핑은 추후 확장
+        CampaignParticipant participant = req.participantId() != null
+                ? getParticipantOrThrow(req.participantId()) : null;
 
         Task saved = taskRepository.save(req.toEntity(participant, taskPart, milestone, assignee));
         return TaskDto.ResTask.from(saved);
@@ -68,7 +71,8 @@ public class TaskService {
         TaskParts taskPart = req.taskPartId() != null ? getTaskPartOrThrow(req.taskPartId()) : task.getTaskPart();
         MileStones milestone = req.milestoneId() != null ? getMilestoneOrThrow(req.milestoneId()) : task.getMilestone();
         User assignee = req.assigneeId() != null ? getUserOrThrow(req.assigneeId()) : task.getAssignee();
-        CampaignParticipant participant = task.getParticipant();
+        CampaignParticipant participant = req.participantId() != null
+                ? getParticipantOrThrow(req.participantId()) : task.getParticipant();
 
         task.update(
                 req.name(),
@@ -111,5 +115,10 @@ public class TaskService {
     private User getUserOrThrow(Long userIdx) {
         return userRepository.findById(userIdx)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+    }
+
+    private CampaignParticipant getParticipantOrThrow(Long participantIdx) {
+        return participantRepository.findById(participantIdx)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "참여사를 찾을 수 없습니다."));
     }
 }
