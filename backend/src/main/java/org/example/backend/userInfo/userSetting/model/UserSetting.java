@@ -22,7 +22,6 @@ import org.example.backend.user.model.User;
 @Getter
 @Entity
 public class UserSetting extends BaseEntity {
-    public static final String THEME_LIGHT = "light";
     public static final String DENSITY_COMFORTABLE = "comfortable";
 
     @Id
@@ -32,10 +31,6 @@ public class UserSetting extends BaseEntity {
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_idx", nullable = false, unique = true)
     private User user;
-
-    @Builder.Default
-    @Column(nullable = false, length = 20)
-    private String theme = THEME_LIGHT;
 
     @Builder.Default
     @Column(nullable = false, length = 30)
@@ -49,11 +44,7 @@ public class UserSetting extends BaseEntity {
     @Column(nullable = false)
     private Boolean highContrast = false;
 
-    public void update(String theme, String density, Boolean reduceMotion, Boolean highContrast) {
-        if (theme != null) {
-            this.theme = theme;
-        }
-
+    public void update(String density, Boolean reduceMotion, Boolean highContrast) {
         if (density != null) {
             this.density = density;
         }

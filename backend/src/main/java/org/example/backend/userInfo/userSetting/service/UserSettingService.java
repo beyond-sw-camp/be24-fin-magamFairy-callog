@@ -14,8 +14,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @RequiredArgsConstructor
 public class UserSettingService {
-    private static final String THEME_DARK = "dark";
-    private static final String THEME_LIGHT = "light";
     private static final String DENSITY_COMFORTABLE = "comfortable";
     private static final String DENSITY_COMPACT = "compact";
 
@@ -35,7 +33,6 @@ public class UserSettingService {
 
         UserSetting userSetting = getOrCreateSetting(userId);
         userSetting.update(
-                resolveTheme(dto.theme(), dto.darkMode()),
                 resolveDensity(dto.density()),
                 dto.reduceMotion(),
                 dto.highContrast()
@@ -57,24 +54,6 @@ public class UserSettingService {
         return userRepository.findUserById(userId)
                 .or(() -> userRepository.findByEmail(userId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "user not found."));
-    }
-
-    private String resolveTheme(String theme, Boolean darkMode) {
-        String normalizedTheme = normalize(theme);
-
-        if (normalizedTheme == null && darkMode != null) {
-            return darkMode ? THEME_DARK : THEME_LIGHT;
-        }
-
-        if (normalizedTheme == null) {
-            return null;
-        }
-
-        if (THEME_DARK.equals(normalizedTheme) || THEME_LIGHT.equals(normalizedTheme)) {
-            return normalizedTheme;
-        }
-
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "theme must be light or dark.");
     }
 
     private String resolveDensity(String density) {
