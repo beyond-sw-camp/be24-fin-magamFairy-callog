@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -153,6 +155,64 @@ public class UserService implements UserDetailsService {
                 .email(savedUser.getEmail())
                 .password(temporaryPassword)
                 .build();
+    }
+
+    @Transactional
+    public UserDto.ManageRoleRes manageUserRole(UserDto.ManageRoleReq dto, Authentication authentication) {
+        if (dto == null) {
+            throw new IllegalArgumentException("request body is required.");
+        }
+
+        User actor = resolveAuthenticatedUser(authentication);
+        String creatorRole = resolveCreatorRole(authentication);
+        if (!GENERAL_MANAGER_ROLE.equals(creatorRole)) {
+            throw new IllegalArgumentException("GENERAL_MANAGER만 권한을 변경할 수 있습니다.");
+        }
+
+        String id = requireText(dto.id(), "id");
+        String nextRole = normalizeRole(requireText(dto.role(), "role"));
+        if (!MANAGER_ROLE.equals(nextRole) && !USER_ROLE.equals(nextRole)) {
+            throw new IllegalArgumentException("MANAGER 또는 USER로만 변경할 수 있습니다.");
+        }
+
+        User target = findUserByIdOrEmail(id)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 계정입니다."));
+        String previousRole = normalizeRole(target.getRole());
+
+        validateManageTarget(actor, creatorRole, target);
+
+        if (previousRole.equals(nextRole)) {
+            throw new IllegalArgumentException("이미 해당 권한입니다.");
+        }
+
+        target.setRole(nextRole);
+
+        return UserDto.ManageRoleRes.builder()
+                .id(target.getId())
+                .name(target.getName())
+                .previousRole(previousRole)
+                .role(target.getRole())
+                .companyName(target.getCompanyName())
+                .department(target.getDepartment())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserDto.ManageableUserRes> listManageableUsers(Authentication authentication) {
+        User actor = resolveAuthenticatedUser(authentication);
+        String creatorRole = resolveCreatorRole(authentication);
+
+        return findManageableUserCandidates(actor, creatorRole).stream()
+                .filter(user -> user.getIdx() == null || !user.getIdx().equals(actor.getIdx()))
+                .filter(user -> Boolean.TRUE.equals(user.getEnable()))
+                .filter(user -> UserAccountStatus.ACTIVE.equals(user.getAccountStatus()))
+                .filter(user -> isManageableListTarget(actor, creatorRole, user))
+                .sorted(Comparator
+                        .comparing((User user) -> sortableText(user.getDepartment()))
+                        .thenComparing(user -> sortableText(user.getName()))
+                        .thenComparing(user -> sortableText(user.getId())))
+                .map(UserDto.ManageableUserRes::from)
+                .toList();
     }
 
     @Transactional
@@ -416,6 +476,54 @@ public class UserService implements UserDetailsService {
         }
 
         throw new IllegalArgumentException("지원하지 않는 권한입니다.");
+    }
+
+    private List<User> findManageableUserCandidates(User actor, String creatorRole) {
+        if (ADMIN_ROLE.equals(creatorRole)) {
+            return userRepository.findAll();
+        }
+
+        if (GENERAL_MANAGER_ROLE.equals(creatorRole)) {
+            Organization organization = actor.getOrganization();
+            if (organization == null || organization.getIdx() == null) {
+                throw new IllegalArgumentException("소속 조직 정보가 없어 구성원 목록을 조회할 수 없습니다.");
+            }
+
+            return userRepository.findAllByOrganizationIdx(organization.getIdx());
+        }
+
+        if (MANAGER_ROLE.equals(creatorRole)) {
+            return userRepository.findAllByCompanyNameAndDepartment(actor.getCompanyName(), actor.getDepartment());
+        }
+
+        throw new IllegalArgumentException("구성원 목록을 조회할 권한이 없습니다.");
+    }
+
+    private boolean isManageableListTarget(User actor, String creatorRole, User user) {
+        try {
+            String role = normalizeRole(user.getRole());
+            if (ADMIN_ROLE.equals(creatorRole)) {
+                return GENERAL_MANAGER_ROLE.equals(role) || MANAGER_ROLE.equals(role) || USER_ROLE.equals(role);
+            }
+
+            if (GENERAL_MANAGER_ROLE.equals(creatorRole)) {
+                return MANAGER_ROLE.equals(role) || USER_ROLE.equals(role);
+            }
+
+            if (MANAGER_ROLE.equals(creatorRole)) {
+                return USER_ROLE.equals(role)
+                        && sameText(actor.getCompanyName(), user.getCompanyName())
+                        && sameText(actor.getDepartment(), user.getDepartment());
+            }
+
+            return false;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private String sortableText(String value) {
+        return Optional.ofNullable(value).orElse("");
     }
 
     private String normalizeIdentifier(String value) {
