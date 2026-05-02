@@ -61,7 +61,16 @@ public class SecurityConfig {
                         "/sse/**"
                 ).permitAll()
                 .requestMatchers("/campaigns/**").authenticated()
-                .requestMatchers("/matching/**", "/matching/evaluation/**").authenticated()
+                .requestMatchers(
+                        "/matching/**"
+                        )
+                .hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
+                .requestMatchers(
+                        "/matching/benefit/**",
+                        "/matching/asset/**",
+                        "/matching/evaluation/list/**"
+                )
+                .hasAnyAuthority("ROLE_USER")
                 .anyRequest().authenticated()
         );
 
