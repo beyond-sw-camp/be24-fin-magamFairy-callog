@@ -762,6 +762,9 @@ function removeFormTag(tagToRemove) {
 }
 
 .reference-card {
+  display: flex;
+  height: 272px;
+  flex-direction: column;
   overflow: hidden;
   cursor: pointer;
   transition:
@@ -780,12 +783,21 @@ function removeFormTag(tagToRemove) {
 .detail-preview {
   display: grid;
   width: 100%;
-  aspect-ratio: 16 / 6.6;
   place-items: center;
   background: linear-gradient(135deg, var(--panel-muted), var(--panel-subtle));
   color: var(--accent-color);
   cursor: pointer;
   overflow: hidden;
+}
+
+.reference-card__preview {
+  height: 128px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.detail-preview {
+  aspect-ratio: 16 / 9;
 }
 
 .reference-card__preview img,
@@ -801,33 +813,13 @@ function removeFormTag(tagToRemove) {
   font-size: 34px;
 }
 
-.reference-card--link .reference-card__preview {
-  display: none;
-}
-
-.reference-card--link .reference-card__body {
-  min-height: 148px;
-}
-
-.reference-card--link .reference-card__body::before {
-  content: 'link';
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-family: 'Material Symbols Outlined';
-  font-size: 18px;
-  font-weight: normal;
-  font-feature-settings: 'liga';
-}
-
 .reference-card__body {
-  display: grid;
-  gap: 7px;
-  padding: 10px 12px;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 12px;
 }
 
 .reference-card__info,
@@ -835,6 +827,15 @@ function removeFormTag(tagToRemove) {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+}
+
+.reference-card__info {
+  margin-top: auto;
+}
+
+.reference-card .tag-row {
+  max-height: 21px;
+  overflow: hidden;
 }
 
 .empty-state {
