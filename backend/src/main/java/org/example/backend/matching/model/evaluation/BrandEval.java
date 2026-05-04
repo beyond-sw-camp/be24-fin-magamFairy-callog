@@ -17,7 +17,8 @@ public class BrandEval {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idx;
-    @CollectionTable(name = "improvement_directions", joinColumns = @JoinColumn(name = "eval_id"))
+    @ElementCollection
+    @CollectionTable(name = "brand_improvement_directions", joinColumns = @JoinColumn(name = "eval_id"))
     @Column(name = "direction_text", columnDefinition = "TEXT") // 여기서 TEXT를 지정해야 함
     private List<String> improvementDirections;
     private Integer overallScore;

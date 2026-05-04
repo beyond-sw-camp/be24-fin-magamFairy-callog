@@ -77,7 +77,6 @@ public class EvaluationDto {
             @JsonSubTypes.Type(value = CollectDto.Operation.class, name = "OPERATION"),
             @JsonSubTypes.Type(value = CollectDto.Brand.class, name = "BRAND")
     })
-
     @Getter
     public static abstract class CollectDto {
         private String category;
