@@ -68,15 +68,6 @@ public class AuthController {
         return ResponseEntity.ok(BaseResponse.success(result));
     }
 
-    @PatchMapping("/password")
-    public ResponseEntity<?> changePassword(
-            @RequestBody UserDto.ChangePasswordReq dto,
-            Authentication authentication
-    ) {
-        UserDto.ChangePasswordRes result = userService.changeMyPassword(dto, authentication);
-        return ResponseEntity.ok(BaseResponse.success(result));
-    }
-
     @PostMapping("/reissue")
     public ResponseEntity<?> reissue(HttpServletRequest request, HttpServletResponse response) {
         try {
