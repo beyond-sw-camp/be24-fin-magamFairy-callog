@@ -16,7 +16,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class UserProfileService {
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
-    private final ProfileImageStorageService profileImageStorageService;
 
     @Transactional
     public void ensureProfilesForExistingUsers() {
@@ -38,7 +37,7 @@ public class UserProfileService {
 
     @Transactional
     public UserProfileDto.Res getMyProfile(String userId) {
-        return toResponse(getOrCreateProfile(userId));
+        return UserProfileDto.Res.from(getOrCreateProfile(userId));
     }
 
     @Transactional
@@ -48,60 +47,14 @@ public class UserProfileService {
         }
 
         UserProfile userProfile = getOrCreateProfile(userId);
-        userProfile.updateContact(
+        userProfile.update(
                 normalize(dto.email()),
-                normalize(dto.phone())
+                normalize(dto.phone()),
+                resolveProfileImageValue(dto.profileImageKey(), userProfile.getProfileImageKey()),
+                resolveProfileImageValue(dto.profileImageUrl(), userProfile.getProfileImageUrl())
         );
 
-        return toResponse(userProfile);
-    }
-
-    @Transactional
-    public UserProfileDto.ProfileImageUploadUrlRes createProfileImageUploadUrl(
-            String userId,
-            UserProfileDto.ProfileImageUploadUrlReq dto
-    ) {
-        User user = findUser(userId);
-        ensureProfile(user);
-
-        return profileImageStorageService.createUploadUrl(user, dto);
-    }
-
-    @Transactional
-    public UserProfileDto.Res updateProfileImage(String userId, UserProfileDto.ProfileImageCommitReq dto) {
-        if (dto == null || dto.objectKey() == null || dto.objectKey().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "objectKey is required.");
-        }
-
-        User user = findUser(userId);
-        UserProfile userProfile = ensureProfile(user);
-        String objectKey = dto.objectKey().trim();
-
-        if (!profileImageStorageService.isProfileImageKeyForUser(user, objectKey)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "profile image key is not allowed.");
-        }
-
-        profileImageStorageService.validateUploadedObject(objectKey);
-
-        String previousObjectKey = userProfile.getProfileImageKey();
-        userProfile.updateProfileImageKey(objectKey);
-
-        if (previousObjectKey != null && !previousObjectKey.equals(objectKey)) {
-            profileImageStorageService.deleteObject(previousObjectKey);
-        }
-
-        return toResponse(userProfile);
-    }
-
-    @Transactional
-    public UserProfileDto.Res deleteProfileImage(String userId) {
-        UserProfile userProfile = getOrCreateProfile(userId);
-        String previousObjectKey = userProfile.getProfileImageKey();
-
-        userProfile.clearProfileImage();
-        profileImageStorageService.deleteObject(previousObjectKey);
-
-        return toResponse(userProfile);
+        return UserProfileDto.Res.from(userProfile);
     }
 
     private UserProfile getOrCreateProfile(String userId) {
@@ -124,10 +77,9 @@ public class UserProfileService {
         return value.trim();
     }
 
-    private UserProfileDto.Res toResponse(UserProfile userProfile) {
-        return UserProfileDto.Res.from(
-                userProfile,
-                profileImageStorageService.createViewUrl(userProfile.getProfileImageKey())
-        );
+    private String resolveProfileImageValue(String nextValue, String currentValue) {
+        String normalizedValue = normalize(nextValue);
+
+        return normalizedValue == null ? currentValue : normalizedValue;
     }
 }
