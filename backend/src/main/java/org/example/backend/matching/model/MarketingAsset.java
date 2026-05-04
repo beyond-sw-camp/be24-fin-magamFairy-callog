@@ -38,4 +38,11 @@ public class MarketingAsset {
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    public void update(String target, String type, String scale, String conditions) {
+        this.target = target;
+        this.type = type;
+        this.scale = scale;
+        this.conditions = conditions;
+    }
 }
