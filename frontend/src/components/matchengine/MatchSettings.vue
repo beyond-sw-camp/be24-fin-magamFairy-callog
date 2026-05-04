@@ -71,8 +71,14 @@ const selectedGoal = computed(
 const canRequestMatching = computed(() => Boolean(selectedGoal.value))
 
 const canAddGoal = computed(() => {
-  const { periodStart, periodEnd } = parsePeriod(form.value.period)
-  return form.value.name.trim() && form.value.primaryType && form.value.kpi.trim() && periodStart && periodEnd
+  return (
+    form.value.name.trim() &&
+    form.value.primaryType &&
+    form.value.kpi.trim() &&
+    form.value.periodStart &&
+    form.value.periodEnd &&
+    form.value.periodEnd >= form.value.periodStart
+  )
 })
 
 const workspaceStyle = computed(() => ({
@@ -86,7 +92,8 @@ function createGoalForm() {
     secondaryType: '',
     kpi: '',
     limit: '',
-    period: '',
+    periodStart: '',
+    periodEnd: '',
     owner: '',
     weights: '수익성 40 · 공수 30 · 브랜드 30',
   }
@@ -104,21 +111,7 @@ function fromBackendGoalType(value) {
   return index >= 0 ? goalTypes[index] : value || ''
 }
 
-function normalizeDate(value) {
-  return value.replaceAll('.', '-').replace(/-(\d)(?=-|$)/g, '-0$1')
-}
-
-function parsePeriod(period) {
-  const dates = String(period ?? '').match(/\d{4}[.-]\d{1,2}[.-]\d{1,2}/g) ?? []
-  return {
-    periodStart: dates[0] ? normalizeDate(dates[0]) : null,
-    periodEnd: dates[1] ? normalizeDate(dates[1]) : null,
-  }
-}
-
 function createGoalPayload() {
-  const { periodStart, periodEnd } = parsePeriod(form.value.period)
-
   return {
     name: form.value.name,
     primaryType: toBackendGoalType(form.value.primaryType),
@@ -127,8 +120,8 @@ function createGoalPayload() {
     kpiSecondary: '',
     budgetLimit: form.value.limit,
     effortLimit: form.value.limit,
-    periodStart,
-    periodEnd,
+    periodStart: form.value.periodStart,
+    periodEnd: form.value.periodEnd,
     weightRevenue: 40,
     weightEffort: 30,
     weightBrand: 30,
@@ -280,7 +273,10 @@ onBeforeUnmount(stopResize)
         </label>
         <label>
           <span>기간</span>
-          <input v-model="form.period" placeholder="예: 2026.05.01 ~ 2026.06.30" />
+          <div class="settings-date-range">
+            <input v-model="form.periodStart" type="date" />
+            <input v-model="form.periodEnd" type="date" :min="form.periodStart || undefined" />
+          </div>
         </label>
         <label>
           <span>등록자</span>
@@ -535,6 +531,12 @@ onBeforeUnmount(stopResize)
   outline: none;
   border-color: var(--accent-color);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 16%, transparent);
+}
+
+.settings-date-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
 }
 
 .settings-goal-form button,
