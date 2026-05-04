@@ -35,9 +35,9 @@ public class BaseResponse<T> {
 
     public static <T> BaseResponse processing(BaseResponseStatus status) {
         return new BaseResponse(
-                SUCCESS.isSuccess(),
-                SUCCESS.getCode(),
-                SUCCESS.getMessage(),
+                status.isSuccess(),
+                status.getCode(),
+                status.getMessage(),
                 null
         );
     }
