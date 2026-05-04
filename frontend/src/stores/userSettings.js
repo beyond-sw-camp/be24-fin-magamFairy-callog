@@ -100,6 +100,17 @@ function drawContainedImage(context, image, x, y, width, height) {
   context.drawImage(image, nextX, nextY, nextWidth, nextHeight)
 }
 
+function drawCoverImage(context, image, x, y, width, height) {
+  const imageRatio = image.width / image.height
+  const boxRatio = width / height
+  const nextWidth = imageRatio > boxRatio ? height * imageRatio : width
+  const nextHeight = imageRatio > boxRatio ? height : width / imageRatio
+  const nextX = x + (width - nextWidth) / 2
+  const nextY = y + (height - nextHeight) / 2
+
+  context.drawImage(image, nextX, nextY, nextWidth, nextHeight)
+}
+
 function createDefaultAvatarDataUrl(initials) {
   if (typeof document === 'undefined') {
     return ''
@@ -234,6 +245,11 @@ function applyThemeUiPreferences(themeUi) {
 function loadImage(source) {
   return new Promise((resolve, reject) => {
     const image = new Image()
+
+    if (typeof source === 'string' && !source.startsWith('data:')) {
+      image.crossOrigin = 'anonymous'
+    }
+
     image.onload = () => resolve(image)
     image.onerror = reject
     image.src = source
@@ -402,9 +418,9 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     context.clip()
 
     try {
-      if (profile.imageDataUrl?.startsWith('data:')) {
+      if (profile.imageDataUrl) {
         const image = await loadImage(profile.imageDataUrl)
-        context.drawImage(image, 68, 78, 148, 148)
+        drawCoverImage(context, image, 68, 78, 148, 148)
       } else {
         throw new Error('empty profile image')
       }
