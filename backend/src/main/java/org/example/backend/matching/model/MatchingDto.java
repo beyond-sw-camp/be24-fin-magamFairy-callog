@@ -5,6 +5,7 @@ import lombok.Getter;
 import org.example.backend.organization.model.Organization;
 import org.springframework.data.domain.Page;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.example.backend.common.Constants.DEFAULT_ASSET_STATUS;
@@ -156,8 +157,10 @@ public class MatchingDto {
         private String type;
         private String affiliate;
         private String target;
+        private String scale;
         private String conditions;
         private Boolean isActive;
+        private String createdAt;
 
         public static AssetRes toDto(MarketingAsset entity){
             return AssetRes.builder()
@@ -165,9 +168,104 @@ public class MatchingDto {
                     .type(entity.getType())
                     .affiliate(entity.getOrganization().getName())
                     .target(entity.getTarget())
+                    .scale(entity.getScale())
                     .conditions(entity.getConditions())
                     .isActive(entity.getIsActive())
+                    .createdAt(entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString())
                     .build();
         }
     }
+
+    @Getter
+    @Builder
+    public static class AddGoal {
+        private String name;
+        private GoalType primaryType;
+        private GoalType secondaryType;
+
+        private String kpiPrimary;
+        private String kpiSecondary;
+
+        private String budgetLimit;
+        private String effortLimit;
+
+        private LocalDate periodStart;
+        private LocalDate periodEnd;
+
+        private Integer weightRevenue;
+        private Integer weightEffort;
+        private Integer weightBrand;
+
+        private String ownerLabel;
+        private String status;
+    }
+
+    // 응답 DTO
+    @Getter
+    @Builder
+    public static class GoalRes {
+        private Long idx;
+        private String name;
+        private GoalType primaryType;
+        private GoalType secondaryType;
+        private String kpiPrimary;
+        private String kpiSecondary;
+        private String budgetLimit;
+        private String effortLimit;
+        private LocalDate periodStart;
+        private LocalDate periodEnd;
+        private Integer weightRevenue;
+        private Integer weightEffort;
+        private Integer weightBrand;
+        private String ownerLabel;
+        private String ownerOrganization;
+        private String status;
+        private String createdAt;
+
+        public static GoalRes toDto(CampaignGoal entity) {
+            return GoalRes.builder()
+                    .idx(entity.getIdx())
+                    .name(entity.getName())
+                    .primaryType(entity.getPrimaryType())
+                    .secondaryType(entity.getSecondaryType())
+                    .kpiPrimary(entity.getKpiPrimary())
+                    .kpiSecondary(entity.getKpiSecondary())
+                    .budgetLimit(entity.getBudgetLimit())
+                    .effortLimit(entity.getEffortLimit())
+                    .periodStart(entity.getPeriodStart())
+                    .periodEnd(entity.getPeriodEnd())
+                    .weightRevenue(entity.getWeightRevenue())
+                    .weightEffort(entity.getWeightEffort())
+                    .weightBrand(entity.getWeightBrand())
+                    .ownerLabel(entity.getOwnerLabel())
+                    .ownerOrganization(entity.getOwnerOrganization() == null ? null : entity.getOwnerOrganization().getName())
+                    .status(entity.getStatus())
+                    .createdAt(entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString())
+                    .build();
+        }
+    }
+
+    // 목록 DTO
+    @Getter
+    @Builder
+    public static class GoalList {
+        private List<GoalRes> goalList;
+        private Integer page;
+        private Integer size;
+        private Long totalElements;
+        private Integer totalPages;
+
+        public static GoalList toDto(Page<CampaignGoal> result) {
+            return GoalList.builder()
+                    .goalList(result.getContent().stream().map(GoalRes::toDto).toList())
+                    .page(result.getNumber())
+                    .size(result.getSize())
+                    .totalElements(result.getTotalElements())
+                    .totalPages(result.getTotalPages())
+                    .build();
+        }
+    }
+
+
+
 }
