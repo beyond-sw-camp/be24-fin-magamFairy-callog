@@ -44,4 +44,18 @@ public class AssetService {
             assetRepository.save(dto.toEntity(affiliate));
         }
     }
+
+    @Transactional
+    public void updateAsset(Long idx, MatchingDto.AddAsset dto) {
+        MarketingAsset asset = assetRepository.findById(idx).orElseThrow(EntityNotFoundException::new);
+        asset.update(dto.getTarget(), dto.getType(), dto.getScale(), dto.getConditions());
+    }
+
+    @Transactional
+    public void deleteAsset(Long idx) {
+        if (!assetRepository.existsById(idx)) {
+            throw new EntityNotFoundException();
+        }
+        assetRepository.deleteById(idx);
+    }
 }
