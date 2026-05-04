@@ -1,0 +1,258 @@
+package org.example.backend.matching.model.evaluation;
+
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import lombok.*;
+import org.example.backend.matching.model.MarketingAsset;
+import org.example.backend.matching.model.PartnerBenefits;
+
+import java.util.List;
+
+public class EvaluationDto {
+
+    @Getter
+    @Builder
+    public static class StartEvaluationReq {
+        private String kpi;
+        private Double dependency;
+        private Long assetIdx;
+        private Long benefitIdx;
+    }
+
+    @Getter
+    @Builder
+    public static class StartEvaluation {
+        private String kpi;
+        private Double dependency; // 0.5와 같은 소수점을 처리하기 위해 Double 사용
+        private AssetRes asset;
+        private BenefitRes benefit;
+
+        @Getter
+        @Builder
+        public static class AssetRes {
+            private String type;
+            private String target;
+            private String conditions;
+            private String scale;
+            public static AssetRes toDto(MarketingAsset entity){
+                return AssetRes.builder()
+                        .type(entity.getType())
+                        .target(entity.getTarget())
+                        .conditions(entity.getConditions())
+                        .scale(entity.getScale())
+                        .build();
+            }
+        }
+
+        @Getter
+        @Builder
+        public static class BenefitRes {
+            private String cost;
+            private String name;
+            private String scale;
+            private String target;
+            private String type;
+            public static BenefitRes toDto(PartnerBenefits entity){
+                return BenefitRes.builder()
+                        .cost(entity.getCost())
+                        .name(entity.getName())
+                        .scale(entity.getScale())
+                        .target(entity.getTarget())
+                        .type(entity.getType())
+                        .build();
+            }
+        }
+    }
+
+    @JsonTypeInfo(
+            use = JsonTypeInfo.Id.NAME,
+            include = JsonTypeInfo.As.EXISTING_PROPERTY, // 이미 존재하는 category 필드를 사용
+            property = "category", // 구분자 필드명
+            visible = true // DTO 객체 내부의 category 필드에도 값이 채워지도록 설정
+    )
+    @JsonSubTypes({
+            @JsonSubTypes.Type(value = CollectDto.Customer.class, name = "CUSTOMER"),
+            @JsonSubTypes.Type(value = CollectDto.Revenue.class, name = "REVENUE"),
+            @JsonSubTypes.Type(value = CollectDto.Cost.class, name = "COST"),
+            @JsonSubTypes.Type(value = CollectDto.Operation.class, name = "OPERATION"),
+            @JsonSubTypes.Type(value = CollectDto.Brand.class, name = "BRAND")
+    })
+
+    @Getter
+    public static abstract class CollectDto {
+        private String category;
+        private Integer overallScore;
+        private List<String> improvementDirections;
+
+        @Getter
+        @Builder
+        @AllArgsConstructor
+        @NoArgsConstructor
+        public static class Customer extends CollectDto {
+            private String customerAgeGroup;
+            private String customerSpendingPatterns;
+            private String membershipTier;
+            private String usageChannel;
+            private String benefitCategory;
+            public CustomerEval toEntity() {
+                return CustomerEval.builder()
+                        .customerAgeGroup(this.customerAgeGroup)
+                        .customerSpendingPatterns(this.customerSpendingPatterns)
+                        .membershipTier(this.membershipTier)
+                        .usageChannel(this.usageChannel)
+                        .benefitCategory(this.benefitCategory)
+                        .overallScore(this.getOverallScore())
+                        .improvementDirections(this.getImprovementDirections())
+                        .build();
+            }
+        }
+
+        @Getter
+        @Builder
+        @AllArgsConstructor
+        @NoArgsConstructor
+        public static class Revenue extends CollectDto {
+            private String purchaseConversionProbability;
+            private String roomReservationIncreaseProbability;
+            private String appRegistrationIncreaseProbability;
+            private String membershipRegistrationRevisitProbability;
+            private String alignmentwithCampaignGoalsandKPIs;
+            public RevenueEval toEntity() {
+                return RevenueEval.builder()
+                        .purchaseConversionProbability(this.purchaseConversionProbability)
+                        .roomReservationIncreaseProbability(this.roomReservationIncreaseProbability)
+                        .appRegistrationIncreaseProbability(this.appRegistrationIncreaseProbability)
+                        .membershipRegistrationRevisitProbability(this.membershipRegistrationRevisitProbability)
+                        .alignmentwithCampaignGoalsandKPIs(this.alignmentwithCampaignGoalsandKPIs)
+                        .overallScore(this.getOverallScore())
+                        .improvementDirections(this.getImprovementDirections())
+                        .build();
+            }
+        }
+
+        @Getter
+        @Builder
+        @AllArgsConstructor
+        @NoArgsConstructor
+        public static class Cost extends CollectDto {
+            private String partnerSampleScale;
+            private String partnerDiscountCostBurden;
+            private String coProductionCostSharing;
+            private String hanwhaDirectCostBurden;
+            private String existingHanwhaChannelUtilization;
+            public CostEval toEntity() {
+                return CostEval.builder()
+                        .partnerSampleScale(this.partnerSampleScale)
+                        .partnerDiscountCostBurden(this.partnerDiscountCostBurden)
+                        .coProductionCostSharing(this.coProductionCostSharing)
+                        .hanwhaDirectCostBurden(this.hanwhaDirectCostBurden)
+                        .existingHanwhaChannelUtilization(this.existingHanwhaChannelUtilization)
+                        .overallScore(this.getOverallScore())
+                        .improvementDirections(this.getImprovementDirections())
+                        .build();
+            }
+        }
+
+        @Getter
+        @Builder
+        @AllArgsConstructor
+        @NoArgsConstructor
+        public static class Operation extends CollectDto {
+            private String approvalStepsCount;
+            private String legalReviewRequired;
+            private String brandReviewRequired;
+            private String deliverablesCount;
+            private String participatingDeptsAndPartners;
+            private String scheduleUrgency;
+            private String offlineOrOnsiteStaffRequired;
+
+            public OperationEval toEntity() {
+                return OperationEval.builder()
+                        .approvalStepsCount(this.approvalStepsCount)
+                        .legalReviewRequired(this.legalReviewRequired)
+                        .brandReviewRequired(this.brandReviewRequired)
+                        .deliverablesCount(this.deliverablesCount)
+                        .participatingDeptsAndPartners(this.participatingDeptsAndPartners)
+                        .scheduleUrgency(this.scheduleUrgency)
+                        .offlineOrOnsiteStaffRequired(this.offlineOrOnsiteStaffRequired)
+                        .overallScore(this.getOverallScore())
+                        .improvementDirections(this.getImprovementDirections())
+                        .build();
+            }
+        }
+
+        @Getter
+        @Builder
+        @AllArgsConstructor
+        @NoArgsConstructor
+        public static class Brand extends CollectDto {
+            private String brandTone;
+            private String priceRange;
+            private String customerExperience;
+            private String brandTrust;
+            private String reputationRisk;
+            private String hanwhaImageConsistency;
+
+            public BrandEval toEntity() {
+                return BrandEval.builder()
+                        .brandTone(this.brandTone)
+                        .priceRange(this.priceRange)
+                        .customerExperience(this.customerExperience)
+                        .brandTrust(this.brandTrust)
+                        .reputationRisk(this.reputationRisk)
+                        .hanwhaImageConsistency(this.hanwhaImageConsistency)
+                        .overallScore(this.getOverallScore())
+                        .improvementDirections(this.getImprovementDirections())
+                        .build();
+            }
+        }
+    }
+
+
+
+    @Getter
+    @Builder
+    public static class EvaluationRes{
+        // 점수
+        private Scores scores;
+        // 상세 데이터
+        private String benefitSummary;
+        private String reason;
+        private String warnings;
+        private String kpis;
+        private String evidence;
+        private String nextActions;
+        private String manualScore;
+
+        @Builder
+        @Getter
+        private static class Scores{
+            private Integer customerFit;
+            private Integer revenue;
+            private Integer cost;
+            private Integer operation;
+            private Integer brand;
+        }
+
+        public static EvaluationRes toDto(Evaluation entity) {
+            return EvaluationRes.builder()
+                    .scores(Scores.builder() // 여기서 Scores 객체를 생성
+                            .customerFit(entity.getCustomerFit())
+                            .revenue(entity.getRevenue())
+                            .cost(entity.getCost())
+                            .operation(entity.getOperation())
+                            .brand(entity.getBrand())
+                            .build())
+                    .benefitSummary(entity.getBenefitSummary())
+                    .reason(entity.getReason())
+                    .warnings(entity.getWarnings())
+                    .kpis(entity.getKpis())
+                    .evidence(entity.getEvidence())
+                    .nextActions(entity.getNextActions())
+                    .manualScore(entity.getManualScore())
+                    .build();
+        }
+    }
+
+
+}

@@ -4,22 +4,20 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.matching.model.*;
-import org.example.backend.matching.repository.AssetRepository;
-import org.example.backend.matching.repository.BenefitRepository;
-import org.example.backend.matching.repository.EvaluationRepository;
+import org.example.backend.matching.model.evaluation.CustomerEval;
+import org.example.backend.matching.model.evaluation.Evaluation;
+import org.example.backend.matching.model.evaluation.EvaluationDto;
+import org.example.backend.matching.repository.*;
 import org.example.backend.organization.model.Organization;
 import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-
-import java.rmi.RemoteException;
 
 
 @Service
@@ -71,8 +69,34 @@ public class EvaluationService {
         }
     }
 
-    public void collect(EvaluationDto.Collect dto, AuthUserDetails user) {
-
+    private final CustomerEvalRepository customerEvalRepository;
+    private final RevenueEvalRepository revenueEvalRepository;
+    private final CostEvalRepository costEvalRepository;
+    private final OperationEvalRepository operationEvalRepository;
+    private final BrandEvalRepository brandEvalRepository;
+    public void collect(EvaluationDto.CollectDto dto, String category) {
+        switch (category) {
+            case "CUSTOMER":
+                EvaluationDto.CollectDto.Customer customerDto = (EvaluationDto.CollectDto.Customer) dto;
+                customerEvalRepository.save(customerDto.toEntity());
+                break;
+            case "REVENUE":
+                EvaluationDto.CollectDto.Revenue revenueDto = (EvaluationDto.CollectDto.Revenue) dto;
+                revenueEvalRepository.save(revenueDto.toEntity());
+                break;
+            case "COST":
+                EvaluationDto.CollectDto.Cost costDto = (EvaluationDto.CollectDto.Cost) dto;
+                costEvalRepository.save(costDto.toEntity());
+                break;
+            case "OPERATION":
+                EvaluationDto.CollectDto.Operation operationDto = (EvaluationDto.CollectDto.Operation) dto;
+                operationEvalRepository.save(operationDto.toEntity());
+                break;
+            case "BRAND":
+                EvaluationDto.CollectDto.Brand brandDto = (EvaluationDto.CollectDto.Brand) dto;
+                brandEvalRepository.save(brandDto.toEntity());
+                break;
+        }
     }
 
     @Transactional(readOnly = true)
