@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AssetBenefitManagement from '@/components/matchengine/AssetBenefitManagement.vue'
+import { CreateGoal, ListGoals } from '@/api/matchingGoals'
 
 defineProps({
   isDark: {
@@ -19,6 +20,16 @@ const goalTypes = [
   '멤버십 재방문',
   '브랜드 노출',
   '매출 증대',
+]
+
+const goalTypeValues = [
+  'NEW_CUSTOMER',
+  'VIP_BENEFIT',
+  'ROOM_BOOKING',
+  'APP_JOIN',
+  'MEMBER_REVISIT',
+  'BRAND_EXPOSURE',
+  'REVENUE',
 ]
 
 const goals = ref([
@@ -48,7 +59,7 @@ const goals = ref([
 
 const selectedGoalId = ref(goals.value[0].id)
 const isAddingGoal = ref(false)
-const form = ref(createGoalForm())
+const form = ref({ ...createGoalForm(), primaryType: 'VIP_BENEFIT' })
 const workspaceRef = ref(null)
 const leftPanelPercent = ref(33)
 const isResizing = ref(false)
@@ -59,9 +70,10 @@ const selectedGoal = computed(
 
 const canRequestMatching = computed(() => Boolean(selectedGoal.value))
 
-const canAddGoal = computed(
-  () => form.value.name.trim() && form.value.primaryType && form.value.kpi.trim() && form.value.period.trim(),
-)
+const canAddGoal = computed(() => {
+  const { periodStart, periodEnd } = parsePeriod(form.value.period)
+  return form.value.name.trim() && form.value.primaryType && form.value.kpi.trim() && periodStart && periodEnd
+})
 
 const workspaceStyle = computed(() => ({
   '--goal-panel-width': `${leftPanelPercent.value}%`,
@@ -80,17 +92,79 @@ function createGoalForm() {
   }
 }
 
-function addGoal() {
+function toBackendGoalType(value) {
+  if (goalTypeValues.includes(value)) return value
+
+  const index = goalTypes.indexOf(value)
+  return index >= 0 ? goalTypeValues[index] : value || null
+}
+
+function fromBackendGoalType(value) {
+  const index = goalTypeValues.indexOf(value)
+  return index >= 0 ? goalTypes[index] : value || ''
+}
+
+function normalizeDate(value) {
+  return value.replaceAll('.', '-').replace(/-(\d)(?=-|$)/g, '-0$1')
+}
+
+function parsePeriod(period) {
+  const dates = String(period ?? '').match(/\d{4}[.-]\d{1,2}[.-]\d{1,2}/g) ?? []
+  return {
+    periodStart: dates[0] ? normalizeDate(dates[0]) : null,
+    periodEnd: dates[1] ? normalizeDate(dates[1]) : null,
+  }
+}
+
+function createGoalPayload() {
+  const { periodStart, periodEnd } = parsePeriod(form.value.period)
+
+  return {
+    name: form.value.name,
+    primaryType: toBackendGoalType(form.value.primaryType),
+    secondaryType: form.value.secondaryType ? toBackendGoalType(form.value.secondaryType) : null,
+    kpiPrimary: form.value.kpi,
+    kpiSecondary: '',
+    budgetLimit: form.value.limit,
+    effortLimit: form.value.limit,
+    periodStart,
+    periodEnd,
+    weightRevenue: 40,
+    weightEffort: 30,
+    weightBrand: 30,
+    ownerLabel: form.value.owner,
+    status: 'ACTIVE',
+  }
+}
+
+function mapGoal(goal) {
+  return {
+    id: goal.id ?? goal.idx,
+    name: goal.name ?? '',
+    primaryType: fromBackendGoalType(goal.primaryType),
+    secondaryType: fromBackendGoalType(goal.secondaryType),
+    kpi: [goal.kpiPrimary, goal.kpiSecondary].filter(Boolean).join(', '),
+    limit: [goal.budgetLimit, goal.effortLimit].filter(Boolean).join(' · '),
+    period: [goal.periodStart, goal.periodEnd].filter(Boolean).join(' ~ '),
+    owner: goal.owner ?? goal.ownerLabel ?? '',
+    weights: `${goal.weightRevenue ?? 0} / ${goal.weightEffort ?? 0} / ${goal.weightBrand ?? 0}`,
+  }
+}
+
+async function loadGoals() {
+  const data = await ListGoals()
+  goals.value = (data.goalList ?? data ?? []).map(mapGoal)
+  selectedGoalId.value = goals.value[0]?.id ?? null
+  emit('goal-count-change', goals.value.length)
+}
+
+async function addGoal() {
   if (!canAddGoal.value) return
 
-  const goal = {
-    ...form.value,
-    id: Date.now(),
-  }
+  await CreateGoal(createGoalPayload())
+  await loadGoals()
 
-  goals.value.unshift(goal)
-  selectedGoalId.value = goal.id
-  form.value = createGoalForm()
+  form.value = { ...createGoalForm(), primaryType: 'VIP_BENEFIT' }
   isAddingGoal.value = false
   emit('goal-count-change', goals.value.length)
 }
@@ -126,7 +200,9 @@ function stopResize() {
 }
 
 onMounted(() => {
-  emit('goal-count-change', goals.value.length)
+  loadGoals().catch(() => {
+    emit('goal-count-change', goals.value.length)
+  })
 })
 
 onBeforeUnmount(stopResize)
@@ -175,14 +251,21 @@ onBeforeUnmount(stopResize)
         <label>
           <span>주 목표 유형</span>
           <select v-model="form.primaryType">
-            <option v-for="type in goalTypes" :key="type" :value="type">{{ type }}</option>
+            <option v-for="(type, index) in goalTypes" :key="goalTypeValues[index]" :value="goalTypeValues[index]">
+              {{ type }}
+            </option>
           </select>
         </label>
         <label>
           <span>보조 목표</span>
           <select v-model="form.secondaryType">
             <option value="">선택 안 함</option>
-            <option v-for="type in goalTypes.filter((type) => type !== form.primaryType)" :key="type" :value="type">
+            <option
+              v-for="(type, index) in goalTypes"
+              :key="goalTypeValues[index]"
+              :value="goalTypeValues[index]"
+              :disabled="goalTypeValues[index] === toBackendGoalType(form.primaryType)"
+            >
               {{ type }}
             </option>
           </select>

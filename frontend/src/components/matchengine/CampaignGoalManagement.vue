@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { CreateGoal, ListGoals } from '@/api/matchingGoals'
 
 defineProps({
   isDark: {
@@ -128,19 +129,74 @@ function typeLabel(id) {
   return goalTypes.find((type) => type.id === id)?.label ?? '-'
 }
 
-function addGoal() {
+function fromGoalType(value) {
+  return value ? value.toLowerCase() : ''
+}
+
+function toGoalType(value) {
+  return value ? value.toUpperCase() : null
+}
+
+function mapGoal(goal) {
+  return {
+    id: goal.id ?? goal.idx,
+    name: goal.name ?? '',
+    primaryType: fromGoalType(goal.primaryType),
+    secondaryType: fromGoalType(goal.secondaryType),
+    kpiPrimary: goal.kpiPrimary ?? '',
+    kpiSecondary: goal.kpiSecondary ?? '',
+    budgetLimit: goal.budgetLimit ?? '',
+    effortLimit: goal.effortLimit ?? '',
+    periodStart: goal.periodStart ?? '',
+    periodEnd: goal.periodEnd ?? '',
+    owner: goal.owner ?? goal.ownerLabel ?? '',
+    weights: {
+      revenue: goal.weightRevenue ?? 0,
+      effort: goal.weightEffort ?? 0,
+      brand: goal.weightBrand ?? 0,
+    },
+  }
+}
+
+function createGoalPayload() {
+  return {
+    name: form.value.name,
+    primaryType: toGoalType(form.value.primaryType),
+    secondaryType: toGoalType(form.value.secondaryType),
+    kpiPrimary: form.value.kpiPrimary,
+    kpiSecondary: form.value.kpiSecondary,
+    budgetLimit: form.value.budgetLimit,
+    effortLimit: form.value.effortLimit,
+    periodStart: form.value.periodStart,
+    periodEnd: form.value.periodEnd,
+    weightRevenue: form.value.weights.revenue,
+    weightEffort: form.value.weights.effort,
+    weightBrand: form.value.weights.brand,
+    ownerLabel: form.value.owner,
+    status: 'ACTIVE',
+  }
+}
+
+async function addGoal() {
   if (!canSubmit.value) return
-  goals.value.unshift({
-    ...form.value,
-    id: Date.now(),
-    weights: { ...form.value.weights },
-  })
+
+  await CreateGoal(createGoalPayload())
+  await loadGoals()
+
   form.value = createGoalForm()
   emit('goal-count-change', goals.value.length)
 }
 
-onMounted(() => {
+async function loadGoals() {
+  const data = await ListGoals()
+  goals.value = (data.goalList ?? data ?? []).map(mapGoal)
   emit('goal-count-change', goals.value.length)
+}
+
+onMounted(() => {
+  loadGoals().catch(() => {
+    emit('goal-count-change', goals.value.length)
+  })
 })
 </script>
 
