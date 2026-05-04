@@ -156,8 +156,10 @@ public class MatchingDto {
         private String type;
         private String affiliate;
         private String target;
+        private String scale;
         private String conditions;
         private Boolean isActive;
+        private String createdAt;
 
         public static AssetRes toDto(MarketingAsset entity){
             return AssetRes.builder()
@@ -165,8 +167,10 @@ public class MatchingDto {
                     .type(entity.getType())
                     .affiliate(entity.getOrganization().getName())
                     .target(entity.getTarget())
+                    .scale(entity.getScale())
                     .conditions(entity.getConditions())
                     .isActive(entity.getIsActive())
+                    .createdAt(entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString())
                     .build();
         }
     }
