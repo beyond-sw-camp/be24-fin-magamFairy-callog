@@ -12,10 +12,14 @@ import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+
+import java.rmi.RemoteException;
 
 
 @Service
@@ -31,7 +35,7 @@ public class EvaluationService {
     @Value("${custom.n8n.webhook-url}")
     String n8nWebhookUrl;
 
-    public void startEvaluation(EvaluationDto.StartEvaluationReq dto) throws Exception {
+    public void startEvaluation(EvaluationDto.StartEvaluationReq dto) {
 
         MarketingAsset requiredAsset = assetRepository.findById(dto.getAssetIdx())
                 .orElseThrow(() -> new EntityNotFoundException("해당 Asset을 찾을 수 없습니다. Asset ID: " + dto.getAssetIdx()));
@@ -46,16 +50,25 @@ public class EvaluationService {
                 .benefit(EvaluationDto.StartEvaluation.BenefitRes.toDto(requiredBenefit))
                 .build();
 
-        restClient.post()
-                .uri(n8nWebhookUrl)
-                .contentType(MediaType.APPLICATION_JSON)
-                .header(HttpHeaders.ACCEPT, "*/*") // 추가 1: 다 받을게
-                .header(HttpHeaders.USER_AGENT, "PostmanRuntime/7.36.1") // 추가 2: 포스트맨인 척하기
-                .header(HttpHeaders.CONNECTION, "keep-alive") // 추가 3: 연결 유
-                .body(eval)
-                .retrieve()
-                .body(String.class);
+        try {
+            String n8nResponse = restClient.post()
+                    .uri(n8nWebhookUrl)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(eval)
+                    .retrieve()
+                    // 1. 응답을 받았지만 실패한 경우 (상태 코드 기반 세밀한 번역)
+                    .onStatus(status -> status == HttpStatus.NOT_FOUND, (request, response) -> {
+                        throw new RuntimeException("n8n 엔드포인트를 찾을 수 없습니다.");
+                    })
+                    .onStatus(status -> status.is5xxServerError(), (request, response) -> {
+                        throw new RuntimeException("n8n 서버 내부 처리 중 오류가 발생했습니다.");
+                    })
+                    .body(String.class);
 
+        } catch (RestClientException e) {
+            // 2. 서버가 꺼져있거나 타임아웃 등 아예 통신 자체가 실패한 경우 (또는 onStatus에서 잡지 못한 나머지 RestClient 예외)
+            throw new RuntimeException("n8n 서버와 연결할 수 없습니다.", e);
+        }
     }
 
     public void collect(EvaluationDto.Collect dto, AuthUserDetails user) {

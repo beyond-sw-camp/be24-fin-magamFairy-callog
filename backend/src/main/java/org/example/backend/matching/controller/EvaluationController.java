@@ -1,5 +1,6 @@
 package org.example.backend.matching.controller;
 
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.common.model.BaseResponse;
 import org.example.backend.common.model.BaseResponseStatus;
@@ -12,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.rmi.RemoteException;
 
 @RestController
 @RequestMapping("/matching")
@@ -38,6 +41,14 @@ public class EvaluationController {
             evaluationService.startEvaluation(dto);
             return  ResponseEntity.status(HttpStatus.ACCEPTED)
                     .body(BaseResponse.processing(BaseResponseStatus.EVLUATION_STARTED));
+        }
+        catch (EntityNotFoundException e){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT,e.getMessage()));
+        }
+        catch (RuntimeException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.fail(BaseResponseStatus.SERVER_NOT_RESPONDING,e.getMessage()));
         }
         catch (Exception e){
             return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
