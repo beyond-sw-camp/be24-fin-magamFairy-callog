@@ -1,4 +1,4 @@
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 const STORAGE_PREFIX = 'callog-user-settings'
@@ -15,16 +15,9 @@ const fallbackProfile = {
 }
 
 const defaultThemeUi = {
-  theme: 'light',
   density: 'comfortable',
   reduceMotion: false,
   highContrast: false,
-}
-
-const defaultSecurity = {
-  accountType: '일반 사용자',
-  sessionStatus: '활성',
-  passwordChangeRoute: '',
 }
 
 function getStorage() {
@@ -101,6 +94,17 @@ function drawContainedImage(context, image, x, y, width, height) {
   const boxRatio = width / height
   const nextWidth = imageRatio > boxRatio ? width : height * imageRatio
   const nextHeight = imageRatio > boxRatio ? width / imageRatio : height
+  const nextX = x + (width - nextWidth) / 2
+  const nextY = y + (height - nextHeight) / 2
+
+  context.drawImage(image, nextX, nextY, nextWidth, nextHeight)
+}
+
+function drawCoverImage(context, image, x, y, width, height) {
+  const imageRatio = image.width / image.height
+  const boxRatio = width / height
+  const nextWidth = imageRatio > boxRatio ? height * imageRatio : width
+  const nextHeight = imageRatio > boxRatio ? height : width / imageRatio
   const nextX = x + (width - nextWidth) / 2
   const nextY = y + (height - nextHeight) / 2
 
@@ -208,6 +212,29 @@ function normalizeProfile(source, rawUser = null) {
   }
 }
 
+function createLocalProfileSource(source) {
+  const nextProfile = { ...(source ?? {}) }
+
+  if (nextProfile.imageDataUrl && !String(nextProfile.imageDataUrl).startsWith('data:')) {
+    nextProfile.imageDataUrl = ''
+  }
+
+  return nextProfile
+}
+
+function createLocalRawUserSource(rawUser) {
+  const nextUser = { ...(rawUser ?? {}) }
+  const imageKeys = ['imageDataUrl', 'profileImage', 'profileImageUrl', 'avatar']
+
+  imageKeys.forEach((key) => {
+    if (nextUser[key] && !String(nextUser[key]).startsWith('data:')) {
+      nextUser[key] = ''
+    }
+  })
+
+  return nextUser
+}
+
 function assignState(target, source) {
   Object.keys(target).forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(source, key)) {
@@ -216,9 +243,36 @@ function assignState(target, source) {
   })
 }
 
+function normalizeDensity(value) {
+  return value === 'compact' ? 'compact' : 'comfortable'
+}
+
+function normalizeThemeUi(source = {}) {
+  return {
+    density: normalizeDensity(source.density),
+    reduceMotion: Boolean(source.reduceMotion),
+    highContrast: Boolean(source.highContrast),
+  }
+}
+
+function applyThemeUiPreferences(themeUi) {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  document.documentElement.dataset.density = normalizeDensity(themeUi.density)
+  document.documentElement.dataset.motion = themeUi.reduceMotion ? 'reduced' : 'standard'
+  document.documentElement.dataset.contrast = themeUi.highContrast ? 'high' : 'standard'
+}
+
 function loadImage(source) {
   return new Promise((resolve, reject) => {
     const image = new Image()
+
+    if (typeof source === 'string' && !source.startsWith('data:')) {
+      image.crossOrigin = 'anonymous'
+    }
+
     image.onload = () => resolve(image)
     image.onerror = reject
     image.src = source
@@ -234,11 +288,20 @@ function triggerDownload(dataUrl, filename) {
   anchor.remove()
 }
 
+function createPersistableProfile(profile) {
+  const nextProfile = { ...profile }
+
+  if (nextProfile.imageDataUrl && !nextProfile.imageDataUrl.startsWith('data:')) {
+    nextProfile.imageDataUrl = ''
+  }
+
+  return nextProfile
+}
+
 export const useUserSettingsStore = defineStore('userSettings', () => {
   const activeUserKey = ref('guest')
   const profile = reactive({ ...fallbackProfile })
   const themeUi = reactive({ ...defaultThemeUi })
-  const security = reactive({ ...defaultSecurity })
   const generatorPrompt = ref('')
   const generatorStatus = ref('ready')
   const generatorMessage = ref('OpenAI 이미지 생성 API 연동 전 준비 상태입니다.')
@@ -261,9 +324,8 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     storage.setItem(
       storageKey.value,
       JSON.stringify({
-        profile: { ...profile },
+        profile: createPersistableProfile(profile),
         themeUi: { ...themeUi },
-        security: { ...security },
         generatorPrompt: generatorPrompt.value,
       }),
     )
@@ -274,21 +336,21 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
 
     const storage = getStorage()
     const savedSettings = safeParse(storage?.getItem(storageKey.value)) ?? {}
-    const nextProfile = normalizeProfile(savedSettings.profile, rawUser)
+    const nextProfile = normalizeProfile(
+      createLocalProfileSource(savedSettings.profile),
+      createLocalRawUserSource(rawUser),
+    )
 
     assignState(profile, nextProfile)
     assignState(themeUi, {
       ...defaultThemeUi,
-      ...(savedSettings.themeUi ?? {}),
-    })
-    assignState(security, {
-      ...defaultSecurity,
-      ...(savedSettings.security ?? {}),
+      ...normalizeThemeUi(savedSettings.themeUi ?? {}),
     })
 
     generatorPrompt.value = String(savedSettings.generatorPrompt ?? '')
     generatorStatus.value = 'ready'
     generatorMessage.value = 'OpenAI 이미지 생성 API 연동 전 준비 상태입니다.'
+    applyThemeUiPreferences(themeUi)
   }
 
   function updateProfile(patch) {
@@ -305,19 +367,15 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
   }
 
   function updateThemeUi(patch) {
-    assignState(themeUi, {
-      ...themeUi,
-      ...(patch ?? {}),
-    })
+    assignState(themeUi, normalizeThemeUi({ ...themeUi, ...(patch ?? {}) }))
     persist()
+    applyThemeUiPreferences(themeUi)
   }
 
-  function updateSecurity(patch) {
-    assignState(security, {
-      ...security,
-      ...(patch ?? {}),
-    })
+  function resetThemeUi() {
+    assignState(themeUi, { ...defaultThemeUi })
     persist()
+    applyThemeUiPreferences(themeUi)
   }
 
   function setGeneratorPrompt(value) {
@@ -386,9 +444,9 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     context.clip()
 
     try {
-      if (profile.imageDataUrl?.startsWith('data:')) {
+      if (profile.imageDataUrl) {
         const image = await loadImage(profile.imageDataUrl)
-        context.drawImage(image, 68, 78, 148, 148)
+        drawCoverImage(context, image, 68, 78, 148, 148)
       } else {
         throw new Error('empty profile image')
       }
@@ -459,6 +517,14 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     return true
   }
 
+  watch(
+    themeUi,
+    () => {
+      applyThemeUiPreferences(themeUi)
+    },
+    { deep: true, immediate: true },
+  )
+
   return {
     activeUserKey,
     downloadProfileCard,
@@ -470,11 +536,10 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     profile,
     profileCardData,
     profileInitials,
-    security,
+    resetThemeUi,
     setGeneratorPrompt,
     themeUi,
     updateProfile,
-    updateSecurity,
     updateThemeUi,
   }
 })
