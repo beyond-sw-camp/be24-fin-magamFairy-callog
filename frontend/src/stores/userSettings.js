@@ -212,6 +212,29 @@ function normalizeProfile(source, rawUser = null) {
   }
 }
 
+function createLocalProfileSource(source) {
+  const nextProfile = { ...(source ?? {}) }
+
+  if (nextProfile.imageDataUrl && !String(nextProfile.imageDataUrl).startsWith('data:')) {
+    nextProfile.imageDataUrl = ''
+  }
+
+  return nextProfile
+}
+
+function createLocalRawUserSource(rawUser) {
+  const nextUser = { ...(rawUser ?? {}) }
+  const imageKeys = ['imageDataUrl', 'profileImage', 'profileImageUrl', 'avatar']
+
+  imageKeys.forEach((key) => {
+    if (nextUser[key] && !String(nextUser[key]).startsWith('data:')) {
+      nextUser[key] = ''
+    }
+  })
+
+  return nextUser
+}
+
 function assignState(target, source) {
   Object.keys(target).forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(source, key)) {
@@ -313,7 +336,10 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
 
     const storage = getStorage()
     const savedSettings = safeParse(storage?.getItem(storageKey.value)) ?? {}
-    const nextProfile = normalizeProfile(savedSettings.profile, rawUser)
+    const nextProfile = normalizeProfile(
+      createLocalProfileSource(savedSettings.profile),
+      createLocalRawUserSource(rawUser),
+    )
 
     assignState(profile, nextProfile)
     assignState(themeUi, {

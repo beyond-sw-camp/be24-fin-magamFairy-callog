@@ -80,6 +80,8 @@ const isChangingPassword = ref(false)
 const isSavingProfile = ref(false)
 const pendingProfileImageFile = ref(null)
 const shouldRemoveProfileImage = ref(false)
+const failedProfileImageUrl = ref('')
+const isRefreshingProfileImage = ref(false)
 
 const activeTab = computed(() => {
   const requestedTab = String(route.query.tab || 'profile')
@@ -99,6 +101,11 @@ const accountName = computed(
 const accountRole = computed(
   () =>
     profileForm.role || readFirstString(authStore.user, ['roleName', 'role', 'authority']) || '-',
+)
+const visibleProfileImageUrl = computed(() =>
+  profileForm.imageDataUrl && profileForm.imageDataUrl !== failedProfileImageUrl.value
+    ? profileForm.imageDataUrl
+    : '',
 )
 const sessionStatus = computed(() => (authStore.hasFreshAccessToken() ? '활성' : '갱신 필요'))
 const themePreviewTitle = computed(() =>
@@ -187,6 +194,7 @@ function applyRemoteProfile(payload) {
   })
 
   userSettingsStore.updateProfile(nextProfile)
+  failedProfileImageUrl.value = ''
 }
 
 function setTheme(nextTheme) {
@@ -387,6 +395,29 @@ async function loadRemoteProfile() {
   }
 }
 
+async function refreshProfileImageFromServer() {
+  if (!authStore.isAuthenticated || isRefreshingProfileImage.value) {
+    return
+  }
+
+  isRefreshingProfileImage.value = true
+
+  try {
+    await loadRemoteProfile()
+  } finally {
+    isRefreshingProfileImage.value = false
+  }
+}
+
+function handleProfileImageError() {
+  if (!profileForm.imageDataUrl) {
+    return
+  }
+
+  failedProfileImageUrl.value = profileForm.imageDataUrl
+  void refreshProfileImageFromServer()
+}
+
 async function refreshSession() {
   securityFeedback.success = ''
   securityFeedback.error = ''
@@ -546,7 +577,14 @@ watch(
           <section class="settings-profile">
             <div class="profile-preview">
               <div class="profile-preview__image">
-                <img v-if="profileForm.imageDataUrl" :src="profileForm.imageDataUrl" alt="" />
+                <img
+                  v-if="visibleProfileImageUrl"
+                  :src="visibleProfileImageUrl"
+                  alt=""
+                  crossorigin="anonymous"
+                  referrerpolicy="strict-origin-when-cross-origin"
+                  @error="handleProfileImageError"
+                />
                 <span v-else>{{ userSettingsStore.profileInitials }}</span>
               </div>
               <div>

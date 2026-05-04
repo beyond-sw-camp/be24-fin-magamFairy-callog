@@ -362,7 +362,9 @@ function handleProfileEdit() {
   })
 }
 
-function handleProfileDownload() {
+async function handleProfileDownload() {
+  await refreshProfileFromServer()
+  await nextTick()
   void userSettingsStore.downloadProfileCard()
 }
 
@@ -546,6 +548,8 @@ onBeforeUnmount(() => {
             v-if="visibleProfileImageUrl"
             :src="visibleProfileImageUrl"
             alt=""
+            crossorigin="anonymous"
+            referrerpolicy="strict-origin-when-cross-origin"
             @error="handleProfileImageError"
           />
           <span v-else>{{ profileCard.initials }}</span>
@@ -641,6 +645,8 @@ onBeforeUnmount(() => {
               v-if="visibleProfileImageUrl"
               :src="visibleProfileImageUrl"
               alt=""
+              crossorigin="anonymous"
+              referrerpolicy="strict-origin-when-cross-origin"
               @error="handleProfileImageError"
             />
             <span v-else>{{ profileCard.initials }}</span>
