@@ -77,6 +77,13 @@ public class UserDto {
         }
     }
 
+    public record PromoteToManagerReq(String id) {
+    }
+
+    @Builder
+    public record PromoteToManagerRes(String id, String name, String role) {
+    }
+
     public record DeleteUserReq(String id) {
     }
 

@@ -6,6 +6,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 public final class RoleGuard {
 
+    public static final String ROLE_GENERAL_MANAGER = "ROLE_GENERAL_MANAGER";
     public static final String ROLE_MANAGER = "ROLE_MANAGER";
 
     private RoleGuard() {}
@@ -19,8 +20,8 @@ public final class RoleGuard {
 
     public static AuthUserDetails requireManager(AuthUserDetails user) {
         AuthUserDetails authenticated = requireAuthenticated(user);
-        if (!ROLE_MANAGER.equals(authenticated.getRole())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ROLE_MANAGER 권한이 필요합니다.");
+        if (!ROLE_MANAGER.equals(authenticated.getRole()) && !ROLE_GENERAL_MANAGER.equals(authenticated.getRole())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ROLE_MANAGER 또는 ROLE_GENERAL_MANAGER 권한이 필요합니다.");
         }
         return authenticated;
     }

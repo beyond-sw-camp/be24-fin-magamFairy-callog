@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useUserSettingsStore } from '@/stores/userSettings'
 import CampaignCreateModal from '@/components/campaign/CampaignCreateModal.vue'
 import { campaignLabels, campaignSidebarText, campaignStatusMeta } from '@/constants/campaignText'
 import { CreateCampaign, UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
@@ -11,6 +12,7 @@ const route = useRoute()
 const router = useRouter()
 const store = usePlannerStore()
 const authStore = useAuthStore()
+const userSettingsStore = useUserSettingsStore()
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'callog-sidebar2-width'
 const SIDEBAR_DEFAULT_WIDTH = 240
@@ -35,7 +37,18 @@ const dropTargetCampaignId = ref(null)
 const dropPlacement = ref('before')
 const folderDropState = ref('idle')
 
+const VIEW_MODE_STORAGE_KEY = 'callog-sidebar2-view-mode'
+const viewMode = ref('compact') // 'compact' | 'kpi'
+
 const contextMenuPosition = reactive({ top: FLOAT_MARGIN, left: FLOAT_MARGIN })
+
+// 캠페인 호버 패널
+const hoveredCampaignId = ref(null)
+const hoverPanelPosition = reactive({ top: FLOAT_MARGIN, left: FLOAT_MARGIN })
+let hoverCloseTimer = null
+const HOVER_OPEN_DELAY_MS = 200
+const HOVER_CLOSE_DELAY_MS = 120
+let hoverOpenTimer = null
 
 const sidebarStyle = computed(() => ({ '--sidebar2-width': `${sidebarWidth.value}px` }))
 
@@ -75,6 +88,13 @@ const contextCampaign = computed(
 const editingCampaign = computed(
   () => store.campaigns.find((c) => c.id === editingCampaignId.value) ?? null,
 )
+const hoveredCampaign = computed(
+  () => store.campaigns.find((c) => c.id === hoveredCampaignId.value) ?? null,
+)
+const hoverPanelStyle = computed(() => ({
+  top: `${hoverPanelPosition.top}px`,
+  left: `${hoverPanelPosition.left}px`,
+}))
 
 const contextMenuStyle = computed(() => ({
   top: `${contextMenuPosition.top}px`,
@@ -144,6 +164,45 @@ function getCampaignStatusMeta(status) {
   return campaignStatusMeta[status] ?? { label: campaignStatusMeta.draft.label, tone: 'draft' }
 }
 
+function toggleViewMode() {
+  viewMode.value = viewMode.value === 'compact' ? 'kpi' : 'compact'
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode.value)
+  }
+}
+
+function getDaysLeft(endDate) {
+  if (!endDate) return null
+  const end = new Date(endDate)
+  if (Number.isNaN(end.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  end.setHours(0, 0, 0, 0)
+  return Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function formatDDay(daysLeft) {
+  if (daysLeft === null || daysLeft === undefined) return ''
+  if (daysLeft > 0) return `D-${daysLeft}`
+  if (daysLeft === 0) return 'D-DAY'
+  return `D+${Math.abs(daysLeft)}`
+}
+
+function getProgressPercent(campaign) {
+  if (typeof campaign.progress === 'number') {
+    return Math.max(0, Math.min(100, Math.round(campaign.progress)))
+  }
+  // store에 progress가 없을 때 status 기반 placeholder
+  const fallbackByStatus = { draft: 10, review: 70, live: 50, paused: 30, completed: 100 }
+  return fallbackByStatus[campaign.status] ?? 0
+}
+
+function getTaskCount(campaign) {
+  const list = store.tasks
+  if (!Array.isArray(list)) return 0
+  return list.filter((task) => task?.campaignId === campaign.id).length
+}
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value))
 }
@@ -200,6 +259,58 @@ function isServerCampaignId(campaignId) {
 
 function closeCampaignMenu() {
   contextCampaignId.value = null
+}
+
+const HOVER_PANEL_WIDTH = 300
+const HOVER_PANEL_HEIGHT_ESTIMATE = 320
+
+function clearHoverTimers() {
+  if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null }
+  if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null }
+}
+
+function handleCampaignMouseEnter(campaign, event) {
+  clearHoverTimers()
+  if (draggedCampaignId.value || contextCampaignId.value) return
+  const target = event.currentTarget
+  if (!(target instanceof HTMLElement)) return
+  const rect = target.getBoundingClientRect()
+  hoverOpenTimer = window.setTimeout(() => {
+    const left = clamp(rect.right + 12, FLOAT_MARGIN, window.innerWidth - HOVER_PANEL_WIDTH - FLOAT_MARGIN)
+    const top = clamp(rect.top, FLOAT_MARGIN, window.innerHeight - HOVER_PANEL_HEIGHT_ESTIMATE - FLOAT_MARGIN)
+    hoverPanelPosition.left = left
+    hoverPanelPosition.top = top
+    hoveredCampaignId.value = campaign.id
+  }, HOVER_OPEN_DELAY_MS)
+}
+
+function handleCampaignMouseLeave() {
+  if (hoverOpenTimer) { clearTimeout(hoverOpenTimer); hoverOpenTimer = null }
+  hoverCloseTimer = window.setTimeout(() => {
+    hoveredCampaignId.value = null
+  }, HOVER_CLOSE_DELAY_MS)
+}
+
+function handleHoverPanelEnter() {
+  if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null }
+}
+
+function handleHoverPanelLeave() {
+  hoveredCampaignId.value = null
+}
+
+function closeHoverPanel() {
+  clearHoverTimers()
+  hoveredCampaignId.value = null
+}
+
+function formatCampaignPeriod(startDate, endDate) {
+  const fmt = (d) => {
+    if (!d) return ''
+    return String(d).replaceAll('-', '.')
+  }
+  if (!startDate && !endDate) return '기간 미정'
+  return `${fmt(startDate)} - ${fmt(endDate)}`
 }
 
 function closeCreateModal() {
@@ -356,7 +467,7 @@ function handleFolderDrop(event) {
 function handleGlobalPointerDown(event) {
   const target = event.target
   if (!(target instanceof HTMLElement)) { closeCampaignMenu(); return }
-  if (contextCampaignId.value && !target.closest('.campaign-list__context-menu') && !target.closest('.campaign-list__item')) {
+  if (contextCampaignId.value && !target.closest('.campaign-list__context-menu') && !target.closest('.campaign-card')) {
     closeCampaignMenu()
   }
 }
@@ -377,6 +488,10 @@ onMounted(() => {
   const storedWidth = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)
   const parsedWidth = Number(storedWidth)
   if (Number.isFinite(parsedWidth)) setSidebarWidth(parsedWidth)
+  const storedViewMode = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY)
+  if (storedViewMode === 'compact' || storedViewMode === 'kpi') {
+    viewMode.value = storedViewMode
+  }
   window.addEventListener('pointerdown', handleGlobalPointerDown)
   window.addEventListener('keydown', handleGlobalKeydown)
 })
@@ -386,6 +501,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', handleGlobalPointerDown)
   window.removeEventListener('keydown', handleGlobalKeydown)
   resetDragState()
+  clearHoverTimers()
 })
 </script>
 
@@ -403,17 +519,28 @@ onBeforeUnmount(() => {
     <div class="campaign-list__inner">
       <div class="campaign-list__header">
         <span class="campaign-list__header-title">Campaigns</span>
-        <button
-          type="button"
-          class="campaign-list__create-btn"
-          :title="campaignLabels.createCampaign"
-          :aria-label="campaignLabels.createCampaign"
-          @click="openCreateModal"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
+        <div class="campaign-list__header-actions">
+          <button
+            type="button"
+            class="campaign-list__view-toggle"
+            :aria-pressed="viewMode === 'kpi'"
+            :title="viewMode === 'compact' ? '확장 보기로 전환' : '간단 보기로 전환'"
+            @click="toggleViewMode"
+          >
+            {{ viewMode === 'compact' ? '확장' : '간단' }}
+          </button>
+          <button
+            type="button"
+            class="campaign-list__create-btn"
+            :title="campaignLabels.createCampaign"
+            :aria-label="campaignLabels.createCampaign"
+            @click="openCreateModal"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="campaign-list__divider" />
@@ -422,37 +549,97 @@ onBeforeUnmount(() => {
         tag="nav"
         name="campaign-list-anim"
         class="campaign-list__nav"
+        :class="`campaign-list__nav--${viewMode}`"
         :aria-label="campaignSidebarText.campaignList"
       >
         <button
           v-for="campaign in visualSidebarCampaigns"
           :key="campaign.id"
           type="button"
-          class="campaign-list__item"
-          :class="{
-            active: store.activeCampaignId === campaign.id,
-            'campaign-list__item--dragging': draggedCampaignId === campaign.id,
-            'campaign-list__item--drop-before': dropTargetCampaignId === campaign.id && dropPlacement === 'before',
-            'campaign-list__item--drop-after': dropTargetCampaignId === campaign.id && dropPlacement === 'after',
-          }"
+          class="campaign-card"
+          :class="[
+            `campaign-card--${viewMode}`,
+            {
+              active: store.activeCampaignId === campaign.id,
+              'campaign-card--dragging': draggedCampaignId === campaign.id,
+              'campaign-card--drop-before': dropTargetCampaignId === campaign.id && dropPlacement === 'before',
+              'campaign-card--drop-after': dropTargetCampaignId === campaign.id && dropPlacement === 'after',
+            },
+          ]"
+          :style="{ '--campaign-color': campaign.color }"
           :aria-current="store.activeCampaignId === campaign.id ? 'page' : undefined"
           draggable="true"
           @click="selectCampaign(campaign.id)"
           @contextmenu="openCampaignMenu(campaign, $event)"
-          @dragstart="handleCampaignDragStart(campaign, $event)"
+          @mouseenter="handleCampaignMouseEnter(campaign, $event)"
+          @mouseleave="handleCampaignMouseLeave"
+          @dragstart="handleCampaignDragStart(campaign, $event); closeHoverPanel()"
           @dragend="handleCampaignDragEnd"
           @dragover="handleCampaignDragOver(campaign, $event)"
           @drop="handleCampaignDrop(campaign, $event)"
         >
-          <span class="campaign-list__item-dot" :style="{ background: campaign.color }" />
-          <span class="campaign-list__item-name">{{ campaign.name }}</span>
-          <span
-            v-if="campaign.status === 'paused' || campaign.status === 'completed'"
-            class="campaign-list__item-badge"
-            :class="`campaign-list__item-badge--${getCampaignStatusMeta(campaign.status).tone}`"
-          >
-            {{ getCampaignStatusMeta(campaign.status).label }}
-          </span>
+          <!-- compact (E2) -->
+          <template v-if="viewMode === 'compact'">
+            <span class="campaign-card__bar" />
+            <span class="campaign-card__body">
+              <span class="campaign-card__top">
+                <span class="campaign-card__title">{{ campaign.name }}</span>
+                <span v-if="getDaysLeft(campaign.endDate) !== null" class="campaign-card__dday">
+                  {{ formatDDay(getDaysLeft(campaign.endDate)) }}
+                </span>
+              </span>
+              <span class="campaign-card__bottom">
+                <span class="campaign-card__pct">{{ getProgressPercent(campaign) }}%</span>
+                <span class="campaign-card__progress">
+                  <i :style="{ width: `${getProgressPercent(campaign)}%` }" />
+                </span>
+                <span
+                  class="campaign-card__chip"
+                  :class="`campaign-card__chip--${getCampaignStatusMeta(campaign.status).tone}`"
+                >
+                  {{ getCampaignStatusMeta(campaign.status).label }}
+                </span>
+              </span>
+            </span>
+          </template>
+
+          <!-- kpi (E3) -->
+          <template v-else>
+            <span class="campaign-card__head">
+              <span class="campaign-card__title">{{ campaign.name }}</span>
+              <span
+                class="campaign-card__chip"
+                :class="`campaign-card__chip--${getCampaignStatusMeta(campaign.status).tone}`"
+              >
+                {{ getCampaignStatusMeta(campaign.status).label }}
+              </span>
+            </span>
+            <span class="campaign-card__kpis">
+              <span class="campaign-card__kpi">
+                <b>{{ getProgressPercent(campaign) }}<i>%</i></b>
+                <em>진행</em>
+              </span>
+              <span class="campaign-card__kpi-sep" />
+              <span class="campaign-card__kpi">
+                <template v-if="getDaysLeft(campaign.endDate) !== null">
+                  <b>{{ Math.abs(getDaysLeft(campaign.endDate)) }}<i>d</i></b>
+                  <em>{{ getDaysLeft(campaign.endDate) >= 0 ? '남은 일수' : '초과' }}</em>
+                </template>
+                <template v-else>
+                  <b>-</b>
+                  <em>일정 미정</em>
+                </template>
+              </span>
+              <span class="campaign-card__kpi-sep" />
+              <span class="campaign-card__kpi">
+                <b>{{ getTaskCount(campaign) }}</b>
+                <em>작업</em>
+              </span>
+            </span>
+            <span class="campaign-card__progress campaign-card__progress--full">
+              <i :style="{ width: `${getProgressPercent(campaign)}%` }" />
+            </span>
+          </template>
         </button>
       </TransitionGroup>
 
@@ -490,7 +677,7 @@ onBeforeUnmount(() => {
       :aria-label="store.sidebarCollapsed ? '캠페인 목록 열기' : '캠페인 목록 닫기'"
       @click="store.toggleSidebar"
     >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <path v-if="store.sidebarCollapsed" d="m9 18 6-6-6-6" />
         <path v-else d="m15 18-6-6 6-6" />
       </svg>
@@ -556,6 +743,92 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
   </Teleport>
+
+  <Teleport to="body">
+    <Transition name="campaign-float">
+      <div
+        v-if="hoveredCampaign && !contextCampaign && !draggedCampaignId"
+        class="campaign-hover-panel"
+        :style="hoverPanelStyle"
+        role="tooltip"
+        @mouseenter="handleHoverPanelEnter"
+        @mouseleave="handleHoverPanelLeave"
+      >
+        <!-- 상단 커버 영역 -->
+        <div
+          class="chp-cover"
+          :style="{ background: `linear-gradient(135deg, ${hoveredCampaign.color}dd 0%, ${hoveredCampaign.color}66 100%)` }"
+        >
+          <div class="chp-cover__gradient" />
+
+          <!-- 회사 로고 원형 -->
+          <div class="chp-cover__logo">
+            <img
+              v-if="userSettingsStore.profile.companyLogoDataUrl"
+              :src="userSettingsStore.profile.companyLogoDataUrl"
+              alt="logo"
+            />
+            <span v-else>{{ hoveredCampaign.initials }}</span>
+          </div>
+
+          <!-- 기간 배지 -->
+          <div class="chp-cover__date">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            {{ formatCampaignPeriod(hoveredCampaign.startDate, hoveredCampaign.endDate) }}
+          </div>
+        </div>
+
+        <!-- 본문 영역 -->
+        <div class="chp-body">
+          <!-- 상태 + 제목 -->
+          <div class="chp-title-block">
+            <div class="chp-status">
+              <span class="chp-status__dot" />
+              <span class="chp-status__label">{{ getCampaignStatusMeta(hoveredCampaign.status).label }}</span>
+            </div>
+            <h2 class="chp-title">{{ hoveredCampaign.name }}</h2>
+          </div>
+
+          <div class="chp-divider" />
+
+          <!-- 목적 및 목표 -->
+          <div v-if="hoveredCampaign.purpose || hoveredCampaign.goals" class="chp-row">
+            <div class="chp-icon chp-icon--amber">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />
+              </svg>
+            </div>
+            <div class="chp-row__content">
+              <p class="chp-row__label">목적 및 목표</p>
+              <p v-if="hoveredCampaign.purpose" class="chp-row__text">{{ hoveredCampaign.purpose }}</p>
+              <p v-if="hoveredCampaign.goals" class="chp-row__goal">🎯 {{ hoveredCampaign.goals }}</p>
+            </div>
+          </div>
+
+          <!-- 파트너 및 태그 -->
+          <div v-if="hoveredCampaign.partners?.length || hoveredCampaign.tags?.length" class="chp-row">
+            <div class="chp-icon chp-icon--emerald">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            <div class="chp-row__content">
+              <p class="chp-row__label">파트너 및 태그</p>
+              <p v-if="hoveredCampaign.partners?.length" class="chp-row__text chp-row__text--bold">{{ hoveredCampaign.partners.join(', ') }}</p>
+              <div v-if="hoveredCampaign.tags?.length" class="chp-chips">
+                <span v-for="tag in hoveredCampaign.tags" :key="tag" class="chp-chip">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" /><line x1="10" y1="3" x2="8" y2="21" /><line x1="16" y1="3" x2="14" y2="21" /></svg>
+                  {{ tag }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -603,16 +876,16 @@ onBeforeUnmount(() => {
 
 .campaign-list__toggle {
   position: absolute;
-  right: -12px;
+  right: -16px;
   top: 50%;
   transform: translateY(-50%);
   z-index: 25;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--panel-color);
   border: 1px solid var(--border-color);
-  color: var(--muted-text);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -642,6 +915,42 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.campaign-list__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.campaign-list__view-toggle {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.campaign-list__view-toggle:hover {
+  background: var(--panel-muted);
+  color: var(--text-primary);
+  border-color: var(--border-strong, var(--color-primary-500));
+}
+
+.campaign-list__view-toggle[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--color-primary-500) 12%, transparent);
+  color: var(--color-primary-600);
+  border-color: color-mix(in srgb, var(--color-primary-500) 22%, transparent);
 }
 
 .campaign-list__create-btn {
@@ -684,11 +993,12 @@ onBeforeUnmount(() => {
 .campaign-list__nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0 8px;
   flex: 1;
   overflow-y: auto;
 }
+
+.campaign-list__nav--compact { padding: 6px 8px; gap: 0; }
+.campaign-list__nav--kpi { padding: 8px; gap: 0; }
 
 .campaign-list__nav::-webkit-scrollbar {
   width: 4px;
@@ -699,42 +1009,36 @@ onBeforeUnmount(() => {
   border-radius: 4px;
 }
 
-.campaign-list__item {
+/* 캠페인 카드 공통 */
+.campaign-card {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
   width: 100%;
-  min-height: 34px;
-  padding: 6px 10px;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--muted-text);
-  border: none;
+  background: var(--panel-color);
+  border: 1px solid var(--border-color);
   cursor: pointer;
   text-align: left;
-  font-size: 13px;
-  font-weight: 500;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.campaign-list__item:hover {
-  background: var(--panel-muted);
+  font-family: inherit;
   color: var(--text-primary);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
-.campaign-list__item.active {
-  background: color-mix(in srgb, var(--color-primary-500) 10%, transparent);
-  color: var(--color-primary-600);
-  box-shadow: inset 3px 0 0 var(--color-primary-500);
+.campaign-card:hover {
+  border-color: var(--border-strong, var(--color-primary-500));
+  background: var(--panel-muted);
 }
 
-.campaign-list__item--dragging { opacity: 0.4; }
+.campaign-card.active {
+  border-color: var(--campaign-color, var(--color-primary-500));
+  background: color-mix(in srgb, var(--campaign-color, var(--color-primary-500)) 8%, var(--panel-color));
+}
 
-.campaign-list__item--drop-before::before,
-.campaign-list__item--drop-after::after {
+.campaign-card--dragging { opacity: 0.4; }
+
+.campaign-card--drop-before::before,
+.campaign-card--drop-after::after {
   content: '';
   position: absolute;
   left: 6px;
@@ -745,39 +1049,217 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.campaign-list__item--drop-before::before { top: -3px; }
-.campaign-list__item--drop-after::after { bottom: -3px; }
+.campaign-card--drop-before::before { top: -3px; }
+.campaign-card--drop-after::after { bottom: -3px; }
 
-.campaign-list__item-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+/* compact (E2) */
+.campaign-card--compact {
+  display: flex;
+  align-items: stretch;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 5px;
+  padding: 0;
+}
+
+.campaign-card--compact .campaign-card__bar {
+  width: 3px;
+  background: var(--campaign-color, var(--color-primary-500));
   flex-shrink: 0;
 }
 
-.campaign-list__item-name {
+.campaign-card--compact .campaign-card__body {
   flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.campaign-card--compact .campaign-card__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.campaign-card--compact .campaign-card__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.campaign-card--compact .campaign-card__dday {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--muted-text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.campaign-card--compact .campaign-card__bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.campaign-card--compact .campaign-card__pct {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-secondary, var(--text-primary));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 30px;
+}
+
+.campaign-card__progress {
+  flex: 1;
+  height: 3px;
+  background: var(--panel-muted);
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.campaign-card__progress i {
+  display: block;
+  height: 100%;
+  background: var(--campaign-color, var(--color-primary-500));
+  border-radius: 2px;
+}
+
+/* kpi (E3) */
+.campaign-card--kpi {
+  display: block;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+}
+
+.campaign-card--kpi:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.campaign-card--kpi.active {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--campaign-color, var(--color-primary-500)) 18%, transparent);
+}
+
+.campaign-card--kpi .campaign-card__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.campaign-card--kpi .campaign-card__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.campaign-card--kpi .campaign-card__kpis {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.campaign-card--kpi .campaign-card__kpi {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.campaign-card--kpi .campaign-card__kpi b {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.campaign-card--kpi .campaign-card__kpi b i {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted-text);
+  margin-left: 1px;
+}
+
+.campaign-card--kpi .campaign-card__kpi em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-text);
   white-space: nowrap;
 }
 
-.campaign-list__item-badge {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: var(--radius-full);
+.campaign-card--kpi.active .campaign-card__kpi b {
+  color: var(--campaign-color, var(--color-primary-500));
 }
 
-.campaign-list__item-badge--completed {
+.campaign-card--kpi .campaign-card__kpi-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  flex-shrink: 0;
+}
+
+.campaign-card--kpi .campaign-card__progress--full {
+  display: block;
+  width: 100%;
+}
+
+/* 상태 칩 (공통) */
+.campaign-card__chip {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.campaign-card__chip--live {
   background: var(--color-success-light);
   color: var(--color-success-dark);
 }
 
-.campaign-list__item-badge--paused {
+.campaign-card__chip--review {
   background: var(--color-warning-light);
   color: var(--color-warning-dark);
+}
+
+.campaign-card__chip--paused {
+  background: var(--panel-muted);
+  color: var(--muted-text);
+}
+
+.campaign-card__chip--draft {
+  background: var(--color-primary-100, var(--panel-muted));
+  color: var(--color-primary-700, var(--text-primary));
+}
+
+.campaign-card__chip--completed {
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
 }
 
 .campaign-list__footer {
@@ -875,6 +1357,185 @@ onBeforeUnmount(() => {
 .campaign-list--collapsed .campaign-list__resize-handle {
   opacity: 0;
   pointer-events: none;
+}
+
+/* Hover panel */
+.campaign-hover-panel {
+  position: fixed;
+  z-index: 55;
+  width: 280px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--panel-color);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+  color: var(--text-primary);
+}
+
+/* 커버 */
+.chp-cover {
+  position: relative;
+  height: 120px;
+  flex-shrink: 0;
+}
+.chp-cover__gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 55%);
+}
+.chp-cover__logo {
+  position: absolute;
+  bottom: -24px;
+  left: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 3px solid var(--panel-color);
+  background: var(--panel-color);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+  z-index: 1;
+}
+.chp-cover__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.chp-cover__date {
+  position: absolute;
+  bottom: 10px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: rgba(220, 38, 38, 0.82);
+  backdrop-filter: blur(4px);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  z-index: 1;
+}
+
+/* 본문 */
+.chp-body {
+  padding: 36px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 상태 + 제목 */
+.chp-title-block { display: flex; flex-direction: column; gap: 4px; }
+.chp-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chp-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-primary-500);
+  flex-shrink: 0;
+}
+.chp-status__label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-primary-600, var(--color-primary-500));
+}
+.chp-title {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.chp-divider {
+  height: 1px;
+  background: var(--border-color);
+}
+
+/* 아이콘 행 */
+.chp-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.chp-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chp-icon--amber {
+  background: rgba(251, 191, 36, 0.12);
+  color: #d97706;
+}
+.chp-icon--emerald {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+}
+.chp-row__content { flex: 1; min-width: 0; }
+.chp-row__label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-text);
+  margin: 0 0 4px;
+}
+.chp-row__text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin: 0 0 4px;
+  word-break: break-word;
+}
+.chp-row__text--bold { font-weight: 700; }
+.chp-row__goal {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-primary-600, var(--color-primary-500));
+  margin: 2px 0 0;
+}
+
+/* 태그 칩 */
+.chp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.chp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 7px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--panel-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  color: var(--muted-text);
 }
 
 /* Context menu */

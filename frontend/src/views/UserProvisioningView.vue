@@ -15,7 +15,14 @@ const tabs = [
 const roleOptions = computed(() => {
   if (authStore.isAdmin) {
     return [
-      { value: 'MANAGER', label: 'MANAGER - 협력사 책임자' },
+      { value: 'GENERAL_MANAGER', label: 'GENERAL_MANAGER - 협력사 총괄' },
+      { value: 'USER', label: 'USER - 구성원' },
+    ]
+  }
+
+  if (authStore.isGeneralManager) {
+    return [
+      { value: 'MANAGER', label: 'MANAGER - 부서 책임자' },
       { value: 'USER', label: 'USER - 구성원' },
     ]
   }
@@ -26,12 +33,24 @@ const roleOptions = computed(() => {
 const managerCompanyName = computed(() => authStore.user?.companyName ?? '')
 const managerDepartment = computed(() => authStore.user?.department ?? '')
 
+function getDefaultCreateRole() {
+  if (authStore.isAdmin) {
+    return 'GENERAL_MANAGER'
+  }
+
+  if (authStore.isGeneralManager) {
+    return 'MANAGER'
+  }
+
+  return 'USER'
+}
+
 const createForm = reactive({
-  companyName: authStore.isManager ? managerCompanyName.value : '',
+  companyName: authStore.isGeneralManager || authStore.isManager ? managerCompanyName.value : '',
   department: authStore.isManager ? managerDepartment.value : '',
   name: '',
   email: '',
-  role: authStore.isAdmin ? 'MANAGER' : 'USER',
+  role: getDefaultCreateRole(),
 })
 
 const deleteForm = reactive({
@@ -74,12 +93,20 @@ const previewId = computed(() => {
 })
 
 watch(
-  () => [authStore.isManager, managerCompanyName.value, managerDepartment.value],
+  () => [authStore.isGeneralManager, authStore.isManager, managerCompanyName.value, managerDepartment.value],
   () => {
-    if (authStore.isManager) {
+    if (authStore.isGeneralManager || authStore.isManager) {
       createForm.companyName = managerCompanyName.value
+    }
+
+    if (authStore.isManager) {
       createForm.department = managerDepartment.value
       createForm.role = 'USER'
+      return
+    }
+
+    if (authStore.isGeneralManager) {
+      createForm.role = 'MANAGER'
     }
   },
   { immediate: true },
@@ -108,11 +135,11 @@ function closeResultModal() {
 }
 
 function resetCreateForm() {
-  createForm.companyName = authStore.isManager ? managerCompanyName.value : ''
+  createForm.companyName = authStore.isGeneralManager || authStore.isManager ? managerCompanyName.value : ''
   createForm.department = authStore.isManager ? managerDepartment.value : ''
   createForm.name = ''
   createForm.email = ''
-  createForm.role = authStore.isAdmin ? 'MANAGER' : 'USER'
+  createForm.role = getDefaultCreateRole()
   status.createError = ''
 }
 
@@ -272,7 +299,7 @@ async function copyResult() {
         <h1>인사관리</h1>
         <p>
           계정 생성, 계정 삭제, 비밀번호 재발급을 한 곳에서 처리합니다.
-          MANAGER는 같은 회사와 같은 부서의 USER만 관리할 수 있습니다.
+          GENERAL_MANAGER는 같은 회사의 MANAGER/USER를, MANAGER는 같은 회사와 같은 부서의 USER만 관리할 수 있습니다.
         </p>
       </header>
 
@@ -293,7 +320,7 @@ async function copyResult() {
         <div class="hr-card__header">
           <p class="hr-eyebrow">Account creation</p>
           <h2>계정 생성</h2>
-          <span>ADMIN은 MANAGER/USER를, MANAGER는 같은 회사와 부서의 USER를 생성합니다.</span>
+          <span>ADMIN은 GENERAL_MANAGER/USER를, GENERAL_MANAGER는 같은 회사의 MANAGER/USER를, MANAGER는 같은 회사와 부서의 USER를 생성합니다.</span>
         </div>
 
         <p v-if="status.createError" class="hr-alert">{{ status.createError }}</p>
@@ -311,7 +338,7 @@ async function copyResult() {
           <div class="hr-grid">
             <label class="hr-field">
               <span>회사명</span>
-              <div v-if="authStore.isManager" class="hr-fixed">{{ createForm.companyName || '-' }}</div>
+              <div v-if="authStore.isGeneralManager || authStore.isManager" class="hr-fixed">{{ createForm.companyName || '-' }}</div>
               <input v-else v-model.trim="createForm.companyName" type="text" placeholder="예: CALLOG" />
             </label>
 
