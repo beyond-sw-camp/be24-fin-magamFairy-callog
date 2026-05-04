@@ -102,24 +102,6 @@ const routes = [
         },
       },
       {
-        path: 'operations',
-        name: 'operations',
-        component: () => import('@/views/OperationsView.vue'),
-        meta: {
-          title: '운영 허브',
-          section: '고객 및 업무 오케스트레이션',
-        },
-      },
-      {
-        path: 'tasks',
-        name: 'tasks',
-        component: () => import('@/views/TasksView.vue'),
-        meta: {
-          title: '작업 보드',
-          section: '실행 보드',
-        },
-      },
-      {
         path: 'frames',
         name: 'frames',
         component: () => import('@/views/FramesView.vue'),
@@ -136,33 +118,6 @@ const routes = [
         meta: {
           title: '레퍼런스',
           section: '캠페인 레퍼런스',
-        },
-      },
-      {
-        path: 'resources',
-        name: 'resources',
-        component: () => import('@/views/CampaignResourcesView.vue'),
-        meta: {
-          title: '자료실',
-          section: '가이드라인 · 톤앤매너 · 위험요소 · 운영자료',
-        },
-      },
-      {
-        path: 'review-approval',
-        name: 'review-approval',
-        component: () => import('@/views/ReviewApprovalView.vue'),
-        meta: {
-          title: '검수/승인',
-          section: '검수 대기 · 승인 요청 · 오픈 차단',
-        },
-      },
-      {
-        path: 'reports',
-        name: 'reports',
-        component: () => import('@/views/ReportsView.vue'),
-        meta: {
-          title: '리포트',
-          section: '성과 리뷰',
         },
       },
       {

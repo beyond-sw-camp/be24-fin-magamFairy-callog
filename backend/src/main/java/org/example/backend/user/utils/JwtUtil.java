@@ -4,6 +4,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import org.example.backend.organization.model.OrganizationType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -19,13 +20,14 @@ public class JwtUtil {
         this.encodeKey = Keys.hmacShaKeyFor(Decoders.BASE64URL.decode(key));
     }
 
-    public String createToken(String category, Long idx, String id, String email, String name, String role, String companyName, String department, Long expiredMs) {
+    public String createToken(String category, Long idx, String id, String email, String name, String role, String companyName, String department, Long expiredMs, OrganizationType type) {
         JwtBuilder builder = Jwts.builder()
                 .claim("category", category)
                 .claim("idx", idx)
                 .claim("id", id)
                 .claim("role", role)
                 .claim("name", name)
+                .claim("orgType", type)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + expiredMs))
                 .signWith(encodeKey);
@@ -95,6 +97,16 @@ public class JwtUtil {
                 .parseSignedClaims(token)
                 .getPayload()
                 .get("category", String.class);
+    }
+
+    public String getOrgType(String token) {
+        Object raw = Jwts.parser()
+                .verifyWith(encodeKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("orgType");
+        return raw == null ? null : raw.toString();
     }
 
     public Boolean isExpired(String token) {

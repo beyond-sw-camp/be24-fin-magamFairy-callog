@@ -1,4 +1,4 @@
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 const STORAGE_PREFIX = 'callog-user-settings'
@@ -15,16 +15,9 @@ const fallbackProfile = {
 }
 
 const defaultThemeUi = {
-  theme: 'light',
   density: 'comfortable',
   reduceMotion: false,
   highContrast: false,
-}
-
-const defaultSecurity = {
-  accountType: '일반 사용자',
-  sessionStatus: '활성',
-  passwordChangeRoute: '',
 }
 
 function getStorage() {
@@ -216,6 +209,28 @@ function assignState(target, source) {
   })
 }
 
+function normalizeDensity(value) {
+  return value === 'compact' ? 'compact' : 'comfortable'
+}
+
+function normalizeThemeUi(source = {}) {
+  return {
+    density: normalizeDensity(source.density),
+    reduceMotion: Boolean(source.reduceMotion),
+    highContrast: Boolean(source.highContrast),
+  }
+}
+
+function applyThemeUiPreferences(themeUi) {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  document.documentElement.dataset.density = normalizeDensity(themeUi.density)
+  document.documentElement.dataset.motion = themeUi.reduceMotion ? 'reduced' : 'standard'
+  document.documentElement.dataset.contrast = themeUi.highContrast ? 'high' : 'standard'
+}
+
 function loadImage(source) {
   return new Promise((resolve, reject) => {
     const image = new Image()
@@ -238,7 +253,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
   const activeUserKey = ref('guest')
   const profile = reactive({ ...fallbackProfile })
   const themeUi = reactive({ ...defaultThemeUi })
-  const security = reactive({ ...defaultSecurity })
   const generatorPrompt = ref('')
   const generatorStatus = ref('ready')
   const generatorMessage = ref('OpenAI 이미지 생성 API 연동 전 준비 상태입니다.')
@@ -263,7 +277,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
       JSON.stringify({
         profile: { ...profile },
         themeUi: { ...themeUi },
-        security: { ...security },
         generatorPrompt: generatorPrompt.value,
       }),
     )
@@ -279,16 +292,13 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     assignState(profile, nextProfile)
     assignState(themeUi, {
       ...defaultThemeUi,
-      ...(savedSettings.themeUi ?? {}),
-    })
-    assignState(security, {
-      ...defaultSecurity,
-      ...(savedSettings.security ?? {}),
+      ...normalizeThemeUi(savedSettings.themeUi ?? {}),
     })
 
     generatorPrompt.value = String(savedSettings.generatorPrompt ?? '')
     generatorStatus.value = 'ready'
     generatorMessage.value = 'OpenAI 이미지 생성 API 연동 전 준비 상태입니다.'
+    applyThemeUiPreferences(themeUi)
   }
 
   function updateProfile(patch) {
@@ -305,19 +315,15 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
   }
 
   function updateThemeUi(patch) {
-    assignState(themeUi, {
-      ...themeUi,
-      ...(patch ?? {}),
-    })
+    assignState(themeUi, normalizeThemeUi({ ...themeUi, ...(patch ?? {}) }))
     persist()
+    applyThemeUiPreferences(themeUi)
   }
 
-  function updateSecurity(patch) {
-    assignState(security, {
-      ...security,
-      ...(patch ?? {}),
-    })
+  function resetThemeUi() {
+    assignState(themeUi, { ...defaultThemeUi })
     persist()
+    applyThemeUiPreferences(themeUi)
   }
 
   function setGeneratorPrompt(value) {
@@ -459,6 +465,14 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     return true
   }
 
+  watch(
+    themeUi,
+    () => {
+      applyThemeUiPreferences(themeUi)
+    },
+    { deep: true, immediate: true },
+  )
+
   return {
     activeUserKey,
     downloadProfileCard,
@@ -470,11 +484,10 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     profile,
     profileCardData,
     profileInitials,
-    security,
+    resetThemeUi,
     setGeneratorPrompt,
     themeUi,
     updateProfile,
-    updateSecurity,
     updateThemeUi,
   }
 })

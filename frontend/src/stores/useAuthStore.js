@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { loginRequest, logoutRequest, reissueRequest } from '@/authApi'
+import { usePlannerStore } from '@/stores/planner'
 import { AUTH_TOKEN_REFRESHED_EVENT } from '../../plugins/interceptor'
 import {
   ACCESS_TOKEN_KEY,
@@ -97,8 +98,13 @@ export const useAuthStore = defineStore('auth', () => {
   const isHydrated = ref(false)
   const isAuthenticated = computed(() => isLogin.value && Boolean(token.value))
   const isAdmin = computed(() => normalizeRole(user.value?.role) === 'ROLE_ADMIN')
+  const isGeneralManager = computed(() => normalizeRole(user.value?.role) === 'ROLE_GENERAL_MANAGER')
   const isManager = computed(() => normalizeRole(user.value?.role) === 'ROLE_MANAGER')
-  const canCreateUsers = computed(() => isAdmin.value || isManager.value)
+  const canCreateUsers = computed(() => isAdmin.value || isGeneralManager.value || isManager.value)
+  const canCreateCampaign = computed(() => {
+    const decoded = decodeJwtPayload(token.value)
+    return decoded?.orgType !== 'EXTERNAL_PARTNER'
+  })
 
   function applyAuth(accessToken, rawUser = null) {
     if (!accessToken) {
@@ -118,6 +124,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     isLogin.value = false
     clearStoredAuth()
+    usePlannerStore().resetCampaigns()
   }
 
   function applyStoredAuth(accessToken) {
@@ -199,6 +206,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       applyAuth(loginResult.accessToken, loginResult)
       isHydrated.value = true
+      void usePlannerStore().loadCampaignsFromServer()
 
       return user.value
     } catch (error) {
@@ -284,8 +292,10 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     isAuthenticated,
     isAdmin,
+    isGeneralManager,
     isManager,
     canCreateUsers,
+    canCreateCampaign,
     isHydrated,
     isLogin,
     user,

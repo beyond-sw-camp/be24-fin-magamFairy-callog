@@ -16,6 +16,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.example.backend.user.model.User;
 
 @NoArgsConstructor
 @AllArgsConstructor
@@ -44,8 +45,8 @@ public class Organization {
 
     @Setter
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_organization_id")
-    private Organization parentOrganization;
+    @JoinColumn(name = "generalManager_idx")
+    private User generalManager;
 
     @Setter
     @Builder.Default

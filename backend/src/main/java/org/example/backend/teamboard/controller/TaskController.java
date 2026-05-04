@@ -16,14 +16,14 @@ public class TaskController {
 
     private final TaskService taskService;
 
-    /** 메인 팀 보드 - 모든 Task (모든 인증 사용자) */
+    /** 메인 팀 보드 - 내가 참여한 캠페인의 Task (모든 인증 사용자) */
     @GetMapping("/tasks")
     public ResponseEntity<BaseResponse> listAll(
             @AuthenticationPrincipal AuthUserDetails user
     ) {
         RoleGuard.requireAuthenticated(user);
         return ResponseEntity.ok(BaseResponse.success(
-                taskService.listAll()
+                taskService.listAll(user.getIdx())
         ));
     }
 

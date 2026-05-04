@@ -11,11 +11,9 @@ import {
 import {
   currentUserId,
   priorityLabels,
-  reportCards,
   seedTasks,
   statusLabels,
   teamMembers,
-  templateLibrary,
 } from '@/data/scheduleSeed'
 import editorApi from '@/api/editor/editorApi'
 import { ListCampaign } from '@/api/campaigns'
@@ -29,38 +27,7 @@ const activeCampaignIdStorageKey = 'callog-active-campaign-id'
 const campaignOrderStorageKey = 'callog-campaign-order'
 const campaignFolderStorageKey = 'callog-campaign-folder'
 
-const defaultCampaigns = [
-  {
-    id: 'campaign-premium-lifestyle',
-    name: '프리미엄 라이프스타일',
-    purpose: 'VIP 고객 대상 공동 프로모션 운영',
-    tags: ['VIP', '라이프스타일', '공동 캠페인'],
-    startDate: '2026-05-01',
-    endDate: '2026-06-15',
-    period: '2026.05.01 - 2026.06.15',
-    partners: ['갤러리아', '호텔앤드리조트', '외부 대행사'],
-    goals: '캠페인 진행률 80% 달성, 검토 대기 3건 이하 유지',
-    mainMessage: '프리미엄 고객에게 한정 혜택과 고급스러운 경험을 전달합니다.',
-    status: 'live',
-    initials: 'PL',
-    color: '#8B5CF6',
-  },
-  {
-    id: 'campaign-spring-vip',
-    name: '봄 VIP 초청전',
-    purpose: '봄 시즌 우수 고객 초청 콘텐츠 운영',
-    tags: ['VIP', '봄 시즌'],
-    startDate: '2026-04-10',
-    endDate: '2026-05-20',
-    period: '2026.04.10 - 2026.05.20',
-    partners: ['갤러리아'],
-    goals: '초청장 승인 완료 및 SNS 카드뉴스 2안 발행',
-    mainMessage: '봄 시즌에 어울리는 우아한 초청 경험을 제공합니다.',
-    status: 'review',
-    initials: 'SV',
-    color: '#3B82F6',
-  },
-]
+const defaultCampaigns = []
 
 function cloneValue(value) {
   return JSON.parse(JSON.stringify(value))
@@ -79,6 +46,15 @@ function readStoredTheme() {
     normalizeTheme(window.localStorage.getItem(themeStorageKey)) ??
     normalizeTheme(window.localStorage.getItem(legacyThemeStorageKey))
   )
+}
+
+function writeStoredTheme(nextTheme) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(themeStorageKey, nextTheme)
+  window.localStorage.removeItem(legacyThemeStorageKey)
 }
 
 function getPreferredTheme() {
@@ -197,18 +173,15 @@ function normalizeCampaignRecord(source, fallback = {}) {
 export const usePlannerStore = defineStore('planner', () => {
   const sidebarCollapsed = ref(true)
   const campaigns = ref(cloneValue(defaultCampaigns))
-  const activeCampaignId = ref(defaultCampaigns[0].id)
+  const activeCampaignId = ref(defaultCampaigns[0])
   const campaignUiOwnerKey = ref(currentUserId)
   const campaignOrder = ref(defaultCampaigns.map((campaign) => campaign.id))
   const campaignFolderIds = ref([])
   const campaignServerHydrated = ref(false)
   const campaignServerLoadPending = ref(false)
-  const legacyActiveCampaign = ref({
-    name: '프리미엄 라이프스타일',
-    period: '2026.05.01 - 2026.06.15',
-    status: 'live',
-  })
   const theme = ref(readStoredTheme() ?? getPreferredTheme())
+  const themeHydrated = ref(false)
+  const themeStorageListenerRegistered = ref(false)
   const activeMode = ref('personal')
   const calendarView = ref('month')
   const calendarTab = ref('calendar')
@@ -335,6 +308,15 @@ export const usePlannerStore = defineStore('planner', () => {
     syncCampaignUiState()
   }
 
+  function resetCampaigns() {
+    campaigns.value = []
+    campaignServerHydrated.value = false
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(campaignsStorageKey)
+      window.localStorage.removeItem(activeCampaignIdStorageKey)
+    }
+  }
+
   async function loadCampaignsFromServer() {
     if (!readStoredToken() || campaignServerLoadPending.value) {
       return campaigns.value
@@ -347,9 +329,22 @@ export const usePlannerStore = defineStore('planner', () => {
 
       if (Array.isArray(loadedCampaigns)) {
         const nextCampaigns = loadedCampaigns.map((campaign) => normalizeCampaignRecord(campaign))
-
         campaigns.value = nextCampaigns
-        campaignOrder.value = nextCampaigns.map((campaign) => campaign.id)
+
+        const nextIds = nextCampaigns.map((c) => c.id)
+        const savedOrder = safeParseCampaigns(
+          typeof window !== 'undefined'
+            ? window.localStorage.getItem(getCampaignUiStorageKey(campaignOrderStorageKey))
+            : null,
+        )
+        if (Array.isArray(savedOrder) && savedOrder.length > 0) {
+          const preserved = savedOrder.filter((id) => nextIds.includes(id))
+          const added = nextIds.filter((id) => !preserved.includes(id))
+          campaignOrder.value = [...preserved, ...added]
+        } else {
+          campaignOrder.value = nextIds
+        }
+
         activeCampaignId.value = nextCampaigns.some((campaign) => campaign.id === activeCampaignId.value)
           ? activeCampaignId.value
           : nextCampaigns[0]?.id ?? null
@@ -374,21 +369,53 @@ export const usePlannerStore = defineStore('planner', () => {
     document.documentElement.dataset.theme = nextTheme
   }
 
+  function syncThemeFromStorage() {
+    const storedTheme = readStoredTheme()
+    const nextTheme = storedTheme ?? theme.value ?? getPreferredTheme()
+
+    theme.value = nextTheme
+    applyTheme(nextTheme)
+
+    if (storedTheme) {
+      writeStoredTheme(nextTheme)
+    }
+
+    themeHydrated.value = true
+  }
+
+  function listenThemeStorage() {
+    if (typeof window === 'undefined' || themeStorageListenerRegistered.value) {
+      return
+    }
+
+    window.addEventListener('storage', (event) => {
+      if (event.key !== themeStorageKey && event.key !== legacyThemeStorageKey) {
+        return
+      }
+
+      const storedTheme = readStoredTheme()
+
+      if (!storedTheme || storedTheme === theme.value) {
+        return
+      }
+
+      theme.value = storedTheme
+      applyTheme(storedTheme)
+    })
+    themeStorageListenerRegistered.value = true
+  }
+
   function initialize() {
     if (typeof window === 'undefined') {
       return
     }
 
-    const storedTheme = readStoredTheme()
     const storedTasks = window.localStorage.getItem(tasksStorageKey)
     const storedCampaigns = window.localStorage.getItem(campaignsStorageKey)
     const storedActiveCampaignId = window.localStorage.getItem(activeCampaignIdStorageKey)
 
-    if (storedTheme) {
-      theme.value = storedTheme
-    } else {
-      theme.value = getPreferredTheme()
-    }
+    syncThemeFromStorage()
+    listenThemeStorage()
 
     if (storedTasks) {
       const parsedTasks = safeParseTasks(storedTasks)
@@ -413,7 +440,6 @@ export const usePlannerStore = defineStore('planner', () => {
       activeCampaignId.value = campaigns.value[0]?.id ?? null
     }
 
-    applyTheme(theme.value)
     hydrateCampaignUiState()
 
     if (!campaignServerHydrated.value && readStoredToken()) {
@@ -423,12 +449,23 @@ export const usePlannerStore = defineStore('planner', () => {
 
   watch(
     theme,
-    (nextTheme) => {
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(themeStorageKey, nextTheme)
+    (nextTheme, previousTheme) => {
+      const normalizedTheme = normalizeTheme(nextTheme)
+
+      if (!normalizedTheme) {
+        return
       }
 
-      applyTheme(nextTheme)
+      if (normalizedTheme !== nextTheme) {
+        theme.value = normalizedTheme
+        return
+      }
+
+      if (themeHydrated.value && normalizedTheme !== previousTheme) {
+        writeStoredTheme(normalizedTheme)
+      }
+
+      applyTheme(normalizedTheme)
     },
     { immediate: true },
   )
@@ -451,8 +488,6 @@ export const usePlannerStore = defineStore('planner', () => {
   })
 
   const members = computed(() => teamMembers)
-  const templates = computed(() => templateLibrary)
-  const reports = computed(() => reportCards)
 
   const memberMap = computed(() =>
     members.value.reduce((accumulator, member) => {
@@ -608,10 +643,6 @@ export const usePlannerStore = defineStore('planner', () => {
     return true
   }
 
-  function isCampaignInFolder(campaignId) {
-    return campaignFolderIds.value.includes(campaignId)
-  }
-
   function createCampaign(payload) {
     const nextIndex = campaigns.value.length + 1
     const name = payload.name?.trim() || `새 캠페인 ${nextIndex}`
@@ -729,10 +760,6 @@ export const usePlannerStore = defineStore('planner', () => {
     calendarTab.value = tab
   }
 
-  function setSidebarCollapsed(value) {
-    sidebarCollapsed.value = value
-  }
-
   function toggleSidebar() {
     sidebarCollapsed.value = !sidebarCollapsed.value
   }
@@ -745,6 +772,9 @@ export const usePlannerStore = defineStore('planner', () => {
     }
 
     theme.value = normalizedTheme
+    themeHydrated.value = true
+    writeStoredTheme(normalizedTheme)
+    applyTheme(normalizedTheme)
   }
 
   function toggleTheme() {
@@ -888,7 +918,8 @@ export const usePlannerStore = defineStore('planner', () => {
     filteredTasks,
     findMember,
     initialize,
-    isCampaignInFolder,
+    loadCampaignsFromServer,
+    resetCampaigns,
     members,
     modalMode,
     modalTask,
@@ -899,7 +930,6 @@ export const usePlannerStore = defineStore('planner', () => {
     orderedCampaigns,
     periodLabel,
     priorityLabels,
-    reports,
     reorderCampaign,
     restoreCampaignFromFolder,
     searchQuery,
@@ -920,12 +950,12 @@ export const usePlannerStore = defineStore('planner', () => {
     statusFilter,
     statusLabels,
     tasks,
-    templates,
     taskOpenToken,
     theme,
     toggleSidebar,
     toggleSpanMode,
     toggleTheme,
+
     updateCampaign,
     updateCampaignStatus,
     updateTask,

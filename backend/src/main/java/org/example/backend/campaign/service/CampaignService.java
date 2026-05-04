@@ -3,12 +3,22 @@ package org.example.backend.campaign.service;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignDto;
+import org.example.backend.campaign.model.CampaignMember;
+import org.example.backend.campaign.model.CampaignMemberRole;
+import org.example.backend.campaign.model.CampaignParticipant;
+import org.example.backend.campaign.model.CampaignRole;
+import org.example.backend.campaign.repository.CampaignMemberRepository;
+import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.organization.model.OrganizationType;
+import org.example.backend.user.model.User;
+import org.example.backend.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,15 +30,26 @@ public class CampaignService {
     private static final List<String> ALLOWED_STATUSES = List.of("draft", "review", "live", "paused", "completed");
 
     private final CampaignRepository campaignRepository;
+    private final UserRepository userRepository;
+    private final CampaignParticipantRepository participantRepository;
+    private final CampaignMemberRepository memberRepository;
 
-    public List<CampaignDto.Res> listCampaigns(String ownerLoginId) {
-        return campaignRepository.findAllByOwnerLoginIdOrderByIdxDesc(ownerLoginId).stream()
-                .map(CampaignDto.Res::from)
+    public List<CampaignDto.Res> listCampaigns(Long userIdx) {
+        return memberRepository.findAllWithCampaignByUserIdx(userIdx).stream()
+                .map(cm -> CampaignDto.Res.from(cm.getCampaign()))
                 .toList();
     }
 
     @Transactional
     public CampaignDto.Res createCampaign(String ownerLoginId, CampaignDto.UpsertReq dto) {
+        User owner = userRepository.findUserById(ownerLoginId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found."));
+
+        if (owner.getOrganization() != null
+                && owner.getOrganization().getType() == OrganizationType.EXTERNAL_PARTNER) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "외부 파트너는 캠페인을 생성할 수 없습니다.");
+        }
+
         String name = normalizeRequired(dto.name(), "Campaign name is required.");
 
         Campaign campaign = Campaign.builder()
@@ -46,7 +67,26 @@ public class CampaignService {
                 .color(normalizeColor(dto.color()))
                 .build();
 
-        return CampaignDto.Res.from(campaignRepository.save(campaign));
+        Campaign saved = campaignRepository.save(campaign);
+
+        // owner를 GENERAL_MANAGER 멤버 + 그 조직을 PM으로 자동 등록
+        if (owner.getOrganization() != null) {
+            CampaignParticipant pmParticipant = CampaignParticipant.builder()
+                    .campaign(saved)
+                    .organization(owner.getOrganization())
+                    .campaignRole(CampaignRole.PM)
+                    .build();
+            participantRepository.save(pmParticipant);
+        }
+        CampaignMember ownerMember = CampaignMember.builder()
+                .campaign(saved)
+                .user(owner)
+                .campaignRole(CampaignMemberRole.GENERAL_MANAGER)
+                .joinedAt(LocalDateTime.now())
+                .build();
+        memberRepository.save(ownerMember);
+
+        return CampaignDto.Res.from(saved);
     }
 
     @Transactional

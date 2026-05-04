@@ -3,6 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { GetCampaignDetails } from '@/api/campaigns'
+import CampaignResourcesView from '@/views/CampaignResourcesView.vue'
+import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
+import CampaignMembersPanel from '@/components/campaign/CampaignMembersPanel.vue'
+import CampaignKpiTab from '@/components/campaign/kpi/CampaignKpiTab.vue'
 import {
   ListMilestones,
   ListTaskParts,
@@ -12,6 +16,7 @@ import {
   CreateTask,
   UpdateTask,
 } from '@/api/teamboard'
+import { getCampaignMembers, listCampaignParticipants } from '@/api/campaignMembers'
 
 const TEAMBOARD_STATUS_MAP = {
   BACKLOG: 'backlog',
@@ -67,7 +72,6 @@ const store = usePlannerStore()
 const activeTab = ref('캠페인 오버뷰')
 const currentBoardView = ref('part')
 const metadataEditing = ref(false)
-const selectedMemberIds = ref([])
 
 const metadataDraft = ref({
   name: '',
@@ -77,7 +81,7 @@ const metadataDraft = ref({
   partnersText: '',
 })
 
-const tabs = ["캠페인 오버뷰", "팀 보드 보기", "레퍼런스 탭", "참여자 설정", "캠페인 성과/KPI"];
+const tabs = ["캠페인 오버뷰", "팀 보드 보기", "레퍼런스 탭", "자료실", "검수/승인", "참여자 설정", "캠페인 성과/KPI"];
 
 const handleTabClick = async (tabName) => {
   activeTab.value = tabName;
@@ -90,9 +94,11 @@ const handleTabClick = async (tabName) => {
   }
 };
 
+const campaignId = computed(() => route.params.campaignId)
+
 const activeCampaign = computed(() => {
-  const campaignId = String(route.params.campaignId ?? '')
-  const routeCampaign = store.campaigns.find((campaign) => campaign.id === campaignId)
+  const cid = String(route.params.campaignId ?? '')
+  const routeCampaign = store.campaigns.find((campaign) => campaign.id === cid)
 
   return routeCampaign ?? store.activeCampaign
 })
@@ -162,6 +168,8 @@ const statusColumns = [
 const milestoneRows = ref([])
 
 const teams = []
+const campaignMemberOptions = ref([])
+const campaignParticipantOptions = ref([])
 
 const teamTasks = ref([])
 
@@ -216,8 +224,8 @@ function createDefaultTaskForm() {
     part: taskPartOptions.value[0],
     type: taskTypeOptions[0],
     priority: 'medium',
-    ownerName: '',
-    ownerInitial: '',
+    assigneeId: null,
+    participantId: null,
     description: '',
   }
 }
@@ -233,6 +241,7 @@ function createDefaultPartForm() {
     dependency: '',
     deliverable: '',
     description: '',
+    participantId: null,
   }
 }
 
@@ -280,42 +289,6 @@ const references = [
     icon: 'PDF',
   },
 ]
-
-const participantCandidates = [
-  { id: 'hq-kim', name: '김본사', team: '글로벌 본사', role: '본사 관리자' },
-  { id: 'design-park', name: '박디자인', team: '디자인 스튜디오 A', role: '협력사 매니저' },
-  { id: 'media-lee', name: '이마켓', team: '미디어 랩 B', role: '협력사 팀원' },
-]
-
-const campaignParticipants = ref([
-  {
-    id: 'hq-kim',
-    name: '김본사',
-    email: 'kim.hq@callog.com',
-    team: '글로벌 본사',
-    role: '본사 관리자',
-    access: '읽기/수정',
-    addedAt: '2024.04.10',
-  },
-  {
-    id: 'design-park',
-    name: '박디자인',
-    email: 'park@studio-a.com',
-    team: '디자인 스튜디오 A',
-    role: '협력사 매니저',
-    access: '당사 업무 수정',
-    addedAt: '2024.04.12',
-  },
-  {
-    id: 'media-lee',
-    name: '이마켓',
-    email: 'lee@media-b.com',
-    team: '미디어 랩 B',
-    role: '협력사 팀원',
-    access: '당사 업무 조회',
-    addedAt: '2024.04.15',
-  },
-])
 
 const kpiRows = ref([
   {
@@ -500,8 +473,8 @@ function editFromDetail() {
     type: t.type || taskTypeOptions[0],
     priority: t.priority ?? 'medium',
     dueDate: t.dueDateRaw ? String(t.dueDateRaw).slice(0, 10) : '',
-    ownerName: t.ownerName ?? '',
-    ownerInitial: t.ownerInitial ?? '',
+    assigneeId: t.assigneeIdx ?? null,
+    participantId: t.participantIdx ?? null,
     description: t.description ?? '',
   }
   taskFormError.value = ''
@@ -542,6 +515,7 @@ async function addTaskPart() {
       deliverable: partForm.value.deliverable.trim() || null,
       description: partForm.value.description.trim() || null,
       sortOrder: taskPartRecords.value.length,
+      participantId: partForm.value.participantId ?? null,
     })
 
     taskPartRecords.value = [
@@ -686,13 +660,13 @@ async function addTeamTask() {
 
   const payload = {
     name: title,
-    participantId: null,
+    participantId: taskForm.value.participantId ?? null,
     dueDate: toIsoDateTime(taskForm.value.dueDate),
     taskType: TYPE_TO_BACKEND[taskForm.value.type] ?? 'OTHER',
     status: STATUS_TO_BACKEND[taskForm.value.status] ?? 'BACKLOG',
     taskPartId,
     milestoneId,
-    assigneeId: null,
+    assigneeId: taskForm.value.assigneeId ?? null,
     priority: (taskForm.value.priority ?? 'medium').toUpperCase(),
     memo: taskForm.value.description.trim() || null,
   }
@@ -714,12 +688,10 @@ async function addTeamTask() {
       priority: TEAMBOARD_PRIORITY_MAP[result.priority] ?? 'medium',
       dueDate: result.dueDate ? formatTeamboardDate(result.dueDate) : '',
       dueDateRaw: result.dueDate ?? '',
-      ownerName: result.assigneeName ?? taskForm.value.ownerName.trim(),
-      ownerInitial:
-        result.assigneeName?.charAt(0) ||
-        taskForm.value.ownerInitial.trim() ||
-        taskForm.value.ownerName.trim().slice(0, 1) ||
-        'N',
+      ownerName: result.assigneeName ?? '',
+      ownerInitial: result.assigneeName?.charAt(0) ?? '?',
+      assigneeIdx: result.assigneeIdx ?? null,
+      participantIdx: result.participantIdx ?? null,
       description: result.memo ?? taskForm.value.description.trim(),
     }
 
@@ -822,21 +794,6 @@ function removeScheduleItem(scheduleId) {
   scheduleItems.value = scheduleItems.value.filter((item) => item.id !== scheduleId)
 }
 
-function addSelectedParticipants() {
-  const existingIds = new Set(campaignParticipants.value.map((participant) => participant.id))
-  const additions = participantCandidates
-    .filter((candidate) => selectedMemberIds.value.includes(candidate.id) && !existingIds.has(candidate.id))
-    .map((candidate) => ({
-      ...candidate,
-      email: `${candidate.id}@callog.com`,
-      access: candidate.team === '글로벌 본사' ? '읽기/수정' : '당사 업무 수정',
-      addedAt: '2024.05.18',
-    }))
-
-  campaignParticipants.value = [...campaignParticipants.value, ...additions]
-  selectedMemberIds.value = []
-}
-
 watch(
   () => route.params.campaignId,
   (campaignId) => {
@@ -853,11 +810,20 @@ async function loadCampaignTeamboard(campaignId) {
   if (!campaignId) return
 
   try {
-    const [milestonesData, taskPartsData, tasksData] = await Promise.all([
+    const [milestonesData, taskPartsData, tasksData, membersRes, participantsRes] = await Promise.all([
       ListMilestones(campaignId),
       ListTaskParts(campaignId),
       ListTasksByCampaign(campaignId),
+      getCampaignMembers(campaignId).then((r) => r.data?.data?.members ?? []).catch(() => []),
+      listCampaignParticipants(campaignId).then((r) => r.data?.data ?? []).catch(() => []),
     ])
+
+    campaignMemberOptions.value = Array.isArray(membersRes)
+      ? membersRes.map((m) => ({ userIdx: m.userIdx, name: m.name, companyName: m.companyName }))
+      : []
+    campaignParticipantOptions.value = Array.isArray(participantsRes)
+      ? participantsRes.map((p) => ({ idx: p.idx, organizationName: p.organizationName }))
+      : []
 
     if (Array.isArray(milestonesData) && milestonesData.length > 0) {
       milestoneRows.value = milestonesData.map((m) => ({
@@ -889,6 +855,8 @@ async function loadCampaignTeamboard(campaignId) {
         dueDateRaw: t.dueDate ?? '',
         ownerInitial: t.assigneeName ? t.assigneeName.charAt(0) : '?',
         ownerName: t.assigneeName ?? '',
+        assigneeIdx: t.assigneeIdx ?? null,
+        participantIdx: t.participantIdx ?? null,
         part: t.taskPartName ?? '',
         priority: TEAMBOARD_PRIORITY_MAP[t.priority] ?? 'medium',
         milestone: t.milestoneName ?? '',
@@ -918,43 +886,41 @@ watch(
 
 <template>
   <section class="campaign-detail">
-    <div class="campaign-sticky-bar">
-      <header class="campaign-hero" aria-label="캠페인 메인 페이지 헤더">
-        <div class="campaign-hero__copy">
-          <div class="campaign-hero__title">
-            <h1>{{ activeCampaign?.name ?? '2024 글로벌 썸머 프로모션 캠페인' }}</h1>
-            <span class="status-chip status-chip--primary">
-              <i aria-hidden="true"></i>
-              {{ campaignStatusLabel }}
-            </span>
-          </div>
-          <div class="campaign-hero__meta" aria-label="캠페인 메타데이터 요약">
-            <span>{{ activeCampaign?.period ?? '2024.06.01 - 2024.08.31' }}</span>
-            <span>본사 관리자 (수정 가능)</span>
-          </div>
+    <header class="campaign-hero" aria-label="캠페인 메인 페이지 헤더">
+      <div class="campaign-hero__copy">
+        <div class="campaign-hero__title">
+          <h1>{{ activeCampaign?.name ?? '2024 글로벌 썸머 프로모션 캠페인' }}</h1>
+          <span class="status-chip status-chip--primary">
+            <i aria-hidden="true"></i>
+            {{ campaignStatusLabel }}
+          </span>
         </div>
-
-        <div class="campaign-hero__actions">
-          <button type="button" class="btn btn--secondary">내보내기</button>
-          <button type="button" class="btn btn--primary" @click="activeTab = 'metadata'; metadataEditing = true">
-            캠페인 편집
-          </button>
+        <div class="campaign-hero__meta" aria-label="캠페인 메타데이터 요약">
+          <span>{{ activeCampaign?.period ?? '2024.06.01 - 2024.08.31' }}</span>
+          <span>본사 관리자 (수정 가능)</span>
         </div>
-      </header>
+      </div>
 
-      <nav class="campaign-tabs" aria-label="캠페인 상세 탭">
-        <button
-          v-for="tab in tabs"
-          :key="tab"
-          type="button"
-          class="campaign-tabs__button"
-          :class="{ active: activeTab === tab }"
-          @click="handleTabClick(tab)"
-        >
-          {{ tab }}
+      <div class="campaign-hero__actions">
+        <button type="button" class="btn btn--secondary">내보내기</button>
+        <button type="button" class="btn btn--primary" @click="activeTab = 'metadata'; metadataEditing = true">
+          캠페인 편집
         </button>
-      </nav>
-    </div>
+      </div>
+    </header>
+
+    <nav class="campaign-tabs" aria-label="캠페인 상세 탭">
+      <button
+        v-for="tab in tabs"
+        :key="tab"
+        type="button"
+        class="campaign-tabs__button"
+        :class="{ active: activeTab === tab }"
+        @click="handleTabClick(tab)"
+      >
+        {{ tab }}
+      </button>
+    </nav>
 
     <section v-if="activeTab === 'metadata'" class="tab-surface">
       <div class="metadata-layout">
@@ -1282,114 +1248,20 @@ watch(
       </div>
     </section>
 
+    <section v-else-if="activeTab === '자료실'" class="tab-surface">
+      <CampaignResourcesView />
+    </section>
+
+    <section v-else-if="activeTab === '검수/승인'" class="tab-surface">
+      <ReviewApprovalView />
+    </section>
+
     <section v-else-if="activeTab === '참여자 설정'" class="tab-surface">
-      <article class="panel">
-        <div class="panel__header">
-          <div>
-            <span class="requirement-badge">CAMPAIGN_005</span>
-            <h2>캠페인 참여자 관리</h2>
-          </div>
-          <button type="button" class="btn btn--primary" @click="addSelectedParticipants">참가자 추가</button>
-        </div>
-
-        <div class="candidate-list">
-          <label v-for="candidate in participantCandidates" :key="candidate.id">
-            <input v-model="selectedMemberIds" type="checkbox" :value="candidate.id" />
-            <span>{{ candidate.name }}</span>
-            <small>{{ candidate.team }} · {{ candidate.role }}</small>
-          </label>
-        </div>
-
-        <div class="data-table data-table--participants">
-          <div class="data-table__head">
-            <span>이름 / 이메일</span>
-            <span>소속 회사</span>
-            <span>역할 (권한)</span>
-            <span>추가된 날짜</span>
-            <span>관리</span>
-          </div>
-          <div v-for="participant in campaignParticipants" :key="participant.id" class="data-table__row">
-            <div class="person-cell">
-              <span>{{ participant.name.slice(0, 1) }}</span>
-              <div>
-                <strong>{{ participant.name }}</strong>
-                <small>{{ participant.email }}</small>
-              </div>
-            </div>
-            <span>{{ participant.team }}</span>
-            <span class="status-pill status-pill--info">{{ participant.role }}</span>
-            <span>{{ participant.addedAt }}</span>
-            <button type="button" class="table-action">관리</button>
-          </div>
-        </div>
-      </article>
-
-      <p class="info-callout">
-        참가자로 추가된 인원은 기본적으로 캠페인 조회 권한을 가집니다. 본사 관리자는 수정 권한을 가지며,
-        협력사는 자신에게 할당된 업무 및 직접 추가한 레퍼런스만 수정할 수 있습니다.
-      </p>
+      <CampaignMembersPanel :campaign-id="campaignId" />
     </section>
 
     <section v-else-if="activeTab === '캠페인 성과/KPI'" class="tab-surface">
-      <div class="metric-grid">
-        <article v-for="item in kpiSummary" :key="item.label" class="kpi-card" :class="`tone-${item.tone}`">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-          <small>{{ item.sub }}</small>
-        </article>
-      </div>
-
-      <article class="panel kpi-panel">
-        <div class="panel__header">
-          <div>
-            <span class="requirement-badge">CAMPAIGN_006</span>
-            <h2>세부 KPI 목록</h2>
-          </div>
-          <div>
-            <button type="button" class="btn btn--secondary">프레임워크 불러오기</button>
-            <button type="button" class="btn btn--primary">지표 추가</button>
-          </div>
-        </div>
-
-        <div class="data-table data-table--kpi">
-          <div class="data-table__head">
-            <span>KPI 항목</span>
-            <span>분류</span>
-            <span>목표값</span>
-            <span>실제값</span>
-            <span>단위</span>
-            <span>달성률</span>
-            <span>상태</span>
-            <span>담당자</span>
-            <span>동작</span>
-          </div>
-          <div v-for="row in kpiRows" :key="row.id" class="data-table__row">
-            <strong>{{ row.name }}</strong>
-            <span class="type-badge">{{ row.category }}</span>
-            <span class="number-cell">{{ row.target.toLocaleString() }}</span>
-            <span class="number-cell">{{ row.actual ? row.actual.toLocaleString() : '-' }}</span>
-            <span>{{ row.unit }}</span>
-            <div class="achievement-cell">
-              <div class="progress-track">
-                <i :class="`fill-${getKpiTone(row)}`" :style="{ width: `${Math.min(getAchievement(row), 100)}%` }"></i>
-              </div>
-              <span>{{ getAchievement(row) }}%</span>
-            </div>
-            <span class="status-pill" :class="`status-pill--${getKpiTone(row)}`">{{ getKpiStatus(row) }}</span>
-            <span>{{ row.owner }}</span>
-            <button type="button" class="table-action">메모</button>
-          </div>
-        </div>
-
-        <div class="kpi-note-box">
-          <h3>성과 분석 및 개선 액션</h3>
-          <textarea
-            rows="3"
-            value="노출 목표는 초과 달성하였으나, 랜딩페이지 내 이탈률이 높아 전환율이 목표에 미달함. 다음 캠페인에서는 랜딩페이지 최상단에 CTA 버튼을 명확히 배치하고 로딩 속도를 최적화하는 액션 필요."
-          />
-          <button type="button" class="btn btn--secondary">저장하기</button>
-        </div>
-      </article>
+      <CampaignKpiTab :campaign-id="campaignId" />
     </section>
 
     <Teleport to="body">
@@ -1486,21 +1358,22 @@ watch(
 
               <label>
                 <span>담당자</span>
-                <input
-                  v-model.trim="taskForm.ownerName"
-                  type="text"
-                  placeholder="예: 김본사"
-                />
+                <select v-model="taskForm.assigneeId">
+                  <option :value="null">— 미지정 —</option>
+                  <option v-for="m in campaignMemberOptions" :key="m.userIdx" :value="m.userIdx">
+                    {{ m.name }} ({{ m.companyName ?? '본사' }})
+                  </option>
+                </select>
               </label>
 
               <label>
-                <span>담당자 이니셜</span>
-                <input
-                  v-model.trim="taskForm.ownerInitial"
-                  type="text"
-                  maxlength="2"
-                  placeholder="김"
-                />
+                <span>담당 참여사</span>
+                <select v-model="taskForm.participantId">
+                  <option :value="null">— 미지정 —</option>
+                  <option v-for="p in campaignParticipantOptions" :key="p.idx" :value="p.idx">
+                    {{ p.organizationName }}
+                  </option>
+                </select>
               </label>
             </div>
 
@@ -1527,7 +1400,7 @@ watch(
     <Teleport to="body">
       <div
         v-if="isPartModalOpen"
-        class="task-modal-backdrop"
+        class="task-modal-backdrop task-modal-backdrop--anchor-top"
         role="presentation"
         @click.self="closePartCreateModal"
         @keydown.esc="closePartCreateModal"
@@ -1585,6 +1458,16 @@ watch(
                 <select v-model="partForm.milestone">
                   <option v-for="milestone in milestoneRows" :key="milestone.id" :value="milestone.id">
                     {{ milestone.label }} ({{ milestone.sub }})
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>담당 참여사</span>
+                <select v-model="partForm.participantId">
+                  <option :value="null">— 미지정 —</option>
+                  <option v-for="p in campaignParticipantOptions" :key="p.idx" :value="p.idx">
+                    {{ p.organizationName }}
                   </option>
                 </select>
               </label>
@@ -1819,14 +1702,6 @@ watch(
   --campaign-muted-fill: #4b5563;
   --campaign-elevated-tint: rgba(139, 92, 246, 0.08);
   --campaign-table-row-hover: color-mix(in srgb, var(--panel-muted) 72%, var(--panel-color));
-}
-
-.campaign-sticky-bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: var(--app-bg);
-  padding-bottom: 10px;
 }
 
 .campaign-hero {
@@ -2661,6 +2536,11 @@ textarea:disabled {
   overflow-y: auto;
   background: rgba(15, 23, 42, 0.46);
   padding: 24px;
+}
+
+.task-modal-backdrop--anchor-top {
+  align-items: start;
+  padding-top: 80px;
 }
 
 :global(:root[data-theme='dark']) .task-modal-backdrop {

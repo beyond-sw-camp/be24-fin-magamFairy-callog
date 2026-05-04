@@ -6,6 +6,8 @@ import org.example.backend.config.filter.LoginFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -43,13 +45,15 @@ public class SecurityConfig {
                 .requestMatchers("/auth/login", "/login", "/error").permitAll()
                 .requestMatchers("/auth/reissue", "/auth/logout").permitAll()
                 .requestMatchers("/auth/signup").permitAll()
+                .requestMatchers("/auth/usercreate").hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
+                .requestMatchers("/auth/manage").hasAnyAuthority("ROLE_GENERAL_MANAGER")
+                .requestMatchers("/auth/manage/users").hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
                 .requestMatchers(
-                        "/auth/usercreate",
                         "/auth/userdelete",
                         "/auth/resetpassword",
                         "/administrator/users",
                         "/admin/users"
-                ).hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER")
+                ).hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
                 .requestMatchers("/administrator/**", "/admin/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers(
                         "/workspace/**",
@@ -59,8 +63,41 @@ public class SecurityConfig {
                         "/api/sse/**",
                         "/sse/**"
                 ).permitAll()
+                .requestMatchers(HttpMethod.GET,    "/campaigns/*/members").authenticated()
+                .requestMatchers(HttpMethod.GET,    "/campaigns/*/members/candidates/**")
+                    .hasAnyAuthority("ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
+                .requestMatchers(HttpMethod.POST,   "/campaigns/*/members")
+                    .hasAnyAuthority("ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
+                .requestMatchers(HttpMethod.POST,   "/campaigns/*/members/invite-partner")
+                    .access((supplier, ctx) -> new AuthorizationDecision(
+                        supplier.get().getAuthorities().stream().anyMatch(a ->
+                            a.getAuthority().equals("ROLE_GENERAL_MANAGER") || a.getAuthority().equals("ROLE_MANAGER"))
+                        && supplier.get().getAuthorities().stream().anyMatch(a ->
+                            a.getAuthority().equals("ORG_AFFILIATE"))
+                    ))
+                .requestMatchers(HttpMethod.PATCH,  "/campaigns/*/members/*")
+                    .hasAuthority("ROLE_GENERAL_MANAGER")
+                .requestMatchers(HttpMethod.DELETE, "/campaigns/*/members/*")
+                    .hasAnyAuthority("ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
+                .requestMatchers(HttpMethod.POST,   "/campaigns/*/kpis")
+                    .hasAnyAuthority("ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
+                .requestMatchers(HttpMethod.POST,   "/campaigns/*/kpis/import-framework")
+                    .hasAnyAuthority("ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
+                .requestMatchers(HttpMethod.PATCH,  "/campaigns/*/kpis/**")
+                    .hasAnyAuthority("ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
+                .requestMatchers(HttpMethod.DELETE, "/campaigns/*/kpis/*")
+                    .hasAnyAuthority("ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
                 .requestMatchers("/campaigns/**").authenticated()
-                .requestMatchers("/matching/**", "/matching/evaluation/**").authenticated()
+                .requestMatchers(
+                        "/matching/**"
+                        )
+                .hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
+                .requestMatchers(
+                        "/matching/benefit/**",
+                        "/matching/asset/**",
+                        "/matching/evaluation/list/**"
+                )
+                .hasAnyAuthority("ROLE_USER")
                 .anyRequest().authenticated()
         );
 
