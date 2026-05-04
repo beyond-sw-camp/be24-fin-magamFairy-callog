@@ -8,7 +8,39 @@ export const updateMyProfile = async (body) => {
   return api.patch('/user-profiles/me', body)
 }
 
+export const createProfileImageUploadUrl = async (body) => {
+  return api.post('/user-profiles/me/profile-image/presigned-url', body)
+}
+
+export const updateMyProfileImage = async (body) => {
+  return api.patch('/user-profiles/me/profile-image', body)
+}
+
+export const deleteMyProfileImage = async () => {
+  return api.delete('/user-profiles/me/profile-image')
+}
+
+export const uploadProfileImageToS3 = async ({ uploadUrl, file, contentType }) => {
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': contentType,
+    },
+    body: file,
+  })
+
+  if (!response.ok) {
+    throw new Error('프로필 이미지를 S3에 업로드하지 못했습니다.')
+  }
+
+  return response
+}
+
 export default {
+  createProfileImageUploadUrl,
+  deleteMyProfileImage,
   getMyProfile,
+  updateMyProfileImage,
   updateMyProfile,
+  uploadProfileImageToS3,
 }
