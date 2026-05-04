@@ -41,10 +41,11 @@ public class SecurityConfig {
 
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/login", "/login", "/error").permitAll()
-                .requestMatchers("/auth/reissue", "/auth/logout").permitAll()
+                .requestMatchers("/auth/reissue", "/auth/logout", "/matching/evaluation/collect").permitAll()
                 .requestMatchers("/auth/signup").permitAll()
                 .requestMatchers("/auth/usercreate").hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
-                .requestMatchers("/auth/promote").hasAnyAuthority("ROLE_GENERAL_MANAGER")
+                .requestMatchers("/auth/manage").hasAnyAuthority("ROLE_GENERAL_MANAGER")
+                .requestMatchers("/auth/manage/users").hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
                 .requestMatchers(
                         "/auth/userdelete",
                         "/auth/resetpassword",
@@ -61,7 +62,16 @@ public class SecurityConfig {
                         "/sse/**"
                 ).permitAll()
                 .requestMatchers("/campaigns/**").authenticated()
-                .requestMatchers("/matching/**", "/matching/evaluation/**").authenticated()
+                .requestMatchers(
+                        "/matching/**"
+                        )
+                .hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
+                .requestMatchers(
+                        "/matching/benefit/**",
+                        "/matching/asset/**",
+                        "/matching/evaluation/list/**"
+                )
+                .hasAnyAuthority("ROLE_USER")
                 .anyRequest().authenticated()
         );
 
