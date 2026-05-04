@@ -32,10 +32,10 @@ public class EvaluationController {
         }
     }
 
-    @PostMapping("/evaluation/new")
-    public ResponseEntity newEvaluation(@RequestBody EvaluationDto.NewEvaluationReq dto){
+    @PostMapping("/evaluation/start")
+    public ResponseEntity startEvaluation(@RequestBody EvaluationDto.StartEvaluationReq dto){
         try {
-            evaluationService.newEvaluation(dto);
+            evaluationService.startEvaluation(dto);
             return  ResponseEntity.status(HttpStatus.ACCEPTED)
                     .body(BaseResponse.processing(BaseResponseStatus.EVLUATION_STARTED));
         }

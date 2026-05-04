@@ -8,7 +8,7 @@ public class EvaluationDto {
 
     @Getter
     @Builder
-    public static class NewEvaluationReq {
+    public static class StartEvaluationReq {
         private String kpi;
         private Double dependency;
         private Long assetIdx;
@@ -17,7 +17,7 @@ public class EvaluationDto {
 
     @Getter
     @Builder
-    public static class NewEvaluation {
+    public static class StartEvaluation {
         private String kpi;
         private Double dependency; // 0.5와 같은 소수점을 처리하기 위해 Double 사용
         private AssetRes asset;

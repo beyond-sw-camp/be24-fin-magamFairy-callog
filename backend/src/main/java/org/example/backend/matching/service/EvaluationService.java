@@ -31,19 +31,19 @@ public class EvaluationService {
     @Value("${custom.n8n.webhook-url}")
     String n8nWebhookUrl;
 
-    public void newEvaluation(EvaluationDto.NewEvaluationReq dto) throws Exception {
+    public void startEvaluation(EvaluationDto.StartEvaluationReq dto) throws Exception {
 
         MarketingAsset requiredAsset = assetRepository.findById(dto.getAssetIdx())
                 .orElseThrow(() -> new EntityNotFoundException("해당 Asset을 찾을 수 없습니다. Asset ID: " + dto.getAssetIdx()));
         PartnerBenefits requiredBenefit = benefitRepository.findById(dto.getBenefitIdx())
                 .orElseThrow(() -> new EntityNotFoundException("해당 Benefit을 찾을 수 없습니다. Benefit ID: " + dto.getBenefitIdx()));
 
-        EvaluationDto.NewEvaluation eval;
-        eval = EvaluationDto.NewEvaluation.builder()
+        EvaluationDto.StartEvaluation eval;
+        eval = EvaluationDto.StartEvaluation.builder()
                 .kpi(dto.getKpi())
                 .dependency(dto.getDependency())
-                .asset(EvaluationDto.NewEvaluation.AssetRes.toDto(requiredAsset))
-                .benefit(EvaluationDto.NewEvaluation.BenefitRes.toDto(requiredBenefit))
+                .asset(EvaluationDto.StartEvaluation.AssetRes.toDto(requiredAsset))
+                .benefit(EvaluationDto.StartEvaluation.BenefitRes.toDto(requiredBenefit))
                 .build();
 
         restClient.post()
