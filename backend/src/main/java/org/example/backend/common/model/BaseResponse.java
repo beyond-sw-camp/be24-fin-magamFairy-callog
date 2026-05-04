@@ -33,6 +33,24 @@ public class BaseResponse<T> {
         );
     }
 
+    public static <T> BaseResponse processing(BaseResponseStatus status) {
+        return new BaseResponse(
+                status.isSuccess(),
+                status.getCode(),
+                status.getMessage(),
+                null
+        );
+    }
+
+    public static <T> BaseResponse processing(BaseResponseStatus status,T data) {
+        return new BaseResponse(
+                status.isSuccess(),
+                status.getCode(),
+                status.getMessage(),
+                data
+        );
+    }
+
     public static <T> BaseResponse fail(BaseResponseStatus status) {
         return new BaseResponse(
                 status.isSuccess(),

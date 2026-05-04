@@ -1,18 +1,23 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
+import { ListAssets } from '@/api/matchingAssets'
 
-import AssetBenefitManagement from '@/components/matchengine/AssetBenefitManagement.vue'
 import CampaignMatching from '@/components/matchengine/CampaignMatching.vue'
 import MatchDashboard from '@/components/matchengine/MatchDashboard.vue'
+import MatchSettings from '@/components/matchengine/MatchSettings.vue'
 import PartnerEvaluation from '@/components/matchengine/PartnerEvaluation.vue'
 
 const store = usePlannerStore()
 
 const isDark = computed(() => store.theme === 'dark')
 const currentTab = ref('dashboard')
+const goalCount = ref(2)
+const assetBenefitCount = ref(0)
+const partnerProposalCount = 3
+const settingCount = computed(() => goalCount.value + assetBenefitCount.value)
 
-const tabs = [
+const tabs = computed(() => [
   {
     id: 'dashboard',
     name: '현황',
@@ -20,6 +25,14 @@ const tabs = [
     count: 8,
     component: MatchDashboard,
     icon: 'M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-3H4v3Z',
+  },
+  {
+    id: 'settings',
+    name: '매칭 설정',
+    caption: '입력값',
+    count: settingCount.value,
+    component: MatchSettings,
+    icon: 'M12 3v18M3 12h18',
   },
   {
     id: 'matching',
@@ -30,14 +43,6 @@ const tabs = [
     icon: 'M10 13a5 5 0 0 1 0-7l1.5-1.5a5 5 0 0 1 7 7L17 13M14 11a5 5 0 0 1 0 7l-1.5 1.5a5 5 0 0 1-7-7L7 11',
   },
   {
-    id: 'assets',
-    name: '자산/혜택',
-    caption: '관리',
-    count: 6,
-    component: AssetBenefitManagement,
-    icon: 'M4 7h16M4 12h16M4 17h10',
-  },
-  {
     id: 'evaluation',
     name: '파트너 평가',
     caption: '2건',
@@ -45,15 +50,38 @@ const tabs = [
     component: PartnerEvaluation,
     icon: 'M12 3l2.7 5.47 6.03.88-4.36 4.25 1.03 6-5.4-2.84L6.1 19.6l1.03-6L2.77 9.35l6.03-.88L12 3Z',
   },
-]
+])
 
 const currentComponent = computed(
-  () => tabs.find((tab) => tab.id === currentTab.value)?.component ?? tabs[0].component,
+  () => tabs.value.find((tab) => tab.id === currentTab.value)?.component ?? tabs.value[0].component,
 )
 
 function resolveTabCount(tab) {
   return typeof tab.count === 'object' ? tab.count.value : tab.count
 }
+
+function updateAssetBenefitCount(assetCount) {
+  assetBenefitCount.value = Number(assetCount ?? 0) + partnerProposalCount
+}
+
+function updateGoalCount(count) {
+  goalCount.value = Number(count ?? 0)
+}
+
+function moveToMatchingTab() {
+  currentTab.value = 'matching'
+}
+
+async function loadAssetBenefitCount() {
+  try {
+    const data = await ListAssets()
+    updateAssetBenefitCount(data.totalElements ?? data.assetList?.length ?? data.length ?? 0)
+  } catch {
+    updateAssetBenefitCount(0)
+  }
+}
+
+onMounted(loadAssetBenefitCount)
 
 </script>
 
@@ -77,7 +105,13 @@ function resolveTabCount(tab) {
     <main class="match-view__body">
       <transition name="match-fade" mode="out-in">
         <KeepAlive>
-          <component :is="currentComponent" :isDark="isDark" />
+          <component
+            :is="currentComponent"
+            :isDark="isDark"
+            @asset-count-change="updateAssetBenefitCount"
+            @goal-count-change="updateGoalCount"
+            @request-matching="moveToMatchingTab"
+          />
         </KeepAlive>
       </transition>
     </main>
