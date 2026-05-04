@@ -65,7 +65,23 @@ public class UserDto {
     public record ResetPasswordRes(String id, String password) {
     }
 
+<<<<<<< HEAD
     public record ManageRoleReq(String id, String role) {
+=======
+    public record ChangePasswordReq(String currentPassword, String newPassword) {
+    }
+
+    @Builder
+    public record ChangePasswordRes(String id) {
+        public static ChangePasswordRes from(User entity) {
+            return ChangePasswordRes.builder()
+                    .id(entity.getId())
+                    .build();
+        }
+    }
+
+    public record PromoteToManagerReq(String id) {
+>>>>>>> origin/dev
     }
 
     @Builder
