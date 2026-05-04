@@ -9,6 +9,8 @@ defineProps({
   },
 })
 
+const emit = defineEmits(['asset-count-change'])
+
 const currentSubTab = ref('assets')
 const assets = ref([])
 const isAssetLoading = ref(false)
@@ -28,6 +30,7 @@ function createAssetForm() {
   return {
     type: '',
     affiliate: '',
+    customAffiliate: '',
     registeredAt: getTodayString(),
     category: '',
     target: '',
@@ -46,10 +49,11 @@ function createAssetForm() {
 const assetForm = ref(createAssetForm())
 
 const assetTypes = [
-  { value: 'customer', label: '고객 자산', desc: 'VIP, 멤버십, 고객DB' },
-  { value: 'channel', label: '채널 자산', desc: '앱, 알림톡, 푸시' },
-  { value: 'space', label: '공간 자산', desc: '호텔, 리조트, 매장' },
-  { value: 'content', label: '콘텐츠 자산', desc: '이벤트, IP, 영상' },
+  { value: 'customer', label: '고객 자산', desc: '예: VIP, 멤버십, 고객DB', supply: '동시 활용 가능' },
+  { value: 'channel', label: '채널 자산', desc: '예: 앱 배너, 알림톡, 푸시', supply: '슬롯 단위 충돌 관리' },
+  { value: 'space', label: '공간 자산', desc: '예: 백화점 매장, 라운지, 전망대', supply: '동시 활용 가능' },
+  { value: 'voucher', label: '상품/이용권 자산', desc: '예: 호텔 객실, 리조트 이용권, 스포츠 티켓', supply: '재고 단위 차감' },
+  { value: 'content', label: '콘텐츠/IP 자산', desc: '예: 이벤트, 선수 IP, 영상 콘텐츠', supply: '라이선스 조건 관리' },
 ]
 
 const affiliateOptions = [
@@ -221,6 +225,9 @@ function proposalStatusLabel(proposal) {
 
 function isFilled(field) {
   const value = assetForm.value[field]
+  if (field === 'affiliate' && value === '직접 입력') {
+    return assetForm.value.customAffiliate.trim() !== ''
+  }
   if (Array.isArray(value)) return value.length > 0
   return value !== '' && value != null
 }
@@ -242,6 +249,27 @@ const progressPercent = computed(() =>
 )
 
 const canSubmitAsset = computed(() => filledRequired.value === totalRequired.value)
+
+const selectedAssetType = computed(
+  () => assetTypes.find((assetType) => assetType.value === assetForm.value.category) ?? null,
+)
+
+const supplyLimitPlaceholder = computed(() => {
+  if (assetForm.value.category === 'voucher') return '예: 객실 200박 중 80박 사용 가능, 티켓 1,000석'
+  if (assetForm.value.category === 'channel') return '예: 앱 배너 1주 2슬롯, 알림톡 월 2회'
+  if (assetForm.value.category === 'space') return '예: 라운지 주말 4회, 매장 팝업 2주'
+  return '예: 분기 캠페인 3건까지 활용 가능'
+})
+
+const supplyLimitHint = computed(() => {
+  if (assetForm.value.category === 'voucher') {
+    return '호텔 객실, 이용권, 티켓은 캠페인에 배정한 수량만큼 남은 재고에서 차감됩니다.'
+  }
+  if (assetForm.value.category === 'channel') {
+    return '동시 캠페인 간 노출 슬롯 충돌을 막기 위해 필요합니다.'
+  }
+  return '동시 캠페인 충돌을 막기 위해 필요합니다.'
+})
 
 function toggleChip(list, value) {
   const items = assetForm.value[list]
@@ -307,6 +335,7 @@ async function loadAssets() {
   try {
     const data = await ListAssets()
     assets.value = (data.assetList ?? data ?? []).map(mapAsset)
+    emit('asset-count-change', assets.value.length)
   } catch (error) {
     assetError.value = error.message ?? '자산을 불러오지 못했습니다.'
   } finally {
@@ -323,10 +352,12 @@ function openAssetForm() {
 
 function openEditAssetForm(asset) {
   editingAssetId.value = asset.id
+  const isKnownAffiliate = affiliateOptions.includes(asset.affiliate)
   assetForm.value = {
     ...createAssetForm(),
     type: asset.type === '-' ? '' : asset.type,
-    affiliate: asset.affiliate === '-' ? '' : asset.affiliate,
+    affiliate: isKnownAffiliate ? asset.affiliate : '직접 입력',
+    customAffiliate: isKnownAffiliate || asset.affiliate === '-' ? '' : asset.affiliate,
     registeredAt: asset.registeredAt === '-' ? getTodayString() : asset.registeredAt,
     category: asset.category ?? 'customer',
     target: asset.target === '-' ? '' : asset.target,
@@ -360,10 +391,18 @@ function closeAssetForm() {
 async function submitAsset() {
   if (!canSubmitAsset.value) return
 
+  const payload = {
+    ...assetForm.value,
+    affiliate:
+      assetForm.value.affiliate === '직접 입력'
+        ? assetForm.value.customAffiliate.trim()
+        : assetForm.value.affiliate,
+  }
+
   if (editingAssetId.value) {
-    await UpdateAsset(editingAssetId.value, assetForm.value)
+    await UpdateAsset(editingAssetId.value, payload)
   } else {
-    await CreateAsset(assetForm.value)
+    await CreateAsset(payload)
   }
 
   assetForm.value = createAssetForm()
@@ -596,6 +635,12 @@ const rows = computed(() =>
                       {{ option }}
                     </option>
                   </select>
+                  <input
+                    v-if="assetForm.affiliate === '직접 입력'"
+                    v-model="assetForm.customAffiliate"
+                    class="reg-field__subinput"
+                    placeholder="예: 한화비전 브랜드전략팀"
+                  />
                   <small class="reg-hint">자산을 소유하거나 운영하는 계열사/부서입니다.</small>
                 </label>
 
@@ -618,8 +663,12 @@ const rows = computed(() =>
                     >
                       <b>{{ assetType.label }}</b>
                       <small>{{ assetType.desc }}</small>
+                      <em>{{ assetType.supply }}</em>
                     </button>
                   </div>
+                  <small v-if="selectedAssetType" class="reg-hint">
+                    선택 유형: {{ selectedAssetType.supply }}
+                  </small>
                 </div>
               </div>
             </section>
@@ -678,8 +727,8 @@ const rows = computed(() =>
 
                 <label class="reg-field">
                   <span class="reg-field__label">이번 분기 공급 한도 <em>*</em></span>
-                  <input v-model="assetForm.supplyLimit" placeholder="예: 객실 200박 중 80박 사용 가능" />
-                  <small class="reg-hint">동시 캠페인 충돌을 막기 위해 필요합니다.</small>
+                  <input v-model="assetForm.supplyLimit" :placeholder="supplyLimitPlaceholder" />
+                  <small class="reg-hint">{{ supplyLimitHint }}</small>
                 </label>
 
                 <div class="reg-field reg-field--full">
@@ -1473,6 +1522,10 @@ const rows = computed(() =>
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 16%, transparent);
 }
 
+.reg-field__subinput {
+  margin-top: 0.18rem;
+}
+
 .reg-hint {
   display: block;
   min-height: 0.9rem;
@@ -1487,32 +1540,49 @@ const rows = computed(() =>
 
 .reg-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--panel-muted);
+  padding: 0.45rem;
 }
 
 .reg-card {
+  position: relative;
   display: grid;
   gap: 0.22rem;
   justify-items: start;
-  border: 1px solid var(--border-color);
+  min-height: 6.2rem;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   background: var(--panel-color);
-  padding: 0.7rem 0.75rem;
+  padding: 0.78rem 0.82rem;
   cursor: pointer;
   text-align: left;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   transition: all 0.15s ease;
 }
 
 .reg-card:hover {
   border-color: color-mix(in srgb, var(--accent-color) 50%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 3%, var(--panel-color));
   transform: translateY(-1px);
 }
 
 .reg-card.active {
   border-color: var(--accent-color);
-  background: color-mix(in srgb, var(--accent-color) 7%, var(--panel-color));
+  background: color-mix(in srgb, var(--accent-color) 8%, var(--panel-color));
   box-shadow: inset 0 0 0 1px var(--accent-color);
+}
+
+.reg-card.active::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 8px 0 0 8px;
+  background: var(--accent-color);
 }
 
 .reg-card b {
@@ -1529,6 +1599,13 @@ const rows = computed(() =>
   color: var(--muted-text);
   font-size: 0.66rem;
   font-weight: 700;
+}
+
+.reg-card em {
+  color: var(--accent-color);
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .reg-chips {
