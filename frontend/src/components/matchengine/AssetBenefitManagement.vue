@@ -20,6 +20,13 @@ const registrationBody = ref(null)
 const activeRegistrationSection = ref('basic')
 const editingAssetId = ref(null)
 const deletingAssetId = ref(null)
+const selectedAssetId = ref(null)
+const assetSearch = ref('')
+const isAssetFilterOpen = ref(false)
+const assetFilters = ref({
+  category: 'all',
+  status: 'all',
+})
 
 function getTodayString() {
   const now = new Date()
@@ -188,7 +195,18 @@ function mapAsset(asset) {
     publicStatus: asset.publicStatus ?? asset.partnerVisibleStatus ?? 'PRIVATE',
     matchingStatus: asset.matchingStatus ?? asset.status ?? (asset.active ?? asset.isActive ? 'ACTIVE' : 'PAUSED'),
     accessPolicy: asset.accessPolicy ?? '공유',
+    owner: asset.owner ?? asset.manager ?? asset.managerName ?? '미입력',
   }
+}
+
+function assetCategoryLabel(value) {
+  return assetTypes.find((assetType) => assetType.value === value)?.label ?? '미입력'
+}
+
+function displayValue(value) {
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '미입력'
+  if (value === null || value === undefined || value === '') return '미입력'
+  return value
 }
 
 function assetStatusLabel(asset) {
@@ -215,6 +233,20 @@ function assetStatusLabel(asset) {
 function isAssetAvailable(asset) {
   const normalized = String(asset.matchingStatus ?? '').toUpperCase()
   return normalized === 'AVAILABLE' || normalized === 'ACTIVE'
+}
+
+function assetStatusFilterValue(asset) {
+  if (isAssetAvailable(asset)) return 'active'
+  const normalized = String(asset.matchingStatus ?? '').toUpperCase()
+  if (normalized === 'EXCLUSIVE') return 'exclusive'
+  return 'paused'
+}
+
+function resetAssetFilters() {
+  assetFilters.value = {
+    category: 'all',
+    status: 'all',
+  }
 }
 
 function proposalStatusLabel(proposal) {
@@ -335,6 +367,9 @@ async function loadAssets() {
   try {
     const data = await ListAssets()
     assets.value = (data.assetList ?? data ?? []).map(mapAsset)
+    if (!assets.value.some((asset) => asset.id === selectedAssetId.value)) {
+      selectedAssetId.value = assets.value[0]?.id ?? null
+    }
     emit('asset-count-change', assets.value.length)
   } catch (error) {
     assetError.value = error.message ?? '자산을 불러오지 못했습니다.'
@@ -434,6 +469,52 @@ onMounted(loadAssets)
 const rows = computed(() =>
   currentSubTab.value === 'assets' ? assets.value : partnerProposals,
 )
+
+const filteredAssets = computed(() => {
+  const keyword = assetSearch.value.trim().toLowerCase()
+  return assets.value.filter((asset) => {
+    const matchesKeyword =
+      !keyword ||
+    [
+      asset.type,
+      asset.affiliate,
+      asset.owner,
+      asset.target,
+      asset.scale,
+      asset.supplyLimit,
+      asset.conditions,
+      asset.exposureValue,
+      asset.performance,
+      asset.partnerFit,
+      asset.blockedPartners,
+    ]
+      .map(displayValue)
+        .some((value) => String(value).toLowerCase().includes(keyword))
+
+    const matchesCategory =
+      assetFilters.value.category === 'all' || asset.category === assetFilters.value.category
+    const matchesStatus =
+      assetFilters.value.status === 'all' ||
+      assetStatusFilterValue(asset) === assetFilters.value.status
+
+    return matchesKeyword && matchesCategory && matchesStatus
+  })
+})
+
+const activeAssetFilterCount = computed(
+  () =>
+    Number(assetFilters.value.category !== 'all') +
+    Number(assetFilters.value.status !== 'all'),
+)
+
+const selectedAsset = computed(
+  () =>
+    filteredAssets.value.find((asset) => asset.id === selectedAssetId.value) ??
+    filteredAssets.value[0] ??
+    assets.value.find((asset) => asset.id === selectedAssetId.value) ??
+    assets.value[0] ??
+    null,
+)
 </script>
 
 <template>
@@ -487,47 +568,184 @@ const rows = computed(() =>
       <p v-if="assetError" class="asset-message">{{ assetError }}</p>
       <p v-else-if="isAssetLoading" class="asset-message">불러오는 중입니다.</p>
 
-      <div v-if="currentSubTab === 'assets'" class="asset-table asset-table--assets">
-        <div class="asset-table__head">
-          <span>자산/RFP</span>
-          <span>파트너 매력도</span>
-          <span>공급 한도</span>
-          <span>매칭 가드레일</span>
-          <span>공개/상태</span>
-          <span>관리</span>
-        </div>
-        <div v-for="asset in rows" :key="asset.id" class="asset-table__row">
-          <span class="asset-info">
-            <b>{{ asset.type }}</b>
-            <small>{{ asset.affiliate }} · 등록 {{ asset.registeredAt }}</small>
-          </span>
-          <span class="asset-info">
-            <b>{{ asset.target }}</b>
-            <small>노출 가치 {{ asset.exposureValue }} · 과거 성과 {{ asset.performance }}</small>
-          </span>
-          <span class="asset-info">
-            <b>{{ asset.scale }}</b>
-            <small>{{ asset.supplyLimit }} · {{ asset.conditions }}</small>
-          </span>
-          <span class="asset-info">
-            <b>{{ asset.partnerFit }}</b>
-            <small>차단 {{ asset.blockedPartners }} · {{ asset.accessPolicy }}</small>
-          </span>
-          <em :class="{ muted: !isAssetAvailable(asset) }">
-            {{ assetStatusLabel(asset) }}
-          </em>
-          <span class="asset-row-actions">
-            <button type="button" @click="openEditAssetForm(asset)">수정</button>
+      <div v-if="currentSubTab === 'assets'" class="asset-browser">
+        <aside class="asset-browser__list" aria-label="자산 목록">
+          <div class="asset-list-tools">
+            <label class="asset-list-search">
+              <span aria-hidden="true">⌕</span>
+              <input v-model="assetSearch" type="search" placeholder="자산 검색" />
+            </label>
             <button
               type="button"
-              class="danger"
-              :disabled="deletingAssetId === asset.id"
-              @click="deleteAsset(asset)"
+              class="asset-filter-button"
+              :class="{ active: activeAssetFilterCount > 0 }"
+              aria-label="자산 필터"
+              :aria-expanded="isAssetFilterOpen"
+              @click="isAssetFilterOpen = !isAssetFilterOpen"
             >
-              {{ deletingAssetId === asset.id ? '삭제 중' : '삭제' }}
+              <span aria-hidden="true">▽</span>
+              <em v-if="activeAssetFilterCount">{{ activeAssetFilterCount }}</em>
             </button>
-          </span>
-        </div>
+            <div v-if="isAssetFilterOpen" class="asset-filter-popover">
+              <div class="asset-filter-popover__head">
+                <strong>필터</strong>
+                <button type="button" @click="resetAssetFilters">초기화</button>
+              </div>
+
+              <label>
+                <span>자산 유형</span>
+                <select v-model="assetFilters.category">
+                  <option value="all">전체</option>
+                  <option v-for="assetType in assetTypes" :key="assetType.value" :value="assetType.value">
+                    {{ assetType.label }}
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>상태</span>
+                <select v-model="assetFilters.status">
+                  <option value="all">전체</option>
+                  <option value="active">매칭 활성</option>
+                  <option value="paused">휴면/비공개</option>
+                  <option value="exclusive">전속 협의</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <button
+            v-for="asset in filteredAssets"
+            :key="asset.id"
+            type="button"
+            class="asset-list-item"
+            :class="{ active: selectedAsset?.id === asset.id }"
+            @click="selectedAssetId = asset.id"
+          >
+            <span class="asset-list-item__mark">{{ String(asset.type).slice(0, 2) }}</span>
+            <span class="asset-list-item__text">
+              <strong>{{ asset.type }}</strong>
+              <small>{{ asset.affiliate }} · {{ asset.target }}</small>
+            </span>
+            <em :class="{ muted: !isAssetAvailable(asset) }">{{ assetStatusLabel(asset) }}</em>
+          </button>
+          <p v-if="!filteredAssets.length" class="asset-list-empty">검색 결과가 없습니다.</p>
+        </aside>
+
+        <article v-if="selectedAsset" class="asset-detail">
+          <header class="asset-detail__head">
+            <div class="asset-detail__identity">
+              <span>{{ String(selectedAsset.type).slice(0, 2) }}</span>
+              <div>
+                <h4>{{ selectedAsset.type }}</h4>
+                <p>{{ selectedAsset.affiliate }} · 등록 {{ selectedAsset.registeredAt }}</p>
+              </div>
+            </div>
+            <div class="asset-detail__actions">
+              <em :class="{ muted: !isAssetAvailable(selectedAsset) }">{{ assetStatusLabel(selectedAsset) }}</em>
+              <button type="button" @click="openEditAssetForm(selectedAsset)">수정</button>
+              <button
+                type="button"
+                class="danger"
+                :disabled="deletingAssetId === selectedAsset.id"
+                @click="deleteAsset(selectedAsset)"
+              >
+                {{ deletingAssetId === selectedAsset.id ? '삭제 중' : '삭제' }}
+              </button>
+            </div>
+          </header>
+
+          <section class="asset-detail__metrics">
+            <div>
+              <span>매칭 타깃</span>
+              <strong>{{ selectedAsset.target }}</strong>
+              <small>노출 가치 {{ selectedAsset.exposureValue }}</small>
+            </div>
+            <div>
+              <span>공급 한도</span>
+              <strong>{{ selectedAsset.scale }}</strong>
+              <small>{{ selectedAsset.supplyLimit }}</small>
+            </div>
+            <div>
+              <span>매칭 가드레일</span>
+              <strong>{{ selectedAsset.partnerFit }}</strong>
+              <small>차단 {{ selectedAsset.blockedPartners }}</small>
+            </div>
+          </section>
+
+          <section class="asset-detail__info">
+            <h5>기본 정보</h5>
+            <dl>
+              <div>
+                <dt>자산명</dt>
+                <dd>
+                  <strong>{{ selectedAsset.type }}</strong>
+                  <small>{{ assetCategoryLabel(selectedAsset.category) }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>소속 RFP</dt>
+                <dd>
+                  <strong>{{ selectedAsset.affiliate }}</strong>
+                  <small>등록 {{ selectedAsset.registeredAt }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>담당자</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.owner) }}</strong>
+                  <small>{{ selectedAsset.registeredAt }} 등록</small>
+                </dd>
+              </div>
+              <div>
+                <dt>운영 조건</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.conditions) }}</strong>
+                  <small>{{ assetStatusLabel(selectedAsset) }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>공급 한도</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.supplyLimit) }}</strong>
+                  <small>{{ displayValue(selectedAsset.scale) }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>매칭 대상</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.target) }}</strong>
+                  <small>노출 가치 {{ displayValue(selectedAsset.exposureValue) }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>과거 성과</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.performance) }}</strong>
+                  <small>미입력 시 업종 평균값으로 대체</small>
+                </dd>
+              </div>
+              <div>
+                <dt>희망 파트너</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.partnerFit) }}</strong>
+                  <small>차단 {{ displayValue(selectedAsset.blockedPartners) }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>공개 정책</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.accessPolicy) }}</strong>
+                  <small>{{ assetStatusLabel(selectedAsset) }}</small>
+                </dd>
+              </div>
+            </dl>
+          </section>
+        </article>
+
+        <article v-else class="asset-detail asset-detail--empty">
+          <h4>등록된 자산이 없습니다.</h4>
+          <p>오른쪽 목록에 표시할 자산을 먼저 등록하세요.</p>
+        </article>
       </div>
 
       <div v-else class="asset-table asset-table--benefits">
@@ -988,6 +1206,478 @@ const rows = computed(() =>
   color: var(--text-secondary);
   font-size: 0.84rem;
   font-weight: 800;
+}
+
+.asset-browser {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.42fr) minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-color);
+}
+
+.asset-browser__list {
+  display: grid;
+  align-content: start;
+  gap: 0.18rem;
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-color);
+  background: var(--panel-muted);
+  padding: 0.45rem;
+}
+
+.asset-list-tools {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2rem;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.22rem;
+  background: var(--panel-muted);
+}
+
+.asset-list-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-color);
+  padding: 0 0.65rem;
+}
+
+.asset-list-search span {
+  color: var(--muted-text);
+  font-size: 0.95rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.asset-list-search input {
+  min-width: 0;
+  min-height: 2.15rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.asset-list-search input:focus {
+  outline: none;
+}
+
+.asset-filter-button {
+  position: relative;
+  display: inline-flex;
+  width: 2rem;
+  height: 2.15rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.asset-filter-button.active {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 9%, var(--panel-color));
+  color: var(--accent-color);
+}
+
+.asset-filter-button span {
+  display: inline-block;
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 900;
+  transform: rotate(90deg);
+}
+
+.asset-filter-button.active span {
+  color: var(--accent-color);
+}
+
+.asset-filter-button em {
+  position: absolute;
+  top: -0.28rem;
+  right: -0.28rem;
+  display: inline-flex;
+  min-width: 1rem;
+  height: 1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.asset-filter-popover {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 5;
+  display: grid;
+  width: min(16rem, calc(100vw - 2rem));
+  gap: 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-color);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.14);
+  padding: 0.75rem;
+}
+
+.asset-filter-popover__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.asset-filter-popover__head strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.asset-filter-popover__head button {
+  border: 0;
+  background: transparent;
+  color: var(--accent-color);
+  font-size: 0.7rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.asset-filter-popover label {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.asset-filter-popover label > span {
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.asset-filter-popover select {
+  min-height: 2.2rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  color: var(--text-primary);
+  padding: 0 0.65rem;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.asset-filter-popover select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 14%, transparent);
+}
+
+.asset-list-empty {
+  margin: 0.9rem 0.35rem;
+  color: var(--muted-text);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.asset-list-item {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.45rem;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0.48rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.asset-list-item.active {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 9%, var(--panel-color));
+  box-shadow: inset 3px 0 0 var(--accent-color);
+}
+
+.asset-list-item__mark {
+  display: inline-flex;
+  width: 1.8rem;
+  height: 1.8rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--border-color));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent-color) 9%, var(--panel-color));
+  color: var(--accent-color);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.asset-list-item__text {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.asset-list-item__text strong,
+.asset-list-item__text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-list-item__text strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.asset-list-item__text small {
+  color: var(--muted-text);
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.asset-list-item > em {
+  grid-column: 2;
+  justify-self: start;
+  border-radius: 999px;
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
+  padding: 0.12rem 0.45rem;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.asset-list-item > em.muted {
+  background: var(--color-warning-light);
+  color: var(--color-warning-dark);
+}
+
+.asset-detail {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 0.9rem;
+}
+
+.asset-detail__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.75rem;
+}
+
+.asset-detail__identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.65rem;
+}
+
+.asset-detail__identity > span {
+  display: inline-flex;
+  width: 2.7rem;
+  height: 2.7rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent-color) 12%, var(--panel-color));
+  color: var(--accent-color);
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.asset-detail__identity h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.02rem;
+  font-weight: 900;
+}
+
+.asset-detail__identity p {
+  margin: 0.2rem 0 0;
+  color: var(--muted-text);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.asset-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.asset-detail__actions em {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
+  padding: 0 0.7rem;
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.asset-detail__actions em.muted {
+  background: var(--color-warning-light);
+  color: var(--color-warning-dark);
+}
+
+.asset-detail__actions button {
+  min-height: 1.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  padding: 0 0.62rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.asset-detail__actions button.danger {
+  color: var(--color-danger, #dc2626);
+}
+
+.asset-detail__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.asset-detail__metrics > div {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-muted);
+  padding: 0.7rem;
+}
+
+.asset-detail__metrics span,
+.asset-detail__info dt {
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.asset-detail__metrics strong,
+.asset-detail__metrics small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-detail__metrics strong {
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.asset-detail__metrics small {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.asset-detail__info {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.asset-detail__info h5 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.asset-detail__info dl {
+  display: grid;
+  margin: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.asset-detail__info dl > div {
+  display: grid;
+  grid-template-columns: 7.4rem minmax(0, 1fr);
+  gap: 0.7rem;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.74rem 0;
+}
+
+.asset-detail__info dd {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.asset-detail__info dd strong,
+.asset-detail__info dd small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-detail__info dd strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.asset-detail__info dd small {
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.asset-detail--empty {
+  place-content: center;
+  text-align: center;
+}
+
+.asset-detail--empty h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.asset-detail--empty p {
+  margin: 0.35rem 0 0;
+  color: var(--muted-text);
+  font-size: 0.76rem;
+  font-weight: 750;
 }
 
 .asset-table {
