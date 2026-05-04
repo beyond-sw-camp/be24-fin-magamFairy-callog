@@ -249,6 +249,16 @@ function triggerDownload(dataUrl, filename) {
   anchor.remove()
 }
 
+function createPersistableProfile(profile) {
+  const nextProfile = { ...profile }
+
+  if (nextProfile.imageDataUrl && !nextProfile.imageDataUrl.startsWith('data:')) {
+    nextProfile.imageDataUrl = ''
+  }
+
+  return nextProfile
+}
+
 export const useUserSettingsStore = defineStore('userSettings', () => {
   const activeUserKey = ref('guest')
   const profile = reactive({ ...fallbackProfile })
@@ -275,7 +285,7 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     storage.setItem(
       storageKey.value,
       JSON.stringify({
-        profile: { ...profile },
+        profile: createPersistableProfile(profile),
         themeUi: { ...themeUi },
         generatorPrompt: generatorPrompt.value,
       }),
