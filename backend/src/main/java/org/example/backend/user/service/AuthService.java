@@ -31,7 +31,7 @@ public class AuthService {
         String userId = requireId(id, email);
         OrganizationType organizationType = userRepository.findById(userIdx).orElseThrow(NoSuchElementException::new).getOrganization().getType();
 
-        String access = jwtUtil.createToken("access", userIdx, userId, email, name, role, companyName, department, 600000L, organizationType);
+        String access = jwtUtil.createToken("access", userIdx, userId, email, name, role, companyName, department, 600000000L, organizationType);
         String refresh = jwtUtil.createToken("refresh", userIdx, userId, email, name, role, companyName, department, 1209600000L, organizationType);
         LocalDateTime expiryDate = LocalDateTime.now().plusDays(14);
 

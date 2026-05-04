@@ -26,13 +26,9 @@ function unwrapResponse(response) {
 export async function loginRequest(credentials) {
   const response = await api.post('/auth/login', credentials)
   const payload = response?.data ?? {}
-  const responseBody = payload?.data && typeof payload.data === 'object'
-    ? payload.data
-    : payload
+  const responseBody = payload?.data && typeof payload.data === 'object' ? payload.data : payload
   const authorization = response?.headers?.authorization ?? response?.headers?.Authorization
-  const headerAccessToken = authorization?.startsWith('Bearer ')
-    ? authorization.slice(7)
-    : null
+  const headerAccessToken = authorization?.startsWith('Bearer ') ? authorization.slice(7) : null
 
   return {
     ...responseBody,
@@ -73,7 +69,22 @@ export async function resetPasswordRequest(payload) {
   return unwrapResponse(response)
 }
 
+export async function changePasswordRequest(payload) {
+  const response = await api.patch('/auth/password', payload)
+  return unwrapResponse(response)
+}
+
 export async function deleteUserRequest(payload) {
   const response = await api.post('/auth/userdelete', payload)
+  return unwrapResponse(response)
+}
+
+export async function manageUserRoleRequest(payload) {
+  const response = await api.post('/auth/manage', payload)
+  return unwrapResponse(response)
+}
+
+export async function fetchManageableUsersRequest() {
+  const response = await api.get('/auth/manage/users')
   return unwrapResponse(response)
 }

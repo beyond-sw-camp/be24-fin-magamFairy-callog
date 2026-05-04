@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { CreateAsset, ListAssets } from '@/api/matchingAssets'
+import { CreateAsset, DeleteAsset, ListAssets, UpdateAsset } from '@/api/matchingAssets'
 
 defineProps({
   isDark: {
@@ -9,18 +9,111 @@ defineProps({
   },
 })
 
+const emit = defineEmits(['asset-count-change'])
+
 const currentSubTab = ref('assets')
 const assets = ref([])
 const isAssetLoading = ref(false)
 const assetError = ref('')
 const isAssetFormOpen = ref(false)
-
-const assetForm = ref({
-  type: '',
-  target: '',
-  scale: '',
-  conditions: '',
+const registrationBody = ref(null)
+const activeRegistrationSection = ref('basic')
+const editingAssetId = ref(null)
+const deletingAssetId = ref(null)
+const selectedAssetId = ref(null)
+const assetSearch = ref('')
+const isAssetFilterOpen = ref(false)
+const assetFilters = ref({
+  category: 'all',
+  status: 'all',
 })
+
+function getTodayString() {
+  const now = new Date()
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+}
+
+function createAssetForm() {
+  return {
+    type: '',
+    affiliate: '',
+    customAffiliate: '',
+    registeredAt: getTodayString(),
+    category: '',
+    target: '',
+    scale: '',
+    exposureValue: '',
+    performance: '',
+    conditions: '',
+    partnerFit: [],
+    blockedPartners: [],
+    supplyLimit: '',
+    publicStatus: 'PUBLIC',
+    matchingStatus: 'ACTIVE',
+  }
+}
+
+const assetForm = ref(createAssetForm())
+
+const assetTypes = [
+  { value: 'customer', label: '고객 자산', desc: '예: VIP, 멤버십, 고객DB', supply: '동시 활용 가능' },
+  { value: 'channel', label: '채널 자산', desc: '예: 앱 배너, 알림톡, 푸시', supply: '슬롯 단위 충돌 관리' },
+  { value: 'space', label: '공간 자산', desc: '예: 백화점 매장, 라운지, 전망대', supply: '동시 활용 가능' },
+  { value: 'voucher', label: '상품/이용권 자산', desc: '예: 호텔 객실, 리조트 이용권, 스포츠 티켓', supply: '재고 단위 차감' },
+  { value: 'content', label: '콘텐츠/IP 자산', desc: '예: 이벤트, 선수 IP, 영상 콘텐츠', supply: '라이선스 조건 관리' },
+]
+
+const affiliateOptions = [
+  '한화갤러리아',
+  '한화호텔앤드리조트',
+  '한화이글스',
+  '한화생명',
+  '한화손해보험',
+  '한화시스템',
+  '직접 입력',
+]
+
+const partnerCategoryOptions = [
+  '럭셔리 뷰티',
+  '프리미엄 F&B',
+  '호텔/리조트',
+  '카드/금융',
+  '패션/리테일',
+  '여행/항공',
+  '엔터테인먼트',
+  '리빙/홈',
+]
+
+const blockedCategoryOptions = ['저가 브랜드', '성인/도박성', '대부업/대출', '담배/주류']
+
+const customPartnerInput = ref('')
+
+const formSections = [
+  {
+    id: 'basic',
+    title: '기본 정보',
+    description: '자산을 식별할 핵심 정보',
+    required: ['type', 'affiliate', 'category'],
+  },
+  {
+    id: 'attractiveness',
+    title: '매칭 매력도',
+    description: '파트너에게 보여줄 자산 가치',
+    required: ['target', 'scale'],
+  },
+  {
+    id: 'conditions',
+    title: '매칭 조건',
+    description: '어떤 파트너와 어떻게 매칭할지',
+    required: ['supplyLimit'],
+  },
+  {
+    id: 'visibility',
+    title: '공개 설정',
+    description: '파트너 페이지 노출 방식',
+    required: ['publicStatus', 'matchingStatus'],
+  },
+]
 
 const partnerProposals = [
   {
@@ -30,8 +123,15 @@ const partnerProposals = [
     type: '샘플',
     target: '2040 뷰티 고객',
     scale: '10,000개',
+    value: '5,000만 원',
+    unitValue: '단가 5,000원',
     cost: '파트너 전액 부담',
+    costDetail: '혜택 원가+배송비 파트너 부담',
     period: '2026.05.01 - 2026.06.30',
+    matchAsset: '갤러리아 VIP 고객층',
+    matchScore: 87,
+    category: '뷰티',
+    missing: [],
     status: '접수 완료',
   },
   {
@@ -41,8 +141,15 @@ const partnerProposals = [
     type: '할인권',
     target: '휴가철 여행 계획 고객',
     scale: '제한 없음',
+    value: '협의 필요',
+    unitValue: '할인율 기반 정산',
     cost: '파트너 100% 부담',
+    costDetail: '혜택 원가 부담, 운영비 별도 협의',
     period: '상시 협의',
+    matchAsset: '호텔 객실 패키지',
+    matchScore: 82,
+    category: '여행',
+    missing: [],
     status: '평가 반영',
   },
   {
@@ -52,37 +159,205 @@ const partnerProposals = [
     type: '공동 콘텐츠',
     target: '미입력',
     scale: '1,000만',
+    value: '미입력',
+    unitValue: '필수',
     cost: '미입력',
+    costDetail: '비용 부담 구조 미입력',
     period: '미입력',
+    matchAsset: '매칭 불가',
+    matchScore: null,
+    category: '콘텐츠',
+    missing: ['대상 고객', '비용 부담', '유효 기간'],
     status: '임시 저장',
   },
 ]
+
+function formatDateValue(value) {
+  if (!value) return '-'
+  return String(value).slice(0, 10)
+}
 
 function mapAsset(asset) {
   return {
     id: asset.id ?? asset.assetId ?? asset.idx,
     type: asset.type ?? asset.assetName ?? asset.name ?? '-',
     affiliate: asset.affiliate ?? asset.affiliateName ?? '-',
+    registeredAt: formatDateValue(asset.registeredAt ?? asset.createdAt ?? asset.createdDate),
+    category: asset.category ?? asset.assetCategory ?? 'customer',
     target: asset.target ?? asset.targetCustomer ?? '-',
     scale: asset.scale ?? asset.assetScale ?? '-',
+    exposureValue: asset.exposureValue ?? asset.mediaValue ?? asset.adValue ?? '미입력',
+    performance: asset.performance ?? asset.pastPerformance ?? '미입력',
     conditions: asset.conditions ?? asset.condition ?? '-',
-    status: asset.status ?? (asset.active ?? asset.isActive ? 'AVAILABLE' : 'PAUSED'),
+    partnerFit: asset.partnerFit ?? asset.preferredPartnerCategories ?? '미입력',
+    blockedPartners: asset.blockedPartners ?? asset.excludedPartnerCategories ?? '없음',
+    supplyLimit: asset.supplyLimit ?? asset.availableCapacity ?? '미입력',
+    publicStatus: asset.publicStatus ?? asset.partnerVisibleStatus ?? 'PRIVATE',
+    matchingStatus: asset.matchingStatus ?? asset.status ?? (asset.active ?? asset.isActive ? 'ACTIVE' : 'PAUSED'),
+    accessPolicy: asset.accessPolicy ?? '공유',
+    owner: asset.owner ?? asset.manager ?? asset.managerName ?? '미입력',
   }
 }
 
-function assetStatusLabel(status) {
-  const normalized = String(status ?? '').toUpperCase()
-
-  if (normalized === 'AVAILABLE' || normalized === 'ACTIVE') return '사용 가능'
-  if (normalized === 'IN_USE') return '사용 중'
-  if (normalized === 'EXPIRED') return '기간 만료'
-  if (normalized === 'NEEDS_REVIEW') return '검토 필요'
-  return '추천 제외'
+function assetCategoryLabel(value) {
+  return assetTypes.find((assetType) => assetType.value === value)?.label ?? '미입력'
 }
 
-function isAssetAvailable(status) {
-  const normalized = String(status ?? '').toUpperCase()
+function displayValue(value) {
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '미입력'
+  if (value === null || value === undefined || value === '') return '미입력'
+  return value
+}
+
+function assetStatusLabel(asset) {
+  const publicStatus = String(asset.publicStatus ?? '').toUpperCase()
+  const matchingStatus = String(asset.matchingStatus ?? '').toUpperCase()
+
+  const publicLabel = publicStatus === 'PUBLIC' || publicStatus === 'VISIBLE' ? '파트너 공개' : '비공개'
+  const matchingLabel =
+    matchingStatus === 'AVAILABLE' || matchingStatus === 'ACTIVE'
+      ? '매칭 활성'
+      : matchingStatus === 'IN_USE'
+        ? '사용 중'
+        : matchingStatus === 'EXCLUSIVE'
+          ? '전속'
+        : matchingStatus === 'EXPIRED'
+          ? '기간 만료'
+          : matchingStatus === 'NEEDS_REVIEW'
+            ? '검토 필요'
+            : '휴면'
+
+  return `${publicLabel} · ${matchingLabel}`
+}
+
+function isAssetAvailable(asset) {
+  const normalized = String(asset.matchingStatus ?? '').toUpperCase()
   return normalized === 'AVAILABLE' || normalized === 'ACTIVE'
+}
+
+function assetStatusFilterValue(asset) {
+  if (isAssetAvailable(asset)) return 'active'
+  const normalized = String(asset.matchingStatus ?? '').toUpperCase()
+  if (normalized === 'EXCLUSIVE') return 'exclusive'
+  return 'paused'
+}
+
+function resetAssetFilters() {
+  assetFilters.value = {
+    category: 'all',
+    status: 'all',
+  }
+}
+
+function proposalStatusLabel(proposal) {
+  if (proposal.missing?.length) return `매칭 불가 · ${proposal.missing.length}개 누락`
+  if (proposal.matchScore) return `${proposal.status} · ${proposal.matchScore}점`
+  return proposal.status
+}
+
+function isFilled(field) {
+  const value = assetForm.value[field]
+  if (field === 'affiliate' && value === '직접 입력') {
+    return assetForm.value.customAffiliate.trim() !== ''
+  }
+  if (Array.isArray(value)) return value.length > 0
+  return value !== '' && value != null
+}
+
+function sectionFilled(section) {
+  return section.required.filter(isFilled).length
+}
+
+const totalRequired = computed(() =>
+  formSections.reduce((sum, section) => sum + section.required.length, 0),
+)
+
+const filledRequired = computed(() =>
+  formSections.reduce((sum, section) => sum + section.required.filter(isFilled).length, 0),
+)
+
+const progressPercent = computed(() =>
+  Math.round((filledRequired.value / totalRequired.value) * 100),
+)
+
+const canSubmitAsset = computed(() => filledRequired.value === totalRequired.value)
+
+const selectedAssetType = computed(
+  () => assetTypes.find((assetType) => assetType.value === assetForm.value.category) ?? null,
+)
+
+const supplyLimitPlaceholder = computed(() => {
+  if (assetForm.value.category === 'voucher') return '예: 객실 200박 중 80박 사용 가능, 티켓 1,000석'
+  if (assetForm.value.category === 'channel') return '예: 앱 배너 1주 2슬롯, 알림톡 월 2회'
+  if (assetForm.value.category === 'space') return '예: 라운지 주말 4회, 매장 팝업 2주'
+  return '예: 분기 캠페인 3건까지 활용 가능'
+})
+
+const supplyLimitHint = computed(() => {
+  if (assetForm.value.category === 'voucher') {
+    return '호텔 객실, 이용권, 티켓은 캠페인에 배정한 수량만큼 남은 재고에서 차감됩니다.'
+  }
+  if (assetForm.value.category === 'channel') {
+    return '동시 캠페인 간 노출 슬롯 충돌을 막기 위해 필요합니다.'
+  }
+  return '동시 캠페인 충돌을 막기 위해 필요합니다.'
+})
+
+function toggleChip(list, value) {
+  const items = assetForm.value[list]
+  const index = items.indexOf(value)
+  if (index > -1) items.splice(index, 1)
+  else items.push(value)
+}
+
+function isChipActive(list, value) {
+  return assetForm.value[list].includes(value)
+}
+
+function addCustomPartner() {
+  const value = customPartnerInput.value.trim()
+  if (value && !assetForm.value.partnerFit.includes(value)) {
+    assetForm.value.partnerFit.push(value)
+  }
+  customPartnerInput.value = ''
+}
+
+function removeChip(list, value) {
+  assetForm.value[list] = assetForm.value[list].filter((item) => item !== value)
+}
+
+function scrollToRegistrationSection(id) {
+  activeRegistrationSection.value = id
+  const element = document.getElementById(`asset-reg-${id}`)
+  if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function updateActiveRegistrationSection() {
+  const container = registrationBody.value
+  if (!container) return
+
+  const isAtBottom =
+    container.scrollTop + container.clientHeight >= container.scrollHeight - 8
+
+  if (isAtBottom) {
+    activeRegistrationSection.value = formSections[formSections.length - 1].id
+    return
+  }
+
+  const containerRect = container.getBoundingClientRect()
+  const anchorY = containerRect.top + containerRect.height * 0.48
+  let currentSection = formSections[0].id
+
+  for (const section of formSections) {
+    const element = document.getElementById(`asset-reg-${section.id}`)
+    if (!element) continue
+
+    if (element.getBoundingClientRect().top <= anchorY) {
+      currentSection = section.id
+    }
+  }
+
+  activeRegistrationSection.value = currentSection
 }
 
 async function loadAssets() {
@@ -92,6 +367,10 @@ async function loadAssets() {
   try {
     const data = await ListAssets()
     assets.value = (data.assetList ?? data ?? []).map(mapAsset)
+    if (!assets.value.some((asset) => asset.id === selectedAssetId.value)) {
+      selectedAssetId.value = assets.value[0]?.id ?? null
+    }
+    emit('asset-count-change', assets.value.length)
   } catch (error) {
     assetError.value = error.message ?? '자산을 불러오지 못했습니다.'
   } finally {
@@ -100,31 +379,141 @@ async function loadAssets() {
 }
 
 function openAssetForm() {
+  assetForm.value = createAssetForm()
+  editingAssetId.value = null
   isAssetFormOpen.value = true
+  activeRegistrationSection.value = 'basic'
+}
+
+function openEditAssetForm(asset) {
+  editingAssetId.value = asset.id
+  const isKnownAffiliate = affiliateOptions.includes(asset.affiliate)
+  assetForm.value = {
+    ...createAssetForm(),
+    type: asset.type === '-' ? '' : asset.type,
+    affiliate: isKnownAffiliate ? asset.affiliate : '직접 입력',
+    customAffiliate: isKnownAffiliate || asset.affiliate === '-' ? '' : asset.affiliate,
+    registeredAt: asset.registeredAt === '-' ? getTodayString() : asset.registeredAt,
+    category: asset.category ?? 'customer',
+    target: asset.target === '-' ? '' : asset.target,
+    scale: asset.scale === '-' ? '' : asset.scale,
+    exposureValue: asset.exposureValue === '미입력' ? '' : asset.exposureValue,
+    performance: asset.performance === '미입력' ? '' : asset.performance,
+    conditions: asset.conditions === '-' ? '' : asset.conditions,
+    partnerFit: Array.isArray(asset.partnerFit)
+      ? [...asset.partnerFit]
+      : asset.partnerFit && asset.partnerFit !== '미입력'
+        ? String(asset.partnerFit).split(',').map((item) => item.trim()).filter(Boolean)
+        : [],
+    blockedPartners: Array.isArray(asset.blockedPartners)
+      ? [...asset.blockedPartners]
+      : asset.blockedPartners && asset.blockedPartners !== '없음'
+        ? String(asset.blockedPartners).replace(/^차단\s*/, '').split(',').map((item) => item.trim()).filter(Boolean)
+        : [],
+    supplyLimit: asset.supplyLimit === '미입력' ? '' : asset.supplyLimit,
+    publicStatus: asset.publicStatus ?? 'PUBLIC',
+    matchingStatus: asset.matchingStatus ?? 'ACTIVE',
+  }
+  isAssetFormOpen.value = true
+  activeRegistrationSection.value = 'basic'
 }
 
 function closeAssetForm() {
   isAssetFormOpen.value = false
+  editingAssetId.value = null
 }
 
 async function submitAsset() {
-  await CreateAsset(assetForm.value)
+  if (!canSubmitAsset.value) return
 
-  assetForm.value = {
-    type: '',
-    target: '',
-    scale: '',
-    conditions: '',
+  const payload = {
+    ...assetForm.value,
+    affiliate:
+      assetForm.value.affiliate === '직접 입력'
+        ? assetForm.value.customAffiliate.trim()
+        : assetForm.value.affiliate,
   }
+
+  if (editingAssetId.value) {
+    await UpdateAsset(editingAssetId.value, payload)
+  } else {
+    await CreateAsset(payload)
+  }
+
+  assetForm.value = createAssetForm()
+  editingAssetId.value = null
 
   isAssetFormOpen.value = false
   await loadAssets()
+}
+
+async function deleteAsset(asset) {
+  const confirmed = window.confirm(`'${asset.type}' 자산을 삭제할까요? 삭제하면 매칭 추천 입력값에서도 제외됩니다.`)
+  if (!confirmed) return
+
+  deletingAssetId.value = asset.id
+  try {
+    await DeleteAsset(asset.id)
+    await loadAssets()
+  } finally {
+    deletingAssetId.value = null
+  }
+}
+
+function saveAssetDraft() {
+  isAssetFormOpen.value = false
 }
 
 onMounted(loadAssets)
 
 const rows = computed(() =>
   currentSubTab.value === 'assets' ? assets.value : partnerProposals,
+)
+
+const filteredAssets = computed(() => {
+  const keyword = assetSearch.value.trim().toLowerCase()
+  return assets.value.filter((asset) => {
+    const matchesKeyword =
+      !keyword ||
+    [
+      asset.type,
+      asset.affiliate,
+      asset.owner,
+      asset.target,
+      asset.scale,
+      asset.supplyLimit,
+      asset.conditions,
+      asset.exposureValue,
+      asset.performance,
+      asset.partnerFit,
+      asset.blockedPartners,
+    ]
+      .map(displayValue)
+        .some((value) => String(value).toLowerCase().includes(keyword))
+
+    const matchesCategory =
+      assetFilters.value.category === 'all' || asset.category === assetFilters.value.category
+    const matchesStatus =
+      assetFilters.value.status === 'all' ||
+      assetStatusFilterValue(asset) === assetFilters.value.status
+
+    return matchesKeyword && matchesCategory && matchesStatus
+  })
+})
+
+const activeAssetFilterCount = computed(
+  () =>
+    Number(assetFilters.value.category !== 'all') +
+    Number(assetFilters.value.status !== 'all'),
+)
+
+const selectedAsset = computed(
+  () =>
+    filteredAssets.value.find((asset) => asset.id === selectedAssetId.value) ??
+    filteredAssets.value[0] ??
+    assets.value.find((asset) => asset.id === selectedAssetId.value) ??
+    assets.value[0] ??
+    null,
 )
 </script>
 
@@ -179,76 +568,498 @@ const rows = computed(() =>
       <p v-if="assetError" class="asset-message">{{ assetError }}</p>
       <p v-else-if="isAssetLoading" class="asset-message">불러오는 중입니다.</p>
 
-      <div v-if="currentSubTab === 'assets'" class="asset-table asset-table--assets">
-        <div class="asset-table__head">
-          <span>자산명</span>
-          <span>보유 조직</span>
-          <span>접점 고객</span>
-          <span>제공 규모</span>
-          <span>사용 조건</span>
-          <span>추천 사용</span>
-        </div>
-        <div v-for="asset in rows" :key="asset.id" class="asset-table__row">
-          <strong>{{ asset.type }}</strong>
-          <span>{{ asset.affiliate }}</span>
-          <span>{{ asset.target }}</span>
-          <span>{{ asset.scale }}</span>
-          <span>{{ asset.conditions }}</span>
-          <em :class="{ muted: !isAssetAvailable(asset.status) }">
-            {{ assetStatusLabel(asset.status) }}
-          </em>
-        </div>
+      <div v-if="currentSubTab === 'assets'" class="asset-browser">
+        <aside class="asset-browser__list" aria-label="자산 목록">
+          <div class="asset-list-tools">
+            <label class="asset-list-search">
+              <span aria-hidden="true">⌕</span>
+              <input v-model="assetSearch" type="search" placeholder="자산 검색" />
+            </label>
+            <button
+              type="button"
+              class="asset-filter-button"
+              :class="{ active: activeAssetFilterCount > 0 }"
+              aria-label="자산 필터"
+              :aria-expanded="isAssetFilterOpen"
+              @click="isAssetFilterOpen = !isAssetFilterOpen"
+            >
+              <span aria-hidden="true">▽</span>
+              <em v-if="activeAssetFilterCount">{{ activeAssetFilterCount }}</em>
+            </button>
+            <div v-if="isAssetFilterOpen" class="asset-filter-popover">
+              <div class="asset-filter-popover__head">
+                <strong>필터</strong>
+                <button type="button" @click="resetAssetFilters">초기화</button>
+              </div>
+
+              <label>
+                <span>자산 유형</span>
+                <select v-model="assetFilters.category">
+                  <option value="all">전체</option>
+                  <option v-for="assetType in assetTypes" :key="assetType.value" :value="assetType.value">
+                    {{ assetType.label }}
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>상태</span>
+                <select v-model="assetFilters.status">
+                  <option value="all">전체</option>
+                  <option value="active">매칭 활성</option>
+                  <option value="paused">휴면/비공개</option>
+                  <option value="exclusive">전속 협의</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <button
+            v-for="asset in filteredAssets"
+            :key="asset.id"
+            type="button"
+            class="asset-list-item"
+            :class="{ active: selectedAsset?.id === asset.id }"
+            @click="selectedAssetId = asset.id"
+          >
+            <span class="asset-list-item__mark">{{ String(asset.type).slice(0, 2) }}</span>
+            <span class="asset-list-item__text">
+              <strong>{{ asset.type }}</strong>
+              <small>{{ asset.affiliate }} · {{ asset.target }}</small>
+            </span>
+            <em :class="{ muted: !isAssetAvailable(asset) }">{{ assetStatusLabel(asset) }}</em>
+          </button>
+          <p v-if="!filteredAssets.length" class="asset-list-empty">검색 결과가 없습니다.</p>
+        </aside>
+
+        <article v-if="selectedAsset" class="asset-detail">
+          <header class="asset-detail__head">
+            <div class="asset-detail__identity">
+              <span>{{ String(selectedAsset.type).slice(0, 2) }}</span>
+              <div>
+                <h4>{{ selectedAsset.type }}</h4>
+                <p>{{ selectedAsset.affiliate }} · 등록 {{ selectedAsset.registeredAt }}</p>
+              </div>
+            </div>
+            <div class="asset-detail__actions">
+              <em :class="{ muted: !isAssetAvailable(selectedAsset) }">{{ assetStatusLabel(selectedAsset) }}</em>
+              <button type="button" @click="openEditAssetForm(selectedAsset)">수정</button>
+              <button
+                type="button"
+                class="danger"
+                :disabled="deletingAssetId === selectedAsset.id"
+                @click="deleteAsset(selectedAsset)"
+              >
+                {{ deletingAssetId === selectedAsset.id ? '삭제 중' : '삭제' }}
+              </button>
+            </div>
+          </header>
+
+          <section class="asset-detail__metrics">
+            <div>
+              <span>매칭 타깃</span>
+              <strong>{{ selectedAsset.target }}</strong>
+              <small>노출 가치 {{ selectedAsset.exposureValue }}</small>
+            </div>
+            <div>
+              <span>공급 한도</span>
+              <strong>{{ selectedAsset.scale }}</strong>
+              <small>{{ selectedAsset.supplyLimit }}</small>
+            </div>
+            <div>
+              <span>매칭 가드레일</span>
+              <strong>{{ selectedAsset.partnerFit }}</strong>
+              <small>차단 {{ selectedAsset.blockedPartners }}</small>
+            </div>
+          </section>
+
+          <section class="asset-detail__info">
+            <h5>기본 정보</h5>
+            <dl>
+              <div>
+                <dt>자산명</dt>
+                <dd>
+                  <strong>{{ selectedAsset.type }}</strong>
+                  <small>{{ assetCategoryLabel(selectedAsset.category) }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>소속 RFP</dt>
+                <dd>
+                  <strong>{{ selectedAsset.affiliate }}</strong>
+                  <small>등록 {{ selectedAsset.registeredAt }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>담당자</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.owner) }}</strong>
+                  <small>{{ selectedAsset.registeredAt }} 등록</small>
+                </dd>
+              </div>
+              <div>
+                <dt>운영 조건</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.conditions) }}</strong>
+                  <small>{{ assetStatusLabel(selectedAsset) }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>공급 한도</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.supplyLimit) }}</strong>
+                  <small>{{ displayValue(selectedAsset.scale) }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>매칭 대상</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.target) }}</strong>
+                  <small>노출 가치 {{ displayValue(selectedAsset.exposureValue) }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>과거 성과</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.performance) }}</strong>
+                  <small>미입력 시 업종 평균값으로 대체</small>
+                </dd>
+              </div>
+              <div>
+                <dt>희망 파트너</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.partnerFit) }}</strong>
+                  <small>차단 {{ displayValue(selectedAsset.blockedPartners) }}</small>
+                </dd>
+              </div>
+              <div>
+                <dt>공개 정책</dt>
+                <dd>
+                  <strong>{{ displayValue(selectedAsset.accessPolicy) }}</strong>
+                  <small>{{ assetStatusLabel(selectedAsset) }}</small>
+                </dd>
+              </div>
+            </dl>
+          </section>
+        </article>
+
+        <article v-else class="asset-detail asset-detail--empty">
+          <h4>등록된 자산이 없습니다.</h4>
+          <p>오른쪽 목록에 표시할 자산을 먼저 등록하세요.</p>
+        </article>
       </div>
 
       <div v-else class="asset-table asset-table--benefits">
         <div class="asset-table__head">
           <span>파트너</span>
           <span>제안 혜택</span>
-          <span>혜택 유형</span>
-          <span>대상 고객</span>
-          <span>제공 규모</span>
+          <span>규모/환산 가치</span>
+          <span>유효 기간</span>
           <span>비용 부담</span>
+          <span>추천 자산</span>
           <span>검토 상태</span>
         </div>
         <div v-for="proposal in rows" :key="proposal.id" class="asset-table__row">
           <strong>{{ proposal.partner }}</strong>
-          <span>{{ proposal.name }}</span>
-          <span>{{ proposal.type }}</span>
-          <span>{{ proposal.target }}</span>
-          <span>{{ proposal.scale }}</span>
-          <span>{{ proposal.cost }}</span>
-          <em :class="{ muted: proposal.status === '임시 저장' }">{{ proposal.status }}</em>
+          <span class="proposal-benefit">
+            <b>{{ proposal.name }}</b>
+            <small>{{ proposal.category }} · {{ proposal.type }} · {{ proposal.target }}</small>
+          </span>
+          <span class="proposal-metric">
+            <b>{{ proposal.scale }}</b>
+            <small>{{ proposal.value }} · {{ proposal.unitValue }}</small>
+          </span>
+          <span>{{ proposal.period }}</span>
+          <span class="proposal-metric" :title="proposal.costDetail">
+            <b>{{ proposal.cost }}</b>
+            <small>{{ proposal.costDetail }}</small>
+          </span>
+          <span class="proposal-match" :class="{ muted: !proposal.matchScore }">
+            <b>{{ proposal.matchAsset }}</b>
+            <small v-if="proposal.matchScore">적합도 {{ proposal.matchScore }}%</small>
+            <small v-else>{{ proposal.missing.join(', ') }}</small>
+          </span>
+          <span class="proposal-status">
+            <em :class="{ muted: proposal.missing?.length || proposal.status === '임시 저장' }">
+              {{ proposalStatusLabel(proposal) }}
+            </em>
+            <button v-if="proposal.missing?.length" type="button">보완 요청</button>
+          </span>
         </div>
       </div>
 
-      <div v-if="isAssetFormOpen" class="asset-modal">
-        <form class="asset-modal__panel" @submit.prevent="submitAsset">
-          <div class="asset-modal__head">
-            <strong>한화 자산 등록</strong>
-            <button type="button" @click="closeAssetForm">닫기</button>
+      <div v-if="isAssetFormOpen" class="reg-modal" role="dialog" aria-modal="true" aria-labelledby="asset-reg-title">
+        <form class="reg-panel" @submit.prevent="submitAsset">
+          <header class="reg-head">
+            <div class="reg-head__title">
+              <strong id="asset-reg-title">{{ editingAssetId ? '한화 자산 수정' : '한화 자산 등록' }}</strong>
+              <span>파트너 페이지에 노출되는 정보입니다. 정확하게 채울수록 매칭 추천이 정교해집니다.</span>
+            </div>
+            <div class="reg-head__right">
+              <div class="reg-progress" :title="`필수 ${filledRequired}/${totalRequired}`">
+                <div class="reg-progress__meta">
+                  <span>필수 입력</span>
+                  <b>{{ filledRequired }}/{{ totalRequired }}</b>
+                </div>
+                <div class="reg-progress__bar">
+                  <div :style="{ width: `${progressPercent}%` }" />
+                </div>
+              </div>
+              <button type="button" class="reg-close" aria-label="닫기" @click="closeAssetForm">×</button>
+            </div>
+          </header>
+
+          <nav class="reg-nav" aria-label="등록 섹션">
+            <button
+              v-for="(section, index) in formSections"
+              :key="section.id"
+              type="button"
+              class="reg-nav__item"
+              :class="{
+                active: activeRegistrationSection === section.id,
+                done: sectionFilled(section) === section.required.length,
+              }"
+              @click="scrollToRegistrationSection(section.id)"
+            >
+              <em>{{ index + 1 }}</em>
+              <span>
+                <b>{{ section.title }}</b>
+                <small>{{ sectionFilled(section) }}/{{ section.required.length }} 필수</small>
+              </span>
+            </button>
+          </nav>
+
+          <div ref="registrationBody" class="reg-body" @scroll="updateActiveRegistrationSection">
+            <section id="asset-reg-basic" class="reg-section">
+              <header class="reg-section__head">
+                <strong>1. 기본 정보</strong>
+                <small>자산을 식별할 핵심 정보</small>
+              </header>
+
+              <div class="reg-grid">
+                <label class="reg-field reg-field--full">
+                  <span class="reg-field__label">자산명 <em>*</em></span>
+                  <input
+                    v-model="assetForm.type"
+                    placeholder="예: 갤러리아 VIP 고객층, 한화호텔 객실 재고, 이글스 홈경기 티켓"
+                  />
+                  <small class="reg-hint">파트너가 이 자산을 명확히 인식할 수 있는 이름으로 입력하세요.</small>
+                </label>
+
+                <label class="reg-field">
+                  <span class="reg-field__label">보유 조직 <em>*</em></span>
+                  <select v-model="assetForm.affiliate">
+                    <option value="">선택하세요</option>
+                    <option v-for="option in affiliateOptions" :key="option" :value="option">
+                      {{ option }}
+                    </option>
+                  </select>
+                  <input
+                    v-if="assetForm.affiliate === '직접 입력'"
+                    v-model="assetForm.customAffiliate"
+                    class="reg-field__subinput"
+                    placeholder="예: 한화비전 브랜드전략팀"
+                  />
+                  <small class="reg-hint">자산을 소유하거나 운영하는 계열사/부서입니다.</small>
+                </label>
+
+                <label class="reg-field">
+                  <span class="reg-field__label">등록일</span>
+                  <input v-model="assetForm.registeredAt" type="date" />
+                  <small class="reg-hint">기본값은 오늘 날짜이며, 서버 등록일과 함께 관리됩니다.</small>
+                </label>
+
+                <div class="reg-field reg-field--full">
+                  <span class="reg-field__label">자산 유형 <em>*</em></span>
+                  <div class="reg-cards">
+                    <button
+                      v-for="assetType in assetTypes"
+                      :key="assetType.value"
+                      type="button"
+                      class="reg-card"
+                      :class="{ active: assetForm.category === assetType.value }"
+                      @click="assetForm.category = assetType.value"
+                    >
+                      <b>{{ assetType.label }}</b>
+                      <small>{{ assetType.desc }}</small>
+                      <em>{{ assetType.supply }}</em>
+                    </button>
+                  </div>
+                  <small v-if="selectedAssetType" class="reg-hint">
+                    선택 유형: {{ selectedAssetType.supply }}
+                  </small>
+                </div>
+              </div>
+            </section>
+
+            <section id="asset-reg-attractiveness" class="reg-section">
+              <header class="reg-section__head">
+                <strong>2. 매칭 매력도</strong>
+                <small>파트너에게 보여줄 자산 가치와 추천 점수의 핵심 입력값</small>
+              </header>
+
+              <div class="reg-grid">
+                <label class="reg-field reg-field--full">
+                  <span class="reg-field__label">고객 규모 / 특성 <em>*</em></span>
+                  <input
+                    v-model="assetForm.target"
+                    placeholder="예: VIP 고객 5만 명 / 2040 여성 / 평균 객단가 18만 원 / 활성률 70%"
+                  />
+                  <small class="reg-hint">규모, 인구통계, 활성률을 함께 적으면 추천 정확도가 올라갑니다.</small>
+                </label>
+
+                <label class="reg-field">
+                  <span class="reg-field__label">제공 규모 <em>*</em></span>
+                  <input v-model="assetForm.scale" placeholder="예: MAU 45만, 월 1만 객실, 시즌 50회" />
+                  <small class="reg-hint">파트너 페이지에 표시될 실제 가용 규모입니다.</small>
+                </label>
+
+                <label class="reg-field">
+                  <span class="reg-field__label">노출 가치</span>
+                  <input v-model="assetForm.exposureValue" placeholder="예: 앱 배너 1주 = 시장가 1,500만 원" />
+                  <small class="reg-hint">파트너 분담률 계산의 기준입니다.</small>
+                </label>
+
+                <label class="reg-field reg-field--full">
+                  <span class="reg-field__label">과거 캠페인 성과</span>
+                  <input
+                    v-model="assetForm.performance"
+                    placeholder="예: 평균 전환율 4.2%, 재방문율 +8%, 객실 점유율 +12%"
+                  />
+                  <small class="reg-hint">선택 입력. 비워두면 추천 시 업종 평균값으로 대체됩니다.</small>
+                </label>
+              </div>
+            </section>
+
+            <section id="asset-reg-conditions" class="reg-section">
+              <header class="reg-section__head">
+                <strong>3. 매칭 조건</strong>
+                <small>어떤 파트너와, 어떤 조건으로 매칭할지 정의합니다.</small>
+              </header>
+
+              <div class="reg-grid">
+                <label class="reg-field">
+                  <span class="reg-field__label">사용 조건</span>
+                  <input v-model="assetForm.conditions" placeholder="예: 월 1회 메인 팝업, 주중 한정" />
+                  <small class="reg-hint">운영/노출 제약이 있으면 짧게 적어주세요.</small>
+                </label>
+
+                <label class="reg-field">
+                  <span class="reg-field__label">이번 분기 공급 한도 <em>*</em></span>
+                  <input v-model="assetForm.supplyLimit" :placeholder="supplyLimitPlaceholder" />
+                  <small class="reg-hint">{{ supplyLimitHint }}</small>
+                </label>
+
+                <div class="reg-field reg-field--full">
+                  <span class="reg-field__label">매칭 희망 파트너</span>
+                  <small class="reg-hint reg-hint--top">선호하는 파트너 카테고리를 선택하거나 직접 입력하세요.</small>
+                  <div class="reg-chips">
+                    <button
+                      v-for="option in partnerCategoryOptions"
+                      :key="option"
+                      type="button"
+                      class="reg-chip"
+                      :class="{ active: isChipActive('partnerFit', option) }"
+                      @click="toggleChip('partnerFit', option)"
+                    >
+                      {{ option }}
+                    </button>
+                  </div>
+                  <div class="reg-chip-input">
+                    <input
+                      v-model="customPartnerInput"
+                      placeholder="직접 입력 후 Enter 또는 추가"
+                      @keydown.enter.prevent="addCustomPartner"
+                    />
+                    <button type="button" @click="addCustomPartner">추가</button>
+                  </div>
+                  <div v-if="assetForm.partnerFit.length" class="reg-chips reg-chips--selected">
+                    <span v-for="value in assetForm.partnerFit" :key="value" class="reg-chip-selected">
+                      {{ value }}
+                      <button type="button" aria-label="제거" @click="removeChip('partnerFit', value)">×</button>
+                    </span>
+                  </div>
+                </div>
+
+                <div class="reg-field reg-field--full">
+                  <span class="reg-field__label">차단 카테고리</span>
+                  <small class="reg-hint reg-hint--top">매칭에서 제외할 파트너 카테고리입니다.</small>
+                  <div class="reg-chips">
+                    <button
+                      v-for="option in blockedCategoryOptions"
+                      :key="option"
+                      type="button"
+                      class="reg-chip reg-chip--block"
+                      :class="{ active: isChipActive('blockedPartners', option) }"
+                      @click="toggleChip('blockedPartners', option)"
+                    >
+                      {{ option }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section id="asset-reg-visibility" class="reg-section">
+              <header class="reg-section__head">
+                <strong>4. 공개 설정</strong>
+                <small>파트너 페이지 노출 방식과 매칭 가능 상태를 정합니다.</small>
+              </header>
+
+              <div class="reg-grid">
+                <div class="reg-field">
+                  <span class="reg-field__label">파트너 공개 상태 <em>*</em></span>
+                  <div class="reg-radios">
+                    <label class="reg-radio" :class="{ active: assetForm.publicStatus === 'PUBLIC' }">
+                      <input v-model="assetForm.publicStatus" type="radio" value="PUBLIC" />
+                      <b>파트너 공개</b>
+                      <small>모든 파트너가 RFP 열람</small>
+                    </label>
+                    <label class="reg-radio" :class="{ active: assetForm.publicStatus === 'PRIVATE' }">
+                      <input v-model="assetForm.publicStatus" type="radio" value="PRIVATE" />
+                      <b>비공개</b>
+                      <small>지정 파트너만 초대 열람</small>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="reg-field">
+                  <span class="reg-field__label">매칭 상태 <em>*</em></span>
+                  <div class="reg-radios">
+                    <label class="reg-radio" :class="{ active: assetForm.matchingStatus === 'ACTIVE' }">
+                      <input v-model="assetForm.matchingStatus" type="radio" value="ACTIVE" />
+                      <b>매칭 활성</b>
+                      <small>지금 매칭 가능</small>
+                    </label>
+                    <label class="reg-radio" :class="{ active: assetForm.matchingStatus === 'PAUSED' }">
+                      <input v-model="assetForm.matchingStatus" type="radio" value="PAUSED" />
+                      <b>휴면</b>
+                      <small>임시 보류</small>
+                    </label>
+                    <label class="reg-radio" :class="{ active: assetForm.matchingStatus === 'EXCLUSIVE' }">
+                      <input v-model="assetForm.matchingStatus" type="radio" value="EXCLUSIVE" />
+                      <b>전속 협의</b>
+                      <small>특정 파트너 한정</small>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
 
-          <label>
-            <span>자산명</span>
-            <input v-model="assetForm.type" placeholder="예: 갤러리아 앱, 호텔 객실, 멤버십 채널" />
-          </label>
-          <label>
-            <span>접점 고객</span>
-            <input v-model="assetForm.target" placeholder="예: 2030 프리미엄 쇼핑 고객" />
-          </label>
-          <label>
-            <span>제공 규모</span>
-            <input v-model="assetForm.scale" placeholder="예: MAU 45만, 월 1만 객실" />
-          </label>
-          <label>
-            <span>사용 조건</span>
-            <input v-model="assetForm.conditions" placeholder="예: 월 1회 메인 팝업, 주중 한정" />
-          </label>
-
-          <div class="asset-modal__actions">
-            <button type="button" class="asset-modal__secondary" @click="closeAssetForm">취소</button>
-            <button type="submit" class="asset-modal__primary">저장</button>
-          </div>
+          <footer class="reg-foot">
+            <span class="reg-foot__hint">
+              <em>*</em> 표시는 필수 입력
+              <b v-if="!canSubmitAsset">· 필수 {{ totalRequired - filledRequired }}개 남음</b>
+              <b v-else class="reg-foot__hint--ok">· 모든 필수 항목 완료</b>
+            </span>
+            <div class="reg-foot__actions">
+              <button type="button" class="reg-btn reg-btn--ghost" @click="closeAssetForm">취소</button>
+              <button type="button" class="reg-btn reg-btn--secondary" @click="saveAssetDraft">임시 저장</button>
+              <button type="submit" class="reg-btn reg-btn--primary" :disabled="!canSubmitAsset">
+                {{ editingAssetId ? '수정 저장' : '등록' }}
+              </button>
+            </div>
+          </footer>
         </form>
       </div>
     </article>
@@ -397,6 +1208,478 @@ const rows = computed(() =>
   font-weight: 800;
 }
 
+.asset-browser {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.42fr) minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-color);
+}
+
+.asset-browser__list {
+  display: grid;
+  align-content: start;
+  gap: 0.18rem;
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-color);
+  background: var(--panel-muted);
+  padding: 0.45rem;
+}
+
+.asset-list-tools {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2rem;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.22rem;
+  background: var(--panel-muted);
+}
+
+.asset-list-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-color);
+  padding: 0 0.65rem;
+}
+
+.asset-list-search span {
+  color: var(--muted-text);
+  font-size: 0.95rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.asset-list-search input {
+  min-width: 0;
+  min-height: 2.15rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.asset-list-search input:focus {
+  outline: none;
+}
+
+.asset-filter-button {
+  position: relative;
+  display: inline-flex;
+  width: 2rem;
+  height: 2.15rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.asset-filter-button.active {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 9%, var(--panel-color));
+  color: var(--accent-color);
+}
+
+.asset-filter-button span {
+  display: inline-block;
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 900;
+  transform: rotate(90deg);
+}
+
+.asset-filter-button.active span {
+  color: var(--accent-color);
+}
+
+.asset-filter-button em {
+  position: absolute;
+  top: -0.28rem;
+  right: -0.28rem;
+  display: inline-flex;
+  min-width: 1rem;
+  height: 1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.asset-filter-popover {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 5;
+  display: grid;
+  width: min(16rem, calc(100vw - 2rem));
+  gap: 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-color);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.14);
+  padding: 0.75rem;
+}
+
+.asset-filter-popover__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.asset-filter-popover__head strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.asset-filter-popover__head button {
+  border: 0;
+  background: transparent;
+  color: var(--accent-color);
+  font-size: 0.7rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.asset-filter-popover label {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.asset-filter-popover label > span {
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.asset-filter-popover select {
+  min-height: 2.2rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  color: var(--text-primary);
+  padding: 0 0.65rem;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.asset-filter-popover select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 14%, transparent);
+}
+
+.asset-list-empty {
+  margin: 0.9rem 0.35rem;
+  color: var(--muted-text);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.asset-list-item {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.45rem;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0.48rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.asset-list-item.active {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 9%, var(--panel-color));
+  box-shadow: inset 3px 0 0 var(--accent-color);
+}
+
+.asset-list-item__mark {
+  display: inline-flex;
+  width: 1.8rem;
+  height: 1.8rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--border-color));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent-color) 9%, var(--panel-color));
+  color: var(--accent-color);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.asset-list-item__text {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.asset-list-item__text strong,
+.asset-list-item__text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-list-item__text strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.asset-list-item__text small {
+  color: var(--muted-text);
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.asset-list-item > em {
+  grid-column: 2;
+  justify-self: start;
+  border-radius: 999px;
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
+  padding: 0.12rem 0.45rem;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.asset-list-item > em.muted {
+  background: var(--color-warning-light);
+  color: var(--color-warning-dark);
+}
+
+.asset-detail {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 0.9rem;
+}
+
+.asset-detail__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.75rem;
+}
+
+.asset-detail__identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.65rem;
+}
+
+.asset-detail__identity > span {
+  display: inline-flex;
+  width: 2.7rem;
+  height: 2.7rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent-color) 12%, var(--panel-color));
+  color: var(--accent-color);
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.asset-detail__identity h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.02rem;
+  font-weight: 900;
+}
+
+.asset-detail__identity p {
+  margin: 0.2rem 0 0;
+  color: var(--muted-text);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.asset-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.asset-detail__actions em {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
+  padding: 0 0.7rem;
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.asset-detail__actions em.muted {
+  background: var(--color-warning-light);
+  color: var(--color-warning-dark);
+}
+
+.asset-detail__actions button {
+  min-height: 1.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  padding: 0 0.62rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.asset-detail__actions button.danger {
+  color: var(--color-danger, #dc2626);
+}
+
+.asset-detail__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.asset-detail__metrics > div {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-muted);
+  padding: 0.7rem;
+}
+
+.asset-detail__metrics span,
+.asset-detail__info dt {
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.asset-detail__metrics strong,
+.asset-detail__metrics small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-detail__metrics strong {
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.asset-detail__metrics small {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.asset-detail__info {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.asset-detail__info h5 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.asset-detail__info dl {
+  display: grid;
+  margin: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.asset-detail__info dl > div {
+  display: grid;
+  grid-template-columns: 7.4rem minmax(0, 1fr);
+  gap: 0.7rem;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.74rem 0;
+}
+
+.asset-detail__info dd {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.asset-detail__info dd strong,
+.asset-detail__info dd small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-detail__info dd strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.asset-detail__info dd small {
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.asset-detail--empty {
+  place-content: center;
+  text-align: center;
+}
+
+.asset-detail--empty h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.asset-detail--empty p {
+  margin: 0.35rem 0 0;
+  color: var(--muted-text);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
 .asset-table {
   display: grid;
   gap: 0.4rem;
@@ -411,12 +1694,12 @@ const rows = computed(() =>
 
 .asset-table--assets .asset-table__head,
 .asset-table--assets .asset-table__row {
-  grid-template-columns: 0.8fr 1fr 1.45fr 0.8fr 1.1fr 70px;
+  grid-template-columns: 1.05fr 1.35fr 0.9fr 1.2fr max-content 5.9rem;
 }
 
 .asset-table--benefits .asset-table__head,
 .asset-table--benefits .asset-table__row {
-  grid-template-columns: 0.8fr 1.35fr 0.75fr 1.2fr 0.7fr 0.9fr 80px;
+  grid-template-columns: 0.62fr 1.35fr 1fr 0.9fr 1.08fr 1.05fr 1.1fr;
 }
 
 .asset-table__head {
@@ -450,14 +1733,59 @@ const rows = computed(() =>
   white-space: nowrap;
 }
 
+.proposal-benefit,
+.proposal-metric,
+.proposal-match,
+.proposal-status,
+.asset-info {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.proposal-benefit b,
+.proposal-metric b,
+.proposal-match b,
+.asset-info b {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proposal-benefit small,
+.proposal-metric small,
+.proposal-match small,
+.asset-info small {
+  overflow: hidden;
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proposal-match b {
+  color: var(--accent-color);
+}
+
+.proposal-match.muted b {
+  color: var(--muted-text);
+}
+
 .asset-table__row em {
   display: inline-flex;
+  width: max-content;
   min-height: 1.45rem;
   align-items: center;
   justify-content: center;
+  justify-self: start;
   border-radius: 999px;
   background: var(--color-success-light);
   color: var(--color-success-dark);
+  padding: 0 0.7rem;
   font-size: 0.72rem;
   font-style: normal;
   font-weight: 900;
@@ -466,6 +1794,56 @@ const rows = computed(() =>
 .asset-table__row em.muted {
   background: var(--color-warning-light);
   color: var(--color-warning-dark);
+}
+
+.asset-row-actions {
+  display: flex !important;
+  gap: 0.35rem;
+  justify-content: flex-end;
+  justify-self: end;
+  overflow: visible !important;
+}
+
+.asset-row-actions button {
+  min-height: 1.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  padding: 0 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.asset-row-actions button:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-color));
+  color: var(--accent-color);
+}
+
+.asset-row-actions button.danger {
+  color: var(--color-danger, #dc2626);
+}
+
+.asset-row-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.proposal-status em {
+  justify-self: start;
+  padding: 0 0.55rem;
+}
+
+.proposal-status button {
+  justify-self: start;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  padding: 0.2rem 0.45rem;
+  font-size: 0.66rem;
+  font-weight: 900;
 }
 
 .asset-modal {
@@ -480,7 +1858,8 @@ const rows = computed(() =>
 
 .asset-modal__panel {
   display: grid;
-  width: min(28rem, 100%);
+  width: min(46rem, 100%);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.8rem;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -492,6 +1871,7 @@ const rows = computed(() =>
 .asset-modal__head,
 .asset-modal__actions {
   display: flex;
+  grid-column: 1 / -1;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
@@ -514,7 +1894,8 @@ const rows = computed(() =>
   font-weight: 800;
 }
 
-.asset-modal input {
+.asset-modal input,
+.asset-modal select {
   min-height: 2.6rem;
   border: 1px solid var(--border-color);
   border-radius: 7px;
@@ -542,6 +1923,593 @@ const rows = computed(() =>
   color: var(--text-secondary);
 }
 
+.reg-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.4);
+  padding: 1.25rem;
+}
+
+.reg-panel {
+  display: grid;
+  width: min(60rem, 100%);
+  max-height: calc(100vh - 2.5rem);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel-color);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+}
+
+.reg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent-color) 6%, var(--panel-color)),
+      var(--panel-color)
+    );
+  padding: 0.95rem 1.1rem;
+}
+
+.reg-head__title {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.reg-head__title strong {
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.reg-head__title span {
+  color: var(--muted-text);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.reg-head__right {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.reg-progress {
+  display: grid;
+  gap: 0.32rem;
+  min-width: 11rem;
+}
+
+.reg-progress__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.reg-progress__meta span {
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.reg-progress__meta b {
+  color: var(--accent-color);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.reg-progress__bar {
+  height: 0.36rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-muted);
+}
+
+.reg-progress__bar > div {
+  height: 100%;
+  background: var(--accent-color);
+  transition: width 0.25s ease;
+}
+
+.reg-close {
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  font-size: 1.15rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.reg-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--panel-muted);
+  padding: 0.65rem 1.1rem;
+}
+
+.reg-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-color);
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.reg-nav__item:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 40%, var(--border-color));
+}
+
+.reg-nav__item.active {
+  border-color: var(--border-color);
+  background: var(--panel-color);
+  box-shadow: none;
+}
+
+.reg-nav__item.done {
+  border-color: var(--border-color);
+  background: var(--panel-color);
+}
+
+.reg-nav__item.active.done {
+  border-color: var(--border-color);
+  background: var(--panel-color);
+}
+
+.reg-nav__item em {
+  display: inline-flex;
+  width: 1.55rem;
+  height: 1.55rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+  color: var(--accent-color);
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.reg-nav__item.done em {
+  background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+  color: var(--accent-color);
+}
+
+.reg-nav__item.active em {
+  background: color-mix(in srgb, var(--accent-color) 18%, transparent);
+  color: var(--accent-color);
+}
+
+.reg-nav__item.active b {
+  color: var(--accent-color);
+}
+
+.reg-nav__item span {
+  display: grid;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.reg-nav__item b {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reg-nav__item small {
+  color: var(--muted-text);
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.reg-body {
+  display: grid;
+  gap: 1rem;
+  overflow-y: auto;
+  padding: 1.1rem 1.1rem 0.6rem;
+}
+
+.reg-section {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--panel-muted);
+  padding: 0.9rem;
+}
+
+.reg-section__head {
+  display: grid;
+  gap: 0.18rem;
+  border-bottom: 1px dashed var(--border-color);
+  padding-bottom: 0.6rem;
+}
+
+.reg-section__head strong {
+  color: var(--text-primary);
+  font-size: 0.94rem;
+  font-weight: 900;
+}
+
+.reg-section__head small {
+  color: var(--muted-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.reg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.reg-field {
+  display: grid;
+  gap: 0.34rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.reg-field--full {
+  grid-column: 1 / -1;
+}
+
+.reg-field__label {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.reg-field__label em {
+  margin-left: 0.18rem;
+  color: var(--accent-color);
+  font-style: normal;
+}
+
+.reg-field input,
+.reg-field select {
+  height: 2.55rem;
+  min-height: 2.55rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-color);
+  color: var(--text-primary);
+  padding: 0 0.78rem;
+  font-size: 0.84rem;
+  font-weight: 700;
+  transition: all 0.12s ease;
+}
+
+.reg-field input:focus,
+.reg-field select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 16%, transparent);
+}
+
+.reg-field__subinput {
+  margin-top: 0.18rem;
+}
+
+.reg-hint {
+  display: block;
+  min-height: 0.9rem;
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.reg-hint--top {
+  margin-top: -0.18rem;
+}
+
+.reg-cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--panel-muted);
+  padding: 0.45rem;
+}
+
+.reg-card {
+  position: relative;
+  display: grid;
+  gap: 0.22rem;
+  justify-items: start;
+  min-height: 6.2rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel-color);
+  padding: 0.78rem 0.82rem;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: all 0.15s ease;
+}
+
+.reg-card:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 50%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 3%, var(--panel-color));
+  transform: translateY(-1px);
+}
+
+.reg-card.active {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 8%, var(--panel-color));
+  box-shadow: inset 0 0 0 1px var(--accent-color);
+}
+
+.reg-card.active::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 8px 0 0 8px;
+  background: var(--accent-color);
+}
+
+.reg-card b {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.reg-card.active b {
+  color: var(--accent-color);
+}
+
+.reg-card small {
+  color: var(--muted-text);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.reg-card em {
+  color: var(--accent-color);
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.reg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.36rem;
+}
+
+.reg-chip {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  padding: 0.36rem 0.78rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.13s ease;
+}
+
+.reg-chip:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-color));
+}
+
+.reg-chip.active {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-color));
+  color: var(--accent-color);
+}
+
+.reg-chip--block.active {
+  border-color: var(--color-warning-dark);
+  background: var(--color-warning-light);
+  color: var(--color-warning-dark);
+}
+
+.reg-chip-input {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.reg-chip-input input {
+  flex: 1;
+  min-height: 2.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-color);
+  padding: 0 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.reg-chip-input button {
+  min-height: 2.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  padding: 0 0.95rem;
+  font-size: 0.74rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.reg-chips--selected {
+  margin-top: 0.5rem;
+  border-top: 1px dashed var(--border-color);
+  padding-top: 0.5rem;
+}
+
+.reg-chip-selected {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  border-radius: 999px;
+  background: var(--accent-color);
+  color: #fff;
+  padding: 0.3rem 0.4rem 0.3rem 0.72rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.reg-chip-selected button {
+  display: inline-flex;
+  width: 1.15rem;
+  height: 1.15rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.reg-radios {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.reg-radio {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 0.6rem;
+  row-gap: 0.05rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-color);
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  transition: all 0.13s ease;
+}
+
+.reg-radio:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 40%, var(--border-color));
+}
+
+.reg-radio.active {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 6%, var(--panel-color));
+}
+
+.reg-radio input {
+  grid-row: 1 / 3;
+  accent-color: var(--accent-color);
+}
+
+.reg-radio b {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.reg-radio small {
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.reg-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--panel-color);
+  padding: 0.85rem 1.1rem;
+}
+
+.reg-foot__hint {
+  color: var(--muted-text);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.reg-foot__hint em {
+  color: var(--accent-color);
+  font-style: normal;
+}
+
+.reg-foot__hint b {
+  margin-left: 0.25rem;
+  color: var(--muted-text);
+  font-weight: 800;
+}
+
+.reg-foot__hint--ok {
+  color: var(--color-success-dark) !important;
+}
+
+.reg-foot__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.reg-btn {
+  min-height: 2.5rem;
+  border-radius: 7px;
+  padding: 0 1.15rem;
+  font-size: 0.82rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.13s ease;
+}
+
+.reg-btn--primary {
+  border: 1px solid var(--accent-color);
+  background: var(--accent-color);
+  color: #fff;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent-color) 20%, transparent);
+}
+
+.reg-btn--primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+.reg-btn--secondary {
+  border: 1px solid color-mix(in srgb, var(--accent-color) 30%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-color));
+  color: var(--accent-color);
+}
+
+.reg-btn--ghost {
+  border: 1px solid var(--border-color);
+  background: var(--panel-color);
+  color: var(--text-secondary);
+}
+
 @media (max-width: 1180px) {
   .asset-panel__head,
   .asset-toolbar {
@@ -552,6 +2520,27 @@ const rows = computed(() =>
   .asset-segment {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 920px) {
+  .reg-nav,
+  .reg-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reg-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reg-field--full {
+    grid-column: 1;
+  }
+
+  .reg-head,
+  .reg-foot {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

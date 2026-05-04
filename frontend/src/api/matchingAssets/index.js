@@ -23,8 +23,17 @@ export const CreateAsset = async (payload) => {
   return unwrapResponse(await api.post('/matching/asset/add', payload))
 }
 
+export const UpdateAsset = async (idx, payload) => {
+  return unwrapResponse(await api.put(`/matching/asset/${idx}`, payload))
+}
+
+export const DeleteAsset = async (idx) => {
+  return unwrapResponse(await api.delete(`/matching/asset/${idx}`))
+}
 
 export default {
   ListAssets,
   CreateAsset,
+  UpdateAsset,
+  DeleteAsset,
 }
