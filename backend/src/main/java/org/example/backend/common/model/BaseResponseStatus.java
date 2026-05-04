@@ -30,7 +30,8 @@ public enum BaseResponseStatus {
     // 5000번대 실패
     FAIL(false, 5000, "요청이 실패했습니다."),
     NO_SUCH_ELEMENT(false, 5001, "요청하신 정보가 없습니다."),
-    ACCESS_DENIED(false,5002 ,"접근할 수 없습니다." );
+    ACCESS_DENIED(false,5002 ,"접근할 수 없습니다." ),
+    SERVER_NOT_RESPONDING(false,5003 ,"서버가 응답하지 않습니다." );
 
     private final boolean success;
     private final int code;
