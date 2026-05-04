@@ -6,28 +6,9 @@ import org.example.backend.user.model.User;
 public class UserProfileDto {
     public record UpdateReq(
             String email,
-            String phone
-    ) {
-    }
-
-    public record ProfileImageUploadUrlReq(
-            String fileName,
-            String contentType,
-            Long fileSize
-    ) {
-    }
-
-    @Builder
-    public record ProfileImageUploadUrlRes(
-            String objectKey,
-            String uploadUrl,
-            Long expiresInSeconds,
-            String contentType
-    ) {
-    }
-
-    public record ProfileImageCommitReq(
-            String objectKey
+            String phone,
+            String profileImageKey,
+            String profileImageUrl
     ) {
     }
 
@@ -42,7 +23,7 @@ public class UserProfileDto {
             String profileImageKey,
             String profileImageUrl
     ) {
-        public static Res from(UserProfile entity, String profileImageUrl) {
+        public static Res from(UserProfile entity) {
             User user = entity.getUser();
 
             return Res.builder()
@@ -53,7 +34,7 @@ public class UserProfileDto {
                     .email(resolveText(entity.getEmail(), user.getEmail()))
                     .phone(entity.getPhone())
                     .profileImageKey(entity.getProfileImageKey())
-                    .profileImageUrl(profileImageUrl)
+                    .profileImageUrl(entity.getProfileImageUrl())
                     .build();
         }
     }
