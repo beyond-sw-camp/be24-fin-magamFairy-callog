@@ -19,12 +19,25 @@ import org.springframework.web.bind.annotation.*;
 public class EvaluationController {
     private final EvaluationService evaluationService;
 
-    @PostMapping("/evaluation/new")
-    public ResponseEntity newEvaluation(@RequestBody EvaluationDto.NewEvaluation dto,
-                                   @AuthenticationPrincipal AuthUserDetails user){
+    @PostMapping("/evaluation/collect")
+    public ResponseEntity collect(@RequestBody EvaluationDto.Collect dto,
+                                        @AuthenticationPrincipal AuthUserDetails user){
         try {
-            evaluationService.newEvaluation(dto, user);
-            return  ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.SUCCESSFULY_EVALUATED));
+            evaluationService.collect(dto, user);
+            return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESSFULY_EVALUATED, "바보"));
+        }
+        catch (Exception e){
+            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
+                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
+        }
+    }
+
+    @PostMapping("/evaluation/new")
+    public ResponseEntity newEvaluation(@RequestBody EvaluationDto.NewEvaluationReq dto){
+        try {
+            evaluationService.newEvaluation(dto);
+            return  ResponseEntity.status(HttpStatus.ACCEPTED)
+                    .body(BaseResponse.processing(BaseResponseStatus.EVLUATION_STARTED));
         }
         catch (Exception e){
             return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)

@@ -6,6 +6,9 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum BaseResponseStatus {
+    // 1000번대 진행중
+    EVLUATION_STARTED(true, 1000,"평가가 시작되었습니다."),
+
     // 2000번대 성공
     SUCCESS(true, 2000, "요청이 성공했습니다."),
     LIST_SUCCESS(true, 2001, "목록 가져오기에 성공했습니다."),
