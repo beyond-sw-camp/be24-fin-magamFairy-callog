@@ -65,6 +65,9 @@ public class UserDto {
     public record ResetPasswordRes(String id, String password) {
     }
 
+<<<<<<< HEAD
+    public record ManageRoleReq(String id, String role) {
+=======
     public record ChangePasswordReq(String currentPassword, String newPassword) {
     }
 
@@ -78,10 +81,44 @@ public class UserDto {
     }
 
     public record PromoteToManagerReq(String id) {
+>>>>>>> origin/dev
     }
 
     @Builder
-    public record PromoteToManagerRes(String id, String name, String role) {
+    public record ManageableUserRes(
+            Long idx,
+            String id,
+            String email,
+            String name,
+            String role,
+            String companyName,
+            String department,
+            Boolean active
+    ) {
+        public static ManageableUserRes from(User entity) {
+            return ManageableUserRes.builder()
+                    .idx(entity.getIdx())
+                    .id(entity.getId())
+                    .email(entity.getEmail())
+                    .name(entity.getName())
+                    .role(entity.getRole())
+                    .companyName(entity.getCompanyName())
+                    .department(entity.getDepartment())
+                    .active(Boolean.TRUE.equals(entity.getEnable())
+                            && UserAccountStatus.ACTIVE.equals(entity.getAccountStatus()))
+                    .build();
+        }
+    }
+
+    @Builder
+    public record ManageRoleRes(
+            String id,
+            String name,
+            String previousRole,
+            String role,
+            String companyName,
+            String department
+    ) {
     }
 
     public record DeleteUserReq(String id) {

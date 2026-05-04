@@ -78,3 +78,13 @@ export async function deleteUserRequest(payload) {
   const response = await api.post('/auth/userdelete', payload)
   return unwrapResponse(response)
 }
+
+export async function manageUserRoleRequest(payload) {
+  const response = await api.post('/auth/manage', payload)
+  return unwrapResponse(response)
+}
+
+export async function fetchManageableUsersRequest() {
+  const response = await api.get('/auth/manage/users')
+  return unwrapResponse(response)
+}

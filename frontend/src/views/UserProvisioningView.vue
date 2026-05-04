@@ -1,16 +1,43 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { createUserRequest, deleteUserRequest, resetPasswordRequest } from '@/authApi'
+import {
+  createUserRequest,
+  deleteUserRequest,
+  fetchManageableUsersRequest,
+  manageUserRoleRequest,
+  resetPasswordRequest,
+} from '@/authApi'
 import { useAuthStore } from '@/stores/useAuthStore'
 
 const authStore = useAuthStore()
 
-const activeTab = ref('create')
-const tabs = [
-  { id: 'create', label: '계정 생성' },
-  { id: 'delete', label: '계정 삭제' },
-  { id: 'reset', label: '비밀번호 재발급' },
-]
+const showCreateModal = ref(false)
+const manageableUsers = ref([])
+const memberSearch = ref('')
+const memberActionId = ref('')
+
+const status = reactive({
+  createLoading: false,
+  listLoading: false,
+  roleLoading: false,
+  deleteLoading: false,
+  resetLoading: false,
+  createError: '',
+  listError: '',
+  actionError: '',
+})
+
+const resultModal = reactive({
+  open: false,
+  title: '',
+  description: '',
+  rows: [],
+  copyText: '',
+  copied: false,
+})
+
+const managerCompanyName = computed(() => authStore.user?.companyName ?? '')
+const managerDepartment = computed(() => authStore.user?.department ?? '')
 
 const roleOptions = computed(() => {
   if (authStore.isAdmin) {
@@ -29,9 +56,6 @@ const roleOptions = computed(() => {
 
   return [{ value: 'USER', label: 'USER - 구성원' }]
 })
-
-const managerCompanyName = computed(() => authStore.user?.companyName ?? '')
-const managerDepartment = computed(() => authStore.user?.department ?? '')
 
 function getDefaultCreateRole() {
   if (authStore.isAdmin) {
@@ -53,33 +77,6 @@ const createForm = reactive({
   role: getDefaultCreateRole(),
 })
 
-const deleteForm = reactive({
-  id: '',
-  confirmId: '',
-})
-
-const resetForm = reactive({
-  id: '',
-})
-
-const status = reactive({
-  createLoading: false,
-  deleteLoading: false,
-  resetLoading: false,
-  createError: '',
-  deleteError: '',
-  resetError: '',
-})
-
-const resultModal = reactive({
-  open: false,
-  title: '',
-  description: '',
-  rows: [],
-  copyText: '',
-  copied: false,
-})
-
 const selectedRoleLabel = computed(
   () => roleOptions.value.find((role) => role.value === createForm.role)?.label ?? 'USER - 구성원',
 )
@@ -91,6 +88,33 @@ const previewId = computed(() => {
 
   return `${company}_${department}_${name}`
 })
+
+const filteredManageableUsers = computed(() => {
+  const keyword = memberSearch.value.trim().toLowerCase()
+
+  if (!keyword) {
+    return manageableUsers.value
+  }
+
+  return manageableUsers.value.filter((user) => {
+    const searchable = [
+      user.name,
+      user.id,
+      user.email,
+      user.companyName,
+      user.department,
+      getMemberRoleLabel(user.role),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+
+    return searchable.includes(keyword)
+  })
+})
+
+const visibleMemberCount = computed(() => filteredManageableUsers.value.length)
+const totalMemberCount = computed(() => manageableUsers.value.length)
 
 watch(
   () => [authStore.isGeneralManager, authStore.isManager, managerCompanyName.value, managerDepartment.value],
@@ -108,6 +132,22 @@ watch(
     if (authStore.isGeneralManager) {
       createForm.role = 'MANAGER'
     }
+
+    ensureAllowedRole()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => [
+    authStore.isAuthenticated,
+    authStore.user?.id,
+    authStore.user?.role,
+    managerCompanyName.value,
+    managerDepartment.value,
+  ],
+  () => {
+    fetchManageableUsers()
   },
   { immediate: true },
 )
@@ -116,6 +156,18 @@ function ensureAllowedRole() {
   if (!roleOptions.value.some((role) => role.value === createForm.role)) {
     createForm.role = roleOptions.value[0]?.value ?? 'USER'
   }
+}
+
+function openCreateModal() {
+  ensureAllowedRole()
+  status.createError = ''
+  showCreateModal.value = true
+}
+
+function closeCreateModal() {
+  if (status.createLoading) return
+  showCreateModal.value = false
+  resetCreateForm()
 }
 
 function openResultModal({ title, description, rows, copyText }) {
@@ -143,19 +195,71 @@ function resetCreateForm() {
   status.createError = ''
 }
 
-function resetDeleteForm() {
-  deleteForm.id = ''
-  deleteForm.confirmId = ''
-  status.deleteError = ''
-}
-
-function resetResetForm() {
-  resetForm.id = ''
-  status.resetError = ''
-}
-
 function resolveErrorMessage(error, fallback) {
   return error?.response?.data?.message ?? error?.message ?? fallback
+}
+
+function normalizeMemberRole(role) {
+  if (!role) return ''
+  return role.startsWith('ROLE_') ? role : `ROLE_${role}`
+}
+
+function getMemberRoleLabel(role) {
+  const normalizedRole = normalizeMemberRole(role)
+  if (normalizedRole === 'ROLE_GENERAL_MANAGER') return 'GENERAL_MANAGER'
+  if (normalizedRole === 'ROLE_MANAGER') return 'MANAGER'
+  if (normalizedRole === 'ROLE_USER') return 'USER'
+  return role ?? '-'
+}
+
+function getMemberNextRole(role) {
+  const normalizedRole = normalizeMemberRole(role)
+  if (normalizedRole === 'ROLE_USER') return 'MANAGER'
+  if (normalizedRole === 'ROLE_MANAGER') return 'USER'
+  return ''
+}
+
+function getMemberActionLabel(role) {
+  const nextRole = getMemberNextRole(role)
+  if (nextRole === 'MANAGER') return 'MANAGER로 승격'
+  if (nextRole === 'USER') return 'USER로 강등'
+  return '변경 불가'
+}
+
+function canChangeMemberRole(user) {
+  return authStore.isGeneralManager && Boolean(getMemberNextRole(user.role))
+}
+
+function isMemberAction(action, user) {
+  return memberActionId.value === `${action}-${user.id}`
+}
+
+async function fetchManageableUsers({ silent = false } = {}) {
+  if (!authStore.isAuthenticated) {
+    manageableUsers.value = []
+    return
+  }
+
+  if (!silent) {
+    status.listLoading = true
+    status.listError = ''
+  }
+
+  try {
+    const users = await fetchManageableUsersRequest()
+    manageableUsers.value = Array.isArray(users) ? users : []
+  } catch (error) {
+    if (!silent) {
+      status.listError = resolveErrorMessage(
+        error,
+        '구성원 목록을 불러오지 못했습니다.',
+      )
+    }
+  } finally {
+    if (!silent) {
+      status.listLoading = false
+    }
+  }
 }
 
 async function handleCreateUser() {
@@ -179,6 +283,7 @@ async function handleCreateUser() {
       role: createForm.role,
     })
 
+    showCreateModal.value = false
     openResultModal({
       title: '계정 생성 완료',
       description: '아래 계정 정보를 사용자에게 전달해 주세요.',
@@ -190,6 +295,7 @@ async function handleCreateUser() {
       copyText: `계정 정보\n권한: ${createdUser.role ?? createForm.role}\n아이디: ${createdUser.id}\n임시 비밀번호: ${createdUser.password}`,
     })
     resetCreateForm()
+    await fetchManageableUsers({ silent: true })
   } catch (error) {
     status.createError = resolveErrorMessage(
       error,
@@ -200,26 +306,108 @@ async function handleCreateUser() {
   }
 }
 
-async function handleDeleteUser() {
-  if (status.deleteLoading) return
+async function handleMemberRoleChange(user) {
+  if (status.roleLoading) return
 
-  const id = deleteForm.id.trim()
-  const confirmId = deleteForm.confirmId.trim()
-  if (!id || !confirmId) {
-    status.deleteError = '삭제할 계정 아이디를 두 번 입력해 주세요.'
+  const nextRole = getMemberNextRole(user.role)
+  if (!nextRole) {
+    status.actionError = '변경할 수 없는 권한입니다.'
     return
   }
 
-  if (id !== confirmId) {
-    status.deleteError = '확인 아이디가 일치하지 않습니다.'
+  status.roleLoading = true
+  status.actionError = ''
+  memberActionId.value = `role-${user.id}`
+
+  try {
+    const managedUser = await manageUserRoleRequest({
+      id: user.id,
+      role: nextRole,
+    })
+
+    manageableUsers.value = manageableUsers.value.map((member) => {
+      if (member.id !== managedUser.id) {
+        return member
+      }
+
+      return {
+        ...member,
+        name: managedUser.name ?? member.name,
+        role: managedUser.role,
+        companyName: managedUser.companyName ?? member.companyName,
+        department: managedUser.department ?? member.department,
+      }
+    })
+
+    openResultModal({
+      title: '권한 변경 완료',
+      description: '대상 계정의 권한이 변경되었습니다.',
+      rows: [
+        { label: '아이디', value: managedUser.id },
+        { label: '이름', value: managedUser.name },
+        { label: '이전 권한', value: managedUser.previousRole },
+        { label: '변경 권한', value: managedUser.role },
+        { label: '소속', value: `${managedUser.companyName ?? '-'} / ${managedUser.department ?? '-'}` },
+      ],
+      copyText: `권한 변경 완료\n아이디: ${managedUser.id}\n이름: ${managedUser.name}\n이전 권한: ${managedUser.previousRole}\n변경 권한: ${managedUser.role}`,
+    })
+  } catch (error) {
+    status.actionError = resolveErrorMessage(
+      error,
+      '권한 변경에 실패했습니다. 권한 범위를 확인해 주세요.',
+    )
+  } finally {
+    status.roleLoading = false
+    memberActionId.value = ''
+  }
+}
+
+async function handleMemberPasswordReset(user) {
+  if (status.resetLoading) return
+
+  status.resetLoading = true
+  status.actionError = ''
+  memberActionId.value = `reset-${user.id}`
+
+  try {
+    const resetResult = await resetPasswordRequest({ id: user.id })
+
+    openResultModal({
+      title: '비밀번호 재설정 완료',
+      description: '새 임시 비밀번호를 사용자에게 전달해 주세요.',
+      rows: [
+        { label: '아이디', value: resetResult.id },
+        { label: '새 임시 비밀번호', value: resetResult.password },
+      ],
+      copyText: `비밀번호 재설정\n아이디: ${resetResult.id}\n새 임시 비밀번호: ${resetResult.password}`,
+    })
+  } catch (error) {
+    status.actionError = resolveErrorMessage(
+      error,
+      '비밀번호 재설정에 실패했습니다. 권한 범위를 확인해 주세요.',
+    )
+  } finally {
+    status.resetLoading = false
+    memberActionId.value = ''
+  }
+}
+
+async function handleMemberDelete(user) {
+  if (status.deleteLoading) return
+
+  const confirmed = window.confirm(`${user.name ?? user.id} 계정을 삭제할까요?`)
+  if (!confirmed) {
     return
   }
 
   status.deleteLoading = true
-  status.deleteError = ''
+  status.actionError = ''
+  memberActionId.value = `delete-${user.id}`
 
   try {
-    const deletedUser = await deleteUserRequest({ id })
+    const deletedUser = await deleteUserRequest({ id: user.id })
+
+    manageableUsers.value = manageableUsers.value.filter((member) => member.id !== deletedUser.id)
 
     openResultModal({
       title: '계정 삭제 완료',
@@ -232,49 +420,14 @@ async function handleDeleteUser() {
       ],
       copyText: `계정 삭제 완료\n아이디: ${deletedUser.id}\n이름: ${deletedUser.name}\n권한: ${deletedUser.role}`,
     })
-    resetDeleteForm()
   } catch (error) {
-    status.deleteError = resolveErrorMessage(
+    status.actionError = resolveErrorMessage(
       error,
-      '계정 삭제에 실패했습니다. 아이디와 권한 범위를 확인해 주세요.',
+      '계정 삭제에 실패했습니다. 권한 범위를 확인해 주세요.',
     )
   } finally {
     status.deleteLoading = false
-  }
-}
-
-async function handleResetPassword() {
-  if (status.resetLoading) return
-
-  const id = resetForm.id.trim()
-  if (!id) {
-    status.resetError = '아이디를 입력해 주세요.'
-    return
-  }
-
-  status.resetLoading = true
-  status.resetError = ''
-
-  try {
-    const resetResult = await resetPasswordRequest({ id })
-
-    openResultModal({
-      title: '비밀번호 재발급 완료',
-      description: '새 임시 비밀번호를 사용자에게 전달해 주세요.',
-      rows: [
-        { label: '아이디', value: resetResult.id },
-        { label: '새 임시 비밀번호', value: resetResult.password },
-      ],
-      copyText: `비밀번호 재발급\n아이디: ${resetResult.id}\n새 임시 비밀번호: ${resetResult.password}`,
-    })
-    resetResetForm()
-  } catch (error) {
-    status.resetError = resolveErrorMessage(
-      error,
-      '비밀번호 재발급에 실패했습니다. 아이디와 권한 범위를 확인해 주세요.',
-    )
-  } finally {
-    status.resetLoading = false
+    memberActionId.value = ''
   }
 }
 
@@ -293,34 +446,115 @@ async function copyResult() {
 
 <template>
   <section class="hr-page ui-page min-h-[calc(100vh-7rem)] px-6 py-10">
-    <div class="mx-auto w-full max-w-4xl">
+    <div class="mx-auto w-full max-w-6xl">
       <header class="hr-header">
-        <p class="hr-eyebrow">Human resources</p>
-        <h1>인사관리</h1>
-        <p>
-          계정 생성, 계정 삭제, 비밀번호 재발급을 한 곳에서 처리합니다.
-          GENERAL_MANAGER는 같은 회사의 MANAGER/USER를, MANAGER는 같은 회사와 같은 부서의 USER만 관리할 수 있습니다.
-        </p>
+        <div>
+          <p class="hr-eyebrow">Human resources</p>
+          <h1>인사관리</h1>
+          <p>
+            같은 조직의 구성원을 확인하고 비밀번호 재설정, 권한 변경, 계정 삭제를 바로 처리합니다.
+          </p>
+        </div>
+
+        <button type="button" class="hr-primary" @click="openCreateModal">
+          유저 생성
+        </button>
       </header>
 
-      <nav class="hr-tabs" aria-label="인사관리 메뉴">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          type="button"
-          class="hr-tab"
-          :class="{ 'is-active': activeTab === tab.id }"
-          @click="activeTab = tab.id"
-        >
-          {{ tab.label }}
-        </button>
-      </nav>
+      <article class="hr-card">
+        <div class="hr-card__header hr-list-header">
+          <div>
+            <p class="hr-eyebrow">Members</p>
+            <h2>구성원 목록</h2>
+            <span>총 {{ totalMemberCount }}명 중 {{ visibleMemberCount }}명을 표시합니다.</span>
+          </div>
 
-      <article v-if="activeTab === 'create'" class="hr-card">
-        <div class="hr-card__header">
-          <p class="hr-eyebrow">Account creation</p>
-          <h2>계정 생성</h2>
-          <span>ADMIN은 GENERAL_MANAGER/USER를, GENERAL_MANAGER는 같은 회사의 MANAGER/USER를, MANAGER는 같은 회사와 부서의 USER를 생성합니다.</span>
+          <button
+            type="button"
+            class="hr-secondary hr-compact"
+            :disabled="status.listLoading"
+            @click="fetchManageableUsers()"
+          >
+            {{ status.listLoading ? '불러오는 중' : '새로고침' }}
+          </button>
+        </div>
+
+        <p v-if="status.listError" class="hr-alert">{{ status.listError }}</p>
+        <p v-if="status.actionError" class="hr-alert">{{ status.actionError }}</p>
+
+        <div class="hr-manage-toolbar">
+          <label class="hr-field">
+            <span>구성원 검색</span>
+            <input v-model.trim="memberSearch" type="text" placeholder="이름, 아이디, 이메일, 부서, 권한 검색" />
+          </label>
+        </div>
+
+        <div v-if="status.listLoading" class="hr-empty">구성원 목록을 불러오는 중입니다.</div>
+
+        <div v-else-if="filteredManageableUsers.length" class="hr-member-list">
+          <div v-for="user in filteredManageableUsers" :key="user.id" class="hr-member-row">
+            <div class="hr-member-main">
+              <strong>{{ user.name || '-' }}</strong>
+              <span>{{ user.id }}</span>
+              <small>{{ user.email || '이메일 없음' }}</small>
+            </div>
+
+            <div class="hr-member-meta">
+              <span>{{ user.companyName || '-' }} / {{ user.department || '-' }}</span>
+              <b class="hr-role-pill">{{ getMemberRoleLabel(user.role) }}</b>
+            </div>
+
+            <div class="hr-member-actions">
+              <button
+                type="button"
+                class="hr-secondary hr-compact"
+                :disabled="memberActionId !== ''"
+                @click="handleMemberPasswordReset(user)"
+              >
+                {{ isMemberAction('reset', user) ? '재설정 중' : '비밀번호 재설정' }}
+              </button>
+
+              <button
+                v-if="canChangeMemberRole(user)"
+                type="button"
+                class="hr-primary hr-compact"
+                :disabled="memberActionId !== ''"
+                @click="handleMemberRoleChange(user)"
+              >
+                {{ isMemberAction('role', user) ? '처리 중' : getMemberActionLabel(user.role) }}
+              </button>
+
+              <button
+                type="button"
+                class="hr-danger hr-compact"
+                :disabled="memberActionId !== ''"
+                @click="handleMemberDelete(user)"
+              >
+                {{ isMemberAction('delete', user) ? '삭제 중' : '삭제' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="hr-empty">관리할 수 있는 구성원이 없습니다.</div>
+      </article>
+    </div>
+
+    <div
+      v-if="showCreateModal"
+      class="hr-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+    >
+      <div class="hr-modal hr-modal--form w-full max-w-2xl">
+        <div class="hr-modal__header hr-modal__header--split">
+          <div>
+            <p class="hr-eyebrow">Account creation</p>
+            <h3>유저 생성</h3>
+            <p>관리 범위 안에서 새 계정을 만들고 임시 비밀번호를 발급합니다.</p>
+          </div>
+
+          <button type="button" class="hr-secondary hr-compact" @click="closeCreateModal">
+            닫기
+          </button>
         </div>
 
         <p v-if="status.createError" class="hr-alert">{{ status.createError }}</p>
@@ -370,54 +604,7 @@ async function copyResult() {
             {{ status.createLoading ? '생성 중' : '계정 생성' }}
           </button>
         </form>
-      </article>
-
-      <article v-else-if="activeTab === 'delete'" class="hr-card">
-        <div class="hr-card__header">
-          <p class="hr-eyebrow">Account deletion</p>
-          <h2>계정 삭제</h2>
-          <span>삭제된 계정은 즉시 비활성화되며 더 이상 로그인할 수 없습니다.</span>
-        </div>
-
-        <p v-if="status.deleteError" class="hr-alert">{{ status.deleteError }}</p>
-
-        <form class="hr-form" @submit.prevent="handleDeleteUser">
-          <label class="hr-field">
-            <span>삭제할 아이디</span>
-            <input v-model.trim="deleteForm.id" type="text" placeholder="예: CALLOG_마케팅팀_홍길동" />
-          </label>
-
-          <label class="hr-field">
-            <span>아이디 확인</span>
-            <input v-model.trim="deleteForm.confirmId" type="text" placeholder="삭제할 아이디를 한 번 더 입력" />
-          </label>
-
-          <button type="submit" class="hr-danger" :disabled="status.deleteLoading">
-            {{ status.deleteLoading ? '삭제 중' : '계정 삭제' }}
-          </button>
-        </form>
-      </article>
-
-      <article v-else class="hr-card">
-        <div class="hr-card__header">
-          <p class="hr-eyebrow">Password reset</p>
-          <h2>비밀번호 재발급</h2>
-          <span>관리 가능한 계정에 새 임시 비밀번호를 발급합니다.</span>
-        </div>
-
-        <p v-if="status.resetError" class="hr-alert">{{ status.resetError }}</p>
-
-        <form class="hr-form" @submit.prevent="handleResetPassword">
-          <label class="hr-field">
-            <span>아이디</span>
-            <input v-model.trim="resetForm.id" type="text" placeholder="예: CALLOG_마케팅팀_홍길동" />
-          </label>
-
-          <button type="submit" class="hr-primary" :disabled="status.resetLoading">
-            {{ status.resetLoading ? '재발급 중' : '비밀번호 재발급' }}
-          </button>
-        </form>
-      </article>
+      </div>
     </div>
 
     <div
@@ -455,6 +642,10 @@ async function copyResult() {
 }
 
 .hr-header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
   margin-bottom: 24px;
 }
 
@@ -487,30 +678,6 @@ async function copyResult() {
   margin-top: 8px;
 }
 
-.hr-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.hr-tab {
-  min-height: 40px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  background: var(--surface-control);
-  color: var(--text-body);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 700;
-  padding: 0 16px;
-}
-
-.hr-tab.is-active {
-  border-color: transparent;
-  background: var(--accent-strong);
-  color: #fff;
-}
-
 .hr-card,
 .hr-modal {
   border: 1px solid var(--line-soft);
@@ -522,6 +689,14 @@ async function copyResult() {
 
 .hr-card__header {
   margin-bottom: 20px;
+}
+
+.hr-list-header,
+.hr-modal__header--split {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
 }
 
 .hr-card__header h2,
@@ -600,6 +775,82 @@ async function copyResult() {
   color: var(--text-heading);
 }
 
+.hr-manage-toolbar {
+  margin-bottom: 16px;
+}
+
+.hr-member-list {
+  display: grid;
+  gap: 10px;
+}
+
+.hr-member-row {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  align-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card-muted);
+  padding: 14px;
+}
+
+.hr-member-main,
+.hr-member-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hr-member-main strong {
+  color: var(--text-heading);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.hr-member-main span,
+.hr-member-main small,
+.hr-member-meta span {
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.hr-role-pill {
+  width: fit-content;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 28%, var(--line-soft));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 10px;
+}
+
+.hr-member-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.hr-compact {
+  min-height: 38px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.hr-empty {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card-muted);
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 700;
+  padding: 18px;
+  text-align: center;
+}
+
 .hr-alert {
   border-color: color-mix(in srgb, var(--danger-color) 30%, var(--line-soft));
   background: color-mix(in srgb, var(--danger-color) 12%, var(--surface-card));
@@ -640,7 +891,8 @@ async function copyResult() {
 }
 
 .hr-primary:disabled,
-.hr-danger:disabled {
+.hr-danger:disabled,
+.hr-secondary:disabled {
   cursor: not-allowed;
   opacity: 0.7;
 }
@@ -653,8 +905,14 @@ async function copyResult() {
   box-shadow: var(--shadow-elevated);
 }
 
+.hr-modal--form {
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
 .hr-modal__header {
   border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 18px;
   padding-bottom: 18px;
 }
 
@@ -691,14 +949,25 @@ async function copyResult() {
   margin-top: 18px;
 }
 
-@media (max-width: 720px) {
-  .hr-tabs,
-  .hr-grid {
+@media (max-width: 820px) {
+  .hr-header,
+  .hr-list-header,
+  .hr-modal__header--split,
+  .hr-grid,
+  .hr-member-row {
     grid-template-columns: 1fr;
   }
 
-  .hr-tabs {
+  .hr-header,
+  .hr-list-header,
+  .hr-modal__header--split {
     display: grid;
+  }
+
+  .hr-member-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
   }
 
   .hr-result-list div {
