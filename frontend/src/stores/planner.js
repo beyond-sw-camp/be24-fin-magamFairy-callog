@@ -48,15 +48,6 @@ function readStoredTheme() {
   )
 }
 
-function writeStoredTheme(nextTheme) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  window.localStorage.setItem(themeStorageKey, nextTheme)
-  window.localStorage.removeItem(legacyThemeStorageKey)
-}
-
 function getPreferredTheme() {
   if (typeof window === 'undefined') {
     return 'light'
@@ -167,6 +158,8 @@ function normalizeCampaignRecord(source, fallback = {}) {
     color: merged.color || fallback.color || '#8B5CF6',
     createdAt: merged.createdAt ?? fallback.createdAt,
     updatedAt: merged.updatedAt ?? fallback.updatedAt,
+    myCampaignRole: merged.myCampaignRole ?? fallback.myCampaignRole ?? null,
+    organizationIsPm: Boolean(merged.organizationIsPm ?? fallback.organizationIsPm ?? false),
   }
 }
 
@@ -180,8 +173,6 @@ export const usePlannerStore = defineStore('planner', () => {
   const campaignServerHydrated = ref(false)
   const campaignServerLoadPending = ref(false)
   const theme = ref(readStoredTheme() ?? getPreferredTheme())
-  const themeHydrated = ref(false)
-  const themeStorageListenerRegistered = ref(false)
   const activeMode = ref('personal')
   const calendarView = ref('month')
   const calendarTab = ref('calendar')
@@ -369,53 +360,21 @@ export const usePlannerStore = defineStore('planner', () => {
     document.documentElement.dataset.theme = nextTheme
   }
 
-  function syncThemeFromStorage() {
-    const storedTheme = readStoredTheme()
-    const nextTheme = storedTheme ?? theme.value ?? getPreferredTheme()
-
-    theme.value = nextTheme
-    applyTheme(nextTheme)
-
-    if (storedTheme) {
-      writeStoredTheme(nextTheme)
-    }
-
-    themeHydrated.value = true
-  }
-
-  function listenThemeStorage() {
-    if (typeof window === 'undefined' || themeStorageListenerRegistered.value) {
-      return
-    }
-
-    window.addEventListener('storage', (event) => {
-      if (event.key !== themeStorageKey && event.key !== legacyThemeStorageKey) {
-        return
-      }
-
-      const storedTheme = readStoredTheme()
-
-      if (!storedTheme || storedTheme === theme.value) {
-        return
-      }
-
-      theme.value = storedTheme
-      applyTheme(storedTheme)
-    })
-    themeStorageListenerRegistered.value = true
-  }
-
   function initialize() {
     if (typeof window === 'undefined') {
       return
     }
 
+    const storedTheme = readStoredTheme()
     const storedTasks = window.localStorage.getItem(tasksStorageKey)
     const storedCampaigns = window.localStorage.getItem(campaignsStorageKey)
     const storedActiveCampaignId = window.localStorage.getItem(activeCampaignIdStorageKey)
 
-    syncThemeFromStorage()
-    listenThemeStorage()
+    if (storedTheme) {
+      theme.value = storedTheme
+    } else {
+      theme.value = getPreferredTheme()
+    }
 
     if (storedTasks) {
       const parsedTasks = safeParseTasks(storedTasks)
@@ -440,6 +399,7 @@ export const usePlannerStore = defineStore('planner', () => {
       activeCampaignId.value = campaigns.value[0]?.id ?? null
     }
 
+    applyTheme(theme.value)
     hydrateCampaignUiState()
 
     if (!campaignServerHydrated.value && readStoredToken()) {
@@ -449,23 +409,12 @@ export const usePlannerStore = defineStore('planner', () => {
 
   watch(
     theme,
-    (nextTheme, previousTheme) => {
-      const normalizedTheme = normalizeTheme(nextTheme)
-
-      if (!normalizedTheme) {
-        return
+    (nextTheme) => {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(themeStorageKey, nextTheme)
       }
 
-      if (normalizedTheme !== nextTheme) {
-        theme.value = normalizedTheme
-        return
-      }
-
-      if (themeHydrated.value && normalizedTheme !== previousTheme) {
-        writeStoredTheme(normalizedTheme)
-      }
-
-      applyTheme(normalizedTheme)
+      applyTheme(nextTheme)
     },
     { immediate: true },
   )
@@ -665,6 +614,8 @@ export const usePlannerStore = defineStore('planner', () => {
       color: payload.color || '#8B5CF6',
       createdAt: payload.createdAt ?? new Date().toISOString(),
       updatedAt: payload.updatedAt,
+      myCampaignRole: payload.myCampaignRole ?? null,
+      organizationIsPm: Boolean(payload.organizationIsPm ?? false),
     }
 
     campaigns.value.unshift(nextCampaign)
@@ -703,6 +654,10 @@ export const usePlannerStore = defineStore('planner', () => {
       color: payload.color || currentCampaign.color,
       createdAt: payload.createdAt ?? currentCampaign.createdAt,
       updatedAt: payload.updatedAt ?? new Date().toISOString(),
+      myCampaignRole: payload.myCampaignRole ?? currentCampaign.myCampaignRole ?? null,
+      organizationIsPm: Boolean(
+        payload.organizationIsPm ?? currentCampaign.organizationIsPm ?? false,
+      ),
     }
 
     campaigns.value[index] = nextCampaign
@@ -772,9 +727,6 @@ export const usePlannerStore = defineStore('planner', () => {
     }
 
     theme.value = normalizedTheme
-    themeHydrated.value = true
-    writeStoredTheme(normalizedTheme)
-    applyTheme(normalizedTheme)
   }
 
   function toggleTheme() {
