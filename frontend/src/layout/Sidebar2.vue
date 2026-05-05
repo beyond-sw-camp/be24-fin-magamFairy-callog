@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUserSettingsStore } from '@/stores/userSettings'
+import { useTeamTaskStore } from '@/stores/teamTask'
 import CampaignCreateModal from '@/components/campaign/CampaignCreateModal.vue'
 import { campaignLabels, campaignSidebarText, campaignStatusMeta } from '@/constants/campaignText'
 import { CreateCampaign, UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
@@ -13,6 +14,7 @@ const router = useRouter()
 const store = usePlannerStore()
 const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
+const teamTaskStore = useTeamTaskStore()
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'callog-sidebar2-width'
 const SIDEBAR_DEFAULT_WIDTH = 240
@@ -198,9 +200,7 @@ function getProgressPercent(campaign) {
 }
 
 function getTaskCount(campaign) {
-  const list = store.tasks
-  if (!Array.isArray(list)) return 0
-  return list.filter((task) => task?.campaignId === campaign.id).length
+  return teamTaskStore.countByCampaignId[String(campaign.id)] ?? 0
 }
 
 function clamp(value, min, max) {
@@ -494,6 +494,7 @@ onMounted(() => {
   }
   window.addEventListener('pointerdown', handleGlobalPointerDown)
   window.addEventListener('keydown', handleGlobalKeydown)
+  teamTaskStore.fetch()
 })
 
 onBeforeUnmount(() => {

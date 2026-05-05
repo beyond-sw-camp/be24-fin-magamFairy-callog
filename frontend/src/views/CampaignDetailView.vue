@@ -2,11 +2,14 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { useCampaignKpiStore } from '@/stores/campaignKpi.js'
 import { GetCampaignDetails } from '@/api/campaigns'
 import CampaignResourcesView from '@/views/CampaignResourcesView.vue'
 import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
 import CampaignMembersPanel from '@/components/campaign/CampaignMembersPanel.vue'
 import CampaignKpiTab from '@/components/campaign/kpi/CampaignKpiTab.vue'
+import CampaignExportModal from '@/components/campaign/CampaignExportModal.vue'
 import {
   ListMilestones,
   ListTaskParts,
@@ -72,6 +75,13 @@ const store = usePlannerStore()
 const activeTab = ref('캠페인 오버뷰')
 const currentBoardView = ref('part')
 const metadataEditing = ref(false)
+const exportModalOpen = ref(false)
+const authStore = useAuthStore()
+const myCampaignRole = ref(null)
+const canExport = computed(() => {
+  const isManagerLevel = authStore.isManager || authStore.isGeneralManager
+  return isManagerLevel && myCampaignRole.value === 'PM'
+})
 
 const metadataDraft = ref({
   name: '',
@@ -290,111 +300,91 @@ const references = [
   },
 ]
 
-const kpiRows = ref([
-  {
-    id: 'kpi-impression',
-    name: '메인 배너 노출',
-    category: '노출도',
-    target: 1000000,
-    actual: 1245000,
-    unit: 'Views',
-    source: '검증된 수치 직접 입력',
-    owner: '미디어 랩 B',
-    inputDate: '2024.08.31',
-    memo: '목표 대비 초과 달성',
-    nextAction: '고성과 소재 보관',
-  },
-  {
-    id: 'kpi-conversion-rate',
-    name: '랜딩페이지 전환율',
-    category: '전환',
-    target: 5,
-    actual: 4.2,
-    unit: '%',
-    source: '랜딩 로그 수동 입력',
-    owner: '글로벌 본사',
-    inputDate: '2024.08.31',
-    memo: '이탈률 개선 필요',
-    nextAction: '상단 CTA 재설계',
-  },
-  {
-    id: 'kpi-click',
-    name: 'SNS 스토리 클릭',
-    category: '참여도',
-    target: 40000,
-    actual: 40500,
-    unit: 'Clicks',
-    source: '플랫폼 리포트 입력',
-    owner: '디자인 스튜디오 A',
-    inputDate: '2024.08.31',
-    memo: '목표 달성',
-    nextAction: '유사 소재 확장',
-  },
-  {
-    id: 'kpi-roas',
-    name: '리타겟팅 광고 ROAS',
-    category: '전환',
-    target: 350,
-    actual: 0,
-    unit: '%',
-    source: '측정 대기',
-    owner: '미디어 랩 B',
-    inputDate: '-',
-    memo: '측정 전',
-    nextAction: '종료 후 수치 입력',
-  },
-])
+const kpiStore = useCampaignKpiStore()
 
-const activityItems = [
-  {
-    id: 'act-feedback',
-    tone: 'primary',
-    icon: '말',
-    actor: '본사 김매니저',
-    text: 'SNS 배너 시안 1차에 피드백을 남겼습니다.',
-    quote: '폰트 크기를 조금 더 키우고, 버튼 색상을 브랜드 컬러로 변경 요청드립니다.',
-    time: '10분 전',
-  },
-  {
-    id: 'act-status',
-    tone: 'success',
-    icon: '완',
-    actor: '디자인 스튜디오 A',
-    text: '업무 상태를 승인완료로 변경했습니다.',
-    time: '2시간 전',
-  },
-  {
-    id: 'act-upload',
-    tone: 'info',
-    icon: '업',
-    actor: '미디어 랩 B',
-    text: '새로운 레퍼런스 타사 여름 프로모션 분석.pdf를 업로드했습니다.',
-    time: '어제 오후 3:45',
-  },
-]
+const overviewStats = computed(() => {
+  const tasks = teamTasks.value
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return [
+    { label: '전체 업무', value: tasks.length, unit: '건', tone: 'info' },
+    { label: '완료', value: tasks.filter((t) => t.status === 'done').length, unit: '건', tone: 'success' },
+    {
+      label: '검수 대기',
+      value: tasks.filter((t) => t.status === 'review').length,
+      unit: '건',
+      tone: 'primary',
+      badge: '검수요청',
+    },
+    {
+      label: '지연 업무',
+      value: tasks.filter(
+        (t) => t.status !== 'done' && t.dueDateRaw && new Date(t.dueDateRaw) < today,
+      ).length,
+      unit: '건',
+      tone: 'warning',
+      badge: '주의',
+    },
+  ]
+})
 
-const overviewStats = computed(() => [
-  { label: '전체 에셋', value: 124, unit: '건', tone: 'info' },
-  { label: '승인 완료', value: 82, unit: '건', tone: 'success' },
-  { label: '검수 대기', value: 15, unit: '건', tone: 'primary', badge: '검수요청' },
-  { label: '지연 업무', value: 3, unit: '건', tone: 'warning', badge: '주의' },
-])
-
-const avgProgress = computed(() =>
-  teams.length ? Math.round(teams.reduce((sum, team) => sum + team.progress, 0) / teams.length) : 0,
+const topKpiItems = computed(() =>
+  kpiStore.items
+    .filter((k) => k.actualValue != null)
+    .sort((a, b) => (b.achievementPercent ?? 0) - (a.achievementPercent ?? 0))
+    .slice(0, 3),
 )
 
-const circumference = 251.2
-const progressOffset = computed(() => circumference - (circumference * avgProgress.value) / 100)
+const esgItems = computed(() => kpiStore.items.filter((k) => k.category === 'ESG'))
 
-const esgScore = computed(() => 94)
+const esgScore = computed(() => {
+  const measured = esgItems.value.filter((k) => k.achievementPercent != null)
+  if (measured.length === 0) return null
+  const avg = measured.reduce((s, k) => s + k.achievementPercent, 0) / measured.length
+  return Math.min(Math.round(avg), 100)
+})
 
-const kpiSummary = computed(() => [
-  { label: '목표 달성률', value: '105%', sub: '초과 달성 중', tone: 'success' },
-  { label: '총 노출 수 (Views)', value: '1.2M', sub: '목표: 1M', tone: 'info' },
-  { label: '총 클릭 수 (Clicks)', value: '45.2K', sub: '목표: 40K', tone: 'primary' },
-  { label: '적시성 준수율 (협력사)', value: '92%', sub: '일부 지연 발생', tone: 'warning' },
-])
+const esgAchievedCount = computed(() =>
+  esgItems.value.filter((k) => k.status === 'ACHIEVED' || k.status === 'OVER').length,
+)
+
+const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 50
+
+const kpiGaugeStyle = computed(() => {
+  const pct = Math.min(kpiStore.summary?.overallAchievementPercent ?? 0, 100)
+  return {
+    strokeDasharray: GAUGE_CIRCUMFERENCE,
+    strokeDashoffset: GAUGE_CIRCUMFERENCE * (1 - pct / 100),
+    transition: 'stroke-dashoffset 0.8s ease',
+  }
+})
+
+const esgGaugeStyle = computed(() => {
+  const pct = esgScore.value ?? 0
+  return {
+    strokeDasharray: GAUGE_CIRCUMFERENCE,
+    strokeDashoffset: GAUGE_CIRCUMFERENCE * (1 - pct / 100),
+    transition: 'stroke-dashoffset 0.8s ease',
+  }
+})
+
+const esgRating = computed(() => {
+  const s = esgScore.value
+  if (s == null) return ''
+  if (s >= 90) return 'AAA'
+  if (s >= 80) return 'AA'
+  if (s >= 70) return 'A'
+  if (s >= 60) return 'BBB'
+  if (s >= 50) return 'BB'
+  if (s >= 40) return 'B'
+  return 'CCC'
+})
+
+function statBarWidth(stat) {
+  const total = overviewStats.value[0]?.value || 1
+  if (stat.label === '전체 업무') return '100%'
+  return total > 0 ? `${Math.min(Math.round((stat.value / total) * 100), 100)}%` : '0%'
+}
 
 function getTasksByPart(partId) {
   return teamTasks.value.filter((task) => (task.part ?? '기타') === partId)
@@ -712,39 +702,6 @@ async function addTeamTask() {
   }
 }
 
-function getAchievement(row) {
-  if (!row.target) {
-    return 0
-  }
-
-  return Math.round((Number(row.actual) / Number(row.target)) * 100)
-}
-
-function getKpiStatus(row) {
-  if (!row.actual) {
-    return '측정 전'
-  }
-
-  if (getAchievement(row) > 100) {
-    return '초과달성'
-  }
-
-  if (getAchievement(row) >= 100) {
-    return '달성'
-  }
-
-  return '미달성'
-}
-
-function getKpiTone(row) {
-  const achievement = getAchievement(row)
-
-  if (!row.actual) return 'muted'
-  if (achievement > 100) return 'success'
-  if (achievement >= 100) return 'info'
-  return 'warning'
-}
-
 function syncMetadataDraft() {
   metadataDraft.value = {
     name: activeCampaign.value?.name ?? '2024 글로벌 썸머 프로모션 캠페인',
@@ -814,13 +771,16 @@ async function loadCampaignTeamboard(campaignId) {
       ListMilestones(campaignId),
       ListTaskParts(campaignId),
       ListTasksByCampaign(campaignId),
-      getCampaignMembers(campaignId).then((r) => r.data?.data?.members ?? []).catch(() => []),
+      getCampaignMembers(campaignId).then((r) => r.data?.data ?? null).catch(() => null),
       listCampaignParticipants(campaignId).then((r) => r.data?.data ?? []).catch(() => []),
     ])
 
-    campaignMemberOptions.value = Array.isArray(membersRes)
-      ? membersRes.map((m) => ({ userIdx: m.userIdx, name: m.name, companyName: m.companyName }))
-      : []
+    const memberPayload = membersRes ?? {}
+    const memberList = Array.isArray(memberPayload.members) ? memberPayload.members : []
+    myCampaignRole.value = memberPayload.me?.campaignRole ?? null
+    campaignMemberOptions.value = memberList.map((m) => ({
+      userIdx: m.userIdx, name: m.name, companyName: m.companyName,
+    }))
     campaignParticipantOptions.value = Array.isArray(participantsRes)
       ? participantsRes.map((p) => ({ idx: p.idx, organizationName: p.organizationName }))
       : []
@@ -871,6 +831,7 @@ onMounted(() => {
   const initialCampaignId = route.params.campaignId
   if (initialCampaignId) {
     loadCampaignTeamboard(String(initialCampaignId))
+    kpiStore.fetch(String(initialCampaignId))
   }
 })
 
@@ -879,6 +840,7 @@ watch(
   (campaignId) => {
     if (campaignId) {
       loadCampaignTeamboard(String(campaignId))
+      kpiStore.fetch(String(campaignId))
     }
   },
 )
@@ -902,12 +864,27 @@ watch(
       </div>
 
       <div class="campaign-hero__actions">
-        <button type="button" class="btn btn--secondary">내보내기</button>
+        <button
+          v-if="canExport"
+          type="button"
+          class="btn btn--secondary"
+          :disabled="!campaignId"
+          @click="exportModalOpen = true"
+        >
+          내보내기
+        </button>
         <button type="button" class="btn btn--primary" @click="activeTab = 'metadata'; metadataEditing = true">
           캠페인 편집
         </button>
       </div>
     </header>
+
+    <CampaignExportModal
+      v-if="exportModalOpen && campaignId && canExport"
+      :campaign-id="campaignId"
+      :campaign-name="activeCampaign?.name ?? ''"
+      @close="exportModalOpen = false"
+    />
 
     <nav class="campaign-tabs" aria-label="캠페인 상세 탭">
       <button
@@ -1047,104 +1024,150 @@ watch(
     </section>
 
     <section v-else-if="activeTab === '캠페인 오버뷰'" class="tab-surface">
-      <div class="metric-grid">
-        <article v-for="stat in overviewStats" :key="stat.label" class="metric-card" :class="`tone-${stat.tone}`">
-          <span class="metric-card__icon">{{ stat.label.slice(0, 1) }}</span>
-          <div>
-            <p>{{ stat.label }}</p>
-            <strong>{{ stat.value }}<small>{{ stat.unit }}</small></strong>
-            <em v-if="stat.badge">{{ stat.badge }}</em>
+
+      <!-- ── 업무 현황 4-card row ───────────────────────── -->
+      <div class="ov-stats">
+        <article
+          v-for="stat in overviewStats"
+          :key="stat.label"
+          class="ov-stat"
+          :class="`ov-stat--${stat.tone}`"
+        >
+          <div class="ov-stat__top">
+            <span class="ov-stat__label">{{ stat.label }}</span>
+            <em v-if="stat.badge" class="ov-stat__badge">{{ stat.badge }}</em>
+          </div>
+          <strong class="ov-stat__value">{{ stat.value }}<small>{{ stat.unit }}</small></strong>
+          <div class="ov-stat__bar-track">
+            <div class="ov-stat__bar-fill" :style="{ width: statBarWidth(stat) }"></div>
           </div>
         </article>
       </div>
 
-      <div class="overview-layout">
-        <div class="stack">
-          <article class="panel progress-panel">
-            <div class="progress-ring">
-              <svg viewBox="0 0 100 100" aria-hidden="true">
-                <circle cx="50" cy="50" r="40" class="progress-ring__track" />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="40"
-                  class="progress-ring__fill"
-                  :stroke-dasharray="circumference"
-                  :stroke-dashoffset="progressOffset"
-                />
+      <!-- ── Bento 2-col: KPI + ESG ───────────────────── -->
+      <div class="ov-bento">
+
+        <!-- KPI 성과 패널 -->
+        <article class="panel ov-panel">
+          <div class="panel__header">
+            <h2 class="ov-panel__title">KPI 성과 요약</h2>
+            <button type="button" class="link-button" @click="handleTabClick('캠페인 성과/KPI')">상세보기</button>
+          </div>
+
+          <div class="ov-kpi-hero">
+            <div class="ov-gauge">
+              <svg class="ov-gauge__svg" viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="ov-gauge__track" cx="60" cy="60" r="50"/>
+                <circle class="ov-gauge__fill ov-gauge__fill--kpi" cx="60" cy="60" r="50" :style="kpiGaugeStyle"/>
               </svg>
-              <div>
-                <strong>{{ avgProgress }}%</strong>
-                <span>전체 진척도</span>
+              <div class="ov-gauge__center">
+                <strong class="ov-gauge__num">{{ kpiStore.summary?.overallAchievementPercent ?? '-' }}</strong>
+                <span v-if="kpiStore.summary?.overallAchievementPercent != null" class="ov-gauge__unit">%</span>
+                <span class="ov-gauge__sub">전체 달성률</span>
               </div>
             </div>
 
-            <div class="progress-panel__list">
-              <h2>협력사별 진행 상황</h2>
-              <div v-for="team in teams.slice(1)" :key="team.id" class="progress-row">
-                <div>
-                  <span :class="`dot dot--${team.color}`"></span>
-                  <strong>{{ team.name }}</strong>
-                  <em>{{ team.progress }}%</em>
+            <div class="ov-kpi-stats">
+              <div class="ov-kpi-stat">
+                <span class="ov-kpi-stat__label">달성 지표</span>
+                <strong class="ov-kpi-stat__val">
+                  {{ kpiStore.summary?.achievedCount ?? 0 }}<small> / {{ kpiStore.summary?.totalKpiCount ?? 0 }}건</small>
+                </strong>
+              </div>
+              <div class="ov-kpi-stat">
+                <span class="ov-kpi-stat__label">측정 대기</span>
+                <strong class="ov-kpi-stat__val">{{ kpiStore.summary?.pendingCount ?? 0 }}<small>건</small></strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="ov-kpi-list">
+            <p v-if="kpiStore.loading" class="ov-empty">불러오는 중…</p>
+            <p v-else-if="topKpiItems.length === 0" class="ov-empty">
+              {{ kpiStore.items.length === 0 ? '등록된 KPI가 없습니다.' : '아직 측정된 KPI가 없습니다.' }}
+            </p>
+            <div v-else v-for="kpi in topKpiItems" :key="kpi.idx" class="ov-kpi-row">
+              <div class="ov-kpi-row__info">
+                <span class="ov-kpi-row__name">{{ kpi.name }}</span>
+                <span class="ov-kpi-row__actual">
+                  {{ kpi.actualValue != null ? Number(kpi.actualValue).toLocaleString() : '-' }}{{ kpi.unit }} / 목표 {{ kpi.targetValue != null ? Number(kpi.targetValue).toLocaleString() : '-' }}{{ kpi.unit }}
+                </span>
+              </div>
+              <div class="ov-kpi-row__bar-wrap">
+                <div class="ov-kpi-row__bar">
+                  <div
+                    class="ov-kpi-row__fill"
+                    :class="(kpi.achievementPercent ?? 0) >= 100 ? 'ov-fill--success' : 'ov-fill--warn'"
+                    :style="{ width: Math.min(kpi.achievementPercent ?? 0, 100) + '%' }"
+                  ></div>
                 </div>
-                <div class="progress-track"><i :class="`fill-${team.color}`" :style="{ width: `${team.progress}%` }"></i></div>
+                <span
+                  class="ov-kpi-row__pct"
+                  :class="(kpi.achievementPercent ?? 0) >= 100 ? 'ov-pct--success' : 'ov-pct--warn'"
+                >{{ kpi.achievementPercent != null ? kpi.achievementPercent + '%' : '-' }}</span>
               </div>
             </div>
-          </article>
+          </div>
+        </article>
 
-          <article class="panel performance-panel">
-            <div class="panel__header">
-              <h2>최근 성과 요약</h2>
-              <button type="button" class="link-button" @click="handleTabClick('캠페인 성과/KPI')">상세보기</button>
-            </div>
-            <div class="performance-grid">
-              <div>
-                <span>누적 노출 수</span>
-                <strong>1,245,000</strong>
-                <small>목표대비 112%</small>
-              </div>
-              <div>
-                <span>평균 클릭률(CTR)</span>
-                <strong>3.24%</strong>
-                <small>목표대비 105%</small>
-              </div>
-              <div>
-                <span>전환 건수</span>
-                <strong>8,420</strong>
-                <small class="warning">목표대비 94%</small>
-              </div>
-            </div>
-          </article>
-        </div>
+        <!-- ESG 점수 패널 -->
+        <article class="panel ov-panel ov-panel--esg">
+          <div class="panel__header">
+            <h2 class="ov-panel__title">ESG 점수</h2>
+            <button type="button" class="link-button" @click="handleTabClick('캠페인 성과/KPI')">상세보기</button>
+          </div>
 
-        <aside class="stack">
-          <article class="panel esg-panel">
-            <h2>ESG 컴플라이언스 점수</h2>
-            <div class="esg-score">
-              <strong>{{ esgScore }}</strong>
-              <span>/ 100</span>
+          <div class="ov-esg-hero">
+            <div class="ov-gauge ov-gauge--esg">
+              <svg class="ov-gauge__svg" viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="ov-gauge__track" cx="60" cy="60" r="50"/>
+                <circle class="ov-gauge__fill ov-gauge__fill--esg" cx="60" cy="60" r="50" :style="esgGaugeStyle"/>
+              </svg>
+              <div class="ov-gauge__center">
+                <strong class="ov-gauge__num ov-gauge__num--esg">{{ esgScore ?? '-' }}</strong>
+                <span v-if="esgScore != null" class="ov-gauge__unit">점</span>
+                <span class="ov-esg-rating-badge" v-if="esgRating">{{ esgRating }}</span>
+              </div>
             </div>
-            <p>우수 등급 유지중 (전월 대비 +2)</p>
-            <div class="progress-track"><i class="fill-green" style="width: 88%"></i></div>
-            <small>친환경 에셋 비율 88%</small>
-          </article>
+          </div>
 
-          <article class="panel activity-panel">
-            <div class="panel__header">
-              <h2>최근 활동</h2>
-            </div>
-            <div class="activity-list">
-              <article v-for="activity in activityItems" :key="activity.id" class="activity-item">
-                <span class="activity-item__icon" :class="`tone-${activity.tone}`">{{ activity.icon }}</span>
-                <div>
-                  <p><strong>{{ activity.actor }}</strong>님이 {{ activity.text }}</p>
-                  <blockquote v-if="activity.quote">{{ activity.quote }}</blockquote>
-                  <time>{{ activity.time }}</time>
+          <div class="ov-esg-list">
+            <p v-if="esgItems.length === 0" class="ov-empty">등록된 ESG KPI가 없습니다.</p>
+            <template v-else>
+              <div v-for="kpi in esgItems.slice(0, 3)" :key="kpi.idx" class="ov-kpi-row">
+                <div class="ov-kpi-row__info">
+                  <span class="ov-kpi-row__name">{{ kpi.name }}</span>
+                  <span class="ov-kpi-row__actual">
+                    {{ kpi.actualValue != null ? Number(kpi.actualValue).toLocaleString() + kpi.unit : '미측정' }}
+                  </span>
                 </div>
-              </article>
+                <div class="ov-kpi-row__bar-wrap">
+                  <div class="ov-kpi-row__bar">
+                    <div
+                      class="ov-kpi-row__fill ov-fill--esg"
+                      :style="{ width: Math.min(kpi.achievementPercent ?? 0, 100) + '%' }"
+                    ></div>
+                  </div>
+                  <span class="ov-kpi-row__pct ov-pct--esg">
+                    {{ kpi.achievementPercent != null ? kpi.achievementPercent + '%' : '-' }}
+                  </span>
+                </div>
+              </div>
+              <p v-if="esgItems.length > 3" class="ov-esg-more">외 {{ esgItems.length - 3 }}건 더 있음</p>
+            </template>
+          </div>
+
+          <div v-if="esgItems.length > 0" class="ov-esg-footer">
+            <span class="ov-esg-footer__text">달성 {{ esgAchievedCount }}건 / 전체 {{ esgItems.length }}건</span>
+            <div class="ov-esg-footer__bar">
+              <div
+                class="ov-esg-footer__fill"
+                :style="{ width: (esgItems.length > 0 ? Math.round(esgAchievedCount / esgItems.length * 100) : 0) + '%' }"
+              ></div>
             </div>
-          </article>
-        </aside>
+          </div>
+        </article>
+
       </div>
     </section>
 
@@ -2127,154 +2150,6 @@ textarea:disabled {
   border-color: color-mix(in srgb, var(--color-warning) 28%, var(--border-color));
 }
 
-.progress-panel {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  align-items: center;
-  gap: 28px;
-}
-
-.progress-ring {
-  position: relative;
-  display: grid;
-  place-items: center;
-}
-
-.progress-ring svg {
-  width: 176px;
-  height: 176px;
-  transform: rotate(-90deg);
-}
-
-.progress-ring circle {
-  fill: none;
-  stroke-width: 12;
-}
-
-.progress-ring__track {
-  stroke: var(--campaign-primary-surface);
-}
-
-.progress-ring__fill {
-  stroke: var(--color-primary-500);
-  stroke-linecap: round;
-}
-
-.progress-ring > div {
-  position: absolute;
-  display: grid;
-  place-items: center;
-}
-
-.progress-ring strong {
-  color: var(--text-primary);
-  font-size: 34px;
-  font-weight: 850;
-}
-
-.progress-ring span {
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.progress-panel__list {
-  display: grid;
-  gap: 17px;
-}
-
-.progress-row {
-  display: grid;
-  gap: 8px;
-}
-
-.progress-row div:first-child {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) 46px;
-  align-items: center;
-  gap: 6px;
-}
-
-.progress-row em {
-  color: var(--text-primary);
-  font-style: normal;
-  font-weight: 800;
-  text-align: right;
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.dot--blue,
-.fill-blue {
-  background: var(--color-info);
-}
-
-.dot--green,
-.fill-green,
-.fill-success {
-  background: var(--color-success);
-}
-
-.dot--pink {
-  background: var(--campaign-pink);
-}
-
-.fill-pink {
-  background: var(--campaign-pink);
-}
-
-.fill-primary,
-.fill-info {
-  background: var(--color-primary-500);
-}
-
-.fill-warning {
-  background: var(--color-warning);
-}
-
-.fill-muted {
-  background: var(--campaign-muted-fill);
-}
-
-.progress-track {
-  height: 8px;
-  overflow: hidden;
-  border-radius: var(--radius-full);
-  background: var(--panel-muted);
-}
-
-.progress-track i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-}
-
-.performance-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.performance-grid div,
-.kpi-note-box {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 16px;
-}
-
-.performance-grid small {
-  display: block;
-  margin-top: 5px;
-  color: var(--campaign-success-text);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.performance-grid small.warning,
 .task-card__foot .warning {
   color: var(--campaign-warning-text);
 }
@@ -2286,63 +2161,561 @@ textarea:disabled {
   font-weight: 800;
 }
 
-.esg-panel {
-  overflow: hidden;
-  background: linear-gradient(135deg, var(--panel-color), var(--campaign-elevated-tint));
+/* 최근 성과 요약 */
+.kpi-overview-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
-.esg-score {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
+.kpi-overview-summary div {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 12px 14px;
 }
 
-.esg-score strong {
-  color: var(--text-primary);
-  font-size: 48px;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.esg-panel p {
-  color: var(--campaign-success-text);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.esg-panel small {
+.kpi-overview-summary span {
+  display: block;
   color: var(--muted-text);
   font-size: 12px;
 }
 
-.activity-item {
-  position: relative;
-}
-
-.activity-item p {
+.kpi-overview-summary strong {
+  display: block;
+  margin-top: 4px;
   color: var(--text-primary);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 20px;
+  font-weight: 850;
 }
 
-.activity-item blockquote {
-  margin-top: 8px;
+.performance-empty {
+  padding: 32px 0;
+  text-align: center;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+
+.performance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.perf-kpi-card {
+  display: grid;
+  gap: 6px;
   border: 1px solid var(--border-color);
+  border-left: 4px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--panel-muted);
-  color: var(--text-secondary);
-  font-size: 13px;
-  padding: 10px 12px;
+  padding: 14px;
 }
 
-.activity-item__icon.tone-success {
+.perf-kpi-card--success {
+  border-left-color: var(--color-success);
+}
+
+.perf-kpi-card--warning {
+  border-left-color: var(--color-warning);
+}
+
+.perf-kpi-card__name {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.perf-kpi-card__value {
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.perf-kpi-card__value small {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 3px;
+}
+
+.perf-kpi-card__badge {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+}
+
+.badge--success {
   background: var(--campaign-success-surface);
   color: var(--campaign-success-text);
 }
 
-.activity-item__icon.tone-info {
-  background: var(--campaign-info-surface);
-  color: var(--campaign-info-text);
+.badge--warning {
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  color: var(--campaign-warning-text);
+}
+
+.perf-kpi-card__target {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+/* ESG 점수 패널 */
+.esg-panel {
+  margin-top: 16px;
+}
+
+.esg-score-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.esg-score-display {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.esg-score-value {
+  font-size: 40px;
+  font-weight: 850;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.esg-score-unit {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.esg-progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+
+.esg-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-success);
+  transition: width 0.4s ease;
+}
+
+.esg-score-meta {
+  font-size: 13px;
+  color: var(--muted-text);
+  margin: 0;
+}
+
+.esg-score-empty {
+  font-size: 13px;
+  color: var(--muted-text);
+  margin: 0;
+  padding: 8px 0;
+}
+
+/* ── Campaign Overview (ov-*) ─────────────────────────── */
+
+.ov-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ov-stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--panel-color);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 22px 18px;
+  overflow: hidden;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.ov-stat:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.ov-stat::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+}
+
+.ov-stat--info::before    { background: var(--color-info); }
+.ov-stat--success::before { background: var(--color-success); }
+.ov-stat--primary::before { background: var(--color-primary-500); }
+.ov-stat--warning::before { background: var(--color-warning); }
+
+.ov-stat__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ov-stat__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted-text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ov-stat__badge {
+  display: inline-flex;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  padding: 2px 7px;
+}
+
+.ov-stat--primary .ov-stat__badge {
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+
+.ov-stat--warning .ov-stat__badge {
+  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+  color: var(--color-warning-dark);
+}
+
+.ov-stat__value {
+  font-size: 38px;
+  font-weight: 850;
+  line-height: 1;
+  color: var(--text-primary);
+  letter-spacing: -1px;
+}
+
+.ov-stat__value small {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted-text);
+  margin-left: 3px;
+  letter-spacing: 0;
+}
+
+.ov-stat__bar-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+
+.ov-stat__bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+.ov-stat--info .ov-stat__bar-fill    { background: var(--color-info); }
+.ov-stat--success .ov-stat__bar-fill { background: var(--color-success); }
+.ov-stat--primary .ov-stat__bar-fill { background: var(--color-primary-500); }
+.ov-stat--warning .ov-stat__bar-fill { background: var(--color-warning); }
+
+/* Bento 2-col */
+.ov-bento {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* Panel shared */
+.ov-panel {
+  gap: 20px;
+}
+
+.ov-panel__title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+}
+
+/* KPI hero row */
+.ov-kpi-hero {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+/* Gauge */
+.ov-gauge {
+  position: relative;
+  width: 114px;
+  height: 114px;
+  flex-shrink: 0;
+}
+
+.ov-gauge--esg {
+  width: 136px;
+  height: 136px;
+  margin: 0 auto;
+}
+
+.ov-gauge__svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ov-gauge__track {
+  fill: none;
+  stroke: var(--border-color);
+  stroke-width: 9;
+}
+
+.ov-gauge__fill {
+  fill: none;
+  stroke-width: 9;
+  stroke-linecap: round;
+}
+
+.ov-gauge__fill--kpi { stroke: var(--color-primary-500); }
+.ov-gauge__fill--esg { stroke: var(--color-success); }
+
+.ov-gauge__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+
+.ov-gauge__num {
+  font-size: 26px;
+  font-weight: 850;
+  line-height: 1;
+  color: var(--text-primary);
+  letter-spacing: -1px;
+}
+
+.ov-gauge__num--esg {
+  font-size: 30px;
+}
+
+.ov-gauge__unit {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted-text);
+}
+
+.ov-gauge__sub {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted-text);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-top: 2px;
+}
+
+/* KPI stats */
+.ov-kpi-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+}
+
+.ov-kpi-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ov-kpi-stat:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.ov-kpi-stat:first-child {
+  padding-top: 0;
+}
+
+.ov-kpi-stat__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted-text);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.ov-kpi-stat__val {
+  font-size: 26px;
+  font-weight: 850;
+  color: var(--text-primary);
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.ov-kpi-stat__val small {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted-text);
+  margin-left: 2px;
+  letter-spacing: 0;
+}
+
+/* KPI / ESG row list */
+.ov-kpi-list,
+.ov-esg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 18px;
+}
+
+.ov-kpi-row {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ov-kpi-row__info {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ov-kpi-row__name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.ov-kpi-row__actual {
+  font-size: 11px;
+  color: var(--muted-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ov-kpi-row__bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ov-kpi-row__bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+
+.ov-kpi-row__fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.ov-fill--success { background: var(--color-success); }
+.ov-fill--warn    { background: var(--color-warning); }
+.ov-fill--esg     { background: var(--color-success); }
+
+.ov-kpi-row__pct {
+  min-width: 40px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.ov-pct--success { color: var(--color-success-dark); }
+.ov-pct--warn    { color: var(--color-warning-dark); }
+.ov-pct--esg     { color: var(--color-success-dark); }
+
+.ov-empty {
+  padding: 16px 0 4px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted-text);
+  margin: 0;
+}
+
+/* ESG hero */
+.ov-esg-hero {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.ov-esg-rating-badge {
+  display: inline-flex;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: var(--color-success-dark);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  margin-top: 5px;
+  letter-spacing: 1.5px;
+}
+
+.ov-esg-more {
+  font-size: 12px;
+  color: var(--muted-text);
+  text-align: center;
+  margin: 0;
+  padding-top: 4px;
+}
+
+/* ESG footer */
+.ov-esg-footer {
+  border-top: 1px solid var(--border-color);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ov-esg-footer__text {
+  font-size: 12px;
+  color: var(--muted-text);
+  font-weight: 600;
+}
+
+.ov-esg-footer__bar {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+
+.ov-esg-footer__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-success);
+  transition: width 0.5s ease;
 }
 
 .board-toolbar,
@@ -2884,9 +3257,7 @@ textarea:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .metadata-layout,
-  .overview-layout,
-  .progress-panel {
+  .metadata-layout {
     grid-template-columns: 1fr;
   }
 }
