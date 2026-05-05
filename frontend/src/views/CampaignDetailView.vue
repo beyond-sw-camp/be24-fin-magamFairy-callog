@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
-import { GetCampaignDetails } from '@/api/campaigns'
+import { GetCampaignDetails, UpdateCampaign } from '@/api/campaigns'
 import CampaignResourcesView from '@/views/CampaignResourcesView.vue'
 import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
 import CampaignMembersPanel from '@/components/campaign/CampaignMembersPanel.vue'
@@ -73,13 +73,31 @@ const activeTab = ref('캠페인 오버뷰')
 const currentBoardView = ref('part')
 const metadataEditing = ref(false)
 
+// 캠페인 편집 권한 — `GET /campaigns/{id}/members` 응답에서 채움
+// 두 조건을 모두 만족해야 편집 가능: (1) 내 조직이 PM, (2) 내 캠페인 역할이 MANAGER 또는 GENERAL_MANAGER
+const myCampaignRole = ref(null)
+const organizationIsPm = ref(false)
+const canEditMetadata = computed(() =>
+  organizationIsPm.value
+  && (myCampaignRole.value === 'MANAGER' || myCampaignRole.value === 'GENERAL_MANAGER'),
+)
+
 const metadataDraft = ref({
   name: '',
   startDate: '',
   endDate: '',
   summary: '',
   partnersText: '',
+  color: '',
 })
+
+// 백엔드 CampaignService.CAMPAIGN_PALETTE와 동일한 20색
+const CAMPAIGN_PALETTE = [
+  '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6',
+  '#EF4444', '#06B6D4', '#84CC16', '#F97316', '#14B8A6',
+  '#6366F1', '#A855F7', '#D946EF', '#F43F5E', '#EAB308',
+  '#22C55E', '#0EA5E9', '#FB7185', '#4F46E5', '#059669',
+]
 
 const tabs = ["캠페인 오버뷰", "팀 보드 보기", "레퍼런스 탭", "자료실", "검수/승인", "참여자 설정", "캠페인 성과/KPI"];
 
@@ -754,27 +772,66 @@ function syncMetadataDraft() {
       activeCampaign.value?.purpose ??
       '여름 시즌을 맞이하여 북미 및 아시아 시장을 타겟으로 한 대규모 할인 프로모션 및 신제품 런칭 캠페인.',
     partnersText: partnerNames.value.join(', '),
+    color: activeCampaign.value?.color ?? '',
   }
 }
 
-function saveMetadata() {
-  if (!activeCampaign.value?.id) {
+async function saveMetadata() {
+  const campaignId = activeCampaign.value?.id
+  if (!campaignId) {
     return
   }
 
-  store.updateCampaign(activeCampaign.value.id, {
-    ...activeCampaign.value,
-    name: metadataDraft.value.name,
-    startDate: metadataDraft.value.startDate,
-    endDate: metadataDraft.value.endDate,
-    purpose: metadataDraft.value.summary,
-    partners: metadataDraft.value.partnersText
-      .split(',')
-      .map((partner) => partner.trim())
-      .filter(Boolean),
-  })
+  if (!canEditMetadata.value) {
+    console.warn('캠페인 편집 권한 없음', {
+      organizationIsPm: organizationIsPm.value,
+      myCampaignRole: myCampaignRole.value,
+    })
+    alert('캠페인을 편집할 권한이 없습니다. (PM사 매니저/총괄 매니저만 가능)')
+    metadataEditing.value = false
+    return
+  }
 
-  metadataEditing.value = false
+  const partners = metadataDraft.value.partnersText
+    .split(',')
+    .map((partner) => partner.trim())
+    .filter(Boolean)
+
+  // 백엔드 UpsertReq 형식. 폼에서 안 건드는 필드는 기존 값 유지.
+  const payload = {
+    name: metadataDraft.value.name,
+    purpose: metadataDraft.value.summary,
+    tags: Array.isArray(activeCampaign.value.tags) ? activeCampaign.value.tags : [],
+    startDate: metadataDraft.value.startDate || null,
+    endDate: metadataDraft.value.endDate || null,
+    partners,
+    goals: activeCampaign.value.goals ?? null,
+    mainMessage: activeCampaign.value.mainMessage ?? null,
+    color: metadataDraft.value.color || activeCampaign.value.color || null,
+  }
+
+  try {
+    const updated = await UpdateCampaign(campaignId, payload)
+
+    // 서버 응답을 단일 진실 원천으로 store 갱신
+    store.updateCampaign(campaignId, {
+      ...activeCampaign.value,
+      ...updated,
+      id: String(updated.idx ?? updated.id ?? campaignId),
+    })
+
+    metadataEditing.value = false
+  } catch (error) {
+    console.error('캠페인 메타데이터 저장 실패', error)
+    const status = error?.response?.status
+    if (status === 403) {
+      alert('캠페인을 편집할 권한이 없습니다.')
+    } else if (status === 400) {
+      alert('입력값을 확인해 주세요. (이름은 필수, 날짜 형식 YYYY-MM-DD)')
+    } else {
+      alert('캠페인 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    }
+  }
 }
 
 function addScheduleItem() {
@@ -814,13 +871,19 @@ async function loadCampaignTeamboard(campaignId) {
       ListMilestones(campaignId),
       ListTaskParts(campaignId),
       ListTasksByCampaign(campaignId),
-      getCampaignMembers(campaignId).then((r) => r.data?.data?.members ?? []).catch(() => []),
+      getCampaignMembers(campaignId).then((r) => r.data?.data ?? null).catch(() => null),
       listCampaignParticipants(campaignId).then((r) => r.data?.data ?? []).catch(() => []),
     ])
 
-    campaignMemberOptions.value = Array.isArray(membersRes)
-      ? membersRes.map((m) => ({ userIdx: m.userIdx, name: m.name, companyName: m.companyName }))
-      : []
+    const membersList = Array.isArray(membersRes?.members) ? membersRes.members : []
+    myCampaignRole.value = membersRes?.me?.campaignRole ?? null
+    organizationIsPm.value = Boolean(membersRes?.organizationIsPm)
+
+    campaignMemberOptions.value = membersList.map((m) => ({
+      userIdx: m.userIdx,
+      name: m.name,
+      companyName: m.companyName,
+    }))
     campaignParticipantOptions.value = Array.isArray(participantsRes)
       ? participantsRes.map((p) => ({ idx: p.idx, organizationName: p.organizationName }))
       : []
@@ -903,7 +966,12 @@ watch(
 
       <div class="campaign-hero__actions">
         <button type="button" class="btn btn--secondary">내보내기</button>
-        <button type="button" class="btn btn--primary" @click="activeTab = 'metadata'; metadataEditing = true">
+        <button
+          v-if="canEditMetadata"
+          type="button"
+          class="btn btn--primary"
+          @click="activeTab = 'metadata'; metadataEditing = true"
+        >
           캠페인 편집
         </button>
       </div>
@@ -955,6 +1023,25 @@ watch(
                 <span>캠페인 개요</span>
                 <textarea v-model="metadataDraft.summary" :disabled="!metadataEditing" rows="4" />
               </label>
+
+              <div class="color-picker">
+                <span class="color-picker__label">캠페인 색상</span>
+                <div class="color-picker__swatches" role="radiogroup" aria-label="캠페인 색상 선택">
+                  <button
+                    v-for="color in CAMPAIGN_PALETTE"
+                    :key="color"
+                    type="button"
+                    class="color-swatch"
+                    :class="{ 'color-swatch--active': metadataDraft.color === color }"
+                    :style="{ background: color }"
+                    :disabled="!metadataEditing"
+                    :aria-label="`색상 ${color}`"
+                    :aria-checked="metadataDraft.color === color"
+                    role="radio"
+                    @click="metadataDraft.color = color"
+                  />
+                </div>
+              </div>
             </div>
           </article>
 
@@ -1036,7 +1123,7 @@ watch(
             </dl>
           </article>
 
-          <div class="metadata-actions">
+          <div v-if="canEditMetadata" class="metadata-actions">
             <button type="button" class="btn btn--secondary" @click="metadataEditing = !metadataEditing">
               {{ metadataEditing ? '수정 취소' : '메타데이터 수정' }}
             </button>
@@ -1923,6 +2010,61 @@ watch(
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.color-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.color-picker__label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.color-picker__swatches {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.color-swatch {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.color-swatch:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+}
+
+.color-swatch:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.color-swatch--active {
+  border-color: var(--text-primary, #111);
+  box-shadow: 0 0 0 2px var(--panel-bg, #fff), 0 0 0 4px var(--text-primary, #111);
+}
+
+.color-swatch--active::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 label {
