@@ -1,4 +1,4 @@
-package org.example.backend.matching.model;
+package org.example.backend.matching.model.evaluation;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.backend.campaign.model.Campaign;
+import org.example.backend.matching.model.PartnerBenefits;
 import org.example.backend.organization.model.Organization;
 import org.hibernate.annotations.CreationTimestamp;
 

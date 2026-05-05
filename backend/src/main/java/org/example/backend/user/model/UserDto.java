@@ -65,7 +65,7 @@ public class UserDto {
     public record ResetPasswordRes(String id, String password) {
     }
 
-    public record ManageRoleReq(String id, String role) {
+    public record ManageRoleReq(String id, String role) {}
     public record PromoteToManagerReq(String id) {
     }
 

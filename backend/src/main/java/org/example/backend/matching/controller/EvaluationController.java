@@ -4,8 +4,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.common.model.BaseResponse;
 import org.example.backend.common.model.BaseResponseStatus;
-import org.example.backend.matching.model.EvaluationDto;
-import org.example.backend.matching.model.MatchingDto;
+import org.example.backend.matching.model.evaluation.EvaluationDto;
 import org.example.backend.matching.service.EvaluationService;
 import org.example.backend.user.model.AuthUserDetails;
 import org.springframework.http.HttpStatus;
@@ -14,8 +13,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.rmi.RemoteException;
-
 @RestController
 @RequestMapping("/matching")
 @RequiredArgsConstructor
@@ -23,11 +20,11 @@ public class EvaluationController {
     private final EvaluationService evaluationService;
 
     @PostMapping("/evaluation/collect")
-    public ResponseEntity collect(@RequestBody EvaluationDto.Collect dto,
-                                        @AuthenticationPrincipal AuthUserDetails user){
+    public ResponseEntity collect(@RequestBody EvaluationDto.CollectDto dto,
+                                        @RequestParam String category){
         try {
-            evaluationService.collect(dto, user);
-            return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESSFULY_EVALUATED, "바보"));
+            evaluationService.collect(dto, category);
+            return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESSFULY_EVALUATED, dto));
         }
         catch (Exception e){
             return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
