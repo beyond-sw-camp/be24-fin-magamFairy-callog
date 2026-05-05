@@ -79,7 +79,7 @@ const exportModalOpen = ref(false)
 const authStore = useAuthStore()
 const canExport = computed(() => {
   const isManagerLevel = authStore.isManager || authStore.isGeneralManager
-  return isManagerLevel && myCampaignRole.value === 'PM'
+  return isManagerLevel && organizationIsPm.value
 })
 
 // 캠페인 편집 권한 — `GET /campaigns/{id}/members` 응답에서 채움

@@ -1,13 +1,14 @@
 package org.example.backend.campaign.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.example.backend.campaign.model.CampaignMember;
 import org.example.backend.campaign.model.CampaignRole;
-import org.example.backend.campaign.repository.CampaignMemberRepository;
+import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.service.CampaignExportService;
 import org.example.backend.campaign.service.CampaignPdfReportService;
 import org.example.backend.common.security.RoleGuard;
 import org.example.backend.user.model.AuthUserDetails;
+import org.example.backend.user.model.User;
+import org.example.backend.user.repository.UserRepository;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -31,7 +32,8 @@ public class CampaignExportController {
 
     private final CampaignExportService exportService;
     private final CampaignPdfReportService pdfReportService;
-    private final CampaignMemberRepository campaignMemberRepository;
+    private final CampaignParticipantRepository campaignParticipantRepository;
+    private final UserRepository userRepository;
 
     private static final Set<String> DEFAULT_SECTIONS =
             Set.of("campaign", "members", "tasks", "kpi", "esg");
@@ -82,16 +84,22 @@ public class CampaignExportController {
         return ResponseEntity.ok().headers(headers).body(body);
     }
 
-    /** 내보내기 권한: 글로벌 ROLE_MANAGER 또는 ROLE_GENERAL_MANAGER 이면서, 해당 캠페인의 PM 인 경우만 허용. */
+    /** 내보내기 권한: 글로벌 ROLE_MANAGER/ROLE_GENERAL_MANAGER 이면서, 본인 소속 조직이 해당 캠페인의 PM 인 경우만 허용. */
     private void requireExportPermission(Long campaignId, AuthUserDetails user) {
         AuthUserDetails authenticated = RoleGuard.requireManager(user);
-        CampaignMember member = campaignMemberRepository
-                .findByCampaignIdxAndUserIdx(campaignId, authenticated.getIdx())
+        User caller = userRepository.findById(authenticated.getIdx())
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.FORBIDDEN, "캠페인 멤버가 아닙니다."));
-        if (member.getCampaignRole() != CampaignRole.PM) {
+                        HttpStatus.FORBIDDEN, "사용자 정보를 찾을 수 없습니다."));
+        if (caller.getOrganization() == null) {
             throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "해당 캠페인의 PM만 내보낼 수 있습니다.");
+                    HttpStatus.FORBIDDEN, "소속 조직 정보가 없습니다.");
+        }
+        boolean isPmOrg = campaignParticipantRepository
+                .existsByCampaignIdxAndOrganizationIdxAndCampaignRole(
+                        campaignId, caller.getOrganization().getIdx(), CampaignRole.PM);
+        if (!isPmOrg) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "캠페인의 PM 조직 소속만 내보낼 수 있습니다.");
         }
     }
 
