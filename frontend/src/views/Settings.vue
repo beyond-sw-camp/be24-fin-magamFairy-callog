@@ -181,6 +181,10 @@ function resolveProfileImageGenerationError(error) {
     return 'OpenAI 이미지 생성 요청이 실패했습니다. 프롬프트, 모델 권한, 결제/쿼터 상태를 확인해 주세요.'
   }
 
+  if (error?.response?.status === 500) {
+    return '서버에서 프로필 이미지 생성 처리 중 오류가 발생했습니다. 잠시 후 다시 시도하거나 백엔드 로그를 확인해 주세요.'
+  }
+
   const responseData = error?.response?.data
 
   return (

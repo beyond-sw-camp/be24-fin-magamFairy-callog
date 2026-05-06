@@ -9,11 +9,13 @@ import org.example.backend.userInfo.userProfile.model.ProfileImageHistoryType;
 import org.example.backend.userInfo.userProfile.model.ProfileImageSource;
 import org.example.backend.userInfo.userProfile.model.UserProfile;
 import org.example.backend.userInfo.userProfile.model.UserProfileDto;
+import org.example.backend.userInfo.userProfile.repository.ProfileImageGenerationLogRepository;
 import org.example.backend.userInfo.userProfile.repository.ProfileImageHistoryRepository;
 import org.example.backend.userInfo.userProfile.repository.UserProfileRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashSet;
@@ -31,9 +33,11 @@ public class UserProfileService {
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final ProfileImageHistoryRepository profileImageHistoryRepository;
+    private final ProfileImageGenerationLogRepository profileImageGenerationLogRepository;
     private final ProfileImageStorageService profileImageStorageService;
     private final ProfileImageGenerationLogService profileImageGenerationLogService;
     private final OpenAiProfileImageClient openAiProfileImageClient;
+    private final TransactionTemplate transactionTemplate;
 
     @Transactional
     public void ensureProfilesForExistingUsers() {
@@ -123,7 +127,6 @@ public class UserProfileService {
         return toResponse(userProfile);
     }
 
-    @Transactional
     public UserProfileDto.ProfileImageGenerateRes generateProfileImage(
             String userId,
             UserProfileDto.ProfileImageGenerateReq dto
@@ -131,7 +134,6 @@ public class UserProfileService {
         String prompt = resolveGenerationPrompt(dto);
         Integer requestedSize = resolveGenerationSize(dto);
         User user = findUser(userId);
-        UserProfile userProfile = ensureProfile(user);
         ProfileImageGenerationLog generationLog = profileImageGenerationLogService.createRequested(
                 user,
                 prompt,
@@ -148,23 +150,41 @@ public class UserProfileService {
                     imageBytes,
                     GENERATED_PROFILE_IMAGE_CONTENT_TYPE
             );
-            ProfileImageHistory history = saveHistory(
-                    user,
-                    objectKey,
-                    ProfileImageHistoryType.GENERATED,
-                    ProfileImageSource.AI,
-                    generationLog,
-                    prompt
-            );
+            String generatedObjectKey = objectKey;
+            UserProfileDto.ProfileImageGenerateRes response = transactionTemplate.execute(status -> {
+                User transactionalUser = findUser(userId);
+                UserProfile userProfile = ensureProfile(transactionalUser);
+                ProfileImageGenerationLog managedGenerationLog = profileImageGenerationLogRepository
+                        .findById(generationLog.getIdx())
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "profile image generation log not found."
+                        ));
 
-            pruneHistory(user, userProfile, ProfileImageHistoryType.GENERATED);
-            profileImageGenerationLogService.markSucceeded(generationLog.getIdx(), objectKey);
+                managedGenerationLog.markSucceeded(generatedObjectKey);
+                ProfileImageHistory history = saveHistory(
+                        transactionalUser,
+                        generatedObjectKey,
+                        ProfileImageHistoryType.GENERATED,
+                        ProfileImageSource.AI,
+                        managedGenerationLog,
+                        prompt
+                );
 
-            return UserProfileDto.ProfileImageGenerateRes.builder()
-                    .generationLogId(generationLog.getIdx())
-                    .generatedImage(toHistoryResponse(history))
-                    .histories(toHistoriesResponse(user))
-                    .build();
+                pruneHistory(transactionalUser, userProfile, ProfileImageHistoryType.GENERATED);
+
+                return UserProfileDto.ProfileImageGenerateRes.builder()
+                        .generationLogId(generationLog.getIdx())
+                        .generatedImage(toHistoryResponse(history))
+                        .histories(toHistoriesResponse(transactionalUser))
+                        .build();
+            });
+
+            if (response == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "profile image generation failed.");
+            }
+
+            return response;
         } catch (ResponseStatusException exception) {
             if (objectKey != null) {
                 profileImageStorageService.deleteObject(objectKey);
@@ -278,12 +298,16 @@ public class UserProfileService {
             ProfileImageGenerationLog generationLog,
             String prompt
     ) {
-        return profileImageHistoryRepository.save(ProfileImageHistory.builder()
+        ProfileImageGenerationLog managedGenerationLog = generationLog == null
+                ? null
+                : profileImageGenerationLogRepository.getReferenceById(generationLog.getIdx());
+
+        return profileImageHistoryRepository.saveAndFlush(ProfileImageHistory.builder()
                 .user(user)
                 .objectKey(objectKey)
                 .historyType(historyType)
                 .source(source)
-                .generationLog(generationLog)
+                .generationLog(managedGenerationLog)
                 .prompt(prompt)
                 .build());
     }
