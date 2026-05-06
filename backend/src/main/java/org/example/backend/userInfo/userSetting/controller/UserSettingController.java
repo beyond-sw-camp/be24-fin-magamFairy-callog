@@ -1,9 +1,9 @@
-package org.example.backend.userInfo.userProfile.controller;
+package org.example.backend.userInfo.userSetting.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.example.backend.common.model.BaseResponse;
-import org.example.backend.userInfo.userProfile.model.UserProfileDto;
-import org.example.backend.userInfo.userProfile.service.UserProfileService;
+import org.example.backend.userInfo.userSetting.model.UserSettingDto;
+import org.example.backend.userInfo.userSetting.service.UserSettingService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -16,24 +16,24 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/user-profiles")
-public class UserProfileController {
-    private final UserProfileService userProfileService;
+@RequestMapping("/settings")
+public class UserSettingController {
+    private final UserSettingService userSettingService;
 
-    @GetMapping("/me")
-    public ResponseEntity<BaseResponse> getMyProfile(Authentication authentication) {
+    @GetMapping
+    public ResponseEntity<BaseResponse> getMySetting(Authentication authentication) {
         return ResponseEntity.ok(BaseResponse.success(
-                userProfileService.getMyProfile(currentUser(authentication))
+                userSettingService.getMySetting(currentUser(authentication))
         ));
     }
 
-    @PatchMapping("/me")
-    public ResponseEntity<BaseResponse> updateMyProfile(
-            @RequestBody UserProfileDto.UpdateReq dto,
+    @PatchMapping
+    public ResponseEntity<BaseResponse> updateMySetting(
+            @RequestBody UserSettingDto.UpdateReq dto,
             Authentication authentication
     ) {
         return ResponseEntity.ok(BaseResponse.success(
-                userProfileService.updateMyProfile(currentUser(authentication), dto)
+                userSettingService.updateMySetting(currentUser(authentication), dto)
         ));
     }
 

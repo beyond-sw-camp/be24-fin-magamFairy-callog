@@ -5,7 +5,6 @@ import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUserSettingsStore } from '@/stores/userSettings'
 import { getNoti } from '@/api/notifications/index.js'
-import { getMyProfile } from '@/api/userProfiles/index.js'
 import { formatRelativeTime } from '@/utils/datechange.js'
 
 const route = useRoute()
@@ -21,8 +20,6 @@ const appsMenuOpen = ref(false)
 const appsMenuButton = ref(null)
 const profileCardOpen = ref(false)
 const profileCardButton = ref(null)
-const failedProfileImageUrl = ref('')
-const isRefreshingProfile = ref(false)
 
 const APP_MENU_MARGIN = 12
 const NOTIFICATION_MENU_WIDTH = 360
@@ -71,11 +68,6 @@ const pageTitle = computed(() => route.meta?.title ?? activeRoute.value.label)
 const sectionTitle = computed(() => route.meta?.section ?? activeRoute.value.section)
 const userSettingsKey = computed(() => resolveUserSettingsKey(authStore.user))
 const profileCard = computed(() => userSettingsStore.profileCardData)
-const visibleProfileImageUrl = computed(() =>
-  profileCard.value.imageDataUrl && profileCard.value.imageDataUrl !== failedProfileImageUrl.value
-    ? profileCard.value.imageDataUrl
-    : '',
-)
 const notificationsStyle = computed(() => ({
   top: `${notificationsPosition.top}px`,
   left: `${notificationsPosition.left}px`,
@@ -176,55 +168,6 @@ const getNotifications = async () => {
       },
     ]
   }
-}
-
-function resolveProfilePayload(payload) {
-  return payload?.result ?? payload?.data ?? payload ?? {}
-}
-
-function applyRemoteProfile(payload) {
-  const source = resolveProfilePayload(payload)
-  const nextProfile = {
-    name: source.name,
-    email: source.email,
-    phone: source.phone,
-    imageDataUrl: source.profileImageUrl || '',
-  }
-
-  Object.keys(nextProfile).forEach((key) => {
-    if (nextProfile[key] === undefined) {
-      delete nextProfile[key]
-    }
-  })
-
-  failedProfileImageUrl.value = ''
-  userSettingsStore.updateProfile(nextProfile)
-}
-
-async function refreshProfileFromServer() {
-  if (!authStore.isAuthenticated || isRefreshingProfile.value) {
-    return
-  }
-
-  isRefreshingProfile.value = true
-
-  try {
-    const response = await getMyProfile()
-    applyRemoteProfile(response.data)
-  } catch (error) {
-    console.warn('프로필 정보를 불러오지 못해 로컬 프로필을 유지합니다.', error)
-  } finally {
-    isRefreshingProfile.value = false
-  }
-}
-
-function handleProfileImageError() {
-  if (!profileCard.value.imageDataUrl) {
-    return
-  }
-
-  failedProfileImageUrl.value = profileCard.value.imageDataUrl
-  void refreshProfileFromServer()
 }
 
 function closeFloatingMenus() {
@@ -362,9 +305,7 @@ function handleProfileEdit() {
   })
 }
 
-async function handleProfileDownload() {
-  await refreshProfileFromServer()
-  await nextTick()
+function handleProfileDownload() {
   void userSettingsStore.downloadProfileCard()
 }
 
@@ -398,13 +339,9 @@ function handleViewportChange() {
 }
 
 watch(
-  () => [userSettingsKey.value, authStore.isAuthenticated, authStore.user],
+  () => [userSettingsKey.value, authStore.user],
   () => {
     userSettingsStore.loadUserSettings(userSettingsKey.value, authStore.user)
-
-    if (authStore.isAuthenticated) {
-      void refreshProfileFromServer()
-    }
   },
   { immediate: true, deep: true },
 )
@@ -549,14 +486,7 @@ onBeforeUnmount(() => {
           :aria-expanded="profileCardOpen"
           @click.stop="toggleProfileCard"
         >
-          <img
-            v-if="visibleProfileImageUrl"
-            :src="visibleProfileImageUrl"
-            alt=""
-            crossorigin="anonymous"
-            referrerpolicy="strict-origin-when-cross-origin"
-            @error="handleProfileImageError"
-          />
+          <img v-if="profileCard.imageDataUrl" :src="profileCard.imageDataUrl" alt="" />
           <span v-else>{{ profileCard.initials }}</span>
         </button>
 
@@ -646,14 +576,7 @@ onBeforeUnmount(() => {
       >
         <div class="callog-profile-card__hero">
           <div class="callog-profile-card__avatar">
-            <img
-              v-if="visibleProfileImageUrl"
-              :src="visibleProfileImageUrl"
-              alt=""
-              crossorigin="anonymous"
-              referrerpolicy="strict-origin-when-cross-origin"
-              @error="handleProfileImageError"
-            />
+            <img v-if="profileCard.imageDataUrl" :src="profileCard.imageDataUrl" alt="" />
             <span v-else>{{ profileCard.initials }}</span>
           </div>
           <div>
