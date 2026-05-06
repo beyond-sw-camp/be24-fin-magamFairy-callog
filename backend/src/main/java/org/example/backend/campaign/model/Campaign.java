@@ -45,6 +45,7 @@ public class Campaign extends BaseEntity {
     @ElementCollection
     @CollectionTable(name = "campaign_tag", joinColumns = @JoinColumn(name = "campaign_idx"))
     @Column(name = "tag", length = 80)
+    @org.hibernate.annotations.BatchSize(size = 50)
     private List<String> tags = new ArrayList<>();
 
     private LocalDate startDate;
@@ -55,6 +56,7 @@ public class Campaign extends BaseEntity {
     @ElementCollection
     @CollectionTable(name = "campaign_partner", joinColumns = @JoinColumn(name = "campaign_idx"))
     @Column(name = "partner", length = 120)
+    @org.hibernate.annotations.BatchSize(size = 50)
     private List<String> partners = new ArrayList<>();
 
     @Column(columnDefinition = "TEXT")
