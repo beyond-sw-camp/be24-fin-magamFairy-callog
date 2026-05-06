@@ -28,8 +28,17 @@ function createEmptyForm() {
     partnerInput: '',
     goals: '',
     mainMessage: '',
+    color: '',
   }
 }
+
+// 백엔드 CampaignService.CAMPAIGN_PALETTE와 동일한 20색
+const CAMPAIGN_PALETTE = [
+  '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6',
+  '#EF4444', '#06B6D4', '#84CC16', '#F97316', '#14B8A6',
+  '#6366F1', '#A855F7', '#D946EF', '#F43F5E', '#EAB308',
+  '#22C55E', '#0EA5E9', '#FB7185', '#4F46E5', '#059669',
+]
 
 const form = reactive(createEmptyForm())
 const partners = ref([])
@@ -136,6 +145,7 @@ function submitForm() {
     partners: partners.value,
     goals: form.goals,
     mainMessage: form.mainMessage,
+    color: form.color,
   })
 }
 
@@ -203,37 +213,60 @@ function avatarInitial(value) {
             <div class="step-section-title">캠페인 기본 정보</div>
             <div class="step-section-desc">캠페인의 이름과 목적을 정해 주세요. 태그를 활용하면 검색·필터에 도움이 됩니다.</div>
 
-            <div class="field-row">
-              <label class="lbl"><span>캠페인 이름</span></label>
-              <input
-                v-model="form.name"
-                type="text"
-                class="fld"
-                :placeholder="campaignModalText.namePlaceholder"
-              />
-            </div>
+            <div class="step1-grid">
+              <div class="step1-grid__main">
+                <div class="field-row">
+                  <label class="lbl"><span>캠페인 이름</span></label>
+                  <input
+                    v-model="form.name"
+                    type="text"
+                    class="fld"
+                    :placeholder="campaignModalText.namePlaceholder"
+                  />
+                </div>
 
-            <div class="field-row">
-              <label class="lbl"><span>{{ campaignLabels.purpose }}</span></label>
-              <textarea
-                v-model="form.purpose"
-                rows="3"
-                class="fld fld--text"
-                :placeholder="campaignModalText.purposePlaceholder"
-              />
-            </div>
+                <div class="field-row">
+                  <label class="lbl"><span>{{ campaignLabels.purpose }}</span></label>
+                  <textarea
+                    v-model="form.purpose"
+                    rows="3"
+                    class="fld fld--text"
+                    :placeholder="campaignModalText.purposePlaceholder"
+                  />
+                </div>
 
-            <div class="field-row">
-              <label class="lbl"><span>태그 <em>(쉼표로 구분)</em></span></label>
-              <input
-                v-model="form.tagInput"
-                type="text"
-                class="fld"
-                :placeholder="campaignModalText.tagsPlaceholder"
-              />
-              <div v-if="tagList.length" class="pill-row" style="margin-top: 10px;">
-                <span v-for="tag in tagList" :key="tag" class="chip chip--soft">#{{ tag }}</span>
+                <div class="field-row">
+                  <label class="lbl"><span>태그 <em>(쉼표로 구분)</em></span></label>
+                  <input
+                    v-model="form.tagInput"
+                    type="text"
+                    class="fld"
+                    :placeholder="campaignModalText.tagsPlaceholder"
+                  />
+                  <div v-if="tagList.length" class="pill-row" style="margin-top: 10px;">
+                    <span v-for="tag in tagList" :key="tag" class="chip chip--soft">#{{ tag }}</span>
+                  </div>
+                </div>
               </div>
+
+              <aside class="step1-grid__aside">
+                <div class="lbl"><span>캠페인 색상</span></div>
+                <p class="aside-hint">선택하지 않으면 자동으로 부여됩니다.</p>
+                <div class="color-swatches" role="radiogroup" aria-label="캠페인 색상 선택">
+                  <button
+                    v-for="color in CAMPAIGN_PALETTE"
+                    :key="color"
+                    type="button"
+                    class="color-swatch"
+                    :class="{ 'color-swatch--active': form.color === color }"
+                    :style="{ background: color }"
+                    :aria-label="`색상 ${color}`"
+                    :aria-checked="form.color === color"
+                    role="radio"
+                    @click="form.color = form.color === color ? '' : color"
+                  />
+                </div>
+              </aside>
             </div>
           </div>
 
@@ -488,6 +521,77 @@ function avatarInitial(value) {
   color: var(--text-primary);
   margin-bottom: 4px;
 }
+/* ── step1 좌/우 레이아웃 + 색상 picker ───── */
+.step1-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .step1-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.step1-grid__main {
+  display: grid;
+  gap: 14px;
+}
+
+.step1-grid__aside {
+  padding: 14px;
+  background: var(--panel-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+
+.aside-hint {
+  margin: 6px 0 12px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+.color-swatches {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.color-swatch {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.color-swatch:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+}
+
+.color-swatch--active {
+  border-color: var(--text-primary, #111);
+  box-shadow: 0 0 0 2px var(--panel-color, #fff), 0 0 0 4px var(--text-primary, #111);
+}
+
+.color-swatch--active::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
 .step-section-desc {
   font-size: 13px;
   color: var(--muted-text);

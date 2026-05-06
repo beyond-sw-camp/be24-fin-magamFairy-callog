@@ -10,6 +10,7 @@ import org.example.backend.organization.model.Organization;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @AllArgsConstructor
@@ -22,22 +23,31 @@ public class MarketingAsset {
     private Long idx;
 
     @ManyToOne(fetch=FetchType.LAZY)
-    @JoinColumn(name = "affiliate_idx")
+    @JoinColumn(name = "owner_idx")
     private Organization organization;
 
     @ManyToOne(fetch=FetchType.LAZY)
     @JoinColumn(name = "campaign_idx")
     private Campaign campaign;
 
+    private String affiliate;
+    private List<String> blockedPartners;
+    private String category;
+    private String conditions;
+    private String customAffiliate;
+    private String exposureValue;
+    private String matchingStatus;
+    private List<String> partnerFit;
+    private String performance;
+    private String publicStatus;
+    private String scale;
+    private String supplyLimit;
     private String target;
     private String type;
-    private String scale;
-    private String conditions;
-    private Boolean isActive;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime registeredAt;
 
     public void update(String target, String type, String scale, String conditions) {
         this.target = target;

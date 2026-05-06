@@ -11,20 +11,14 @@ const fallbackProfile = {
   phone: '010-0000-0000',
   email: 'user@callog.com',
   imageDataUrl: '',
+  profileImageKey: '',
   companyLogoDataUrl: '',
 }
 
 const defaultThemeUi = {
-  theme: 'light',
   density: 'comfortable',
   reduceMotion: false,
   highContrast: false,
-}
-
-const defaultSecurity = {
-  accountType: '일반 사용자',
-  sessionStatus: '활성',
-  passwordChangeRoute: '',
 }
 
 function getStorage() {
@@ -78,6 +72,30 @@ function createInitials(name) {
       : normalizedName.slice(0, 2)
 
   return value.toUpperCase()
+}
+
+function normalizeDensity(value) {
+  return value === 'compact' ? 'compact' : 'comfortable'
+}
+
+function normalizeThemeUi(source = {}) {
+  return {
+    density: normalizeDensity(source.density),
+    reduceMotion: Boolean(source.reduceMotion),
+    highContrast: Boolean(source.highContrast),
+  }
+}
+
+function applyThemeUiPreferences(themeUi) {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const root = document.documentElement
+
+  root.dataset.density = normalizeDensity(themeUi.density)
+  root.dataset.motion = themeUi.reduceMotion ? 'reduced' : 'normal'
+  root.dataset.contrast = themeUi.highContrast ? 'high' : 'normal'
 }
 
 function drawRoundedRect(context, x, y, width, height, radius) {
@@ -179,6 +197,7 @@ function normalizeProfile(source, rawUser = null) {
       'profileImageUrl',
       'avatar',
     ]),
+    profileImageKey: readFirstString(rawUser, ['profileImageKey']),
     companyLogoDataUrl: readFirstString(rawUser, [
       'companyLogoDataUrl',
       'companyLogo',
@@ -204,6 +223,7 @@ function normalizeProfile(source, rawUser = null) {
     phone: String(mergedProfile.phone || fallbackProfile.phone).trim(),
     email: String(mergedProfile.email || fallbackProfile.email).trim(),
     imageDataUrl: String(mergedProfile.imageDataUrl || createDefaultAvatarDataUrl(initials)).trim(),
+    profileImageKey: String(mergedProfile.profileImageKey || '').trim(),
     companyLogoDataUrl: String(mergedProfile.companyLogoDataUrl || '').trim(),
   }
 }
@@ -219,6 +239,11 @@ function assignState(target, source) {
 function loadImage(source) {
   return new Promise((resolve, reject) => {
     const image = new Image()
+
+    if (typeof source === 'string' && !source.startsWith('data:')) {
+      image.crossOrigin = 'anonymous'
+    }
+
     image.onload = () => resolve(image)
     image.onerror = reject
     image.src = source
@@ -234,11 +259,30 @@ function triggerDownload(dataUrl, filename) {
   anchor.remove()
 }
 
+function createPersistableProfile(profile) {
+  const nextProfile = { ...profile }
+
+  if (nextProfile.imageDataUrl && !nextProfile.imageDataUrl.startsWith('data:')) {
+    nextProfile.imageDataUrl = ''
+  }
+
+  return nextProfile
+}
+
+function sanitizeSavedProfile(source) {
+  const nextProfile = { ...(source ?? {}) }
+
+  if (nextProfile.imageDataUrl && !String(nextProfile.imageDataUrl).startsWith('data:')) {
+    nextProfile.imageDataUrl = ''
+  }
+
+  return nextProfile
+}
+
 export const useUserSettingsStore = defineStore('userSettings', () => {
   const activeUserKey = ref('guest')
   const profile = reactive({ ...fallbackProfile })
   const themeUi = reactive({ ...defaultThemeUi })
-  const security = reactive({ ...defaultSecurity })
   const generatorPrompt = ref('')
   const generatorStatus = ref('ready')
   const generatorMessage = ref('OpenAI 이미지 생성 API 연동 전 준비 상태입니다.')
@@ -261,9 +305,8 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     storage.setItem(
       storageKey.value,
       JSON.stringify({
-        profile: { ...profile },
+        profile: createPersistableProfile(profile),
         themeUi: { ...themeUi },
-        security: { ...security },
         generatorPrompt: generatorPrompt.value,
       }),
     )
@@ -274,17 +317,12 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
 
     const storage = getStorage()
     const savedSettings = safeParse(storage?.getItem(storageKey.value)) ?? {}
-    const nextProfile = normalizeProfile(savedSettings.profile, rawUser)
+    const nextProfile = normalizeProfile(sanitizeSavedProfile(savedSettings.profile), rawUser)
+    const nextThemeUi = normalizeThemeUi(savedSettings.themeUi)
 
     assignState(profile, nextProfile)
-    assignState(themeUi, {
-      ...defaultThemeUi,
-      ...(savedSettings.themeUi ?? {}),
-    })
-    assignState(security, {
-      ...defaultSecurity,
-      ...(savedSettings.security ?? {}),
-    })
+    assignState(themeUi, nextThemeUi)
+    applyThemeUiPreferences(themeUi)
 
     generatorPrompt.value = String(savedSettings.generatorPrompt ?? '')
     generatorStatus.value = 'ready'
@@ -305,18 +343,19 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
   }
 
   function updateThemeUi(patch) {
-    assignState(themeUi, {
+    const nextThemeUi = normalizeThemeUi({
       ...themeUi,
       ...(patch ?? {}),
     })
+
+    assignState(themeUi, nextThemeUi)
+    applyThemeUiPreferences(themeUi)
     persist()
   }
 
-  function updateSecurity(patch) {
-    assignState(security, {
-      ...security,
-      ...(patch ?? {}),
-    })
+  function resetThemeUi() {
+    assignState(themeUi, { ...defaultThemeUi })
+    applyThemeUiPreferences(themeUi)
     persist()
   }
 
@@ -386,7 +425,7 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     context.clip()
 
     try {
-      if (profile.imageDataUrl?.startsWith('data:')) {
+      if (profile.imageDataUrl) {
         const image = await loadImage(profile.imageDataUrl)
         context.drawImage(image, 68, 78, 148, 148)
       } else {
@@ -453,8 +492,16 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
       context.fillText(profile.company || 'CALLOG', 70, 350)
     }
 
+    let dataUrl = ''
+
+    try {
+      dataUrl = canvas.toDataURL('image/png')
+    } catch {
+      return false
+    }
+
     const filename = `callog-profile-card-${sanitizeUserKey(profile.name)}.png`
-    triggerDownload(canvas.toDataURL('image/png'), filename)
+    triggerDownload(dataUrl, filename)
 
     return true
   }
@@ -470,11 +517,10 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     profile,
     profileCardData,
     profileInitials,
-    security,
+    resetThemeUi,
     setGeneratorPrompt,
     themeUi,
     updateProfile,
-    updateSecurity,
     updateThemeUi,
   }
 })
