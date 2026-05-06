@@ -66,6 +66,33 @@ public class UserProfileController {
         ));
     }
 
+    @PostMapping("/me/profile-image/generate")
+    public ResponseEntity<BaseResponse> generateProfileImage(
+            @RequestBody UserProfileDto.ProfileImageGenerateReq dto,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                userProfileService.generateProfileImage(currentUser(authentication), dto)
+        ));
+    }
+
+    @GetMapping("/me/profile-image/histories")
+    public ResponseEntity<BaseResponse> getProfileImageHistories(Authentication authentication) {
+        return ResponseEntity.ok(BaseResponse.success(
+                userProfileService.getProfileImageHistories(currentUser(authentication))
+        ));
+    }
+
+    @PatchMapping("/me/profile-image/select")
+    public ResponseEntity<BaseResponse> selectProfileImage(
+            @RequestBody UserProfileDto.ProfileImageSelectReq dto,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                userProfileService.selectProfileImage(currentUser(authentication), dto)
+        ));
+    }
+
     private String currentUser(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication is required.");
