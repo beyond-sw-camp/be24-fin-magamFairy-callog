@@ -111,19 +111,36 @@ public class MatchingDto {
     @Getter
     @Builder
     public static class AddAsset {
+        private String affiliate;
+        private List<String> blockedPartners;
+        private String category;
+        private String conditions;
+        private String customAffiliate;
+        private String exposureValue;
+        private String matchingStatus;
+        private List<String> partnerFit;
+        private String performance;
+        private String publicStatus;
+        private String scale;
         private String target;
         private String type;
-        private String scale;
-        private String conditions;
 
         public MarketingAsset toEntity(Organization organization) {
             return MarketingAsset.builder()
                     .organization(organization)
-                    .target(this.target)
-                    .scale(this.scale)
-                    .type(this.type)
+                    .affiliate(this.affiliate)
+                    .blockedPartners(this.blockedPartners)
+                    .category(this.category)
                     .conditions(this.conditions)
-                    .isActive(DEFAULT_ASSET_STATUS)
+                    .customAffiliate(this.customAffiliate)
+                    .exposureValue(this.exposureValue)
+                    .matchingStatus(this.matchingStatus)
+                    .partnerFit(this.partnerFit)
+                    .performance(this.performance)
+                    .publicStatus(this.publicStatus)
+                    .scale(this.scale)
+                    .target(this.target)
+                    .type(this.type)
                     .build();
         }
     }
@@ -154,24 +171,38 @@ public class MatchingDto {
     @Builder
     public static class AssetRes{
         private Long idx;
-        private String type;
+        private String owner;
         private String affiliate;
-        private String target;
-        private String scale;
+        private List<String> blockedPartners;
+        private String category;
         private String conditions;
-        private Boolean isActive;
-        private String createdAt;
+        private String customAffiliate;
+        private String exposureValue;
+        private String matchingStatus;
+        private List<String> partnerFit;
+        private String performance;
+        private String publicStatus;
+        private String scale;
+        private String target;
+        private String type;
 
         public static AssetRes toDto(MarketingAsset entity){
             return AssetRes.builder()
                     .idx(entity.getIdx())
-                    .type(entity.getType())
-                    .affiliate(entity.getOrganization().getName())
-                    .target(entity.getTarget())
-                    .scale(entity.getScale())
+                    .affiliate(entity.getAffiliate())
+                    .blockedPartners(entity.getBlockedPartners())
+                    .category(entity.getCategory())
                     .conditions(entity.getConditions())
-                    .isActive(entity.getIsActive())
-                    .createdAt(entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString())
+                    .customAffiliate(entity.getCustomAffiliate())
+                    .exposureValue(entity.getExposureValue())
+                    .matchingStatus(entity.getMatchingStatus())
+                    .partnerFit(entity.getPartnerFit())
+                    .performance(entity.getPerformance())
+                    .publicStatus(entity.getPublicStatus())
+                    .scale(entity.getScale())
+                    .target(entity.getTarget())
+                    .type(entity.getType())
+                    .owner(entity.getOrganization().getName())
                     .build();
         }
     }
