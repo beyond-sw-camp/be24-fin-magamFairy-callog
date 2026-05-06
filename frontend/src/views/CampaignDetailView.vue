@@ -76,6 +76,7 @@ const store = usePlannerStore()
 const activeTab = ref('캠페인 오버뷰')
 const currentBoardView = ref('part')
 const metadataEditing = ref(false)
+const heroCollapsed = ref(false)
 const exportModalOpen = ref(false)
 const authStore = useAuthStore()
 const canExport = computed(() => {
@@ -909,6 +910,8 @@ watch(
 
 <template>
   <section class="campaign-detail">
+    <div class="hero-collapse" :class="{ 'hero-collapse--closed': heroCollapsed }" aria-hidden="false">
+    <div class="hero-collapse__inner">
     <header class="campaign-hero" aria-label="캠페인 메인 페이지 헤더">
       <div class="campaign-hero__copy">
         <div class="campaign-hero__title">
@@ -948,6 +951,8 @@ watch(
         </div>
       </div>
     </header>
+    </div>
+    </div>
 
     <CampaignExportModal
       v-if="exportModalOpen && campaignId && canExport"
@@ -966,6 +971,24 @@ watch(
         @click="handleTabClick(tab)"
       >
         {{ tab }}
+      </button>
+      <button
+        type="button"
+        class="campaign-tabs__toggle"
+        :class="{ 'campaign-tabs__toggle--collapsed': heroCollapsed }"
+        :aria-label="heroCollapsed ? '헤더 펼치기' : '헤더 접기'"
+        :title="heroCollapsed ? '헤더 펼치기' : '헤더 접기'"
+        @click="heroCollapsed = !heroCollapsed"
+      >
+        <svg
+          class="campaign-tabs__toggle-icon"
+          width="18" height="18" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor"
+          stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <polyline points="18 15 12 9 6 15"></polyline>
+        </svg>
       </button>
     </nav>
 
@@ -1909,6 +1932,78 @@ watch(
   border-bottom-color: var(--color-primary-500);
   background: var(--campaign-primary-surface);
   color: var(--campaign-primary-text);
+}
+
+/* ─── Hero Toggle Button (iOS-style) ─────────────────────────── */
+.campaign-tabs__toggle {
+  margin-left: auto;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  margin-right: 6px;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.04);
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+  position: sticky;
+  right: 6px;
+  z-index: 2;
+}
+.campaign-tabs__toggle:hover {
+  color: var(--color-primary-600);
+  background: var(--color-primary-50);
+  border-color: var(--color-primary-300);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(124, 58, 237, 0.18);
+}
+.campaign-tabs__toggle:active {
+  transform: translateY(0) scale(0.96);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.campaign-tabs__toggle:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+.campaign-tabs__toggle-icon {
+  display: block;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.campaign-tabs__toggle--collapsed .campaign-tabs__toggle-icon {
+  transform: rotate(180deg);
+}
+
+/* ─── Hero Collapse (grid-template-rows 트릭으로 자연스러운 슬라이드) ─── */
+.hero-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.hero-collapse--closed {
+  grid-template-rows: 0fr;
+}
+.hero-collapse__inner {
+  overflow: hidden;
+  min-height: 0;
+}
+/* 헤더 내부 콘텐츠가 위로 빨려 올라가는 느낌 추가 */
+.hero-collapse__inner .campaign-hero {
+  transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+  transform-origin: top center;
+}
+.hero-collapse--closed .campaign-hero {
+  transform: translateY(-12px);
 }
 
 .tab-surface {
