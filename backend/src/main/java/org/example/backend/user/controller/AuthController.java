@@ -13,11 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
@@ -58,6 +54,12 @@ public class AuthController {
     @PostMapping("/resetpassword")
     public ResponseEntity<?> resetPassword(@RequestBody UserDto.ResetPasswordReq dto, Authentication authentication) {
         UserDto.ResetPasswordRes result = userService.resetPassword(dto, authentication);
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
+    @PatchMapping("/password")
+    public ResponseEntity<?> changePassword(@RequestBody UserDto.ChangePasswordReq dto, Authentication authentication) {
+        UserDto.ChangePasswordRes result = userService.changePassword(dto, authentication);
         return ResponseEntity.ok(BaseResponse.success(result));
     }
 

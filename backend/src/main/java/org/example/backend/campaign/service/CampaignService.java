@@ -63,7 +63,23 @@ public class CampaignService {
     private final CampaignMemberRepository memberRepository;
 
     public List<CampaignDto.Res> listCampaigns(Long userIdx) {
+        return listCampaigns(userIdx, "mine");
+    }
+
+    /**
+     * scope = "mine" → 내가 멤버인 캠페인 (CampaignMember 기준)
+     * scope = "org"  → 내 조직이 참여하는 캠페인 (CampaignParticipant 기준)
+     * Campaign.tags / partners 는 @BatchSize(50) 으로 배치 로딩되어 N+1 회피.
+     */
+    public List<CampaignDto.Res> listCampaigns(Long userIdx, String scope) {
         User user = userRepository.findById(userIdx).orElse(null);
+        if ("org".equalsIgnoreCase(scope) && user != null && user.getOrganization() != null) {
+            Long orgIdx = user.getOrganization().getIdx();
+            return participantRepository.findCampaignsByOrganizationIdx(orgIdx).stream()
+                    .map(c -> buildResponseFor(c, user))
+                    .toList();
+        }
+        // 기본 — mine
         return memberRepository.findAllWithCampaignByUserIdx(userIdx).stream()
                 .map(cm -> buildResponseFor(cm.getCampaign(), user))
                 .toList();

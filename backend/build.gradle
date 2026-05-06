@@ -40,6 +40,7 @@ dependencies {
     implementation 'com.openhtmltopdf:openhtmltopdf-core:1.0.10'
     implementation 'com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10'
     implementation 'com.openhtmltopdf:openhtmltopdf-slf4j:1.0.10'
+    implementation 'software.amazon.awssdk:s3:2.25.70'
 }
 
 tasks.named('test') {
