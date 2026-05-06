@@ -86,9 +86,19 @@ public class TaskDto {
             LocalDateTime dueDate,
             String milestoneName,
             String taskPartName,
-            String assigneeName
+            String assigneeName,
+            Long assigneeIdx,
+            Long participantIdx,
+            String companyName,
+            Long campaignIdx
     ) {
         public static ResList from(Task entity) {
+            String companyName = null;
+            if (entity.getParticipant() != null && entity.getParticipant().getOrganization() != null) {
+                companyName = entity.getParticipant().getOrganization().getName();
+            }
+            Long campaignIdx = entity.getTaskPart() != null && entity.getTaskPart().getCampaign() != null
+                    ? entity.getTaskPart().getCampaign().getIdx() : null;
             return new ResList(
                     entity.getIdx(),
                     entity.getName(),
@@ -97,7 +107,11 @@ public class TaskDto {
                     entity.getDueDate(),
                     entity.getMilestone() != null ? entity.getMilestone().getName() : null,
                     entity.getTaskPart() != null ? entity.getTaskPart().getName() : null,
-                    entity.getAssignee() != null ? entity.getAssignee().getName() : null
+                    entity.getAssignee() != null ? entity.getAssignee().getName() : null,
+                    entity.getAssignee() != null ? entity.getAssignee().getIdx() : null,
+                    entity.getParticipant() != null ? entity.getParticipant().getIdx() : null,
+                    companyName,
+                    campaignIdx
             );
         }
     }

@@ -158,6 +158,8 @@ function normalizeCampaignRecord(source, fallback = {}) {
     color: merged.color || fallback.color || '#8B5CF6',
     createdAt: merged.createdAt ?? fallback.createdAt,
     updatedAt: merged.updatedAt ?? fallback.updatedAt,
+    myCampaignRole: merged.myCampaignRole ?? fallback.myCampaignRole ?? null,
+    organizationIsPm: Boolean(merged.organizationIsPm ?? fallback.organizationIsPm ?? false),
   }
 }
 
@@ -612,6 +614,8 @@ export const usePlannerStore = defineStore('planner', () => {
       color: payload.color || '#8B5CF6',
       createdAt: payload.createdAt ?? new Date().toISOString(),
       updatedAt: payload.updatedAt,
+      myCampaignRole: payload.myCampaignRole ?? null,
+      organizationIsPm: Boolean(payload.organizationIsPm ?? false),
     }
 
     campaigns.value.unshift(nextCampaign)
@@ -650,6 +654,10 @@ export const usePlannerStore = defineStore('planner', () => {
       color: payload.color || currentCampaign.color,
       createdAt: payload.createdAt ?? currentCampaign.createdAt,
       updatedAt: payload.updatedAt ?? new Date().toISOString(),
+      myCampaignRole: payload.myCampaignRole ?? currentCampaign.myCampaignRole ?? null,
+      organizationIsPm: Boolean(
+        payload.organizationIsPm ?? currentCampaign.organizationIsPm ?? false,
+      ),
     }
 
     campaigns.value[index] = nextCampaign
