@@ -53,21 +53,21 @@ public class EvaluationController {
         }
     }
 
-    @GetMapping("/evaluation/list/{campaign_idx}")
-    public ResponseEntity getEvaluationList(@AuthenticationPrincipal AuthUserDetails user, @PathVariable Long campaign_idx) {
-        ResponseEntity result;
-        try {
-            EvaluationDto.EvaluationRes dto = evaluationService.getEvaluationRes(user.getIdx(), campaign_idx);
-            result = ResponseEntity.ok(BaseResponse.success(dto));
-        }
-        catch (AccessDeniedException e) {
-            result = ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(BaseResponse.fail(BaseResponseStatus.ACCESS_DENIED, null));
-        }
-        catch (Exception e){
-            result = ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
-        return result;
-    }
+//    @GetMapping("/evaluation/list/{campaign_idx}")
+//    public ResponseEntity getEvaluationList(@AuthenticationPrincipal AuthUserDetails user, @PathVariable Long campaign_idx) {
+//        ResponseEntity result;
+//        try {
+//            EvaluationDto.EvaluationRes dto = evaluationService.getEvaluationRes(user.getIdx(), campaign_idx);
+//            result = ResponseEntity.ok(BaseResponse.success(dto));
+//        }
+//        catch (AccessDeniedException e) {
+//            result = ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+//                    .body(BaseResponse.fail(BaseResponseStatus.ACCESS_DENIED, null));
+//        }
+//        catch (Exception e){
+//            result = ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
+//                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
+//        }
+//        return result;
+//    }
 }
