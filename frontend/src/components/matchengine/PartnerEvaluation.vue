@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 defineProps({
   isDark: {
@@ -12,24 +12,26 @@ const proposals = [
   {
     id: 1,
     partnerName: '나이키 코리아',
-    benefitSummary: '러닝앱 멤버십 공동 챌린지 및 리미티드 굿즈',
+    benefitSummary: '러닝 앱 멤버십 공동 챌린지 및 리워드 굿즈',
     scores: { customerFit: 90, revenue: 85, cost: 80, operation: 70, brand: 95 },
     warnings: ['운영 일정 촉박'],
-    reason: '2030 액티브 레저 고객층과 브랜드 타겟이 일치하며 앱 가입 전환이 기대됩니다.',
+    reason: '2030 액티브 레저 고객층과 브랜드 타겟이 일치하며 앱 가입 전환을 기대할 수 있습니다.',
     kpis: [
-      { label: '예상 참여', value: '18,000명', baseline: '최근 레저 캠페인 대비 +24%' },
-      { label: '가입 전환', value: '+9.5%', baseline: '앱 미가입 타깃 기준' },
-      { label: '쿠폰 사용', value: '62%', baseline: '선착순 1만 장 가정' },
+      { label: '예상 참여', value: '18,000명', baseline: '최근 유사 캠페인 대비 +24%' },
+      { label: '가입 전환', value: '+9.5%', baseline: '앱 미가입 고객 기준' },
+      { label: '쿠폰 사용', value: '62%', baseline: '할당 쿠폰 1만 장 가정' },
     ],
     evidence: [
-      '한화리조트 2030 액티브 고객군과 NRC 주 이용층 중복률 68%',
-      '러닝 챌린지는 SNS 공유 소재로 전환하기 쉬워 콘텐츠 확산 가능',
-      '리워드 굿즈 제공으로 혜택 체감가는 높지만 직접 비용 부담은 제한적',
+      '2030 액티브 고객군과 러닝 앱 주 이용층이 높게 겹칩니다.',
+      '공동 챌린지 방식은 앱 가입과 SNS 확산을 동시에 만들기 쉽습니다.',
+      '리워드 굿즈 제공으로 고객 체감 가치는 높지만 직접 비용 부담은 제한적입니다.',
+      '랜딩, 고지, 리워드 지급 조건을 짧은 기간 안에 확정해야 합니다.',
+      '스포츠·건강 이미지가 캠페인 브랜드 톤과 자연스럽게 맞습니다.',
     ],
     conditions: [
-      '챌린지 시작 2주 전 랜딩/푸시 문안 확정',
-      '우천 시 실내 피트니스 미션으로 대체',
-      '참여 리워드는 선착순과 추첨형을 분리 운영',
+      '챌린지 시작 2주 전 랜딩/고지 문안 확정',
+      '추천 안내는 앱 내 피트니스 미션으로 대체',
+      '참여 리워드는 쿠폰형과 추첨형을 분리 운영',
     ],
     nextActions: ['나이키 담당자 일정 확정', '랜딩 와이어프레임 작성', '법무 유의사항 1차 검토'],
     manualScore: null,
@@ -37,26 +39,28 @@ const proposals = [
   {
     id: 2,
     partnerName: 'LG 생활건강',
-    benefitSummary: '신규 뷰티 브랜드 런칭 기념 샘플링 키트 제공',
+    benefitSummary: '신규 뷰티 브랜드 제휴 기념 샘플링 키트 제공',
     scores: { customerFit: 70, revenue: 60, cost: 85, operation: 80, brand: 60 },
     warnings: ['고객층 불명확', '브랜드 적합도 검토'],
-    reason: '비용 효율성은 좋지만 수익 기여도와 고객 적합도 보완이 필요합니다.',
+    reason: '비용 효율성은 좋지만 수익 기여와 고객 적합도는 보완 검토가 필요합니다.',
     kpis: [
-      { label: '샘플 소진', value: '8,500개', baseline: '객실 비치형 전환 시' },
+      { label: '샘플 소진', value: '8,500개', baseline: '객실 비치 후 전환 가정' },
       { label: '재방문 기여', value: '+3.1%', baseline: '뷰티 관심군 기준' },
       { label: '후기 확보', value: '420건', baseline: 'QR 설문 응답률 5%' },
     ],
     evidence: [
-      '샘플 비용을 파트너가 부담해 비용 효율성은 높음',
-      '신규 브랜드라 기존 한화 프리미엄 이미지와의 연결 근거가 부족',
-      '호텔 객실 비치형으로 전환하면 고객 접점은 명확해질 수 있음',
+      '뷰티 관심 고객군에는 맞지만 전체 캠페인 타겟과의 접점은 제한적입니다.',
+      '직접 구매나 예약 전환으로 이어지는 연결 구조가 약합니다.',
+      '샘플 비용을 파트너가 부담해 비용 효율은 높습니다.',
+      '객실 비치 방식은 운영 부담이 비교적 낮습니다.',
+      '신규 브랜드라 프리미엄 이미지와의 연결 근거가 부족합니다.',
     ],
     conditions: [
       '대상 고객군과 제품 라인업 재정의 필요',
       '샘플 수량, 배송비, 재고 회수 기준 확정',
-      '브랜드 톤 검수 후 VIP/일반 고객 노출 분리',
+      '브랜드별 검토 후 VIP/일반 고객 노출 분리',
     ],
-    nextActions: ['파트너 혜택 조건 재요청', '고객군 세그먼트 재평가', '객실 비치 시나리오 비용 산정'],
+    nextActions: ['파트너 샘플 조건 재요청', '고객군 세그먼트 재평가', '객실 비치 시나리오 비용 산정'],
     manualScore: 70.5,
   },
 ]
@@ -65,21 +69,101 @@ const metrics = [
   { key: 'customerFit', label: '고객 적합도', weight: 25 },
   { key: 'revenue', label: '수익 기여도', weight: 25 },
   { key: 'cost', label: '비용 효율성', weight: 20 },
-  { key: 'operation', label: '운영 난이도', weight: 15 },
+  { key: 'operation', label: '운영 용이성', weight: 15 },
   { key: 'brand', label: '브랜드 적합도', weight: 15 },
 ]
 
+const metricDetails = {
+  customerFit: {
+    benchmark: 78,
+    reasons: [
+      '타겟 고객군과 혜택 이용층이 겹칩니다.',
+      '채널 접점이 명확해 캠페인 노출 손실이 적습니다.',
+      '대상 고객이 구체적일수록 점수가 높게 산정됩니다.',
+    ],
+  },
+  revenue: {
+    benchmark: 74,
+    reasons: [
+      '가입, 구매, 예약 같은 전환 행동과 연결됩니다.',
+      '성과 측정 KPI가 비교적 명확합니다.',
+      '단순 노출형 캠페인보다 수익 기여를 크게 봅니다.',
+    ],
+  },
+  cost: {
+    benchmark: 76,
+    reasons: [
+      '파트너 부담 비용과 자체 채널 활용 가능성을 함께 봅니다.',
+      '추가 제작비가 낮을수록 점수가 높습니다.',
+      '혜택 규모 대비 운영 비용이 적정합니다.',
+    ],
+  },
+  operation: {
+    benchmark: 72,
+    reasons: [
+      '승인 단계와 제작 산출물 수를 기준으로 봅니다.',
+      '법무/브랜드 검수가 많으면 점수가 낮아집니다.',
+      '일정이 짧을수록 실행 리스크가 커집니다.',
+    ],
+  },
+  brand: {
+    benchmark: 80,
+    reasons: [
+      '브랜드 톤과 고객 경험의 연결성이 높습니다.',
+      '평판 리스크가 낮을수록 점수가 높습니다.',
+      '제휴사가 가진 이미지가 캠페인 메시지를 보강합니다.',
+    ],
+  },
+}
+
 const selectedId = ref(proposals[0].id)
+const activeMetricKey = ref(metrics[0].key)
+const isFormulaOpen = ref(false)
+const isConditionsOpen = ref(false)
+
 const selectedProposal = computed(() => proposals.find((proposal) => proposal.id === selectedId.value) ?? proposals[0])
-const reviewBrief = computed(() => {
+const selectedScore = computed(() => calculateScore(selectedProposal.value))
+const activeMetric = computed(() => metrics.find((metric) => metric.key === activeMetricKey.value) ?? metrics[0])
+const activeMetricIndex = computed(() => metrics.findIndex((metric) => metric.key === activeMetric.value.key))
+const activeMetricEvidence = computed(() => {
+  return selectedProposal.value.evidence[activeMetricIndex.value] ?? selectedProposal.value.reason
+})
+const activeMetricDetails = computed(() => metricDetails[activeMetric.value.key] ?? metricDetails.customerFit)
+const topMetric = computed(() => {
+  return metrics.reduce((top, metric) => {
+    return selectedProposal.value.scores[metric.key] > selectedProposal.value.scores[top.key] ? metric : top
+  }, metrics[0])
+})
+const weakestMetric = computed(() => {
+  return metrics.reduce((weakest, metric) => {
+    return selectedProposal.value.scores[metric.key] < selectedProposal.value.scores[weakest.key] ? metric : weakest
+  }, metrics[0])
+})
+const headlineSummaries = computed(() => {
   const proposal = selectedProposal.value
-  const score = calculateScore(proposal)
+  const warningsText = proposal.warnings.length
+    ? `${proposal.warnings[0]} (리스크 ${proposal.warnings.length}건)`
+    : `${weakestMetric.value.label} ${proposal.scores[weakestMetric.value.key]}점 보완 필요`
 
   return [
-    { label: '판정', value: grade(score) },
-    { label: '보정', value: proposal.manualScore === null ? '미적용' : '적용됨' },
-    { label: '리스크', value: `${proposal.warnings.length}건` },
+    `${topMetric.value.label} ${proposal.scores[topMetric.value.key]}점으로 강점이 뚜렷합니다.`,
+    proposal.reason,
+    warningsText,
   ]
+})
+const scoreFormula = computed(() => {
+  return metrics
+    .map((metric) => {
+      const score = selectedProposal.value.scores[metric.key]
+      return `${metric.label} ${score}×${(metric.weight / 100).toFixed(2)}`
+    })
+    .join(' + ')
+})
+
+watch(selectedId, () => {
+  activeMetricKey.value = metrics[0].key
+  isFormulaOpen.value = false
+  isConditionsOpen.value = false
 })
 
 function calculateScore(proposal) {
@@ -128,100 +212,124 @@ function grade(score) {
     </aside>
 
     <article class="eval-detail">
-      <div class="eval-title">
-        <div>
-          <h3>{{ selectedProposal.partnerName }}</h3>
-          <p>{{ selectedProposal.benefitSummary }}</p>
-        </div>
-        <div class="eval-score">
-          <strong>{{ calculateScore(selectedProposal) }}</strong>
-          <span>{{ grade(calculateScore(selectedProposal)) }}</span>
-        </div>
-      </div>
-
-      <div class="eval-grid">
-        <div class="eval-metrics">
-          <div v-for="metric in metrics" :key="metric.key" class="eval-bar">
-            <span>{{ metric.label }} <small>{{ metric.weight }}%</small></span>
-            <div><i :style="{ width: `${selectedProposal.scores[metric.key]}%` }" /></div>
-            <strong>{{ selectedProposal.scores[metric.key] }}</strong>
+      <section class="eval-hero">
+        <div class="eval-hero__main">
+          <div>
+            <h3>{{ selectedProposal.partnerName }}</h3>
+            <p>{{ selectedProposal.benefitSummary }}</p>
+          </div>
+          <div class="eval-score">
+            <strong>{{ selectedScore }}</strong>
+            <span>{{ grade(selectedScore) }}</span>
           </div>
         </div>
 
-        <aside class="eval-note">
-          <h4>추천 사유</h4>
-          <p>{{ selectedProposal.reason }}</p>
-          <div class="eval-risk-box">
-            <h4>리스크 ({{ selectedProposal.warnings.length }}건)</h4>
-            <ul>
-              <li v-for="warning in selectedProposal.warnings" :key="warning">{{ warning }}</li>
-            </ul>
-          </div>
-        </aside>
-      </div>
+        <ul class="eval-summary">
+          <li
+            v-for="(summary, index) in headlineSummaries"
+            :key="summary"
+            :class="{ primary: index === 0, risk: index === 2 }"
+          >
+            {{ index === 2 ? '!' : '✓' }} {{ summary }}
+          </li>
+        </ul>
 
-      <div class="eval-review-grid">
-        <section class="review-panel review-panel--summary">
-          <div class="review-panel__head">
-            <h4>검토 요약</h4>
-            <span>Review brief</span>
-          </div>
-          <div class="review-brief">
-            <div
-              v-for="item in reviewBrief"
-              :key="item.label"
-              :class="{ 'review-brief__risk': item.label === '리스크' }"
+        <button type="button" class="formula-toggle" @click="isFormulaOpen = !isFormulaOpen">
+          점수 산식 {{ isFormulaOpen ? '접기 ▴' : '보기 ▾' }}
+        </button>
+        <p v-if="isFormulaOpen" class="score-formula">{{ selectedScore }} = {{ scoreFormula }}</p>
+      </section>
+
+      <section class="eval-what">
+        <div class="section-head">
+          <h4>세부 평가</h4>
+        </div>
+
+        <div class="metric-layout">
+          <div class="metric-bars">
+            <button
+              v-for="metric in metrics"
+              :key="metric.key"
+              type="button"
+              class="eval-bar"
+              :class="{ active: activeMetricKey === metric.key }"
+              @click="activeMetricKey = metric.key"
             >
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
+              <span>{{ metric.label }} <small>{{ metric.weight }}%</small></span>
+              <div class="eval-bar__meter">
+                <div class="eval-bar__track"><i :style="{ width: `${selectedProposal.scores[metric.key]}%` }" /></div>
+                <strong>{{ selectedProposal.scores[metric.key] }}</strong>
+              </div>
+            </button>
+          </div>
+
+          <aside class="metric-evidence">
+            <div class="metric-evidence__head">
+              <span>{{ activeMetric.label }} 근거</span>
+              <strong>{{ selectedProposal.scores[activeMetric.key] }}점</strong>
             </div>
-          </div>
-        </section>
-
-        <section class="review-panel">
-          <div class="review-panel__head">
-            <h4>KPI 가정</h4>
-            <span>Forecast</span>
-          </div>
-          <div class="review-kpi-list">
-            <div v-for="kpi in selectedProposal.kpis" :key="kpi.label">
-              <span>{{ kpi.label }}</span>
-              <strong>{{ kpi.value }}</strong>
-              <small>{{ kpi.baseline }}</small>
+            <p>{{ activeMetricEvidence }}</p>
+            <ul>
+              <li v-for="reason in activeMetricDetails.reasons" :key="reason">{{ reason }}</li>
+            </ul>
+            <div class="metric-compare">
+              <div>
+                <span>선택 제안</span>
+                <b>{{ selectedProposal.scores[activeMetric.key] }}</b>
+              </div>
+              <div>
+                <span>타 파트너 평균</span>
+                <b>{{ activeMetricDetails.benchmark }}</b>
+              </div>
+              <div class="metric-compare__bar">
+                <i :style="{ width: `${selectedProposal.scores[activeMetric.key]}%` }" />
+                <em :style="{ left: `${activeMetricDetails.benchmark}%` }" />
+              </div>
             </div>
-          </div>
-        </section>
+          </aside>
+        </div>
+      </section>
 
-        <section class="review-panel">
-          <div class="review-panel__head">
-            <h4>평가 근거</h4>
-            <span>Evidence</span>
-          </div>
-          <ol class="review-list">
-            <li v-for="item in selectedProposal.evidence" :key="item">{{ item }}</li>
-          </ol>
-        </section>
+      <section class="eval-now">
+        <div class="section-head">
+          <h4>기대 효과와 실행</h4>
+        </div>
 
-        <section class="review-panel">
-          <div class="review-panel__head">
-            <h4>운영 조건</h4>
-            <span>Constraints</span>
-          </div>
-          <ol class="review-list">
-            <li v-for="item in selectedProposal.conditions" :key="item">{{ item }}</li>
-          </ol>
-        </section>
+        <div class="now-grid">
+          <section class="now-panel">
+            <h5>KPI 예측</h5>
+            <div class="kpi-list">
+              <div v-for="kpi in selectedProposal.kpis" :key="kpi.label">
+                <span>{{ kpi.label }}</span>
+                <strong>{{ kpi.value }}</strong>
+                <small>{{ kpi.baseline }}</small>
+              </div>
+            </div>
 
-        <section class="review-panel">
-          <div class="review-panel__head">
-            <h4>다음 액션</h4>
-            <span>Owner tasks</span>
-          </div>
-          <ol class="review-list review-list--action">
-            <li v-for="item in selectedProposal.nextActions" :key="item">{{ item }}</li>
-          </ol>
-        </section>
-      </div>
+            <button type="button" class="conditions-toggle" @click="isConditionsOpen = !isConditionsOpen">
+              운영 조건 {{ isConditionsOpen ? '접기' : '펼치기' }}
+            </button>
+            <ol v-if="isConditionsOpen" class="condition-list">
+              <li v-for="item in selectedProposal.conditions" :key="item">{{ item }}</li>
+            </ol>
+          </section>
+
+          <section class="now-panel now-panel--actions">
+            <h5>다음 액션</h5>
+            <ol class="action-list">
+              <li v-for="item in selectedProposal.nextActions" :key="item">
+                <span aria-hidden="true"></span>
+                {{ item }}
+              </li>
+            </ol>
+            <div class="decision-actions">
+              <button type="button" class="primary-action">진행하기</button>
+              <button type="button">보류</button>
+              <button type="button">제외</button>
+            </div>
+          </section>
+        </div>
+      </section>
     </article>
   </section>
 </template>
@@ -245,6 +353,11 @@ function grade(score) {
 }
 
 .eval-list {
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 0.5rem;
+  overflow: auto;
   background:
     linear-gradient(
       180deg,
@@ -256,45 +369,41 @@ function grade(score) {
 }
 
 .eval-detail {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  overflow: auto;
   background: var(--panel-color);
   border-color: var(--border-strong);
 }
 
 .eval-head,
-.eval-title {
+.eval-hero__main,
+.section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.65rem;
 }
 
 .eval-head h3,
-.eval-title h3,
-.eval-note h4 {
+.eval-hero h3,
+.section-head h4,
+.now-panel h5 {
   color: var(--text-primary);
   font-size: 0.95rem;
 }
 
 .eval-head span,
-.eval-title p,
+.eval-hero p,
 .eval-item small,
-.eval-note p,
-.eval-note li {
+.section-head span,
+.metric-evidence p,
+.kpi-list small,
+.condition-list li,
+.action-list li {
   color: var(--muted-text);
   font-size: 0.76rem;
-}
-
-.eval-list {
-  display: grid;
-  grid-auto-rows: max-content;
-  align-content: start;
-  gap: 0.5rem;
-  overflow: auto;
-}
-
-.eval-detail {
-  overflow: auto;
 }
 
 .eval-item {
@@ -340,9 +449,28 @@ function grade(score) {
   color: var(--accent-color);
 }
 
-.eval-title {
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 0.65rem;
+.eval-hero,
+.eval-what,
+.eval-now {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--panel-color) 80%, var(--panel-muted)),
+      var(--panel-color)
+    );
+  padding: 0.85rem;
+}
+
+.eval-hero {
+  border-color: color-mix(in srgb, var(--accent-color) 36%, var(--border-color));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent-color) 10%, var(--panel-color)),
+      var(--panel-color) 62%
+    );
 }
 
 .eval-score {
@@ -352,33 +480,101 @@ function grade(score) {
 
 .eval-score strong {
   display: block;
-  font-size: 1.55rem;
+  font-size: 1.75rem;
   line-height: 1;
 }
 
 .eval-score span {
-  color: var(--muted-text);
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.eval-summary {
+  display: grid;
+  gap: 0.38rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eval-summary li {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.42;
+}
+
+.eval-summary li.primary {
+  color: var(--text-primary);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.eval-summary li.risk {
+  color: var(--color-warning-dark, #b45309);
+}
+
+.formula-toggle {
+  margin-top: 0.65rem;
+  border: 0;
+  background: transparent;
+  color: var(--accent-color);
+  padding: 0;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.conditions-toggle {
+  margin-top: 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  padding: 0.38rem 0.55rem;
   font-size: 0.72rem;
   font-weight: 800;
 }
 
-.eval-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.62fr);
-  gap: 0.7rem;
-  min-height: 0;
+.score-formula {
+  margin-top: 0.45rem;
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.45rem;
+  color: var(--muted-text);
+  font-size: 0.72rem;
+  line-height: 1.45;
 }
 
-.eval-metrics {
+.metric-layout {
   display: grid;
-  gap: 0.58rem;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.55fr);
+  gap: 0.7rem;
+  margin-top: 0.65rem;
+}
+
+.metric-bars {
+  display: grid;
+  gap: 0.5rem;
 }
 
 .eval-bar {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) 34px;
+  grid-template-columns: 120px minmax(0, 1fr);
   align-items: center;
   gap: 0.55rem;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.eval-bar.active {
+  border-color: color-mix(in srgb, var(--accent-color) 42%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-color) 8%, var(--panel-color));
 }
 
 .eval-bar span {
@@ -392,7 +588,14 @@ function grade(score) {
   font-size: 0.64rem;
 }
 
-.eval-bar div {
+.eval-bar__meter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2rem;
+  align-items: center;
+  gap: 0.32rem;
+}
+
+.eval-bar__track {
   height: 0.58rem;
   overflow: hidden;
   border-radius: 999px;
@@ -406,155 +609,212 @@ function grade(score) {
   background: var(--accent-color);
 }
 
-.eval-bar strong {
+.eval-bar__meter strong {
   color: var(--text-primary);
   font-size: 0.78rem;
-  text-align: right;
+  text-align: left;
 }
 
-.eval-note {
+.metric-evidence {
   display: grid;
   align-content: start;
-  gap: 0.5rem;
+  gap: 0.55rem;
   border: 1px solid var(--border-color);
   border-radius: 7px;
   background: var(--panel-muted);
   padding: 0.7rem;
 }
 
-.eval-risk-box {
-  display: grid;
-  gap: 0.35rem;
-  border-top: 1px solid var(--border-color);
-  padding-top: 0.55rem;
+.metric-evidence__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
 }
 
-.eval-risk-box h4 {
+.metric-evidence span,
+.kpi-list span {
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.metric-evidence strong {
   color: var(--accent-color);
+  font-size: 1rem;
 }
 
-.eval-risk-box ul {
+.metric-evidence ul {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.28rem;
   margin: 0;
   padding-left: 1rem;
 }
 
-.eval-risk-box li::marker {
+.metric-evidence li {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.42;
+}
+
+.metric-evidence li::marker {
   color: var(--accent-color);
 }
 
-.eval-review-grid {
+.metric-compare {
   display: grid;
-  grid-template-columns: minmax(180px, 0.65fr) minmax(260px, 1fr) repeat(3, minmax(0, 1fr));
-  gap: 0.6rem;
-  margin-top: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 0.55rem;
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.55rem;
 }
 
-.review-panel {
-  min-width: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--panel-color) 76%, var(--panel-muted)),
-      var(--panel-muted)
-    );
-  padding: 0.65rem;
+.metric-compare div:not(.metric-compare__bar) {
+  display: grid;
+  gap: 0.08rem;
 }
 
-.review-panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 0.42rem;
-}
-
-.review-panel__head h4 {
+.metric-compare b {
   color: var(--text-primary);
   font-size: 0.82rem;
 }
 
-.review-panel__head span {
-  color: var(--muted-text);
-  font-size: 0.62rem;
-  font-weight: 900;
-  text-transform: uppercase;
+.metric-compare__bar {
+  position: relative;
+  grid-column: 1 / -1;
+  height: 0.46rem;
+  border-radius: 999px;
+  background: var(--panel-color);
 }
 
-.review-brief,
-.review-kpi-list {
+.metric-compare__bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-color);
+}
+
+.metric-compare__bar em {
+  position: absolute;
+  top: -0.18rem;
+  width: 2px;
+  height: 0.82rem;
+  border-radius: 999px;
+  background: var(--color-warning-dark, #b45309);
+}
+
+.now-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.65rem;
+  margin-top: 0.65rem;
+}
+
+.now-panel {
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  padding: 0.7rem;
+}
+
+.kpi-list {
   display: grid;
   gap: 0.42rem;
+  margin-top: 0.5rem;
 }
 
-.review-brief div,
-.review-kpi-list div {
+.kpi-list div {
   display: grid;
-  gap: 0.08rem;
+  grid-template-columns: minmax(72px, 0.6fr) minmax(64px, 0.4fr);
+  gap: 0.1rem 0.45rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   background: var(--panel-color);
-  padding: 0.45rem 0.5rem;
+  padding: 0.48rem 0.55rem;
 }
 
-.review-brief span,
-.review-kpi-list span,
-.review-kpi-list small {
-  color: var(--muted-text);
-  font-size: 0.66rem;
-  font-weight: 800;
-}
-
-.review-brief strong,
-.review-kpi-list strong {
+.kpi-list strong {
   color: var(--accent-color);
-  font-size: 0.84rem;
-  line-height: 1.15;
+  font-size: 0.86rem;
+  text-align: right;
 }
 
-.review-brief__risk {
-  border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border-color)) !important;
-  background: color-mix(in srgb, var(--accent-color) 7%, var(--panel-color)) !important;
-}
-
-.review-kpi-list small {
+.kpi-list small {
+  grid-column: 1 / -1;
   overflow: hidden;
-  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.review-list {
+.condition-list,
+.action-list {
   display: grid;
-  gap: 0.34rem;
-  margin: 0;
-  padding-left: 1.05rem;
+  gap: 0.38rem;
+  margin: 0.55rem 0 0;
+  padding-left: 1rem;
 }
 
-.review-list li {
-  color: var(--text-secondary);
-  font-size: 0.7rem;
-  line-height: 1.42;
+.condition-list li,
+.action-list li {
+  line-height: 1.45;
 }
 
-.review-list li::marker {
+.condition-list li::marker {
   color: var(--accent-color);
+}
+
+.action-list {
+  margin-top: 0.5rem;
+  padding-left: 0;
+  list-style: none;
+}
+
+.action-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.action-list span {
+  width: 0.82rem;
+  height: 0.82rem;
+  flex: 0 0 auto;
+  margin-top: 0.1rem;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 48%, var(--border-color));
+  border-radius: 3px;
+  background: var(--panel-color);
+}
+
+.decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+}
+
+.decision-actions button {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  padding: 0.48rem 0.7rem;
+  font-size: 0.74rem;
   font-weight: 900;
 }
 
-.review-list--action li {
-  font-weight: 700;
+.decision-actions .primary-action {
+  border-color: var(--accent-color);
+  background: var(--accent-color);
+  color: white;
 }
 
 @media (max-width: 1180px) {
   .eval-workspace,
-  .eval-grid,
-  .eval-review-grid {
+  .metric-layout,
+  .now-grid {
     grid-template-columns: 1fr;
   }
 }
