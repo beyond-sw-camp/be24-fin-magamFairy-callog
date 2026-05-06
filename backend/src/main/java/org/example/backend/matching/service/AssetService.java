@@ -36,13 +36,21 @@ public class AssetService {
 
     @Transactional
     public void addAsset(MatchingDto.AddAsset dto, AuthUserDetails user) {
+        if (user == null) {
+            throw new IllegalArgumentException("로그인 사용자 정보가 없습니다.");
+        }
+
         User userEntity = userRepository.getReferenceById(user.getIdx());
         Organization affiliate = userEntity.getOrganization();
-        if(affiliate.getType().equals(EXTERNAL_PARTNER)){
-            System.out.println("권한 거부");
-        }else {
-            assetRepository.save(dto.toEntity(affiliate));
+        if (affiliate == null) {
+            throw new IllegalArgumentException("사용자 소속 조직 정보가 없습니다.");
         }
+
+        if (EXTERNAL_PARTNER.equals(affiliate.getType())) {
+            throw new IllegalArgumentException("외부 파트너는 자산을 등록할 수 없습니다.");
+        }
+
+        assetRepository.save(dto.toEntity(affiliate));
     }
 
     @Transactional

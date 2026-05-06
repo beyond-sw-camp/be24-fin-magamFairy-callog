@@ -15,6 +15,7 @@ const goalCount = ref(2)
 const assetBenefitCount = ref(0)
 const partnerProposalCount = 3
 const matchingCriteria = ref(null)
+const evaluationCandidate = ref(null)
 const settingCount = computed(() => goalCount.value + assetBenefitCount.value)
 
 const tabs = computed(() => [
@@ -73,6 +74,11 @@ function moveToMatchingTab(criteria) {
   currentTab.value = 'matching'
 }
 
+function moveToEvaluationTab(candidate) {
+  evaluationCandidate.value = candidate ?? null
+  currentTab.value = 'evaluation'
+}
+
 </script>
 
 <template>
@@ -97,9 +103,11 @@ function moveToMatchingTab(criteria) {
         :is="currentComponent"
         :isDark="isDark"
         :recommendationCriteria="matchingCriteria"
+        :evaluationCandidate="evaluationCandidate"
         @asset-count-change="updateAssetBenefitCount"
         @goal-count-change="updateGoalCount"
         @request-matching="moveToMatchingTab"
+        @request-evaluation="moveToEvaluationTab"
       />
     </main>
   </section>

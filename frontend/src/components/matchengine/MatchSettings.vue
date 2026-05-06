@@ -102,6 +102,7 @@ const isResizing = ref(false)
 const showAssetBenefitPanel = ref(false)
 const isGoalLoading = ref(false)
 const goalError = ref('')
+let assetPanelFrame = null
 
 const selectedGoal = computed(
   () => goals.value.find((goal) => goal.id === selectedGoalId.value) ?? goals.value[0],
@@ -114,11 +115,10 @@ const canAddGoal = computed(() => {
   return (
     form.value.name.trim() &&
     form.value.primaryType &&
-    form.value.campaignMethod &&
-    form.value.kpi.trim() &&
     form.value.periodStart &&
     form.value.periodEnd &&
-    form.value.periodEnd >= form.value.periodStart
+    form.value.periodEnd >= form.value.periodStart &&
+    form.value.owner.trim()
   )
 })
 
@@ -131,8 +131,11 @@ function createGoalForm() {
     name: '',
     primaryType: '신규 고객 유입',
     secondaryType: '',
-    campaignMethod: 'COUPON_DISCOUNT',
+    campaignMethod: '',
     kpi: '',
+    kpiMetric: '',
+    kpiTarget: '',
+    kpiUnit: '',
     limit: '',
     periodStart: '',
     periodEnd: '',
@@ -176,12 +179,18 @@ function fromBackendCampaignMethod(value) {
 }
 
 function createGoalPayload() {
+  const kpiParts = [
+    form.value.kpiMetric,
+    form.value.kpiTarget ? `${form.value.kpiTarget}${form.value.kpiUnit}` : '',
+    form.value.kpi,
+  ].filter(Boolean)
+
   return {
     name: form.value.name,
     primaryType: toBackendGoalType(form.value.primaryType),
     secondaryType: form.value.secondaryType ? toBackendGoalType(form.value.secondaryType) : null,
-    campaignMethod: toBackendCampaignMethod(form.value.campaignMethod),
-    kpiPrimary: form.value.kpi,
+    campaignMethod: form.value.campaignMethod ? toBackendCampaignMethod(form.value.campaignMethod) : null,
+    kpiPrimary: kpiParts.join(' · '),
     kpiSecondary: '',
     budgetLimit: form.value.limit,
     effortLimit: form.value.limit,
@@ -276,10 +285,6 @@ function forwardAssetCount(count) {
   emit('asset-count-change', count)
 }
 
-function openAssetBenefitPanel() {
-  showAssetBenefitPanel.value = true
-}
-
 function requestMatching() {
   if (!canRequestMatching.value) return
   recommendationForm.value = {
@@ -332,10 +337,15 @@ function stopResize() {
 
 onMounted(() => {
   emit('goal-count-change', goals.value.length)
+
+  assetPanelFrame = window.requestAnimationFrame(() => {
+    showAssetBenefitPanel.value = true
+  })
 })
 
 onBeforeUnmount(() => {
   stopResize()
+  if (assetPanelFrame !== null) window.cancelAnimationFrame(assetPanelFrame)
 })
 </script>
 
@@ -396,7 +406,7 @@ onBeforeUnmount(() => {
           </select>
         </label>
         <label>
-          <span>보조 목표</span>
+          <span>보조 목표 <em>선택</em></span>
           <select v-model="form.secondaryType">
             <option value="">선택 안 함</option>
             <option
@@ -410,8 +420,9 @@ onBeforeUnmount(() => {
           </select>
         </label>
         <label>
-          <span>캠페인 방식</span>
+          <span>캠페인 방식 <em>선택</em></span>
           <select v-model="form.campaignMethod">
+            <option value="">선택 안 함</option>
             <option
               v-for="(method, index) in campaignMethods"
               :key="campaignMethodValues[index]"
@@ -421,12 +432,30 @@ onBeforeUnmount(() => {
             </option>
           </select>
         </label>
-        <label>
-          <span>핵심 KPI</span>
+        <div class="settings-goal-form__group">
+          <span>핵심 지표 <em>선택</em></span>
+          <div class="settings-kpi-grid">
+            <select v-model="form.kpiMetric">
+              <option value="">지표 선택</option>
+              <option value="예약수">예약수</option>
+              <option value="매출">매출</option>
+              <option value="회원수">회원수</option>
+              <option value="방문수">방문수</option>
+              <option value="기타">기타</option>
+            </select>
+            <input v-model="form.kpiTarget" type="number" min="0" placeholder="목표값" />
+            <select v-model="form.kpiUnit">
+              <option value="">단위</option>
+              <option value="%">%</option>
+              <option value="건">건</option>
+              <option value="명">명</option>
+              <option value="원">원</option>
+            </select>
+          </div>
           <input v-model="form.kpi" placeholder="예: 추가 예약 300건, ADR 18만 원 유지" />
-        </label>
+        </div>
         <label>
-          <span>예산/공수 한도</span>
+          <span>예산/공수 한도 <em>선택</em></span>
           <input v-model="form.limit" placeholder="예: 5,000만 원 · 100시간" />
         </label>
         <label>
@@ -437,8 +466,8 @@ onBeforeUnmount(() => {
           </div>
         </label>
         <label>
-          <span>등록자</span>
-          <input v-model="form.owner" placeholder="예: 갤러리아 마케팅팀 김OO" />
+          <span>담당자/부서</span>
+          <input v-model="form.owner" placeholder="예: 제휴마케팅팀 김OO" />
         </label>
         <button type="submit" :disabled="!canAddGoal">추가</button>
       </form>
@@ -447,24 +476,36 @@ onBeforeUnmount(() => {
         <h4>선택 목표</h4>
         <dl>
           <div>
-            <dt>KPI</dt>
-            <dd>{{ selectedGoal.kpi }}</dd>
+            <dt>목표명</dt>
+            <dd>{{ selectedGoal.name }}</dd>
           </div>
           <div>
-            <dt>한도</dt>
-            <dd>{{ selectedGoal.limit }}</dd>
+            <dt>주 목표 유형</dt>
+            <dd>{{ selectedGoal.primaryType }}</dd>
+          </div>
+          <div>
+            <dt>보조 목표</dt>
+            <dd>{{ selectedGoal.secondaryType || '선택 안 함' }}</dd>
+          </div>
+          <div>
+            <dt>캠페인 방식</dt>
+            <dd>{{ selectedGoal.campaignMethod || '선택 안 함' }}</dd>
+          </div>
+          <div>
+            <dt>핵심 지표</dt>
+            <dd>{{ selectedGoal.kpi || '미입력' }}</dd>
+          </div>
+          <div>
+            <dt>예산/공수 한도</dt>
+            <dd>{{ selectedGoal.limit || '미입력' }}</dd>
           </div>
           <div>
             <dt>기간</dt>
-            <dd>{{ selectedGoal.period }}</dd>
+            <dd>{{ selectedGoal.period || '미입력' }}</dd>
           </div>
           <div>
-            <dt>방식</dt>
-            <dd>{{ selectedGoal.campaignMethod || '-' }}</dd>
-          </div>
-          <div>
-            <dt>가중치</dt>
-            <dd>{{ selectedGoal.weights }}</dd>
+            <dt>담당자/부서</dt>
+            <dd>{{ selectedGoal.owner || '미입력' }}</dd>
           </div>
         </dl>
       </section>
@@ -496,9 +537,7 @@ onBeforeUnmount(() => {
         @asset-count-change="forwardAssetCount"
       />
       <div v-else class="settings-assets__placeholder">
-        <strong>자산/혜택 영역</strong>
-        <span>필요할 때 불러오면 설정 탭 진입이 가벼워집니다.</span>
-        <button type="button" @click="openAssetBenefitPanel">자산/혜택 불러오기</button>
+        <strong>자산/혜택을 불러오는 중</strong>
       </div>
     </section>
   </section>
@@ -771,15 +810,25 @@ onBeforeUnmount(() => {
   margin-top: -0.15rem;
 }
 
-.settings-goal-form label {
+.settings-goal-form label,
+.settings-goal-form__group {
   display: grid;
   gap: 0.28rem;
 }
 
-.settings-goal-form span {
+.settings-goal-form span,
+.settings-goal-form__group > span {
   color: var(--text-primary);
   font-size: 0.7rem;
   font-weight: 900;
+}
+
+.settings-goal-form em {
+  margin-left: 0.22rem;
+  color: var(--muted-text);
+  font-size: 0.64rem;
+  font-style: normal;
+  font-weight: 800;
 }
 
 .settings-goal-form input,
@@ -799,6 +848,12 @@ onBeforeUnmount(() => {
   outline: none;
   border-color: var(--accent-color);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 16%, transparent);
+}
+
+.settings-kpi-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(5rem, 0.7fr) minmax(4.4rem, 0.5fr);
+  gap: 0.4rem;
 }
 
 .settings-date-range {
@@ -890,18 +945,6 @@ onBeforeUnmount(() => {
   color: var(--muted-text);
   font-size: 0.72rem;
   font-weight: 750;
-}
-
-.settings-assets__placeholder button {
-  min-height: 2.25rem;
-  border: 1px solid var(--accent-color);
-  border-radius: 7px;
-  background: var(--accent-color);
-  color: #fff;
-  padding: 0 0.85rem;
-  font-size: 0.76rem;
-  font-weight: 900;
-  cursor: pointer;
 }
 
 .settings-assets :deep(.asset-panel) {

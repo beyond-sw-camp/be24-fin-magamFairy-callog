@@ -303,7 +303,7 @@ onMounted(() => {
         </label>
 
         <label class="goal-field">
-          <span>한화 부담 예산 상한 <em>*</em></span>
+          <span>예산 상한 <em>*</em></span>
           <input v-model="form.budgetLimit" placeholder="예: 5,000만 원" />
         </label>
 

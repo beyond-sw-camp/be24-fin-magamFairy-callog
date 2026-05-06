@@ -112,6 +112,8 @@ public class MatchingDto {
 
     @Getter
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class AddAsset {
         private String target;
         private String type;
