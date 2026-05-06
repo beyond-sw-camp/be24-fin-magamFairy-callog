@@ -14,7 +14,8 @@ public class TaskPartsDto {
             String dependency,
             String deliverable,
             String description,
-            Integer sortOrder
+            Integer sortOrder,
+            Long participantId
     ) {
         public TaskParts toEntity(Campaign campaign, MileStones mileStones, CampaignParticipant participant) {
             return TaskParts.builder()

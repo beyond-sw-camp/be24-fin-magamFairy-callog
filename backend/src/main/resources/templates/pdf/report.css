@@ -1,0 +1,411 @@
+/* ─── PDF Report Stylesheet ─────────────────────────── */
+@page {
+  size: A4;
+  margin: 18mm 16mm 18mm 16mm;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  font-family: "ReportFont", sans-serif;
+  font-size: 10.5pt;
+  color: #1F2937;
+  margin: 0;
+  padding: 0;
+  line-height: 1.45;
+}
+
+.page {
+  page-break-after: always;
+  position: relative;
+  min-height: 100%;
+}
+.page:last-child { page-break-after: auto; }
+
+/* ─── Cover / Header ──────────────────────────────── */
+.cover {
+  border-bottom: 2px solid #7C3AED;
+  padding: 0 0 14px 0;
+  margin-bottom: 18px;
+}
+.cover-eyebrow {
+  font-size: 8pt;
+  font-weight: 800;
+  color: #7C3AED;
+  letter-spacing: 0.18em;
+  margin-bottom: 4px;
+}
+.cover-title {
+  font-size: 22pt;
+  font-weight: 800;
+  color: #1F2937;
+  margin: 0 0 8px 0;
+  line-height: 1.15;
+  letter-spacing: -0.5pt;
+}
+.cover-meta {
+  display: block;
+  font-size: 9pt;
+}
+.cover-period {
+  color: #4B5563;
+  font-weight: 700;
+  margin-right: 12px;
+}
+.cover-status {
+  display: inline-block;
+  background: #EDE9FE;
+  color: #6D28D9;
+  border-radius: 3pt;
+  padding: 1pt 7pt;
+  font-size: 8pt;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-right: 12px;
+}
+.cover-stamp {
+  color: #9CA3AF;
+  font-size: 8pt;
+}
+
+/* ─── Stat Cards (4 columns) ──────────────────────── */
+.stats-row {
+  display: table;
+  width: 100%;
+  border-spacing: 8pt 0;
+  margin-bottom: 14px;
+}
+.stat {
+  display: table-cell;
+  width: 25%;
+  vertical-align: top;
+  border: 1px solid #E5E7EB;
+  border-radius: 6pt;
+  background: #ffffff;
+  padding: 12pt 14pt 10pt 14pt;
+  border-left: 3pt solid #E5E7EB;
+}
+.stat-info    { border-left-color: #3B82F6; }
+.stat-success { border-left-color: #10B981; }
+.stat-primary { border-left-color: #7C3AED; }
+.stat-warning { border-left-color: #F59E0B; }
+
+.stat-label {
+  font-size: 8pt;
+  font-weight: 800;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6pt;
+}
+.stat-value {
+  font-size: 22pt;
+  font-weight: 800;
+  color: #1F2937;
+  letter-spacing: -0.5pt;
+  line-height: 1;
+  margin-bottom: 8pt;
+}
+.stat-value small {
+  font-size: 9pt;
+  color: #9CA3AF;
+  margin-left: 2pt;
+  font-weight: 700;
+}
+.stat-bar {
+  height: 3pt;
+  background: #E5E7EB;
+  border-radius: 999pt;
+  overflow: hidden;
+}
+.stat-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999pt;
+}
+.stat-info .stat-fill    { background: #3B82F6; }
+.stat-success .stat-fill { background: #10B981; }
+.stat-primary .stat-fill { background: #7C3AED; }
+.stat-warning .stat-fill { background: #F59E0B; }
+
+/* ─── Bento (KPI + ESG) ───────────────────────────── */
+.bento {
+  display: table;
+  width: 100%;
+  border-spacing: 8pt 0;
+  margin-bottom: 14px;
+}
+.panel {
+  display: table-cell;
+  vertical-align: top;
+  border: 1px solid #E5E7EB;
+  border-radius: 6pt;
+  background: #ffffff;
+  padding: 14pt 16pt;
+}
+.kpi-panel { width: 60%; }
+.esg-panel { width: 40%; }
+
+.panel-head h2 {
+  font-size: 11pt;
+  font-weight: 800;
+  color: #1F2937;
+  margin: 0 0 12pt 0;
+  letter-spacing: -0.2pt;
+}
+
+/* KPI hero (gauge + meta) */
+.kpi-hero {
+  display: table;
+  width: 100%;
+  margin-bottom: 12pt;
+}
+.gauge-cell {
+  display: table-cell;
+  vertical-align: middle;
+  width: 45%;
+  text-align: center;
+}
+.kpi-meta {
+  display: table-cell;
+  vertical-align: middle;
+  padding-left: 14pt;
+}
+.meta-row {
+  border-bottom: 1px solid #E5E7EB;
+  padding: 6pt 0;
+}
+.meta-row:last-child { border-bottom: none; }
+.meta-label {
+  display: block;
+  font-size: 8pt;
+  color: #6B7280;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2pt;
+}
+.meta-value {
+  font-size: 14pt;
+  color: #1F2937;
+  font-weight: 800;
+  letter-spacing: -0.3pt;
+}
+
+/* ESG hero */
+.esg-hero {
+  text-align: center;
+  margin-bottom: 12pt;
+}
+
+/* Gauge (큰 숫자 + 가로 진행바, PDF 친화적) */
+.gauge {
+  display: block;
+  text-align: center;
+  padding: 4pt 0;
+}
+.gauge-num {
+  font-size: 28pt;
+  font-weight: 800;
+  color: #1F2937;
+  line-height: 1;
+  letter-spacing: -1pt;
+  margin-bottom: 6pt;
+}
+.gauge-esg .gauge-num {
+  font-size: 32pt;
+  color: #047857;
+}
+.gauge-num-unit {
+  font-size: 12pt;
+  font-weight: 700;
+  color: #9CA3AF;
+  margin-left: 1pt;
+  letter-spacing: 0;
+}
+.gauge-bar {
+  height: 5pt;
+  background: #E5E7EB;
+  border-radius: 999pt;
+  overflow: hidden;
+  margin: 0 8pt 6pt 8pt;
+}
+.gauge-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999pt;
+}
+.gauge-bar-fill-kpi { background: #7C3AED; }
+.gauge-bar-fill-esg { background: #10B981; }
+.gauge-sub {
+  font-size: 7pt;
+  font-weight: 800;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Top KPI list */
+.kpi-list {
+  border-top: 1px solid #E5E7EB;
+  padding-top: 10pt;
+}
+.top-row { padding: 6pt 0; }
+.top-row + .top-row { border-top: 1px solid #F3F4F6; }
+.top-info {
+  display: block;
+  margin-bottom: 4pt;
+}
+.top-name {
+  font-size: 9pt;
+  font-weight: 800;
+  color: #374151;
+}
+.top-actual {
+  display: block;
+  font-size: 7.5pt;
+  color: #9CA3AF;
+  margin-top: 1pt;
+}
+.top-bar-wrap {
+  display: table;
+  width: 100%;
+}
+.top-bar {
+  display: table-cell;
+  width: 100%;
+  height: 6pt;
+  background: #E5E7EB;
+  border-radius: 999pt;
+  overflow: hidden;
+}
+.top-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999pt;
+}
+.fill-success { background: #10B981; }
+.fill-warn    { background: #F59E0B; }
+
+.top-pct {
+  display: table-cell;
+  width: 38pt;
+  text-align: right;
+  font-size: 9pt;
+  font-weight: 800;
+  padding-left: 8pt;
+}
+.pct-success { color: #047857; }
+.pct-warn    { color: #92400E; }
+
+.empty {
+  text-align: center;
+  font-size: 9pt;
+  color: #9CA3AF;
+  padding: 12pt 0 4pt;
+}
+
+/* ESG footer */
+.esg-foot {
+  border-top: 1px solid #E5E7EB;
+  padding-top: 8pt;
+}
+.esg-foot-row {
+  display: table;
+  width: 100%;
+}
+.esg-foot-row span {
+  display: table-cell;
+  font-size: 8pt;
+  font-weight: 700;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.esg-foot-row strong {
+  display: table-cell;
+  text-align: right;
+  font-size: 11pt;
+  font-weight: 800;
+  color: #1F2937;
+}
+
+/* ─── Detail Pages ─────────────────────────────── */
+.detail-section {
+  margin-bottom: 18pt;
+}
+.detail-title {
+  font-size: 13pt;
+  font-weight: 800;
+  color: #1F2937;
+  margin: 0 0 10pt 0;
+  padding-bottom: 4pt;
+  border-bottom: 1pt solid #E5E7EB;
+  letter-spacing: -0.2pt;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9pt;
+}
+.data-table thead th {
+  background: #F9FAFB;
+  border-bottom: 1pt solid #E5E7EB;
+  text-align: left;
+  padding: 7pt 8pt;
+  font-size: 8pt;
+  font-weight: 800;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.data-table tbody td {
+  padding: 7pt 8pt;
+  border-bottom: 0.5pt solid #F3F4F6;
+  color: #374151;
+  vertical-align: middle;
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.td-name { font-weight: 700; color: #1F2937; }
+.td-num  { text-align: right; font-variant-numeric: tabular-nums; }
+.empty-row {
+  text-align: center !important;
+  color: #9CA3AF;
+  padding: 14pt 8pt !important;
+  font-size: 8.5pt;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 7.5pt;
+  font-weight: 800;
+  border-radius: 3pt;
+  padding: 1pt 6pt;
+  letter-spacing: 0.04em;
+}
+.tag-success { background: #ECFDF5; color: #047857; }
+.tag-warn    { background: #FFFBEB; color: #92400E; }
+.tag-info    { background: #EFF6FF; color: #1D4ED8; }
+.tag-mute    { background: #F3F4F6; color: #6B7280; }
+
+/* ─── Page Footer (inline, 페이지 하단에 표시) ────── */
+.page-foot {
+  display: table;
+  width: 100%;
+  margin-top: 18pt;
+  padding-top: 8pt;
+  border-top: 1pt solid #E5E7EB;
+  font-size: 7.5pt;
+  color: #9CA3AF;
+}
+.page-foot span {
+  display: table-cell;
+}
+.page-foot-brand {
+  text-align: right !important;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #7C3AED;
+}

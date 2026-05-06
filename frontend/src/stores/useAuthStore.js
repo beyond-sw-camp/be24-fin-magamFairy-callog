@@ -101,6 +101,10 @@ export const useAuthStore = defineStore('auth', () => {
   const isGeneralManager = computed(() => normalizeRole(user.value?.role) === 'ROLE_GENERAL_MANAGER')
   const isManager = computed(() => normalizeRole(user.value?.role) === 'ROLE_MANAGER')
   const canCreateUsers = computed(() => isAdmin.value || isGeneralManager.value || isManager.value)
+  const canCreateCampaign = computed(() => {
+    const decoded = decodeJwtPayload(token.value)
+    return decoded?.orgType !== 'EXTERNAL_PARTNER'
+  })
 
   function applyAuth(accessToken, rawUser = null) {
     if (!accessToken) {
@@ -291,6 +295,7 @@ export const useAuthStore = defineStore('auth', () => {
     isGeneralManager,
     isManager,
     canCreateUsers,
+    canCreateCampaign,
     isHydrated,
     isLogin,
     user,

@@ -99,6 +99,16 @@ public class JwtUtil {
                 .get("category", String.class);
     }
 
+    public String getOrgType(String token) {
+        Object raw = Jwts.parser()
+                .verifyWith(encodeKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("orgType");
+        return raw == null ? null : raw.toString();
+    }
+
     public Boolean isExpired(String token) {
         return Jwts.parser()
                 .verifyWith(encodeKey)

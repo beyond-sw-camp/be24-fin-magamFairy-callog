@@ -15,55 +15,73 @@ const goalTypes = [
   {
     id: 'new_customer',
     label: '신규 고객 유입',
-    kpis: ['신규 가입 수', 'CAC 한도'],
-    rule: '도달 규모와 신규 전환 가능성 가중',
+    kpis: ['신규 유입수', '획득 비용'],
+    rule: '신규 유입 규모와 획득 효율 가중',
   },
   {
-    id: 'vip_benefit',
-    label: 'VIP 혜택 강화',
-    kpis: ['VIP 재방문율', '객단가 상승률'],
-    rule: '고객 등급과 브랜드 적합도 가중',
-  },
-  {
-    id: 'room_booking',
-    label: '객실 예약 증가',
-    kpis: ['추가 예약 건수', 'ADR 유지선'],
-    rule: '재고 소진과 예약 전환 가능성 가중',
-  },
-  {
-    id: 'app_join',
-    label: '앱 가입 증가',
-    kpis: ['신규 다운로드', 'D7 잔존율'],
-    rule: '채널 전환과 앱 행동 데이터 가중',
-  },
-  {
-    id: 'member_revisit',
-    label: '멤버십 재방문',
+    id: 'customer_revisit',
+    label: '기존 고객 재방문',
     kpis: ['재방문율', '쿠폰 사용률'],
-    rule: '기존 고객 활성도와 혜택 매력도 가중',
+    rule: '기존 고객 활성도와 재방문 가능성 가중',
   },
   {
-    id: 'brand_exposure',
-    label: '브랜드 노출',
+    id: 'member_signup',
+    label: '회원 가입 유도',
+    kpis: ['신규 가입수', 'D7 잔존율'],
+    rule: '가입 전환과 초기 유지율 가중',
+  },
+  {
+    id: 'purchase_booking',
+    label: '구매/예약 유도',
+    kpis: ['구매/예약 건수', '전환율'],
+    rule: '구매 또는 예약 전환 가능성 가중',
+  },
+  {
+    id: 'brand_awareness',
+    label: '브랜드 인지도 확대',
     kpis: ['노출 수', '콘텐츠 공유율'],
-    rule: '채널 노출 가치와 콘텐츠 확산성 가중',
+    rule: '도달 규모와 브랜드 회상 가능성 가중',
   },
   {
     id: 'revenue',
     label: '매출 증대',
-    kpis: ['추가 매출', '손익분기점'],
-    rule: '예상 매출과 파트너 분담률 가중',
+    kpis: ['추가 매출', '수익 기여도'],
+    rule: '예상 매출과 파트너 부담률 가중',
+  },
+  {
+    id: 'upsell',
+    label: '객단가/업셀 향상',
+    kpis: ['객단가', '업셀 전환율'],
+    rule: '고객당 매출 증가 가능성 가중',
+  },
+  {
+    id: 'direct_booking',
+    label: '직접예약 비중 확대',
+    kpis: ['직접예약 비중', '외부 채널 비용 절감'],
+    rule: '자사 채널 전환과 비용 절감 효과 가중',
+  },
+  {
+    id: 'review_reputation',
+    label: '리뷰/평판 개선',
+    kpis: ['리뷰 수', '평점'],
+    rule: '고객 경험 개선과 평판 리스크 완화 가중',
+  },
+  {
+    id: 'other',
+    label: '기타',
+    kpis: ['핵심 KPI', '보조 KPI'],
+    rule: '별도 정의한 목표 기준 적용',
   },
 ]
 
 const goals = ref([
   {
     id: 1,
-    name: '2026 Q2 VIP 리프레시',
-    primaryType: 'vip_benefit',
-    secondaryType: 'member_revisit',
-    kpiPrimary: 'VIP 재방문율 +10%',
-    kpiSecondary: '객단가 +5%',
+    name: '2026 Q2 업셀 프로모션',
+    primaryType: 'upsell',
+    secondaryType: 'customer_revisit',
+    kpiPrimary: '객단가 +5%',
+    kpiSecondary: '재방문율 +10%',
     budgetLimit: '5,000만 원',
     effortLimit: '100시간',
     periodStart: '2026-05-01',
@@ -73,8 +91,8 @@ const goals = ref([
   },
   {
     id: 2,
-    name: '앱 신규 가입 전환 캠페인',
-    primaryType: 'app_join',
+    name: '신규 회원 가입 캠페인',
+    primaryType: 'member_signup',
     secondaryType: 'new_customer',
     kpiPrimary: '신규 다운로드 30,000건',
     kpiSecondary: 'D7 잔존율 18%',
@@ -92,7 +110,7 @@ const form = ref(createGoalForm())
 function createGoalForm() {
   return {
     name: '',
-    primaryType: 'vip_benefit',
+    primaryType: 'new_customer',
     secondaryType: '',
     kpiPrimary: '',
     kpiSecondary: '',
@@ -285,7 +303,7 @@ onMounted(() => {
         </label>
 
         <label class="goal-field">
-          <span>한화 부담 예산 상한 <em>*</em></span>
+          <span>예산 상한 <em>*</em></span>
           <input v-model="form.budgetLimit" placeholder="예: 5,000만 원" />
         </label>
 

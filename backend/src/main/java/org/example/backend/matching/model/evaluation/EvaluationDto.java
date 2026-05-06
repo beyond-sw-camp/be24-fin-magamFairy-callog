@@ -3,9 +3,9 @@ package org.example.backend.matching.model.evaluation;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.*;
-import org.example.backend.matching.model.MarketingAsset;
-import org.example.backend.matching.model.PartnerBenefits;
+import org.example.backend.matching.model.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public class EvaluationDto {
@@ -13,52 +13,52 @@ public class EvaluationDto {
     @Getter
     @Builder
     public static class StartEvaluationReq {
-        private String kpi;
         private Double dependency;
         private Long assetIdx;
         private Long benefitIdx;
+        private Long goalIdx;
     }
 
     @Getter
     @Builder
     public static class StartEvaluation {
-        private String kpi;
         private Double dependency; // 0.5와 같은 소수점을 처리하기 위해 Double 사용
-        private AssetRes asset;
-        private BenefitRes benefit;
+        private MatchingDto.AssetRes asset;
+        private MatchingDto.BenefitRes benefit;
+        private CampaignGoalRes goal;
 
         @Getter
         @Builder
-        public static class AssetRes {
-            private String type;
-            private String target;
-            private String conditions;
-            private String scale;
-            public static AssetRes toDto(MarketingAsset entity){
-                return AssetRes.builder()
-                        .type(entity.getType())
-                        .target(entity.getTarget())
-                        .conditions(entity.getConditions())
-                        .scale(entity.getScale())
-                        .build();
-            }
-        }
-
-        @Getter
-        @Builder
-        public static class BenefitRes {
-            private String cost;
+        public static class CampaignGoalRes {
             private String name;
-            private String scale;
-            private String target;
-            private String type;
-            public static BenefitRes toDto(PartnerBenefits entity){
-                return BenefitRes.builder()
-                        .cost(entity.getCost())
+            private GoalType primary;
+            private GoalType secondary;
+            private String kpiPrimary;
+            private String kpiSecondary;
+            private String budgetLimit;
+            private String effortLimit;
+            private LocalDate periodStart;
+            private LocalDate periodEnd;
+            private Integer weightRevenue;
+            private Integer weightEffort;
+            private Integer weightBrand;
+            private String status;
+
+            public static CampaignGoalRes toDto(CampaignGoal entity) {
+                return CampaignGoalRes.builder()
                         .name(entity.getName())
-                        .scale(entity.getScale())
-                        .target(entity.getTarget())
-                        .type(entity.getType())
+                        .primary(entity.getPrimaryType())
+                        .secondary(entity.getSecondaryType())
+                        .kpiPrimary(entity.getKpiPrimary())
+                        .kpiSecondary(entity.getKpiSecondary())
+                        .budgetLimit(entity.getBudgetLimit())
+                        .effortLimit(entity.getEffortLimit())
+                        .periodStart(entity.getPeriodStart())
+                        .periodEnd(entity.getPeriodEnd())
+                        .weightRevenue(entity.getWeightRevenue())
+                        .weightEffort(entity.getWeightEffort())
+                        .weightBrand(entity.getWeightBrand())
+                        .status(entity.getStatus())
                         .build();
             }
         }
@@ -82,6 +82,7 @@ public class EvaluationDto {
         private String category;
         private Integer overallScore;
         private List<String> improvementDirections;
+        private String uuid;
 
         @Getter
         @Builder
@@ -204,52 +205,6 @@ public class EvaluationDto {
                         .improvementDirections(this.getImprovementDirections())
                         .build();
             }
-        }
-    }
-
-
-
-    @Getter
-    @Builder
-    public static class EvaluationRes{
-        // 점수
-        private Scores scores;
-        // 상세 데이터
-        private String benefitSummary;
-        private String reason;
-        private String warnings;
-        private String kpis;
-        private String evidence;
-        private String nextActions;
-        private String manualScore;
-
-        @Builder
-        @Getter
-        private static class Scores{
-            private Integer customerFit;
-            private Integer revenue;
-            private Integer cost;
-            private Integer operation;
-            private Integer brand;
-        }
-
-        public static EvaluationRes toDto(Evaluation entity) {
-            return EvaluationRes.builder()
-                    .scores(Scores.builder() // 여기서 Scores 객체를 생성
-                            .customerFit(entity.getCustomerFit())
-                            .revenue(entity.getRevenue())
-                            .cost(entity.getCost())
-                            .operation(entity.getOperation())
-                            .brand(entity.getBrand())
-                            .build())
-                    .benefitSummary(entity.getBenefitSummary())
-                    .reason(entity.getReason())
-                    .warnings(entity.getWarnings())
-                    .kpis(entity.getKpis())
-                    .evidence(entity.getEvidence())
-                    .nextActions(entity.getNextActions())
-                    .manualScore(entity.getManualScore())
-                    .build();
         }
     }
 

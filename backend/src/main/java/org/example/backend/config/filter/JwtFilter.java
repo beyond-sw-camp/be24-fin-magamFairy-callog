@@ -14,6 +14,7 @@ import org.example.backend.user.repository.UserRepository;
 import org.example.backend.user.utils.JwtUtil;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -113,11 +115,14 @@ public class JwtFilter extends OncePerRequestFilter {
                 .accountStatus(resolveStatus(userEntity))
                 .build();
 
-        Authentication authentication = new UsernamePasswordAuthenticationToken(
-                user,
-                null,
-                List.of(new SimpleGrantedAuthority(resolvedRole))
-        );
+        String orgType = jwtUtil.getOrgType(token);
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority(resolvedRole));
+        if (orgType != null) {
+            authorities.add(new SimpleGrantedAuthority("ORG_" + orgType));
+        }
+
+        Authentication authentication = new UsernamePasswordAuthenticationToken(user, null, authorities);
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         // 다음 필터로 요청 전달
