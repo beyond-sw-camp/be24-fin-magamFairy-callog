@@ -62,6 +62,12 @@ public class AuthController {
         return ResponseEntity.ok(BaseResponse.success(result));
     }
 
+    @PatchMapping("/password")
+    public ResponseEntity<?> changePassword(@RequestBody UserDto.ChangePasswordReq dto, Authentication authentication) {
+        UserDto.ChangePasswordRes result = userService.changePassword(dto, authentication);
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
     @PostMapping("/userdelete")
     public ResponseEntity<?> deleteUser(@RequestBody UserDto.DeleteUserReq dto, Authentication authentication) {
         UserDto.DeleteUserRes result = userService.deleteUser(dto, authentication);
