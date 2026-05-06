@@ -212,6 +212,8 @@ public class MatchingDto {
 
     @Getter
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class AddAsset {
         private String affiliate;
         private List<String> blockedPartners;
