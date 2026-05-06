@@ -7,6 +7,7 @@ import { useCampaignKpiStore } from '@/stores/campaignKpi.js'
 import { GetCampaignDetails, UpdateCampaign } from '@/api/campaigns'
 import CampaignResourcesView from '@/views/CampaignResourcesView.vue'
 import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
+import MatchOverview from '@/views/MatchOverview.vue'
 import CampaignMembersPanel from '@/components/campaign/CampaignMembersPanel.vue'
 import CampaignKpiTab from '@/components/campaign/kpi/CampaignKpiTab.vue'
 import CampaignExportModal from '@/components/campaign/CampaignExportModal.vue'
@@ -108,7 +109,7 @@ const CAMPAIGN_PALETTE = [
   '#22C55E', '#0EA5E9', '#FB7185', '#4F46E5', '#059669',
 ]
 
-const tabs = ["캠페인 오버뷰", "팀 보드 보기", "레퍼런스 탭", "자료실", "검수/승인", "참여자 설정", "캠페인 성과/KPI"];
+const tabs = ["캠페인 오버뷰", "팀 보드 보기", "레퍼런스 탭", "자료실", "검수/승인", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
 
 const handleTabClick = async (tabName) => {
   activeTab.value = tabName;
@@ -933,9 +934,18 @@ watch(
         >
           내보내기
         </button>
-        <button type="button" class="btn btn--primary" @click="activeTab = 'metadata'; metadataEditing = true">
-          캠페인 편집
-        </button>
+        <div class="campaign-hero__edit-stack">
+          <button type="button" class="btn btn--primary" @click="activeTab = 'metadata'; metadataEditing = true">
+            캠페인 편집
+          </button>
+          <router-link
+            v-if="campaignId"
+            :to="{ name: 'campaign-intro', params: { campaignId } }"
+            class="btn btn--secondary"
+          >
+            캠페인 소개
+          </router-link>
+        </div>
       </div>
     </header>
 
@@ -1364,6 +1374,10 @@ watch(
 
     <section v-else-if="activeTab === '캠페인 성과/KPI'" class="tab-surface">
       <CampaignKpiTab :campaign-id="campaignId" />
+    </section>
+
+    <section v-else-if="activeTab === '매칭 탭'" class="tab-surface">
+      <MatchOverview :campaign-id="campaignId" />
     </section>
 
     <Teleport to="body">
@@ -1861,6 +1875,17 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.campaign-hero__edit-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+.campaign-hero__edit-stack > .btn {
+  text-align: center;
+  justify-content: center;
 }
 
 .campaign-tabs {

@@ -48,6 +48,18 @@ export const UpdateCampaignStatus = async (campaignId, status) => {
   return unwrapResponse(await api.patch(`/campaigns/${campaignId}/status`, { status }))
 }
 
+export const GetCampaignIntro = async (campaignId) => {
+  return unwrapResponse(await api.get(`/campaigns/${campaignId}/intro`))
+}
+
+export const UpdateCampaignIntro = async (campaignId, payload) => {
+  return unwrapResponse(await api.patch(`/campaigns/${campaignId}/intro`, payload))
+}
+
+export const SubmitCampaignProposal = async (campaignId, payload) => {
+  return unwrapResponse(await api.post(`/campaigns/${campaignId}/proposals`, payload))
+}
+
 export const InvitePartners = async (campaignId, partners) => {
   return unwrapResponse(await api.post(`/campaigns/${campaignId}/partners/invitations`, { partners }))
 }
@@ -92,6 +104,9 @@ export default {
   CreateCampaign,
   UpdateCampaign,
   UpdateCampaignStatus,
+  GetCampaignIntro,
+  UpdateCampaignIntro,
+  SubmitCampaignProposal,
   InvitePartners,
   ExportCampaignCsv,
   ExportCampaignPdf,
