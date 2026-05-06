@@ -168,6 +168,30 @@ function resolvePayload(payload) {
   return payload?.result ?? payload?.data ?? payload ?? {}
 }
 
+function resolveProfileImageGenerationError(error) {
+  if (error?.code === 'ECONNABORTED') {
+    return '이미지 생성 시간이 너무 오래 걸리고 있습니다. 잠시 후 다시 시도해 주세요.'
+  }
+
+  if (error?.response?.status === 503) {
+    return 'OpenAI 이미지 API 키 설정을 확인해 주세요. 서버 실행 환경에 OPEN_API_IMAGE가 필요합니다.'
+  }
+
+  if (error?.response?.status === 502) {
+    return 'OpenAI 이미지 생성 요청이 실패했습니다. 프롬프트, 모델 권한, 결제/쿼터 상태를 확인해 주세요.'
+  }
+
+  const responseData = error?.response?.data
+
+  return (
+    responseData?.message ??
+    responseData?.error?.message ??
+    responseData?.data ??
+    error?.message ??
+    '프로필 이미지를 생성하지 못했습니다. 프롬프트나 API 설정을 확인해 주세요.'
+  )
+}
+
 function syncProfileForm() {
   Object.assign(profileForm, {
     name: userSettingsStore.profile.name,
@@ -375,10 +399,7 @@ async function requestImageGeneration() {
     closeImageGenerationModal()
   } catch (error) {
     console.error('Profile image generation failed.', error)
-    feedback.profileError =
-      error?.response?.data?.message ??
-      error?.response?.data?.error?.message ??
-      '프로필 이미지를 생성하지 못했습니다. 프롬프트나 API 설정을 확인해 주세요.'
+    feedback.profileError = resolveProfileImageGenerationError(error)
   } finally {
     isGeneratingImage.value = false
   }

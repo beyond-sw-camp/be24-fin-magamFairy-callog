@@ -1,5 +1,7 @@
 import api from '/plugins/interceptor.js'
 
+const PROFILE_IMAGE_GENERATION_TIMEOUT_MS = 180000
+
 export const getMyProfile = async () => {
   return api.get('/user-profiles/me')
 }
@@ -21,7 +23,9 @@ export const deleteMyProfileImage = async () => {
 }
 
 export const generateMyProfileImage = async (body) => {
-  return api.post('/user-profiles/me/profile-image/generate', body)
+  return api.post('/user-profiles/me/profile-image/generate', body, {
+    timeout: PROFILE_IMAGE_GENERATION_TIMEOUT_MS,
+  })
 }
 
 export const getMyProfileImageHistories = async () => {
