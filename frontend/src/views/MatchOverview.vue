@@ -1,7 +1,6 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
-import { ListAssets } from '@/api/matchingAssets'
 
 import CampaignMatching from '@/components/matchengine/CampaignMatching.vue'
 import MatchDashboard from '@/components/matchengine/MatchDashboard.vue'
@@ -15,6 +14,7 @@ const currentTab = ref('dashboard')
 const goalCount = ref(2)
 const assetBenefitCount = ref(0)
 const partnerProposalCount = 3
+const matchingCriteria = ref(null)
 const settingCount = computed(() => goalCount.value + assetBenefitCount.value)
 
 const tabs = computed(() => [
@@ -68,20 +68,10 @@ function updateGoalCount(count) {
   goalCount.value = Number(count ?? 0)
 }
 
-function moveToMatchingTab() {
+function moveToMatchingTab(criteria) {
+  matchingCriteria.value = criteria ?? null
   currentTab.value = 'matching'
 }
-
-async function loadAssetBenefitCount() {
-  try {
-    const data = await ListAssets()
-    updateAssetBenefitCount(data.totalElements ?? data.assetList?.length ?? data.length ?? 0)
-  } catch {
-    updateAssetBenefitCount(0)
-  }
-}
-
-onMounted(loadAssetBenefitCount)
 
 </script>
 
@@ -103,17 +93,14 @@ onMounted(loadAssetBenefitCount)
     </nav>
 
     <main class="match-view__body">
-      <transition name="match-fade" mode="out-in">
-        <KeepAlive>
-          <component
-            :is="currentComponent"
-            :isDark="isDark"
-            @asset-count-change="updateAssetBenefitCount"
-            @goal-count-change="updateGoalCount"
-            @request-matching="moveToMatchingTab"
-          />
-        </KeepAlive>
-      </transition>
+      <component
+        :is="currentComponent"
+        :isDark="isDark"
+        :recommendationCriteria="matchingCriteria"
+        @asset-count-change="updateAssetBenefitCount"
+        @goal-count-change="updateGoalCount"
+        @request-matching="moveToMatchingTab"
+      />
     </main>
   </section>
 </template>
@@ -204,19 +191,6 @@ onMounted(loadAssetBenefitCount)
   gap: 0;
   min-width: 0;
   min-height: 0;
-}
-
-.match-fade-enter-active,
-.match-fade-leave-active {
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
-}
-
-.match-fade-enter-from,
-.match-fade-leave-to {
-  opacity: 0;
-  transform: translateY(4px);
 }
 
 @media (max-width: 1200px) {

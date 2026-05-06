@@ -1,7 +1,9 @@
 package org.example.backend.matching.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.example.backend.organization.model.Organization;
 import org.springframework.data.domain.Page;
 
@@ -178,10 +180,13 @@ public class MatchingDto {
 
     @Getter
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class AddGoal {
         private String name;
         private GoalType primaryType;
         private GoalType secondaryType;
+        private CampaignMethod campaignMethod;
 
         private String kpiPrimary;
         private String kpiSecondary;

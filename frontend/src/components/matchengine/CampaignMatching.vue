@@ -1,30 +1,57 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
-defineProps({
+const props = defineProps({
   isDark: {
     type: Boolean,
     default: false,
   },
+  recommendationCriteria: {
+    type: Object,
+    default: null,
+  },
 })
 
-const selectedGoal = ref('vip')
+const selectedGoal = ref('PURCHASE_BOOKING')
 const selectedComboId = ref(1)
 const detailMode = ref('summary')
 const operationHandoff = ref(null)
 
 const goals = [
-  { id: 'vip', name: 'VIP 혜택 강화', count: 2 },
-  { id: 'new_cust', name: '신규 고객 유입', count: 1 },
-  { id: 'room_res', name: '객실 예약 증가', count: 1 },
-  { id: 'app_join', name: '앱 가입 증가', count: 1 },
-  { id: 'brand_exp', name: '브랜드 노출', count: 2 },
+  { id: 'NEW_CUSTOMER', name: '신규 고객 유입', count: 1 },
+  { id: 'CUSTOMER_REVISIT', name: '기존 고객 재방문', count: 1 },
+  { id: 'MEMBER_SIGNUP', name: '회원 가입 유도', count: 1 },
+  { id: 'PURCHASE_BOOKING', name: '구매/예약 유도', count: 1 },
+  { id: 'BRAND_AWARENESS', name: '브랜드 인지도 확대', count: 2 },
+  { id: 'REVENUE', name: '매출 증대', count: 1 },
+  { id: 'UPSELL', name: '객단가/업셀 향상', count: 1 },
+  { id: 'DIRECT_BOOKING', name: '직접예약 비중 확대', count: 1 },
+  { id: 'REVIEW_REPUTATION', name: '리뷰/평판 개선', count: 1 },
+  { id: 'OTHER', name: '기타', count: 0 },
 ]
+
+const campaignMethodLabels = {
+  COUPON_DISCOUNT: '쿠폰/할인 혜택',
+  TRIAL_GIFT: '체험권/사은품 제공',
+  MEMBERSHIP_LOYALTY: '멤버십·로열티 강화',
+  JOINT_PROMOTION: '공동 프로모션',
+  CONTENT_COLLABORATION: '콘텐츠 협업',
+  CHANNEL_APP_PROMOTION: '채널/앱 프로모션',
+  OTHER: '기타',
+}
+
+const sortLabels = {
+  HIGH_SCORE: '점수 높은 순',
+  LOW_EFFORT: '운영 쉬운 순',
+  BRAND_FIT: '브랜드 적합도 높은 순',
+}
 
 const combinations = [
   {
     id: 1,
-    goal: 'vip',
+    goal: 'UPSELL',
+    methods: ['MEMBERSHIP_LOYALTY', 'COUPON_DISCOUNT'],
+    benefitIds: [1],
     title: '갤러리아 VIP 프리미엄 리프레시',
     grade: '최우선 추천',
     partner: '스타벅스 코리아',
@@ -36,10 +63,14 @@ const combinations = [
     schedule: '기획 2주 / 운영 3주',
     risk: '쿠폰 소진 속도 제한 필요',
     score: 94,
+    effortScore: 78,
+    brandScore: 92,
   },
   {
     id: 2,
-    goal: 'room_res',
+    goal: 'PURCHASE_BOOKING',
+    methods: ['TRIAL_GIFT', 'JOINT_PROMOTION'],
+    benefitIds: [2],
     title: '호텔앤드리조트 액티브 스테이',
     grade: '우선 검토',
     partner: '나이키 코리아',
@@ -51,10 +82,14 @@ const combinations = [
     schedule: '기획 3주 / 운영 1개월',
     risk: '클래스 일정 확정 필요',
     score: 88,
+    effortScore: 82,
+    brandScore: 86,
   },
   {
     id: 3,
-    goal: 'app_join',
+    goal: 'MEMBER_SIGNUP',
+    methods: ['CHANNEL_APP_PROMOTION', 'COUPON_DISCOUNT'],
+    benefitIds: [3],
     title: '앱 신규 가입 시네마 베네핏',
     grade: '우선 검토',
     partner: 'CGV',
@@ -66,22 +101,66 @@ const combinations = [
     schedule: '기획 1주 / 운영 2주',
     risk: '예매권 조건 문구 검수',
     score: 82,
+    effortScore: 90,
+    brandScore: 80,
   },
 ]
 
+const criteriaSummary = computed(() => {
+  const criteria = props.recommendationCriteria ?? {}
+
+  return {
+    goal: goals.find((goal) => goal.id === selectedGoal.value)?.name ?? '-',
+    methods: (criteria.campaignMethods ?? []).map((method) => campaignMethodLabels[method] ?? method),
+    benefitCount: criteria.benefitIds?.length ?? 0,
+    sort: sortLabels[criteria.sortType] ?? sortLabels.HIGH_SCORE,
+  }
+})
+
 const visibleCombinations = computed(() => {
-  const filtered = combinations.filter((combo) => combo.goal === selectedGoal.value)
-  return filtered.length ? filtered : combinations
+  const criteria = props.recommendationCriteria ?? {}
+  const methodFilters = Array.isArray(criteria.campaignMethods) ? criteria.campaignMethods : []
+  const benefitFilters = Array.isArray(criteria.benefitIds) ? criteria.benefitIds : []
+
+  const filtered = combinations.filter((combo) => {
+    if (combo.goal !== selectedGoal.value) return false
+    if (methodFilters.length && !methodFilters.some((method) => combo.methods?.includes(method))) return false
+    if (benefitFilters.length && !benefitFilters.some((benefitId) => combo.benefitIds?.includes(benefitId))) return false
+    return true
+  })
+
+  const results = filtered.length ? filtered : combinations
+  const sortType = criteria.sortType ?? 'HIGH_SCORE'
+
+  return [...results].sort((a, b) => {
+    if (sortType === 'LOW_EFFORT') return (b.effortScore ?? 0) - (a.effortScore ?? 0)
+    if (sortType === 'BRAND_FIT') return (b.brandScore ?? 0) - (a.brandScore ?? 0)
+    return (b.score ?? 0) - (a.score ?? 0)
+  })
+})
+
+const isFallbackRecommendation = computed(() => {
+  return visibleCombinations.value.some((combo) => combo.goal === selectedGoal.value) === false
 })
 
 const selectedCombo = computed(
-  () => combinations.find((combo) => combo.id === selectedComboId.value) ?? visibleCombinations.value[0],
+  () => visibleCombinations.value.find((combo) => combo.id === selectedComboId.value) ?? visibleCombinations.value[0] ?? null,
 )
 
 function selectGoal(goalId) {
   selectedGoal.value = goalId
-  selectedComboId.value = visibleCombinations.value[0]?.id ?? combinations[0].id
+  selectedComboId.value = visibleCombinations.value[0]?.id ?? null
 }
+
+watch(
+  () => props.recommendationCriteria,
+  (criteria) => {
+    if (!criteria?.goalType) return
+    selectedGoal.value = criteria.goalType
+    selectedComboId.value = visibleCombinations.value[0]?.id ?? combinations[0]?.id ?? null
+  },
+  { immediate: true },
+)
 
 function scoreTone(score) {
   if (score >= 90) return 'match-tone--strong'
@@ -136,6 +215,17 @@ const operationTasks = [
         <h3>추천 조합</h3>
         <span>{{ visibleCombinations.length }}건</span>
       </div>
+
+      <section class="match-criteria">
+        <span>목표: {{ criteriaSummary.goal }}</span>
+        <span>방식: {{ criteriaSummary.methods.length ? criteriaSummary.methods.join(', ') : '전체' }}</span>
+        <span>파트너 필터: {{ criteriaSummary.benefitCount ? `${criteriaSummary.benefitCount}개 선택` : '전체' }}</span>
+        <span>정렬: {{ criteriaSummary.sort }}</span>
+      </section>
+
+      <p v-if="isFallbackRecommendation" class="match-fallback">
+        선택 조건과 정확히 일치하는 예시가 없어 전체 추천 후보를 보여줍니다.
+      </p>
 
       <button
         v-for="combo in visibleCombinations"
@@ -247,6 +337,11 @@ const operationTasks = [
         </div>
       </template>
     </aside>
+
+    <aside v-else class="match-panel match-detail match-empty">
+      <strong>추천 조합을 불러오지 못했습니다.</strong>
+      <p>조건을 완화하거나 다시 추천을 실행해 주세요.</p>
+    </aside>
   </section>
 </template>
 
@@ -284,6 +379,26 @@ const operationTasks = [
 .match-detail {
   background: var(--panel-color);
   border-color: var(--border-strong);
+}
+
+.match-empty {
+  align-content: center;
+  justify-items: center;
+  min-height: 18rem;
+  text-align: center;
+}
+
+.match-empty strong {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.match-empty p {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 0.76rem;
+  font-weight: 750;
 }
 
 .match-panel__head {
@@ -347,6 +462,35 @@ const operationTasks = [
 .match-detail__title p {
   color: var(--muted-text);
   font-size: 0.74rem;
+}
+
+.match-fallback {
+  margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  color: var(--muted-text);
+  padding: 0.55rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.match-criteria {
+  display: grid;
+  gap: 0.32rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  padding: 0.6rem 0.65rem;
+}
+
+.match-criteria span {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .match-goal--active,
