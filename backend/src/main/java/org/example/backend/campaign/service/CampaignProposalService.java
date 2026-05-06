@@ -49,7 +49,7 @@ public class CampaignProposalService {
                 .type(dto.getAsset().getType())
                 .scale(dto.getAsset().getScale())
                 .conditions(dto.getAsset().getConditions())
-                .isActive(true)
+     //           .isActive(true)
                 .build();
         MarketingAsset savedAsset = assetRepository.save(asset);
 
