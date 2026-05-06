@@ -73,6 +73,11 @@ export async function resetPasswordRequest(payload) {
   return unwrapResponse(response)
 }
 
+export async function changePasswordRequest(payload) {
+  const response = await api.patch('/auth/password', payload)
+  return unwrapResponse(response)
+}
+
 export async function deleteUserRequest(payload) {
   const response = await api.post('/auth/userdelete', payload)
   return unwrapResponse(response)

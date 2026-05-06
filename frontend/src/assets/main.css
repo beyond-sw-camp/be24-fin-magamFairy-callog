@@ -45,7 +45,7 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 24px;
+  padding: var(--density-page-padding, 24px);
 }
 /* ─────────────────────────────────────────────────────── */
 
@@ -163,7 +163,7 @@
 .ghost-button,
 .soft-button,
 .icon-button {
-  min-height: 2.7rem;
+  min-height: var(--density-control-height, 2.7rem);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 0 0.95rem;

@@ -46,9 +46,15 @@ public class CampaignDto {
             String initials,
             String color,
             Date createdAt,
-            Date updatedAt
+            Date updatedAt,
+            CampaignMemberRole myCampaignRole,
+            boolean organizationIsPm
     ) {
         public static Res from(Campaign entity) {
+            return from(entity, null, false);
+        }
+
+        public static Res from(Campaign entity, CampaignMemberRole myCampaignRole, boolean organizationIsPm) {
             return Res.builder()
                     .id(String.valueOf(entity.getIdx()))
                     .idx(entity.getIdx())
@@ -66,6 +72,8 @@ public class CampaignDto {
                     .color(entity.getColor())
                     .createdAt(entity.getCreatedAt())
                     .updatedAt(entity.getUpdatedAt())
+                    .myCampaignRole(myCampaignRole)
+                    .organizationIsPm(organizationIsPm)
                     .build();
         }
     }

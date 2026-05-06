@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUserSettingsStore } from '@/stores/userSettings'
+import { useTeamTaskStore } from '@/stores/teamTask'
 import CampaignCreateModal from '@/components/campaign/CampaignCreateModal.vue'
 import { campaignLabels, campaignSidebarText, campaignStatusMeta } from '@/constants/campaignText'
 import { CreateCampaign, UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
@@ -13,6 +14,7 @@ const router = useRouter()
 const store = usePlannerStore()
 const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
+const teamTaskStore = useTeamTaskStore()
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'callog-sidebar2-width'
 const SIDEBAR_DEFAULT_WIDTH = 240
@@ -103,9 +105,20 @@ const contextMenuStyle = computed(() => ({
 
 const contextCampaignStatus = computed(() => getCampaignStatusMeta(contextCampaign.value?.status))
 
+// 캠페인 편집(메타데이터/상태/협력사 초대) 권한:
+//   1) 내 조직이 이 캠페인의 PM
+//   2) 내 캠페인 멤버 역할이 MANAGER 또는 GENERAL_MANAGER
+// 둘 다 만족해야 컨텍스트 메뉴(수정/완료/일시정지) 노출
+function canEditCampaign(campaign) {
+  if (!campaign) return false
+  const role = campaign.myCampaignRole
+  return Boolean(campaign.organizationIsPm) && (role === 'MANAGER' || role === 'GENERAL_MANAGER')
+}
+
 const contextMenuActions = computed(() => {
   const campaign = contextCampaign.value
   if (!campaign) return []
+  if (!canEditCampaign(campaign)) return []
   return [
     {
       key: 'edit',
@@ -198,9 +211,7 @@ function getProgressPercent(campaign) {
 }
 
 function getTaskCount(campaign) {
-  const list = store.tasks
-  if (!Array.isArray(list)) return 0
-  return list.filter((task) => task?.campaignId === campaign.id).length
+  return teamTaskStore.countByCampaignId[String(campaign.id)] ?? 0
 }
 
 function clamp(value, min, max) {
@@ -346,6 +357,10 @@ function openEditModal(campaignId) {
 
 function openCampaignMenu(campaign, event) {
   event.preventDefault()
+  if (!canEditCampaign(campaign)) {
+    // 권한 없으면 메뉴 자체를 띄우지 않음
+    return
+  }
   contextMenuPosition.left = clamp(event.clientX + 8, FLOAT_MARGIN, window.innerWidth - MENU_WIDTH - FLOAT_MARGIN)
   contextMenuPosition.top = clamp(event.clientY + 8, FLOAT_MARGIN, window.innerHeight - MENU_HEIGHT_ESTIMATE - FLOAT_MARGIN)
   contextCampaignId.value = campaign.id
@@ -378,6 +393,16 @@ async function saveExistingCampaign(campaignId, payload) {
 async function handleContextMenuAction(action) {
   const campaign = contextCampaign.value
   if (!campaign) return
+  // DOM 우회 방지용 안전망 — 백엔드도 동일 가드를 가짐
+  if (!canEditCampaign(campaign)) {
+    console.warn('캠페인 편집 권한 없음', {
+      organizationIsPm: campaign.organizationIsPm,
+      myCampaignRole: campaign.myCampaignRole,
+    })
+    alert('캠페인을 편집할 권한이 없습니다. (PM사 매니저/총괄 매니저만 가능)')
+    closeCampaignMenu()
+    return
+  }
   if (action.key === 'edit') { openEditModal(campaign.id); return }
   if (action.nextStatus) {
     try {
@@ -389,6 +414,12 @@ async function handleContextMenuAction(action) {
       }
     } catch (error) {
       console.warn('Campaign status update failed', error)
+      const status = error?.response?.status
+      if (status === 403) {
+        alert('캠페인을 편집할 권한이 없습니다.')
+      } else {
+        alert('캠페인 상태를 변경하지 못했습니다.')
+      }
       return
     }
   }
@@ -494,6 +525,7 @@ onMounted(() => {
   }
   window.addEventListener('pointerdown', handleGlobalPointerDown)
   window.addEventListener('keydown', handleGlobalKeydown)
+  teamTaskStore.fetch()
 })
 
 onBeforeUnmount(() => {
@@ -530,6 +562,7 @@ onBeforeUnmount(() => {
             {{ viewMode === 'compact' ? '확장' : '간단' }}
           </button>
           <button
+            v-if="authStore.canCreateCampaign"
             type="button"
             class="campaign-list__create-btn"
             :title="campaignLabels.createCampaign"
@@ -761,14 +794,9 @@ onBeforeUnmount(() => {
         >
           <div class="chp-cover__gradient" />
 
-          <!-- 회사 로고 원형 -->
+          <!-- 캠페인 이니셜 원형 -->
           <div class="chp-cover__logo">
-            <img
-              v-if="userSettingsStore.profile.companyLogoDataUrl"
-              :src="userSettingsStore.profile.companyLogoDataUrl"
-              alt="logo"
-            />
-            <span v-else>{{ hoveredCampaign.initials }}</span>
+            <span>{{ hoveredCampaign.initials }}</span>
           </div>
 
           <!-- 기간 배지 -->
