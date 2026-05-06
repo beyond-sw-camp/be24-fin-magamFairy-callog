@@ -20,6 +20,12 @@ project:
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
   secure-cookie: ${SECURE_COOKIE:false}
+aws:
+  s3:
+    bucket-name: ${AWS_BUCKET_NAME}
+    access-key: ${AWS_ACCESS_KEY}
+    secret-key: ${AWS_SECRET_KEY}
+    region: ap-northeast-2
 admin:
   id: ${ADMIN_ID}
   email: ${ADMIN_EMAIL}

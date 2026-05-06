@@ -39,18 +39,24 @@ public class UserProfile extends BaseEntity {
     @Column(length = 30)
     private String phone;
 
-    @Setter
     @Column(name = "profile_image_key", length = 512)
     private String profileImageKey;
 
-    @Setter
     @Column(name = "profile_image_url", length = 1000)
     private String profileImageUrl;
 
-    public void update(String email, String phone, String profileImageKey, String profileImageUrl) {
+    public void updateContact(String email, String phone) {
         this.email = email;
         this.phone = phone;
+    }
+
+    public void updateProfileImageKey(String profileImageKey) {
         this.profileImageKey = profileImageKey;
-        this.profileImageUrl = profileImageUrl;
+        this.profileImageUrl = null;
+    }
+
+    public void clearProfileImage() {
+        this.profileImageKey = null;
+        this.profileImageUrl = null;
     }
 }

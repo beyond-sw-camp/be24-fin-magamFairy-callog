@@ -2,7 +2,14 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSettings, updateSettings } from '@/api/settings/index.js'
-import { getMyProfile, updateMyProfile } from '@/api/userProfiles/index.js'
+import {
+  createProfileImageUploadUrl,
+  deleteMyProfileImage,
+  getMyProfile,
+  updateMyProfile,
+  updateMyProfileImage,
+  uploadProfileImageToS3,
+} from '@/api/userProfiles/index.js'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePlannerStore } from '@/stores/planner'
 import { useUserSettingsStore } from '@/stores/userSettings'
@@ -39,6 +46,9 @@ const densityOptions = [
   { value: 'compact', label: '촘촘하게' },
 ]
 
+const ALLOWED_PROFILE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
+const MAX_PROFILE_IMAGE_SIZE = 5 * 1024 * 1024
+
 const tabIds = new Set(tabs.map((tab) => tab.id))
 const profileForm = reactive({
   name: '',
@@ -56,6 +66,9 @@ const feedback = reactive({
 })
 const isImageGenerationModalOpen = ref(false)
 const imageGenerationPrompt = ref('')
+const isSavingProfile = ref(false)
+const pendingProfileImageFile = ref(null)
+const shouldRemoveProfileImage = ref(false)
 
 const activeTab = computed(() => {
   const requestedTab = String(route.query.tab || 'profile')
@@ -177,23 +190,62 @@ function toggleThemeUiValue(key) {
   void syncSettingToServer({ [key]: nextValue })
 }
 
-function handleProfileImageUpload(event) {
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+function validateProfileImageFile(file) {
+  if (!ALLOWED_PROFILE_IMAGE_TYPES.has(file.type)) {
+    return 'PNG, JPG, WEBP 형식의 이미지만 업로드할 수 있습니다.'
+  }
+
+  if (file.size <= 0 || file.size > MAX_PROFILE_IMAGE_SIZE) {
+    return '프로필 이미지는 5MB 이하로 선택해 주세요.'
+  }
+
+  return ''
+}
+
+async function handleProfileImageUpload(event) {
   const file = event.target.files?.[0]
 
   if (!file) {
     return
   }
 
-  const reader = new FileReader()
-  reader.onload = () => {
-    profileForm.imageDataUrl = String(reader.result || '')
+  const validationMessage = validateProfileImageFile(file)
+
+  if (validationMessage) {
+    feedback.profile = ''
+    feedback.profileError = validationMessage
+    event.target.value = ''
+    return
   }
-  reader.readAsDataURL(file)
+
+  try {
+    profileForm.imageDataUrl = await readFileAsDataUrl(file)
+    pendingProfileImageFile.value = file
+    shouldRemoveProfileImage.value = false
+    feedback.profile = ''
+    feedback.profileError = ''
+  } catch {
+    feedback.profile = ''
+    feedback.profileError = '프로필 이미지를 읽지 못했습니다. 다른 파일을 선택해 주세요.'
+  }
+
   event.target.value = ''
 }
 
 function clearProfileImage() {
   profileForm.imageDataUrl = ''
+  pendingProfileImageFile.value = null
+  shouldRemoveProfileImage.value = true
 }
 
 function handleCompanyLogoUpload(event) {
@@ -238,15 +290,32 @@ function requestImageGeneration() {
   closeImageGenerationModal()
 }
 
-function resolveProfileImagePayload() {
-  if (!profileForm.imageDataUrl || profileForm.imageDataUrl.startsWith('data:')) {
-    return {}
+async function syncProfileImageToServer() {
+  if (pendingProfileImageFile.value) {
+    const file = pendingProfileImageFile.value
+    const presignedResponse = await createProfileImageUploadUrl({
+      fileName: file.name,
+      contentType: file.type,
+      fileSize: file.size,
+    })
+    const presignedPayload = resolveProfilePayload(presignedResponse.data)
+
+    await uploadProfileImageToS3({
+      uploadUrl: presignedPayload.uploadUrl,
+      file,
+      contentType: presignedPayload.contentType || file.type,
+    })
+
+    return updateMyProfileImage({
+      objectKey: presignedPayload.objectKey,
+    })
   }
 
-  return {
-    profileImageKey: null,
-    profileImageUrl: profileForm.imageDataUrl,
+  if (shouldRemoveProfileImage.value) {
+    return deleteMyProfileImage()
   }
+
+  return null
 }
 
 async function saveProfile() {
@@ -262,24 +331,25 @@ async function saveProfile() {
     return
   }
 
+  isSavingProfile.value = true
+
   try {
+    await syncProfileImageToServer()
     const response = await updateMyProfile({
       email,
       phone,
-      ...resolveProfileImagePayload(),
     })
 
     applyRemoteProfile(response.data)
-    userSettingsStore.updateProfile({
-      ...profileForm,
-      email,
-      phone,
-    })
+    pendingProfileImageFile.value = null
+    shouldRemoveProfileImage.value = false
     syncProfileForm()
     feedback.profile = '프로필 정보가 저장되었습니다.'
   } catch (error) {
     console.error('프로필 저장 API 호출에 실패했습니다.', error)
     feedback.profileError = '프로필 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    isSavingProfile.value = false
   }
 }
 
@@ -383,7 +453,13 @@ watch(
           <section class="settings-profile">
             <div class="profile-preview">
               <div class="profile-preview__image">
-                <img v-if="profileForm.imageDataUrl" :src="profileForm.imageDataUrl" alt="" />
+                <img
+                  v-if="profileForm.imageDataUrl"
+                  :src="profileForm.imageDataUrl"
+                  alt=""
+                  crossorigin="anonymous"
+                  referrerpolicy="strict-origin-when-cross-origin"
+                />
                 <span v-else>{{ userSettingsStore.profileInitials }}</span>
               </div>
               <div>
@@ -404,7 +480,7 @@ watch(
                 이미지 선택
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/png,image/jpeg,image/webp"
                   class="settings-file"
                   @change="handleProfileImageUpload"
                 />
@@ -485,7 +561,13 @@ watch(
           <footer class="settings-actions">
             <p v-if="feedback.profileError" class="settings-error">{{ feedback.profileError }}</p>
             <p v-else-if="feedback.profile" class="settings-success">{{ feedback.profile }}</p>
-            <button type="submit" class="settings-button settings-button--primary">저장</button>
+            <button
+              type="submit"
+              class="settings-button settings-button--primary"
+              :disabled="isSavingProfile"
+            >
+              {{ isSavingProfile ? '저장 중' : '저장' }}
+            </button>
           </footer>
         </form>
 
@@ -1083,6 +1165,11 @@ watch(
 .settings-button--ghost:hover {
   border-color: var(--line-strong);
   background: var(--surface-control-hover);
+}
+
+.settings-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .settings-modal {

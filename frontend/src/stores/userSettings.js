@@ -219,6 +219,11 @@ function assignState(target, source) {
 function loadImage(source) {
   return new Promise((resolve, reject) => {
     const image = new Image()
+
+    if (typeof source === 'string' && !source.startsWith('data:')) {
+      image.crossOrigin = 'anonymous'
+    }
+
     image.onload = () => resolve(image)
     image.onerror = reject
     image.src = source
@@ -232,6 +237,16 @@ function triggerDownload(dataUrl, filename) {
   document.body.append(anchor)
   anchor.click()
   anchor.remove()
+}
+
+function createPersistableProfile(profile) {
+  const nextProfile = { ...profile }
+
+  if (nextProfile.imageDataUrl && !nextProfile.imageDataUrl.startsWith('data:')) {
+    nextProfile.imageDataUrl = ''
+  }
+
+  return nextProfile
 }
 
 export const useUserSettingsStore = defineStore('userSettings', () => {
@@ -261,7 +276,7 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     storage.setItem(
       storageKey.value,
       JSON.stringify({
-        profile: { ...profile },
+        profile: createPersistableProfile(profile),
         themeUi: { ...themeUi },
         security: { ...security },
         generatorPrompt: generatorPrompt.value,
@@ -386,7 +401,7 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     context.clip()
 
     try {
-      if (profile.imageDataUrl?.startsWith('data:')) {
+      if (profile.imageDataUrl) {
         const image = await loadImage(profile.imageDataUrl)
         context.drawImage(image, 68, 78, 148, 148)
       } else {
