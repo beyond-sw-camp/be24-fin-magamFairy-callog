@@ -7,9 +7,15 @@ import MatchDashboard from '@/components/matchengine/MatchDashboard.vue'
 import MatchSettings from '@/components/matchengine/MatchSettings.vue'
 import PartnerEvaluation from '@/components/matchengine/PartnerEvaluation.vue'
 
+const props = defineProps({
+  // 캠페인별 한정 보기 모드용. 없으면 전체 글로벌 뷰 (옵션 1).
+  campaignId: { type: [String, Number], default: null },
+})
+
 const store = usePlannerStore()
 
 const isDark = computed(() => store.theme === 'dark')
+const isScopedToCampaign = computed(() => props.campaignId != null && props.campaignId !== '')
 const currentTab = ref('dashboard')
 const goalCount = ref(2)
 const assetBenefitCount = ref(0)

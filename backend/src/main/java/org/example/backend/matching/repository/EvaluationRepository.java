@@ -7,5 +7,6 @@ import java.util.Optional;
 
 
 public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
-    Optional<Evaluation> findByCampaignIdxAndOrganizationIdx(Long campaignIdx, Long organizationIdx);
+    Optional<Evaluation> findBySessionId(String attr0);
+//    Optional<Evaluation> findByCampaignIdxAndOrganizationIdx(Long campaignIdx, Long organizationIdx);
 }

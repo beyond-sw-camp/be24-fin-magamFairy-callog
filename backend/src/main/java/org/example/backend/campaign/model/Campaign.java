@@ -45,6 +45,7 @@ public class Campaign extends BaseEntity {
     @ElementCollection
     @CollectionTable(name = "campaign_tag", joinColumns = @JoinColumn(name = "campaign_idx"))
     @Column(name = "tag", length = 80)
+    @org.hibernate.annotations.BatchSize(size = 50)
     private List<String> tags = new ArrayList<>();
 
     private LocalDate startDate;
@@ -55,6 +56,7 @@ public class Campaign extends BaseEntity {
     @ElementCollection
     @CollectionTable(name = "campaign_partner", joinColumns = @JoinColumn(name = "campaign_idx"))
     @Column(name = "partner", length = 120)
+    @org.hibernate.annotations.BatchSize(size = 50)
     private List<String> partners = new ArrayList<>();
 
     @Column(columnDefinition = "TEXT")
@@ -66,6 +68,17 @@ public class Campaign extends BaseEntity {
     @Builder.Default
     @Column(nullable = false, length = 30)
     private String status = "draft";
+
+    @Column(columnDefinition = "TEXT")
+    private String kpiAnalysis;
+
+    public void updateKpiAnalysis(String kpiAnalysis) {
+        this.kpiAnalysis = kpiAnalysis;
+    }
+
+    public boolean isClosed() {
+        return "closed".equals(this.status);
+    }
 
     @Column(nullable = false, length = 20)
     private String initials;
