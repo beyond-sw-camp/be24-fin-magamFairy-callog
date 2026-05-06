@@ -30,7 +30,7 @@ public class OpenAiProfileImageClient {
     @Value("${openai.image.model:gpt-image-1.5}")
     private String model;
 
-    @Value("${openai.image.quality:medium}")
+    @Value("${openai.image.quality:low}")
     private String quality;
 
     public OpenAiProfileImageClient() {
