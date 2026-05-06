@@ -46,6 +46,11 @@ spring:
       hibernate:
         format_sql: true
 
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
 logging:
   level:
     org.hibernate.SQL: debug
@@ -60,3 +65,6 @@ logging:
 custom:
   n8n:
     webhook-url: ${N8N_URL}
+    ad-check-url: ${N8N_AD_CHECK_URL}
+  ocr:
+    url: ${OCR_SERVICE_URL:http://localhost:8000/ocr}
