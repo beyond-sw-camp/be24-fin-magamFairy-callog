@@ -1,6 +1,6 @@
 import api from '/plugins/interceptor.js'
 
-const PROFILE_IMAGE_GENERATION_TIMEOUT_MS = 180000
+const PROFILE_IMAGE_GENERATION_TIMEOUT_MS = 120000
 
 export const getMyProfile = async () => {
   return api.get('/user-profiles/me')
