@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUserSettingsStore } from '@/stores/userSettings'
+import { getMyProfile } from '@/api/userProfiles/index.js'
 import { getNoti } from '@/api/notifications/index.js'
 import { formatRelativeTime } from '@/utils/datechange.js'
 
@@ -133,6 +134,48 @@ function resolveUserSettingsKey(user) {
     store.currentUserId ??
     'guest'
   )
+}
+
+function resolveProfilePayload(payload) {
+  return payload?.result ?? payload?.data ?? payload ?? {}
+}
+
+function applyRemoteProfile(payload) {
+  const source = resolveProfilePayload(payload)
+  const nextProfile = {
+    name: source.name,
+    email: source.email,
+    phone: source.phone,
+  }
+
+  if (Object.prototype.hasOwnProperty.call(source, 'profileImageUrl')) {
+    nextProfile.imageDataUrl = source.profileImageUrl || ''
+  }
+
+  Object.keys(nextProfile).forEach((key) => {
+    if (nextProfile[key] === undefined || nextProfile[key] === null) {
+      delete nextProfile[key]
+    }
+  })
+
+  userSettingsStore.updateProfile(nextProfile)
+}
+
+async function refreshProfileCard() {
+  if (!authStore.isAuthenticated) {
+    return
+  }
+
+  try {
+    const response = await getMyProfile()
+    applyRemoteProfile(response.data)
+  } catch (error) {
+    console.warn('Profile image refresh failed.', error)
+  }
+}
+
+function handleProfileImageError() {
+  userSettingsStore.updateProfile({ imageDataUrl: '' })
 }
 
 const getNotifications = async () => {
@@ -342,6 +385,7 @@ watch(
   () => [userSettingsKey.value, authStore.user],
   () => {
     userSettingsStore.loadUserSettings(userSettingsKey.value, authStore.user)
+    void refreshProfileCard()
   },
   { immediate: true, deep: true },
 )
@@ -486,7 +530,14 @@ onBeforeUnmount(() => {
           :aria-expanded="profileCardOpen"
           @click.stop="toggleProfileCard"
         >
-          <img v-if="profileCard.imageDataUrl" :src="profileCard.imageDataUrl" alt="" />
+          <img
+            v-if="profileCard.imageDataUrl"
+            :src="profileCard.imageDataUrl"
+            alt=""
+            crossorigin="anonymous"
+            referrerpolicy="strict-origin-when-cross-origin"
+            @error="handleProfileImageError"
+          />
           <span v-else>{{ profileCard.initials }}</span>
         </button>
 
@@ -576,7 +627,14 @@ onBeforeUnmount(() => {
       >
         <div class="callog-profile-card__hero">
           <div class="callog-profile-card__avatar">
-            <img v-if="profileCard.imageDataUrl" :src="profileCard.imageDataUrl" alt="" />
+            <img
+              v-if="profileCard.imageDataUrl"
+              :src="profileCard.imageDataUrl"
+              alt=""
+              crossorigin="anonymous"
+              referrerpolicy="strict-origin-when-cross-origin"
+              @error="handleProfileImageError"
+            />
             <span v-else>{{ profileCard.initials }}</span>
           </div>
           <div>

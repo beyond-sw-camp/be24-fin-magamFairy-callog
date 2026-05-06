@@ -266,6 +266,16 @@ function createPersistableProfile(profile) {
   return nextProfile
 }
 
+function sanitizeSavedProfile(source) {
+  const nextProfile = { ...(source ?? {}) }
+
+  if (nextProfile.imageDataUrl && !String(nextProfile.imageDataUrl).startsWith('data:')) {
+    nextProfile.imageDataUrl = ''
+  }
+
+  return nextProfile
+}
+
 export const useUserSettingsStore = defineStore('userSettings', () => {
   const activeUserKey = ref('guest')
   const profile = reactive({ ...fallbackProfile })
@@ -304,7 +314,7 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
 
     const storage = getStorage()
     const savedSettings = safeParse(storage?.getItem(storageKey.value)) ?? {}
-    const nextProfile = normalizeProfile(savedSettings.profile, rawUser)
+    const nextProfile = normalizeProfile(sanitizeSavedProfile(savedSettings.profile), rawUser)
     const nextThemeUi = normalizeThemeUi(savedSettings.themeUi)
 
     assignState(profile, nextProfile)
