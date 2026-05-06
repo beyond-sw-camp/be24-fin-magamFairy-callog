@@ -40,6 +40,24 @@ const routes = [
         },
       },
       {
+        path: 'campaigns/:campaignId/intro',
+        name: 'campaign-intro',
+        component: () => import('@/views/CampaignIntroView.vue'),
+        meta: {
+          title: '캠페인 소개',
+          section: '캠페인 소개 페이지',
+        },
+      },
+      {
+        path: 'campaigns/:campaignId/proposal/new',
+        name: 'campaign-proposal-new',
+        component: () => import('@/views/CampaignProposalSubmitView.vue'),
+        meta: {
+          title: '제안서 제출',
+          section: '파트너 제안서 작성',
+        },
+      },
+      {
         path: 'content/new',
         name: 'content-create',
         component: () => import('@/views/ContentEditorView.vue'),

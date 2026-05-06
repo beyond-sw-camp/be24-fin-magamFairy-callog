@@ -7,8 +7,10 @@ import org.example.backend.userInfo.userProfile.service.UserProfileService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,6 +36,60 @@ public class UserProfileController {
     ) {
         return ResponseEntity.ok(BaseResponse.success(
                 userProfileService.updateMyProfile(currentUser(authentication), dto)
+        ));
+    }
+
+    @PostMapping("/me/profile-image/presigned-url")
+    public ResponseEntity<BaseResponse> createProfileImageUploadUrl(
+            @RequestBody UserProfileDto.ProfileImageUploadUrlReq dto,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                userProfileService.createProfileImageUploadUrl(currentUser(authentication), dto)
+        ));
+    }
+
+    @PatchMapping("/me/profile-image")
+    public ResponseEntity<BaseResponse> updateProfileImage(
+            @RequestBody UserProfileDto.ProfileImageCommitReq dto,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                userProfileService.updateProfileImage(currentUser(authentication), dto)
+        ));
+    }
+
+    @DeleteMapping("/me/profile-image")
+    public ResponseEntity<BaseResponse> deleteProfileImage(Authentication authentication) {
+        return ResponseEntity.ok(BaseResponse.success(
+                userProfileService.deleteProfileImage(currentUser(authentication))
+        ));
+    }
+
+    @PostMapping("/me/profile-image/generate")
+    public ResponseEntity<BaseResponse> generateProfileImage(
+            @RequestBody UserProfileDto.ProfileImageGenerateReq dto,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                userProfileService.generateProfileImage(currentUser(authentication), dto)
+        ));
+    }
+
+    @GetMapping("/me/profile-image/histories")
+    public ResponseEntity<BaseResponse> getProfileImageHistories(Authentication authentication) {
+        return ResponseEntity.ok(BaseResponse.success(
+                userProfileService.getProfileImageHistories(currentUser(authentication))
+        ));
+    }
+
+    @PatchMapping("/me/profile-image/select")
+    public ResponseEntity<BaseResponse> selectProfileImage(
+            @RequestBody UserProfileDto.ProfileImageSelectReq dto,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                userProfileService.selectProfileImage(currentUser(authentication), dto)
         ));
     }
 

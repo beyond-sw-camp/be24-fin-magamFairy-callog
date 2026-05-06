@@ -28,6 +28,7 @@ public class EvaluationService {
     private final UserRepository userRepository;
     private final AssetRepository assetRepository;
     private final BenefitRepository benefitRepository;
+    private final GoalRepository goalRepository;
     private final RestClient restClient;
 
     @Value("${custom.n8n.webhook-url}")
@@ -39,13 +40,15 @@ public class EvaluationService {
                 .orElseThrow(() -> new EntityNotFoundException("해당 Asset을 찾을 수 없습니다. Asset ID: " + dto.getAssetIdx()));
         PartnerBenefits requiredBenefit = benefitRepository.findById(dto.getBenefitIdx())
                 .orElseThrow(() -> new EntityNotFoundException("해당 Benefit을 찾을 수 없습니다. Benefit ID: " + dto.getBenefitIdx()));
+        CampaignGoal requiredGoal = goalRepository.findById(dto.getGoalIdx())
+                .orElseThrow(() -> new EntityNotFoundException("해당 Goal을 찾을 수 없습니다. Goal ID: " + dto.getGoalIdx()));
 
         EvaluationDto.StartEvaluation eval;
         eval = EvaluationDto.StartEvaluation.builder()
-                .kpi(dto.getKpi())
                 .dependency(dto.getDependency())
-                .asset(EvaluationDto.StartEvaluation.AssetRes.toDto(requiredAsset))
+                .asset(MatchingDto.AssetRes.toDto(requiredAsset))
                 .benefit(EvaluationDto.StartEvaluation.BenefitRes.toDto(requiredBenefit))
+                .goal(EvaluationDto.StartEvaluation.CampaignGoalRes.toDto(requiredGoal))
                 .build();
 
         try {

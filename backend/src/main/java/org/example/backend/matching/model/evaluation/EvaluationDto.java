@@ -3,9 +3,9 @@ package org.example.backend.matching.model.evaluation;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.*;
-import org.example.backend.matching.model.MarketingAsset;
-import org.example.backend.matching.model.PartnerBenefits;
+import org.example.backend.matching.model.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public class EvaluationDto {
@@ -13,36 +13,36 @@ public class EvaluationDto {
     @Getter
     @Builder
     public static class StartEvaluationReq {
-        private String kpi;
         private Double dependency;
         private Long assetIdx;
         private Long benefitIdx;
+        private Long goalIdx;
     }
 
     @Getter
     @Builder
     public static class StartEvaluation {
-        private String kpi;
         private Double dependency; // 0.5와 같은 소수점을 처리하기 위해 Double 사용
-        private AssetRes asset;
+        private MatchingDto.AssetRes asset;
         private BenefitRes benefit;
+        private CampaignGoalRes goal;
 
-        @Getter
-        @Builder
-        public static class AssetRes {
-            private String type;
-            private String target;
-            private String conditions;
-            private String scale;
-            public static AssetRes toDto(MarketingAsset entity){
-                return AssetRes.builder()
-                        .type(entity.getType())
-                        .target(entity.getTarget())
-                        .conditions(entity.getConditions())
-                        .scale(entity.getScale())
-                        .build();
-            }
-        }
+//        @Getter
+//        @Builder
+//        public static class AssetRes {
+//            private String type;
+//            private String target;
+//            private String conditions;
+//            private String scale;
+//            public static AssetRes toDto(MarketingAsset entity){
+//                return AssetRes.builder()
+//                        .type(entity.getType())
+//                        .target(entity.getTarget())
+//                        .conditions(entity.getConditions())
+//                        .scale(entity.getScale())
+//                        .build();
+//            }
+//        }
 
         @Getter
         @Builder
@@ -59,6 +59,42 @@ public class EvaluationDto {
                         .scale(entity.getScale())
                         .target(entity.getTarget())
                         .type(entity.getType())
+                        .build();
+            }
+        }
+
+        @Getter
+        @Builder
+        public static class CampaignGoalRes {
+            private String name;
+            private GoalType primary;
+            private GoalType secondary;
+            private String kpiPrimary;
+            private String kpiSecondary;
+            private String budgetLimit;
+            private String effortLimit;
+            private LocalDate periodStart;
+            private LocalDate periodEnd;
+            private Integer weightRevenue;
+            private Integer weightEffort;
+            private Integer weightBrand;
+            private String status;
+
+            public static CampaignGoalRes toDto(CampaignGoal entity) {
+                return CampaignGoalRes.builder()
+                        .name(entity.getName())
+                        .primary(entity.getPrimaryType())
+                        .secondary(entity.getSecondaryType())
+                        .kpiPrimary(entity.getKpiPrimary())
+                        .kpiSecondary(entity.getKpiSecondary())
+                        .budgetLimit(entity.getBudgetLimit())
+                        .effortLimit(entity.getEffortLimit())
+                        .periodStart(entity.getPeriodStart())
+                        .periodEnd(entity.getPeriodEnd())
+                        .weightRevenue(entity.getWeightRevenue())
+                        .weightEffort(entity.getWeightEffort())
+                        .weightBrand(entity.getWeightBrand())
+                        .status(entity.getStatus())
                         .build();
             }
         }

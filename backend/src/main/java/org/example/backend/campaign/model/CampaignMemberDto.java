@@ -53,6 +53,15 @@ public class CampaignMemberDto {
 
     public record UpdateRoleReq(CampaignMemberRole campaignRole) {}
 
+    public record ParticipantRes(Long idx, String organizationName) {
+        public static ParticipantRes from(CampaignParticipant entity) {
+            return new ParticipantRes(
+                    entity.getIdx(),
+                    entity.getOrganization() != null ? entity.getOrganization().getName() : null
+            );
+        }
+    }
+
     @Builder
     public record CandidateRes(
             Long userIdx,

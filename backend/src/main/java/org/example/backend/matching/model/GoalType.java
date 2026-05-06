@@ -1,12 +1,14 @@
 package org.example.backend.matching.model;
 
 public enum GoalType {
-    // 보조 목표
     NEW_CUSTOMER,
-    VIP_BENEFIT,
-    ROOM_BOOKING,
-    APP_JOIN,
-    MEMBER_REVISIT,
-    BRAND_EXPOSURE,
-    REVENUE
+    CUSTOMER_REVISIT,
+    MEMBER_SIGNUP,
+    PURCHASE_BOOKING,
+    BRAND_AWARENESS,
+    REVENUE,
+    UPSELL,
+    DIRECT_BOOKING,
+    REVIEW_REPUTATION,
+    OTHER
 }
