@@ -11,6 +11,7 @@ const fallbackProfile = {
   phone: '010-0000-0000',
   email: 'user@callog.com',
   imageDataUrl: '',
+  profileImageKey: '',
   companyLogoDataUrl: '',
 }
 
@@ -196,6 +197,7 @@ function normalizeProfile(source, rawUser = null) {
       'profileImageUrl',
       'avatar',
     ]),
+    profileImageKey: readFirstString(rawUser, ['profileImageKey']),
     companyLogoDataUrl: readFirstString(rawUser, [
       'companyLogoDataUrl',
       'companyLogo',
@@ -221,6 +223,7 @@ function normalizeProfile(source, rawUser = null) {
     phone: String(mergedProfile.phone || fallbackProfile.phone).trim(),
     email: String(mergedProfile.email || fallbackProfile.email).trim(),
     imageDataUrl: String(mergedProfile.imageDataUrl || createDefaultAvatarDataUrl(initials)).trim(),
+    profileImageKey: String(mergedProfile.profileImageKey || '').trim(),
     companyLogoDataUrl: String(mergedProfile.companyLogoDataUrl || '').trim(),
   }
 }

@@ -5,7 +5,10 @@ import { changePasswordRequest } from '@/authApi'
 import {
   createProfileImageUploadUrl,
   deleteMyProfileImage,
+  generateMyProfileImage,
   getMyProfile,
+  getMyProfileImageHistories,
+  selectMyProfileImageHistory,
   updateMyProfile,
   updateMyProfileImage,
   uploadProfileImageToS3,
@@ -48,6 +51,7 @@ const densityOptions = [
 
 const ALLOWED_PROFILE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const MAX_PROFILE_IMAGE_SIZE = 5 * 1024 * 1024
+const PROFILE_IMAGE_GENERATION_SIZE = 1024
 const tabIds = new Set(tabs.map((tab) => tab.id))
 
 const profileForm = reactive({
@@ -58,6 +62,7 @@ const profileForm = reactive({
   phone: '',
   email: '',
   imageDataUrl: '',
+  profileImageKey: '',
   companyLogoDataUrl: '',
 })
 
@@ -77,10 +82,17 @@ const feedback = reactive({
 const isImageGenerationModalOpen = ref(false)
 const imageGenerationPrompt = ref('')
 const isSavingProfile = ref(false)
+const isGeneratingImage = ref(false)
+const isLoadingImageHistories = ref(false)
 const isChangingPassword = ref(false)
 const isRefreshingSession = ref(false)
+const selectingHistoryId = ref(null)
 const pendingProfileImageFile = ref(null)
 const shouldRemoveProfileImage = ref(false)
+const profileImageHistories = reactive({
+  appliedImages: [],
+  generatedImages: [],
+})
 
 const activeTab = computed(() => {
   const requestedTab = String(route.query.tab || 'profile')
@@ -91,9 +103,7 @@ const currentTab = computed(() => tabs.find((tab) => tab.id === activeTab.value)
 const isDarkMode = computed(() => plannerStore.theme === 'dark')
 const userKey = computed(() => resolveUserKey(authStore.user))
 const accountEmail = computed(() => profileForm.email || userSettingsStore.profile.email)
-const tokenStatus = computed(() =>
-  authStore.hasFreshAccessToken?.() ? '활성 세션' : '갱신 필요',
-)
+const tokenStatus = computed(() => (authStore.hasFreshAccessToken?.() ? '활성 세션' : '갱신 필요'))
 const accountRows = computed(() => [
   { label: '로그인 ID', value: readUserValue(['id', 'loginId', 'sub']) || userKey.value },
   { label: '이름', value: profileForm.name },
@@ -120,14 +130,13 @@ const passwordPolicyItems = computed(() => {
     },
   ]
 })
-const isPasswordPolicyValid = computed(() =>
-  passwordPolicyItems.value.every((item) => item.valid),
-)
-const isPasswordFormReady = computed(() =>
-  Boolean(passwordForm.currentPassword) &&
-  Boolean(passwordForm.newPassword) &&
-  passwordForm.newPassword === passwordForm.confirmPassword &&
-  isPasswordPolicyValid.value,
+const isPasswordPolicyValid = computed(() => passwordPolicyItems.value.every((item) => item.valid))
+const isPasswordFormReady = computed(
+  () =>
+    Boolean(passwordForm.currentPassword) &&
+    Boolean(passwordForm.newPassword) &&
+    passwordForm.newPassword === passwordForm.confirmPassword &&
+    isPasswordPolicyValid.value,
 )
 
 function resolveUserKey(user) {
@@ -150,9 +159,9 @@ function readUserValue(keys) {
     return ''
   }
 
-  return keys
-    .map((key) => user[key])
-    .find((value) => typeof value === 'string' && value.trim()) ?? ''
+  return (
+    keys.map((key) => user[key]).find((value) => typeof value === 'string' && value.trim()) ?? ''
+  )
 }
 
 function resolvePayload(payload) {
@@ -168,6 +177,7 @@ function syncProfileForm() {
     phone: userSettingsStore.profile.phone,
     email: userSettingsStore.profile.email,
     imageDataUrl: userSettingsStore.profile.imageDataUrl,
+    profileImageKey: userSettingsStore.profile.profileImageKey || '',
     companyLogoDataUrl: userSettingsStore.profile.companyLogoDataUrl,
   })
 }
@@ -191,6 +201,10 @@ function applyRemoteProfile(payload) {
 
   if (Object.prototype.hasOwnProperty.call(source, 'profileImageUrl')) {
     nextProfile.imageDataUrl = source.profileImageUrl || ''
+  }
+
+  if (Object.prototype.hasOwnProperty.call(source, 'profileImageKey')) {
+    nextProfile.profileImageKey = source.profileImageKey || ''
   }
 
   Object.keys(nextProfile).forEach((key) => {
@@ -307,18 +321,97 @@ function closeImageGenerationModal() {
   isImageGenerationModalOpen.value = false
 }
 
-function requestImageGeneration() {
-  const prompt = imageGenerationPrompt.value.trim()
+function applyProfileImageHistories(payload) {
+  const source = resolvePayload(payload)
 
-  if (!prompt) {
+  profileImageHistories.appliedImages = Array.isArray(source.appliedImages)
+    ? source.appliedImages
+    : []
+  profileImageHistories.generatedImages = Array.isArray(source.generatedImages)
+    ? source.generatedImages
+    : []
+}
+
+async function loadProfileImageHistories() {
+  if (!authStore.isAuthenticated) {
+    applyProfileImageHistories({})
     return
   }
 
-  userSettingsStore.setGeneratorPrompt(prompt)
-  userSettingsStore.markImageGenerationReady()
-  feedback.profile = '프로필 이미지 생성 프롬프트가 저장되었습니다.'
+  isLoadingImageHistories.value = true
+
+  try {
+    const response = await getMyProfileImageHistories()
+    applyProfileImageHistories(response.data)
+  } catch (error) {
+    console.warn('Profile image histories load failed.', error)
+  } finally {
+    isLoadingImageHistories.value = false
+  }
+}
+
+async function requestImageGeneration() {
+  const prompt = imageGenerationPrompt.value.trim()
+
+  if (!prompt || isGeneratingImage.value) {
+    return
+  }
+
   feedback.profileError = ''
-  closeImageGenerationModal()
+  feedback.profile = ''
+  isGeneratingImage.value = true
+
+  try {
+    userSettingsStore.setGeneratorPrompt(prompt)
+    const response = await generateMyProfileImage({
+      prompt,
+      size: PROFILE_IMAGE_GENERATION_SIZE,
+    })
+    const payload = resolvePayload(response.data)
+
+    applyProfileImageHistories(payload.histories)
+    feedback.profile =
+      '생성 이미지가 기록에 추가되었습니다. 미리보기에서 적용할 이미지를 선택해 주세요.'
+    closeImageGenerationModal()
+  } catch (error) {
+    console.error('Profile image generation failed.', error)
+    feedback.profileError =
+      error?.response?.data?.message ??
+      error?.response?.data?.error?.message ??
+      '프로필 이미지를 생성하지 못했습니다. 프롬프트나 API 설정을 확인해 주세요.'
+  } finally {
+    isGeneratingImage.value = false
+  }
+}
+
+async function applyProfileImageHistory(history) {
+  if (!history?.id || selectingHistoryId.value) {
+    return
+  }
+
+  feedback.profile = ''
+  feedback.profileError = ''
+  selectingHistoryId.value = history.id
+
+  try {
+    const response = await selectMyProfileImageHistory({
+      historyId: history.id,
+    })
+    const payload = resolvePayload(response.data)
+
+    applyRemoteProfile(payload.profile)
+    applyProfileImageHistories(payload.histories)
+    syncProfileForm()
+    pendingProfileImageFile.value = null
+    shouldRemoveProfileImage.value = false
+    feedback.profile = '선택한 프로필 이미지가 적용되었습니다.'
+  } catch (error) {
+    console.error('Profile image history select failed.', error)
+    feedback.profileError =
+      '선택한 프로필 이미지를 적용하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    selectingHistoryId.value = null
+  }
 }
 
 async function syncProfileImageToServer() {
@@ -378,6 +471,7 @@ async function saveProfile() {
     pendingProfileImageFile.value = null
     shouldRemoveProfileImage.value = false
     syncProfileForm()
+    await loadProfileImageHistories()
     feedback.profile = '프로필 정보가 저장되었습니다.'
   } catch (error) {
     console.error('Profile save failed.', error)
@@ -392,6 +486,7 @@ async function loadRemoteProfile() {
     const response = await getMyProfile()
     applyRemoteProfile(response.data)
     syncProfileForm()
+    await loadProfileImageHistories()
   } catch (error) {
     console.warn('Profile load failed. Local settings will be used.', error)
   }
@@ -495,7 +590,9 @@ watch(
       <div>
         <p class="settings-eyebrow">SETTING_001</p>
         <h2 class="settings-heading">환경설정</h2>
-        <p class="settings-subtitle">계정 기준으로 적용되는 개인 환경 설정을 확인하고 즉시 변경합니다.</p>
+        <p class="settings-subtitle">
+          계정 기준으로 적용되는 개인 환경 설정을 확인하고 즉시 변경합니다.
+        </p>
       </div>
       <div class="settings-status" :class="{ 'is-dark': isDarkMode }">
         <span class="settings-status__dot" />
@@ -573,6 +670,99 @@ watch(
               >
                 이미지 제거
               </button>
+            </div>
+          </section>
+
+          <section class="profile-history">
+            <div class="profile-history__section">
+              <div class="profile-history__head">
+                <strong>최근 적용한 이미지</strong>
+                <span>{{
+                  isLoadingImageHistories
+                    ? '불러오는 중'
+                    : `${profileImageHistories.appliedImages.length}/3`
+                }}</span>
+              </div>
+              <div v-if="profileImageHistories.appliedImages.length" class="profile-history__grid">
+                <article
+                  v-for="image in profileImageHistories.appliedImages"
+                  :key="`applied-${image.id}`"
+                  class="profile-history-card"
+                  :class="{
+                    'is-current':
+                      image.objectKey && image.objectKey === profileForm.profileImageKey,
+                  }"
+                >
+                  <img :src="image.imageUrl" alt="" crossorigin="anonymous" />
+                  <div>
+                    <strong>{{ image.source === 'AI' ? 'AI 이미지' : '업로드 이미지' }}</strong>
+                    <small>{{ image.prompt || '직접 업로드' }}</small>
+                  </div>
+                  <button
+                    type="button"
+                    class="settings-button settings-button--ghost"
+                    :disabled="
+                      selectingHistoryId === image.id ||
+                      (image.objectKey && image.objectKey === profileForm.profileImageKey)
+                    "
+                    @click="applyProfileImageHistory(image)"
+                  >
+                    {{
+                      image.objectKey && image.objectKey === profileForm.profileImageKey
+                        ? '사용 중'
+                        : '적용'
+                    }}
+                  </button>
+                </article>
+              </div>
+              <p v-else class="profile-history__empty">아직 적용 기록이 없습니다.</p>
+            </div>
+
+            <div class="profile-history__section">
+              <div class="profile-history__head">
+                <strong>최근 생성한 이미지</strong>
+                <span>{{
+                  isLoadingImageHistories
+                    ? '불러오는 중'
+                    : `${profileImageHistories.generatedImages.length}/3`
+                }}</span>
+              </div>
+              <div
+                v-if="profileImageHistories.generatedImages.length"
+                class="profile-history__grid"
+              >
+                <article
+                  v-for="image in profileImageHistories.generatedImages"
+                  :key="`generated-${image.id}`"
+                  class="profile-history-card"
+                  :class="{
+                    'is-current':
+                      image.objectKey && image.objectKey === profileForm.profileImageKey,
+                  }"
+                >
+                  <img :src="image.imageUrl" alt="" crossorigin="anonymous" />
+                  <div>
+                    <strong>생성 이미지</strong>
+                    <small>{{ image.prompt || '프롬프트 없음' }}</small>
+                  </div>
+                  <button
+                    type="button"
+                    class="settings-button settings-button--ghost"
+                    :disabled="
+                      selectingHistoryId === image.id ||
+                      (image.objectKey && image.objectKey === profileForm.profileImageKey)
+                    "
+                    @click="applyProfileImageHistory(image)"
+                  >
+                    {{
+                      image.objectKey && image.objectKey === profileForm.profileImageKey
+                        ? '사용 중'
+                        : '적용'
+                    }}
+                  </button>
+                </article>
+              </div>
+              <p v-else class="profile-history__empty">생성한 이미지가 여기에 표시됩니다.</p>
             </div>
           </section>
 
@@ -812,7 +1002,9 @@ watch(
               </li>
             </ul>
             <footer class="settings-actions">
-              <p v-if="feedback.securityError" class="settings-error">{{ feedback.securityError }}</p>
+              <p v-if="feedback.securityError" class="settings-error">
+                {{ feedback.securityError }}
+              </p>
               <p v-else-if="feedback.security" class="settings-success">{{ feedback.security }}</p>
               <button
                 type="submit"
@@ -842,7 +1034,7 @@ watch(
           >
             <header class="settings-modal__header">
               <div>
-                <p class="settings-eyebrow">240 x 240</p>
+                <p class="settings-eyebrow">1024 x 1024</p>
                 <h3>프로필 이미지 생성</h3>
               </div>
               <button
@@ -858,7 +1050,7 @@ watch(
             <div class="settings-modal__body">
               <div class="settings-modal__preview">
                 <span class="material-symbols-outlined">auto_awesome</span>
-                <strong>240</strong>
+                <strong>1024</strong>
                 <small>PNG</small>
               </div>
               <label class="settings-field">
@@ -872,7 +1064,8 @@ watch(
                 />
               </label>
               <p class="settings-modal__note">
-                현재는 이미지 생성 API 연동 전 준비 단계이며, 입력한 문구만 저장됩니다.
+                생성 이미지는 바로 적용되지 않고 생성 기록에 저장됩니다. 미리보기에서 원하는
+                이미지를 적용해 주세요.
               </p>
             </div>
 
@@ -887,9 +1080,9 @@ watch(
               <button
                 type="submit"
                 class="settings-button settings-button--primary"
-                :disabled="!imageGenerationPrompt.trim()"
+                :disabled="!imageGenerationPrompt.trim() || isGeneratingImage"
               >
-                생성 준비
+                {{ isGeneratingImage ? '생성 중' : '이미지 생성' }}
               </button>
             </footer>
           </form>
@@ -1206,6 +1399,92 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.profile-history {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.profile-history__section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: var(--density-card-padding, 14px);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card-muted);
+}
+
+.profile-history__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.profile-history__head strong {
+  color: var(--text-heading);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.profile-history__head span,
+.profile-history__empty,
+.profile-history-card small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-history__grid {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-history-card {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 78px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+
+.profile-history-card.is-current {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
+}
+
+.profile-history-card img {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface-control);
+}
+
+.profile-history-card div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.profile-history-card strong,
+.profile-history-card small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-history-card strong {
+  color: var(--text-heading);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .settings-file {
@@ -1603,6 +1882,10 @@ watch(
     grid-template-columns: 1fr;
   }
 
+  .profile-history {
+    grid-template-columns: 1fr;
+  }
+
   .settings-tabs {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1635,6 +1918,14 @@ watch(
   .settings-form-grid,
   .password-policy {
     grid-template-columns: 1fr;
+  }
+
+  .profile-history-card {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .profile-history-card .settings-button {
+    grid-column: 1 / -1;
   }
 
   .settings-actions {

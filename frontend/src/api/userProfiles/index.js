@@ -20,6 +20,18 @@ export const deleteMyProfileImage = async () => {
   return api.delete('/user-profiles/me/profile-image')
 }
 
+export const generateMyProfileImage = async (body) => {
+  return api.post('/user-profiles/me/profile-image/generate', body)
+}
+
+export const getMyProfileImageHistories = async () => {
+  return api.get('/user-profiles/me/profile-image/histories')
+}
+
+export const selectMyProfileImageHistory = async (body) => {
+  return api.patch('/user-profiles/me/profile-image/select', body)
+}
+
 export const uploadProfileImageToS3 = async ({ uploadUrl, file, contentType }) => {
   const response = await fetch(uploadUrl, {
     method: 'PUT',
@@ -39,7 +51,10 @@ export const uploadProfileImageToS3 = async ({ uploadUrl, file, contentType }) =
 export default {
   createProfileImageUploadUrl,
   deleteMyProfileImage,
+  generateMyProfileImage,
   getMyProfile,
+  getMyProfileImageHistories,
+  selectMyProfileImageHistory,
   updateMyProfile,
   updateMyProfileImage,
   uploadProfileImageToS3,
