@@ -1,7 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSettings, updateSettings } from '@/api/settings/index.js'
+import { changePasswordRequest } from '@/authApi'
 import {
   createProfileImageUploadUrl,
   deleteMyProfileImage,
@@ -37,19 +37,19 @@ const tabs = [
     id: 'security',
     label: '계정/보안',
     icon: 'lock',
-    summary: '로그인 계정과 보안 진입 정보를 확인합니다.',
+    summary: '로그인 계정과 비밀번호를 관리합니다.',
   },
 ]
 
 const densityOptions = [
-  { value: 'comfortable', label: '기본' },
-  { value: 'compact', label: '촘촘하게' },
+  { value: 'comfortable', label: '기본', description: '정보 간격을 여유 있게 표시합니다.' },
+  { value: 'compact', label: '컴팩트', description: '반복 작업에 맞춰 간격을 줄입니다.' },
 ]
 
 const ALLOWED_PROFILE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const MAX_PROFILE_IMAGE_SIZE = 5 * 1024 * 1024
-
 const tabIds = new Set(tabs.map((tab) => tab.id))
+
 const profileForm = reactive({
   name: '',
   company: '',
@@ -60,13 +60,25 @@ const profileForm = reactive({
   imageDataUrl: '',
   companyLogoDataUrl: '',
 })
+
+const passwordForm = reactive({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+})
+
 const feedback = reactive({
   profile: '',
   profileError: '',
+  security: '',
+  securityError: '',
 })
+
 const isImageGenerationModalOpen = ref(false)
 const imageGenerationPrompt = ref('')
 const isSavingProfile = ref(false)
+const isChangingPassword = ref(false)
+const isRefreshingSession = ref(false)
 const pendingProfileImageFile = ref(null)
 const shouldRemoveProfileImage = ref(false)
 
@@ -75,11 +87,48 @@ const activeTab = computed(() => {
 
   return tabIds.has(requestedTab) ? requestedTab : 'profile'
 })
-
 const currentTab = computed(() => tabs.find((tab) => tab.id === activeTab.value) ?? tabs[0])
 const isDarkMode = computed(() => plannerStore.theme === 'dark')
-const accountEmail = computed(() => profileForm.email || userSettingsStore.profile.email)
 const userKey = computed(() => resolveUserKey(authStore.user))
+const accountEmail = computed(() => profileForm.email || userSettingsStore.profile.email)
+const tokenStatus = computed(() =>
+  authStore.hasFreshAccessToken?.() ? '활성 세션' : '갱신 필요',
+)
+const accountRows = computed(() => [
+  { label: '로그인 ID', value: readUserValue(['id', 'loginId', 'sub']) || userKey.value },
+  { label: '이름', value: profileForm.name },
+  { label: '회사', value: profileForm.company },
+  { label: '부서', value: profileForm.department },
+  { label: '권한', value: profileForm.role },
+  { label: '이메일', value: accountEmail.value },
+  { label: '세션', value: tokenStatus.value },
+])
+const passwordPolicyItems = computed(() => {
+  const value = passwordForm.newPassword
+
+  return [
+    { key: 'length', label: '8~20자', valid: value.length >= 8 && value.length <= 20 },
+    { key: 'upper', label: '대문자 포함', valid: /[A-Z]/.test(value) },
+    { key: 'lower', label: '소문자 포함', valid: /[a-z]/.test(value) },
+    { key: 'number', label: '숫자 포함', valid: /\d/.test(value) },
+    { key: 'special', label: '특수문자 포함', valid: /[^A-Za-z0-9]/.test(value) },
+    { key: 'space', label: '공백 없음', valid: value.length > 0 && !/\s/.test(value) },
+    {
+      key: 'different',
+      label: '현재 비밀번호와 다름',
+      valid: Boolean(value) && value !== passwordForm.currentPassword,
+    },
+  ]
+})
+const isPasswordPolicyValid = computed(() =>
+  passwordPolicyItems.value.every((item) => item.valid),
+)
+const isPasswordFormReady = computed(() =>
+  Boolean(passwordForm.currentPassword) &&
+  Boolean(passwordForm.newPassword) &&
+  passwordForm.newPassword === passwordForm.confirmPassword &&
+  isPasswordPolicyValid.value,
+)
 
 function resolveUserKey(user) {
   return (
@@ -94,15 +143,19 @@ function resolveUserKey(user) {
   )
 }
 
-function normalizeTheme(value) {
-  return value === 'light' || value === 'dark' ? value : null
+function readUserValue(keys) {
+  const user = authStore.user
+
+  if (!user || typeof user !== 'object') {
+    return ''
+  }
+
+  return keys
+    .map((key) => user[key])
+    .find((value) => typeof value === 'string' && value.trim()) ?? ''
 }
 
-function resolveSettingsPayload(payload) {
-  return payload?.result ?? payload?.data ?? payload ?? {}
-}
-
-function resolveProfilePayload(payload) {
+function resolvePayload(payload) {
   return payload?.result ?? payload?.data ?? payload ?? {}
 }
 
@@ -128,25 +181,16 @@ function selectTab(tabId) {
   })
 }
 
-function applyRemoteSettings(payload) {
-  const source = resolveSettingsPayload(payload)
-  const nextTheme =
-    normalizeTheme(source.theme) ??
-    (typeof source.darkMode === 'boolean' ? (source.darkMode ? 'dark' : 'light') : null)
-
-  if (nextTheme) {
-    plannerStore.setTheme(nextTheme)
-    userSettingsStore.updateThemeUi({ theme: nextTheme })
-  }
-}
-
 function applyRemoteProfile(payload) {
-  const source = resolveProfilePayload(payload)
+  const source = resolvePayload(payload)
   const nextProfile = {
     name: source.name,
     email: source.email,
     phone: source.phone,
-    imageDataUrl: source.profileImageUrl,
+  }
+
+  if (Object.prototype.hasOwnProperty.call(source, 'profileImageUrl')) {
+    nextProfile.imageDataUrl = source.profileImageUrl || ''
   }
 
   Object.keys(nextProfile).forEach((key) => {
@@ -158,36 +202,23 @@ function applyRemoteProfile(payload) {
   userSettingsStore.updateProfile(nextProfile)
 }
 
-async function syncSettingToServer(body) {
-  try {
-    await updateSettings(body)
-  } catch (error) {
-    console.warn('설정 저장 API 호출에 실패했습니다. 로컬 설정은 유지됩니다.', error)
-  }
-}
-
 function setTheme(nextTheme) {
   plannerStore.setTheme(nextTheme)
-  userSettingsStore.updateThemeUi({ theme: nextTheme })
-
-  void syncSettingToServer({
-    theme: nextTheme,
-    darkMode: nextTheme === 'dark',
-  })
 }
 
 function setDensity(value) {
   userSettingsStore.updateThemeUi({ density: value })
-  void syncSettingToServer({ density: value })
 }
 
 function toggleThemeUiValue(key) {
-  const nextValue = !userSettingsStore.themeUi[key]
-
   userSettingsStore.updateThemeUi({
-    [key]: nextValue,
+    [key]: !userSettingsStore.themeUi[key],
   })
-  void syncSettingToServer({ [key]: nextValue })
+}
+
+function resetDisplaySettings() {
+  plannerStore.setTheme('light')
+  userSettingsStore.resetThemeUi()
 }
 
 function readFileAsDataUrl(file) {
@@ -298,7 +329,7 @@ async function syncProfileImageToServer() {
       contentType: file.type,
       fileSize: file.size,
     })
-    const presignedPayload = resolveProfilePayload(presignedResponse.data)
+    const presignedPayload = resolvePayload(presignedResponse.data)
 
     await uploadProfileImageToS3({
       uploadUrl: presignedPayload.uploadUrl,
@@ -341,12 +372,15 @@ async function saveProfile() {
     })
 
     applyRemoteProfile(response.data)
+    userSettingsStore.updateProfile({
+      companyLogoDataUrl: profileForm.companyLogoDataUrl,
+    })
     pendingProfileImageFile.value = null
     shouldRemoveProfileImage.value = false
     syncProfileForm()
     feedback.profile = '프로필 정보가 저장되었습니다.'
   } catch (error) {
-    console.error('프로필 저장 API 호출에 실패했습니다.', error)
+    console.error('Profile save failed.', error)
     feedback.profileError = '프로필 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     isSavingProfile.value = false
@@ -359,7 +393,69 @@ async function loadRemoteProfile() {
     applyRemoteProfile(response.data)
     syncProfileForm()
   } catch (error) {
-    console.warn('프로필 정보를 불러오지 못해 로컬 설정을 사용합니다.', error)
+    console.warn('Profile load failed. Local settings will be used.', error)
+  }
+}
+
+async function refreshSession() {
+  feedback.security = ''
+  feedback.securityError = ''
+  isRefreshingSession.value = true
+
+  try {
+    const refreshed = await authStore.refreshSession()
+
+    if (!refreshed) {
+      feedback.securityError = '세션을 갱신하지 못했습니다. 다시 로그인해 주세요.'
+      await router.replace('/user/login')
+      return
+    }
+
+    feedback.security = '세션을 갱신했습니다.'
+  } finally {
+    isRefreshingSession.value = false
+  }
+}
+
+async function logout() {
+  await authStore.logout()
+  await router.replace('/user/login')
+}
+
+async function changePassword() {
+  feedback.security = ''
+  feedback.securityError = ''
+
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    feedback.securityError = '새 비밀번호 확인이 일치하지 않습니다.'
+    return
+  }
+
+  if (!isPasswordPolicyValid.value) {
+    feedback.securityError = '비밀번호 정책을 모두 만족해야 합니다.'
+    return
+  }
+
+  isChangingPassword.value = true
+
+  try {
+    await changePasswordRequest({
+      currentPassword: passwordForm.currentPassword,
+      newPassword: passwordForm.newPassword,
+    })
+    passwordForm.currentPassword = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+    feedback.security = '비밀번호가 변경되었습니다. 다시 로그인해 주세요.'
+    await authStore.logout()
+    await router.replace('/user/login')
+  } catch (error) {
+    feedback.securityError =
+      error?.response?.data?.message ??
+      error?.message ??
+      '비밀번호를 변경하지 못했습니다. 입력값을 확인해 주세요.'
+  } finally {
+    isChangingPassword.value = false
   }
 }
 
@@ -381,14 +477,6 @@ watch(
 )
 
 watch(
-  () => plannerStore.theme,
-  (nextTheme) => {
-    userSettingsStore.updateThemeUi({ theme: nextTheme })
-  },
-  { immediate: true },
-)
-
-watch(
   () => authStore.isAuthenticated,
   async (isAuthenticated) => {
     if (!isAuthenticated) {
@@ -396,13 +484,6 @@ watch(
     }
 
     await loadRemoteProfile()
-
-    try {
-      const response = await getSettings()
-      applyRemoteSettings(response.data)
-    } catch (error) {
-      console.warn('설정 정보를 불러오지 못해 로컬 설정을 사용합니다.', error)
-    }
   },
   { immediate: true },
 )
@@ -414,7 +495,7 @@ watch(
       <div>
         <p class="settings-eyebrow">SETTING_001</p>
         <h2 class="settings-heading">환경설정</h2>
-        <p class="settings-subtitle">현재 적용된 개인 환경 설정을 확인하고 바로 변경합니다.</p>
+        <p class="settings-subtitle">계정 기준으로 적용되는 개인 환경 설정을 확인하고 즉시 변경합니다.</p>
       </div>
       <div class="settings-status" :class="{ 'is-dark': isDarkMode }">
         <span class="settings-status__dot" />
@@ -534,7 +615,7 @@ watch(
           <section class="settings-form-grid" aria-label="프로필 정보">
             <label class="settings-field">
               <span>이름</span>
-              <input v-model.trim="profileForm.name" type="text" autocomplete="name" />
+              <input v-model.trim="profileForm.name" type="text" autocomplete="name" readonly />
             </label>
             <label class="settings-field">
               <span>이메일</span>
@@ -546,15 +627,15 @@ watch(
             </label>
             <label class="settings-field">
               <span>회사</span>
-              <input v-model.trim="profileForm.company" type="text" />
+              <input v-model.trim="profileForm.company" type="text" readonly />
             </label>
             <label class="settings-field">
               <span>부서</span>
-              <input v-model.trim="profileForm.department" type="text" />
+              <input v-model.trim="profileForm.department" type="text" readonly />
             </label>
             <label class="settings-field">
               <span>역할</span>
-              <input v-model.trim="profileForm.role" type="text" />
+              <input v-model.trim="profileForm.role" type="text" readonly />
             </label>
           </section>
 
@@ -572,10 +653,10 @@ watch(
         </form>
 
         <div v-else-if="activeTab === 'theme'" class="settings-pane">
-          <section class="settings-block">
+          <section class="settings-block settings-block--split">
             <div>
               <strong>테마</strong>
-              <p>선택 즉시 전체 UI에 반영됩니다.</p>
+              <p>선택 즉시 전체 UI에 반영되며 브라우저 localStorage에 저장됩니다.</p>
             </div>
             <div class="settings-segmented" role="group" aria-label="테마 선택">
               <button
@@ -591,16 +672,17 @@ watch(
             </div>
           </section>
 
-          <section class="settings-block">
+          <section class="settings-block settings-block--split">
             <div>
               <strong>화면 밀도</strong>
-              <p>반복 작업에 맞춰 정보 간격을 조정합니다.</p>
+              <p>업무 화면의 여백과 컨트롤 높이를 사용 방식에 맞게 조정합니다.</p>
             </div>
             <div class="settings-segmented" role="group" aria-label="화면 밀도 선택">
               <button
                 v-for="option in densityOptions"
                 :key="option.value"
                 type="button"
+                :title="option.description"
                 :class="{ 'is-active': userSettingsStore.themeUi.density === option.value }"
                 @click="setDensity(option.value)"
               >
@@ -613,7 +695,7 @@ watch(
             <div class="settings-row">
               <div>
                 <strong>모션 줄이기</strong>
-                <p>전환 애니메이션을 더 차분하게 표시합니다.</p>
+                <p>전환 애니메이션과 움직임을 최소화합니다.</p>
               </div>
               <button
                 type="button"
@@ -629,7 +711,7 @@ watch(
             <div class="settings-row">
               <div>
                 <strong>고대비 표시</strong>
-                <p>텍스트와 경계 대비를 높이는 표시 옵션입니다.</p>
+                <p>텍스트와 경계 대비를 높여 화면 요소를 더 뚜렷하게 표시합니다.</p>
               </div>
               <button
                 type="button"
@@ -643,27 +725,104 @@ watch(
               </button>
             </div>
           </section>
+
+          <section class="settings-preview" aria-label="화면 설정 미리보기">
+            <div class="settings-preview__sample">
+              <div class="settings-preview__line">
+                <strong>업무 카드 미리보기</strong>
+                <span>오늘</span>
+              </div>
+              <p>현재 테마, 밀도, 고대비 설정이 적용된 공통 카드 예시입니다.</p>
+              <div class="settings-preview__actions">
+                <button type="button">검토</button>
+                <button type="button">완료</button>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="settings-button settings-button--ghost"
+              @click="resetDisplaySettings"
+            >
+              화면 설정 초기화
+            </button>
+          </section>
         </div>
 
         <div v-else class="settings-pane">
-          <section class="settings-account">
-            <div class="settings-account__row">
-              <span>로그인 계정</span>
-              <strong>{{ accountEmail }}</strong>
-            </div>
-            <div class="settings-account__row">
-              <span>권한</span>
-              <strong>{{ userSettingsStore.profile.role }}</strong>
-            </div>
-            <div class="settings-account__row">
-              <span>세션 상태</span>
-              <strong>{{ userSettingsStore.security.sessionStatus }}</strong>
-            </div>
-            <div class="settings-account__row">
-              <span>비밀번호</span>
-              <strong>별도 기능에서 변경</strong>
+          <section class="settings-account" aria-label="계정 정보">
+            <div v-for="row in accountRows" :key="row.label" class="settings-account__row">
+              <span>{{ row.label }}</span>
+              <strong>{{ row.value || '-' }}</strong>
             </div>
           </section>
+
+          <section class="settings-security-actions">
+            <button
+              type="button"
+              class="settings-button settings-button--ghost"
+              :disabled="isRefreshingSession"
+              @click="refreshSession"
+            >
+              {{ isRefreshingSession ? '갱신 중' : '세션 갱신' }}
+            </button>
+            <button type="button" class="settings-button settings-button--danger" @click="logout">
+              로그아웃
+            </button>
+          </section>
+
+          <form class="settings-password" @submit.prevent="changePassword">
+            <div>
+              <strong>내 비밀번호 변경</strong>
+              <p>성공 시 현재 refresh token을 삭제하고 다시 로그인이 필요합니다.</p>
+            </div>
+            <div class="settings-form-grid">
+              <label class="settings-field">
+                <span>현재 비밀번호</span>
+                <input
+                  v-model="passwordForm.currentPassword"
+                  type="password"
+                  autocomplete="current-password"
+                />
+              </label>
+              <label class="settings-field">
+                <span>새 비밀번호</span>
+                <input
+                  v-model="passwordForm.newPassword"
+                  type="password"
+                  autocomplete="new-password"
+                />
+              </label>
+              <label class="settings-field">
+                <span>새 비밀번호 확인</span>
+                <input
+                  v-model="passwordForm.confirmPassword"
+                  type="password"
+                  autocomplete="new-password"
+                />
+              </label>
+            </div>
+            <ul class="password-policy">
+              <li
+                v-for="item in passwordPolicyItems"
+                :key="item.key"
+                :class="{ 'is-valid': item.valid }"
+              >
+                <span class="password-policy__dot" />
+                {{ item.label }}
+              </li>
+            </ul>
+            <footer class="settings-actions">
+              <p v-if="feedback.securityError" class="settings-error">{{ feedback.securityError }}</p>
+              <p v-else-if="feedback.security" class="settings-success">{{ feedback.security }}</p>
+              <button
+                type="submit"
+                class="settings-button settings-button--primary"
+                :disabled="isChangingPassword || !isPasswordFormReady"
+              >
+                {{ isChangingPassword ? '변경 중' : '비밀번호 변경' }}
+              </button>
+            </footer>
+          </form>
         </div>
       </article>
     </div>
@@ -692,7 +851,7 @@ watch(
                 aria-label="닫기"
                 @click="closeImageGenerationModal"
               >
-                ×
+                x
               </button>
             </header>
 
@@ -747,7 +906,7 @@ watch(
   max-width: 1180px;
   gap: 16px;
   margin: 0 auto;
-  padding: 24px;
+  padding: var(--density-page-padding, 24px);
   scrollbar-gutter: stable;
 }
 
@@ -756,7 +915,7 @@ watch(
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 2px;
+  min-height: 74px;
 }
 
 .settings-eyebrow {
@@ -857,10 +1016,6 @@ watch(
   color: var(--text-heading);
 }
 
-.settings-tab.is-active {
-  box-shadow: none;
-}
-
 .settings-tab.is-active::before {
   background: var(--accent-color);
 }
@@ -868,8 +1023,6 @@ watch(
 .settings-tab__icon {
   width: 28px;
   height: 28px;
-  align-items: center;
-  justify-content: center;
   color: var(--text-muted);
   font-size: 20px;
 }
@@ -917,87 +1070,53 @@ watch(
   align-content: center;
 }
 
-.settings-panel__head .settings-eyebrow {
+.settings-panel__head .settings-eyebrow,
+.settings-panel__head h3 {
   overflow: hidden;
-  line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.settings-panel__head .settings-eyebrow {
+  line-height: 16px;
 }
 
 .settings-panel__head h3 {
   margin-top: 4px;
-  overflow: hidden;
   color: var(--text-heading);
   font-size: 18px;
   font-weight: 800;
   line-height: 25px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .settings-pane {
   display: grid;
-  gap: 18px;
-  padding: 20px;
+  gap: var(--density-pane-gap, 18px);
+  padding: var(--density-card-padding, 20px);
 }
 
-.settings-profile {
+.settings-profile,
+.settings-logo-panel,
+.settings-block--split,
+.settings-row,
+.settings-security-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.settings-profile {
   padding-bottom: 18px;
   border-bottom: 1px solid var(--line-soft);
 }
 
-.profile-preview {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  gap: 14px;
-}
-
-.settings-logo-panel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  background: var(--surface-card-muted);
-}
-
+.profile-preview,
 .company-logo-preview {
   display: flex;
+  align-items: center;
   min-width: 0;
-  align-items: center;
   gap: 14px;
-}
-
-.company-logo-preview__image {
-  display: inline-flex;
-  width: 96px;
-  height: 54px;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-md);
-  background: var(--surface-control);
-  color: var(--text-muted);
-}
-
-.company-logo-preview__image img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  padding: 8px;
-}
-
-.company-logo-preview__image .material-symbols-outlined {
-  font-size: 24px;
 }
 
 .profile-preview__image {
@@ -1032,13 +1151,50 @@ watch(
 .profile-preview p,
 .company-logo-preview p,
 .settings-row p,
-.settings-block p {
+.settings-block p,
+.settings-password p,
+.settings-preview p {
   margin-top: 4px;
   color: var(--text-muted);
   font-size: 13px;
 }
 
-.company-logo-preview strong {
+.settings-logo-panel,
+.settings-block,
+.settings-preview,
+.settings-password {
+  padding: var(--density-card-padding, 16px);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card-muted);
+}
+
+.company-logo-preview__image {
+  display: inline-flex;
+  width: 96px;
+  height: 54px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  color: var(--text-muted);
+}
+
+.company-logo-preview__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 8px;
+}
+
+.company-logo-preview strong,
+.settings-block strong,
+.settings-row strong,
+.settings-password strong,
+.settings-preview strong {
   display: block;
   color: var(--text-heading);
   font-size: 14px;
@@ -1072,7 +1228,7 @@ watch(
 
 .settings-field input {
   width: 100%;
-  min-height: 40px;
+  min-height: var(--density-control-height, 40px);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
   background: var(--surface-control);
@@ -1083,26 +1239,14 @@ watch(
     border-color var(--transition-fast);
 }
 
+.settings-field input[readonly] {
+  color: var(--text-muted);
+}
+
 .settings-field input:focus {
   border-color: var(--accent-color);
   background: var(--control-focus-color);
   outline: none;
-}
-
-.settings-block {
-  display: grid;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  background: var(--surface-card-muted);
-}
-
-.settings-block strong,
-.settings-row strong {
-  color: var(--text-heading);
-  font-size: 14px;
-  font-weight: 800;
 }
 
 .settings-message,
@@ -1110,10 +1254,6 @@ watch(
 .settings-error {
   font-size: 13px;
   font-weight: 700;
-}
-
-.settings-message {
-  color: var(--text-muted);
 }
 
 .settings-success {
@@ -1126,7 +1266,7 @@ watch(
 
 .settings-actions {
   justify-content: flex-end;
-  min-height: 40px;
+  min-height: var(--density-control-height, 40px);
 }
 
 .settings-actions p {
@@ -1135,7 +1275,7 @@ watch(
 
 .settings-button {
   display: inline-flex;
-  min-height: 38px;
+  min-height: var(--density-control-height, 38px);
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -1162,6 +1302,12 @@ watch(
   color: var(--text-heading);
 }
 
+.settings-button--danger {
+  border: 1px solid var(--danger-color);
+  background: var(--danger-surface);
+  color: var(--danger-text-strong);
+}
+
 .settings-button--ghost:hover {
   border-color: var(--line-strong);
   background: var(--surface-control-hover);
@@ -1170,6 +1316,165 @@ watch(
 .settings-button:disabled {
   cursor: not-allowed;
   opacity: 0.62;
+}
+
+.settings-list,
+.settings-account {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+}
+
+.settings-row {
+  min-height: 74px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-card);
+}
+
+.settings-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-segmented {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-self: start;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+}
+
+.settings-segmented button {
+  min-width: 96px;
+  min-height: var(--density-control-height, 38px);
+  padding: 0 14px;
+  color: var(--text-body);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.settings-segmented button.is-active {
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+.settings-preview {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-preview__sample {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+
+.settings-preview__line,
+.settings-preview__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-preview__line span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settings-preview__actions {
+  justify-content: flex-start;
+}
+
+.settings-preview__actions button {
+  min-height: 30px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-control);
+  padding: 0 10px;
+  color: var(--text-heading);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-account__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 58px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.settings-account__row:last-child {
+  border-bottom: 0;
+}
+
+.settings-account__row span {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-account__row strong {
+  color: var(--text-heading);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.settings-security-actions {
+  justify-content: flex-start;
+}
+
+.settings-password {
+  display: grid;
+  gap: 16px;
+}
+
+.password-policy {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.password-policy li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.password-policy__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.password-policy li.is-valid {
+  color: var(--success-color);
+}
+
+.password-policy li.is-valid .password-policy__dot {
+  background: var(--success-color);
 }
 
 .settings-modal {
@@ -1223,7 +1528,7 @@ watch(
   background: var(--surface-control);
   color: var(--text-heading);
   cursor: pointer;
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1;
 }
 
@@ -1258,15 +1563,11 @@ watch(
   font-weight: 800;
 }
 
-.settings-modal__preview small {
-  font-size: 12px;
-  font-weight: 800;
-}
-
+.settings-modal__preview small,
 .settings-modal__note {
   color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .settings-modal__actions {
@@ -1297,97 +1598,13 @@ watch(
   transform: translateY(8px) scale(0.98);
 }
 
-.settings-list {
-  display: grid;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 74px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--surface-card);
-}
-
-.settings-row:last-child {
-  border-bottom: 0;
-}
-
-.settings-segmented {
-  display: inline-grid;
-  grid-auto-flow: column;
-  align-self: start;
-  overflow: hidden;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  background: var(--surface-control);
-}
-
-.settings-segmented button {
-  min-width: 96px;
-  min-height: 38px;
-  padding: 0 14px;
-  color: var(--text-body);
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.settings-segmented button.is-active {
-  background: var(--accent-strong);
-  color: #ffffff;
-}
-
-.settings-account {
-  display: grid;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.settings-account__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 58px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.settings-account__row:last-child {
-  border-bottom: 0;
-}
-
-.settings-account__row span {
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.settings-account__row strong {
-  color: var(--text-heading);
-  font-size: 14px;
-  font-weight: 800;
-  text-align: right;
-}
-
 @media (max-width: 960px) {
   .settings-shell {
     grid-template-columns: 1fr;
   }
 
   .settings-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -1399,8 +1616,10 @@ watch(
   .settings-header,
   .settings-profile,
   .settings-logo-panel,
+  .settings-block--split,
   .settings-row,
-  .settings-account__row {
+  .settings-account__row,
+  .settings-security-actions {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1413,7 +1632,8 @@ watch(
   }
 
   .settings-tabs,
-  .settings-form-grid {
+  .settings-form-grid,
+  .password-policy {
     grid-template-columns: 1fr;
   }
 

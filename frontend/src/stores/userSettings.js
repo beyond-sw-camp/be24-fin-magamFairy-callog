@@ -15,16 +15,9 @@ const fallbackProfile = {
 }
 
 const defaultThemeUi = {
-  theme: 'light',
   density: 'comfortable',
   reduceMotion: false,
   highContrast: false,
-}
-
-const defaultSecurity = {
-  accountType: '일반 사용자',
-  sessionStatus: '활성',
-  passwordChangeRoute: '',
 }
 
 function getStorage() {
@@ -78,6 +71,30 @@ function createInitials(name) {
       : normalizedName.slice(0, 2)
 
   return value.toUpperCase()
+}
+
+function normalizeDensity(value) {
+  return value === 'compact' ? 'compact' : 'comfortable'
+}
+
+function normalizeThemeUi(source = {}) {
+  return {
+    density: normalizeDensity(source.density),
+    reduceMotion: Boolean(source.reduceMotion),
+    highContrast: Boolean(source.highContrast),
+  }
+}
+
+function applyThemeUiPreferences(themeUi) {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const root = document.documentElement
+
+  root.dataset.density = normalizeDensity(themeUi.density)
+  root.dataset.motion = themeUi.reduceMotion ? 'reduced' : 'normal'
+  root.dataset.contrast = themeUi.highContrast ? 'high' : 'normal'
 }
 
 function drawRoundedRect(context, x, y, width, height, radius) {
@@ -253,7 +270,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
   const activeUserKey = ref('guest')
   const profile = reactive({ ...fallbackProfile })
   const themeUi = reactive({ ...defaultThemeUi })
-  const security = reactive({ ...defaultSecurity })
   const generatorPrompt = ref('')
   const generatorStatus = ref('ready')
   const generatorMessage = ref('OpenAI 이미지 생성 API 연동 전 준비 상태입니다.')
@@ -278,7 +294,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
       JSON.stringify({
         profile: createPersistableProfile(profile),
         themeUi: { ...themeUi },
-        security: { ...security },
         generatorPrompt: generatorPrompt.value,
       }),
     )
@@ -290,16 +305,11 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     const storage = getStorage()
     const savedSettings = safeParse(storage?.getItem(storageKey.value)) ?? {}
     const nextProfile = normalizeProfile(savedSettings.profile, rawUser)
+    const nextThemeUi = normalizeThemeUi(savedSettings.themeUi)
 
     assignState(profile, nextProfile)
-    assignState(themeUi, {
-      ...defaultThemeUi,
-      ...(savedSettings.themeUi ?? {}),
-    })
-    assignState(security, {
-      ...defaultSecurity,
-      ...(savedSettings.security ?? {}),
-    })
+    assignState(themeUi, nextThemeUi)
+    applyThemeUiPreferences(themeUi)
 
     generatorPrompt.value = String(savedSettings.generatorPrompt ?? '')
     generatorStatus.value = 'ready'
@@ -320,18 +330,19 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
   }
 
   function updateThemeUi(patch) {
-    assignState(themeUi, {
+    const nextThemeUi = normalizeThemeUi({
       ...themeUi,
       ...(patch ?? {}),
     })
+
+    assignState(themeUi, nextThemeUi)
+    applyThemeUiPreferences(themeUi)
     persist()
   }
 
-  function updateSecurity(patch) {
-    assignState(security, {
-      ...security,
-      ...(patch ?? {}),
-    })
+  function resetThemeUi() {
+    assignState(themeUi, { ...defaultThemeUi })
+    applyThemeUiPreferences(themeUi)
     persist()
   }
 
@@ -468,8 +479,16 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
       context.fillText(profile.company || 'CALLOG', 70, 350)
     }
 
+    let dataUrl = ''
+
+    try {
+      dataUrl = canvas.toDataURL('image/png')
+    } catch {
+      return false
+    }
+
     const filename = `callog-profile-card-${sanitizeUserKey(profile.name)}.png`
-    triggerDownload(canvas.toDataURL('image/png'), filename)
+    triggerDownload(dataUrl, filename)
 
     return true
   }
@@ -485,11 +504,10 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     profile,
     profileCardData,
     profileInitials,
-    security,
+    resetThemeUi,
     setGeneratorPrompt,
     themeUi,
     updateProfile,
-    updateSecurity,
     updateThemeUi,
   }
 })
