@@ -3,6 +3,8 @@ package org.example.backend.matching.service;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.example.backend.campaign.model.Campaign;
+import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.matching.model.MarketingAsset;
 import org.example.backend.matching.model.MatchingDto;
 import org.example.backend.matching.model.PartnerBenefits;
@@ -25,6 +27,7 @@ import static org.example.backend.organization.model.OrganizationType.EXTERNAL_P
 public class BenefitService {
     private final BenefitRepository benefitRepository;
     private final UserRepository userRepository;
+    private final CampaignRepository campaignRepository;
 
     public MatchingDto.BenefitRes getBenefit(Long idx) {
         return MatchingDto.BenefitRes.toDto(benefitRepository.findById(idx).orElseThrow(NoSuchElementException::new));
@@ -42,10 +45,12 @@ public class BenefitService {
     public void addBenefit(MatchingDto.AddBenefit dto, AuthUserDetails user) {
         User userEntity = userRepository.getReferenceById(user.getIdx());
         Organization affiliate = userEntity.getOrganization();
+        Campaign campaign = campaignRepository.findById(dto.getCampaignIdx()).orElseThrow();
+
         if(affiliate.getType().equals(EXTERNAL_PARTNER)){
             System.out.println("권한 거부");
         }else {
-            benefitRepository.save(dto.toEntity(affiliate));
+            benefitRepository.save(dto.toEntity(affiliate, campaign));
         }
     }
 }
