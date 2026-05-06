@@ -24,44 +24,8 @@ public class EvaluationDto {
     public static class StartEvaluation {
         private Double dependency; // 0.5와 같은 소수점을 처리하기 위해 Double 사용
         private MatchingDto.AssetRes asset;
-        private BenefitRes benefit;
+        private MatchingDto.BenefitRes benefit;
         private CampaignGoalRes goal;
-
-//        @Getter
-//        @Builder
-//        public static class AssetRes {
-//            private String type;
-//            private String target;
-//            private String conditions;
-//            private String scale;
-//            public static AssetRes toDto(MarketingAsset entity){
-//                return AssetRes.builder()
-//                        .type(entity.getType())
-//                        .target(entity.getTarget())
-//                        .conditions(entity.getConditions())
-//                        .scale(entity.getScale())
-//                        .build();
-//            }
-//        }
-
-        @Getter
-        @Builder
-        public static class BenefitRes {
-            private String cost;
-            private String name;
-            private String scale;
-            private String target;
-            private String type;
-            public static BenefitRes toDto(PartnerBenefits entity){
-                return BenefitRes.builder()
-                        .cost(entity.getCost())
-                        .name(entity.getName())
-                        .scale(entity.getScale())
-                        .target(entity.getTarget())
-                        .type(entity.getType())
-                        .build();
-            }
-        }
 
         @Getter
         @Builder

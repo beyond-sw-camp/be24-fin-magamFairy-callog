@@ -47,12 +47,12 @@ public class EvaluationService {
         eval = EvaluationDto.StartEvaluation.builder()
                 .dependency(dto.getDependency())
                 .asset(MatchingDto.AssetRes.toDto(requiredAsset))
-                .benefit(EvaluationDto.StartEvaluation.BenefitRes.toDto(requiredBenefit))
+                .benefit(MatchingDto.BenefitRes.toDto(requiredBenefit))
                 .goal(EvaluationDto.StartEvaluation.CampaignGoalRes.toDto(requiredGoal))
                 .build();
 
         try {
-            String n8nResponse = restClient.post()
+            restClient.post()
                     .uri(n8nWebhookUrl)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(eval)
