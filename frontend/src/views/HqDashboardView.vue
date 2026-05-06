@@ -1,158 +1,296 @@
 <script setup>
-import { computed } from 'vue'
-import { usePlannerStore } from '@/stores/planner'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { ListCampaign } from '@/api/campaigns'
+import { ListAllTasks } from '@/api/teamboard'
+import { useAuthStore } from '@/stores/useAuthStore'
+import HeroToggle from '@/components/dashboard/HeroToggle.vue'
+import KpiStatCard from '@/components/dashboard/KpiStatCard.vue'
+import CampaignProgressCard from '@/components/dashboard/CampaignProgressCard.vue'
+import UpcomingTaskItem from '@/components/dashboard/UpcomingTaskItem.vue'
 
-const store = usePlannerStore()
-const activeCampaign = computed(() => store.activeCampaign)
+const router = useRouter()
+const authStore = useAuthStore()
 
-const stats = [
-  { label: '전체 진행률', value: '68%', caption: '+12% this week', positive: true },
-  { label: '검토 대기', value: '3', caption: '초청장, 배너, SNS' },
-  { label: '참여 조직', value: '4', caption: '본사 포함 4개 조직' },
-  { label: '성과 기록', value: '준비중', caption: '행사 지표 입력 예정' },
-]
+// ───────── 상태 ─────────
+const scope = ref('mine')                  // "mine" | "org"
+const mineCampaigns = ref([])              // 내 캠페인 (scope=mine)
+const orgCampaigns = ref([])               // 조직 캠페인 (scope=org)
+const allTasks = ref([])                   // ListAllTasks() 결과
+const progressMode = ref('progress')       // 진행 현황 카드 필터: progress | time | task
+const loading = ref(false)
+const errorMsg = ref('')
 
-const partners = [
-  { name: '갤러리아', progress: 82 },
-  { name: '호텔앤드리조트', progress: 64 },
-  { name: '외부 대행사', progress: 58 },
-  { name: '제휴 파트너', progress: 51 },
-]
+const orgName = computed(() => authStore.user?.organization?.name ?? authStore.user?.companyName ?? '')
+const userName = computed(() => authStore.user?.name ?? authStore.user?.id ?? '')
 
-const activities = [
-  { initial: 'H', text: '본사가 메인 메시지를 승인했습니다.', time: '20분 전', primary: true },
-  { initial: 'G', text: '갤러리아가 VIP 초청장 검토를 요청했습니다.', time: '1시간 전' },
-  { initial: 'A', text: '대행사가 SNS 카드뉴스 2안을 업로드했습니다.', time: '3시간 전' },
-]
+const currentCampaigns = computed(() =>
+  scope.value === 'org' ? orgCampaigns.value : mineCampaigns.value,
+)
 
-const contents = [
-  {
-    code: 'INV',
-    title: 'VIP 초청장 문구',
-    meta: '갤러리아 VIP · 이메일/알림톡',
-    status: 'Review Requested',
-    tone: 'review',
-    primary: true,
-  },
-  {
-    code: 'BNR',
-    title: '리조트 패키지 배너',
-    meta: '가족 휴양 고객 · 랜딩 페이지',
-    status: 'Draft',
-    tone: 'draft',
-  },
-  {
-    code: 'SNS',
-    title: 'SNS 카드뉴스',
-    meta: '프리미엄 뷰티 관심 고객 · Instagram',
-    status: 'Needs Revision',
-    tone: 'revision',
-  },
-]
+// ───────── 데이터 로딩 ─────────
+async function loadCampaignsForScope(s) {
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const data = await ListCampaign({ scope: s })
+    if (s === 'org') orgCampaigns.value = Array.isArray(data) ? data : []
+    else mineCampaigns.value = Array.isArray(data) ? data : []
+  } catch (e) {
+    errorMsg.value = e?.message ?? '캠페인을 불러오지 못했습니다.'
+  } finally {
+    loading.value = false
+  }
+}
 
-const segments = ['갤러리아 VIP 고객', '리조트 회원', '프리미엄 뷰티 관심 고객', '가족 단위 휴양 고객']
+async function loadTasks() {
+  try {
+    const data = await ListAllTasks()
+    allTasks.value = Array.isArray(data) ? data : (data?.taskList ?? data?.list ?? [])
+  } catch {
+    // 태스크 로드 실패는 치명적이지 않음 — 빈 배열로 fallback
+    allTasks.value = []
+  }
+}
 
-const reviews = [
-  { label: '승인 완료', count: 1 },
-  { label: '검토 요청', count: 3 },
-  { label: '수정 필요', count: 1 },
+onMounted(async () => {
+  await Promise.all([loadCampaignsForScope('mine'), loadTasks()])
+  // 토글에 표시할 카운트를 위해 백그라운드로 org 도 미리 받아 둠
+  loadCampaignsForScope('org')
+})
+
+watch(scope, async (next) => {
+  const list = next === 'org' ? orgCampaigns.value : mineCampaigns.value
+  if (list.length === 0) {
+    await loadCampaignsForScope(next)
+  }
+})
+
+// ───────── 태스크 통계 (캠페인별 done/total) ─────────
+const taskStatsByCampaign = computed(() => {
+  const map = new Map()
+  for (const t of allTasks.value) {
+    const cid = t.campaignId ?? t.campaignIdx ?? t.campaign_id
+    if (cid == null) continue
+    const key = String(cid)
+    if (!map.has(key)) map.set(key, { done: 0, total: 0 })
+    const stat = map.get(key)
+    stat.total += 1
+    const status = (t.status ?? '').toUpperCase()
+    if (status === 'DONE' || status === 'COMPLETED') stat.done += 1
+  }
+  return map
+})
+
+function getTaskStats(campaign) {
+  const id = campaign.id ?? campaign.idx
+  return taskStatsByCampaign.value.get(String(id)) ?? { done: 0, total: 0 }
+}
+
+// ───────── KPI 카드 ─────────
+const kpiActiveCount = computed(() =>
+  currentCampaigns.value.filter(c => {
+    const s = (c.status ?? '').toLowerCase()
+    return s === 'live' || s === 'active' || s === '진행중'
+  }).length,
+)
+
+function computeTimeProgress(start, end) {
+  if (!start || !end) return 0
+  const s = new Date(start).getTime()
+  const e = new Date(end).getTime()
+  if (Number.isNaN(s) || Number.isNaN(e) || e <= s) return 0
+  const elapsed = Date.now() - s
+  return Math.max(0, Math.min(100, Math.round((elapsed / (e - s)) * 100)))
+}
+
+function computeHybridProgress(c) {
+  const stats = getTaskStats(c)
+  if (stats.total > 0) return Math.round((stats.done / stats.total) * 100)
+  return computeTimeProgress(c.startDate, c.endDate)
+}
+
+const kpiAvgProgress = computed(() => {
+  if (currentCampaigns.value.length === 0) return 0
+  const sum = currentCampaigns.value.reduce((acc, c) => acc + computeHybridProgress(c), 0)
+  return Math.round(sum / currentCampaigns.value.length)
+})
+
+const kpiPartnerCount = computed(() => {
+  const partnerSet = new Set()
+  for (const c of currentCampaigns.value) {
+    for (const p of c.partners ?? []) partnerSet.add(p)
+  }
+  return partnerSet.size
+})
+
+const kpiThisWeekDeadline = computed(() => {
+  const now = Date.now()
+  const sevenDays = 7 * 86400000
+  const campaignDeadlines = currentCampaigns.value.filter(c => {
+    if (!c.endDate) return false
+    const t = new Date(c.endDate).getTime()
+    return !Number.isNaN(t) && t >= now && t <= now + sevenDays
+  }).length
+  const taskDeadlines = allTasks.value.filter(t => {
+    if (!t.dueDate) return false
+    const ts = new Date(t.dueDate).getTime()
+    if (Number.isNaN(ts) || ts < now || ts > now + sevenDays) return false
+    const inScope = currentCampaigns.value.some(
+      c => String(c.id ?? c.idx) === String(t.campaignId ?? t.campaignIdx),
+    )
+    return inScope
+  }).length
+  return campaignDeadlines + taskDeadlines
+})
+
+// ───────── 캠페인 진행 현황 (5개 + 더보기) ─────────
+const sortedCampaigns = computed(() =>
+  [...currentCampaigns.value].sort((a, b) => {
+    const aT = a.endDate ? new Date(a.endDate).getTime() : Number.MAX_SAFE_INTEGER
+    const bT = b.endDate ? new Date(b.endDate).getTime() : Number.MAX_SAFE_INTEGER
+    return aT - bT
+  }),
+)
+
+const topCampaigns = computed(() => sortedCampaigns.value.slice(0, 5))
+const moreCount = computed(() => Math.max(0, sortedCampaigns.value.length - topCampaigns.value.length))
+
+function goToCampaignList() {
+  router.push({ name: 'overview' })
+}
+
+// ───────── 다가오는 일정 (7일 내 태스크) ─────────
+const upcomingTasks = computed(() => {
+  const now = Date.now()
+  const sevenDays = 7 * 86400000
+  const scopedIds = new Set(currentCampaigns.value.map(c => String(c.id ?? c.idx)))
+  const campaignNameMap = new Map(currentCampaigns.value.map(c => [String(c.id ?? c.idx), c.name]))
+
+  return allTasks.value
+    .filter(t => {
+      if (!t.dueDate) return false
+      const ts = new Date(t.dueDate).getTime()
+      if (Number.isNaN(ts) || ts < now - 86400000 || ts > now + sevenDays) return false
+      const cid = String(t.campaignId ?? t.campaignIdx ?? '')
+      return scopedIds.has(cid)
+    })
+    .map(t => ({
+      ...t,
+      campaignId: t.campaignId ?? t.campaignIdx,
+      campaignName: campaignNameMap.get(String(t.campaignId ?? t.campaignIdx)) ?? '',
+    }))
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+    .slice(0, 10)
+})
+
+// ───────── 진행률 모드 토글 ─────────
+const progressModes = [
+  { id: 'progress', label: '진행률' },
+  { id: 'time', label: '시간' },
+  { id: 'task', label: '태스크' },
 ]
 </script>
 
 <template>
   <section class="hq-dashboard">
-    <header class="hq-dashboard__hero">
-      <div>
-        <p class="hq-dashboard__eyebrow">본사 통합 대시보드</p>
-        <h2>{{ activeCampaign?.name ?? 'Campaign Dashboard' }}</h2>
-        <span v-if="activeCampaign?.purpose" class="hq-dashboard__summary">
-          {{ activeCampaign.purpose }}
+    <!-- HERO -->
+    <header class="hq-hero">
+      <div class="hq-hero__copy">
+        <p class="hq-hero__eyebrow">본사 통합 대시보드</p>
+        <h2 class="hq-hero__title">
+          {{ userName || '사용자' }}
+          <span v-if="orgName" class="hq-hero__org">· {{ orgName }}</span>
+        </h2>
+        <span class="hq-hero__sub">
+          {{ scope === 'org' ? '우리 조직 전체 캠페인' : '내가 멤버인 캠페인' }} 기준
         </span>
       </div>
-      <span class="hq-dashboard__status">{{ activeCampaign?.status ?? 'Live' }}</span>
+      <HeroToggle
+        v-model="scope"
+        :mine-count="mineCampaigns.length"
+        :org-count="orgCampaigns.length"
+      />
     </header>
 
-    <section class="hq-dashboard__stats" aria-label="핵심 지표">
-      <article v-for="stat in stats" :key="stat.label" class="hq-stat-card">
-        <p>{{ stat.label }}</p>
-        <strong>{{ stat.value }}</strong>
-        <span :class="{ 'hq-stat-card__caption--positive': stat.positive }">{{ stat.caption }}</span>
-      </article>
+    <p v-if="errorMsg" class="hq-error-banner">{{ errorMsg }}</p>
+
+    <!-- KPI 4-카드 -->
+    <section class="hq-stats" aria-label="핵심 지표">
+      <KpiStatCard
+        label="진행 중 캠페인"
+        :value="kpiActiveCount"
+        :caption="`전체 ${currentCampaigns.length}건 중`"
+      />
+      <KpiStatCard
+        label="평균 진행률"
+        :value="`${kpiAvgProgress}%`"
+        caption="태스크 우선 · 시간 기반 폴백"
+      />
+      <KpiStatCard
+        label="참여 협력사 수"
+        :value="kpiPartnerCount"
+        :caption="kpiPartnerCount === 0 ? '협력사 미등록' : '고유 협력사 합산'"
+      />
+      <KpiStatCard
+        label="이번 주 마감"
+        :value="kpiThisWeekDeadline"
+        :caption="kpiThisWeekDeadline === 0 ? '7일 내 마감 없음' : '캠페인+태스크'"
+        :positive="kpiThisWeekDeadline > 0"
+      />
     </section>
 
-    <section class="hq-dashboard__grid">
+    <!-- 그리드: 캠페인 진행 현황 + 다가오는 일정 -->
+    <section class="hq-grid">
       <article class="hq-panel hq-panel--wide">
         <div class="hq-panel__header">
-          <h3>Campaign Progress</h3>
-          <span>Live</span>
-        </div>
-        <div class="hq-progress-list" aria-label="협력사별 진행률">
-          <div v-for="partner in partners" :key="partner.name" class="hq-progress-row">
-            <span>{{ partner.name }}</span>
-            <div class="hq-progress-row__track">
-              <i :style="{ width: `${partner.progress}%` }" />
-            </div>
-            <strong>{{ partner.progress }}%</strong>
+          <h3>내 캠페인 진행 현황</h3>
+          <div class="hq-panel__filters" role="tablist">
+            <button
+              v-for="m in progressModes"
+              :key="m.id"
+              type="button"
+              role="tab"
+              :aria-selected="progressMode === m.id"
+              class="hq-panel__filter"
+              :class="{ 'hq-panel__filter--active': progressMode === m.id }"
+              @click="progressMode = m.id"
+            >
+              {{ m.label }}
+            </button>
           </div>
+        </div>
+        <div v-if="loading && currentCampaigns.length === 0" class="hq-empty-hint">
+          불러오는 중...
+        </div>
+        <div v-else-if="currentCampaigns.length === 0" class="hq-empty-hint">
+          {{ scope === 'org' ? '우리 조직이 참여하는 캠페인이 없습니다.' : '내가 멤버로 등록된 캠페인이 없습니다.' }}
+        </div>
+        <div v-else class="hq-progress-list">
+          <CampaignProgressCard
+            v-for="c in topCampaigns"
+            :key="c.id ?? c.idx"
+            :campaign="c"
+            :mode="progressMode"
+            :task-stats="getTaskStats(c)"
+          />
+        </div>
+        <div v-if="moreCount > 0" class="hq-panel__more">
+          <button type="button" @click="goToCampaignList">
+            더보기 ({{ moreCount }}건) →
+          </button>
         </div>
       </article>
 
       <article class="hq-panel">
         <div class="hq-panel__header">
-          <h3>Recent Activity</h3>
+          <h3>다가오는 일정 (7일)</h3>
         </div>
-        <div class="hq-activity-list">
-          <div v-for="activity in activities" :key="activity.text" class="hq-activity">
-            <div class="hq-activity__avatar" :class="{ 'hq-activity__avatar--primary': activity.primary }">
-              {{ activity.initial }}
-            </div>
-            <div>
-              <p>{{ activity.text }}</p>
-              <span>{{ activity.time }}</span>
-            </div>
-          </div>
+        <div v-if="upcomingTasks.length === 0" class="hq-empty-hint">
+          7일 내 마감 예정 태스크가 없습니다.
         </div>
-      </article>
-    </section>
-
-    <article class="hq-panel">
-      <div class="hq-panel__header">
-        <h3>Marketing Content</h3>
-        <button type="button">New Card</button>
-      </div>
-      <div class="hq-content-grid">
-        <article v-for="content in contents" :key="content.title" class="hq-content-card">
-          <div class="hq-content-card__thumb" :class="{ 'hq-content-card__thumb--primary': content.primary }">
-            <span>{{ content.code }}</span>
-          </div>
-          <div class="hq-content-card__body">
-            <strong>{{ content.title }}</strong>
-            <p>{{ content.meta }}</p>
-            <span class="hq-badge" :class="`hq-badge--${content.tone}`">{{ content.status }}</span>
-          </div>
-        </article>
-      </div>
-    </article>
-
-    <section class="hq-dashboard__grid hq-dashboard__grid--bottom">
-      <article class="hq-panel">
-        <div class="hq-panel__header">
-          <h3>Customer Segments</h3>
-        </div>
-        <div class="hq-chip-list">
-          <span v-for="segment in segments" :key="segment">{{ segment }}</span>
-        </div>
-      </article>
-
-      <article class="hq-panel">
-        <div class="hq-panel__header">
-          <h3>Review Status</h3>
-        </div>
-        <div class="hq-review-list">
-          <div v-for="review in reviews" :key="review.label">
-            <span>{{ review.label }}</span>
-            <strong>{{ review.count }}</strong>
-          </div>
+        <div v-else class="hq-upcoming-list">
+          <UpcomingTaskItem v-for="t in upcomingTasks" :key="t.id ?? t.idx" :task="t" />
         </div>
       </article>
     </section>
@@ -163,114 +301,76 @@ const reviews = [
 .hq-dashboard {
   display: flex;
   width: 100%;
-  max-width: var(--content-max-width);
+  max-width: 1600px;
   flex-direction: column;
   gap: 16px;
   margin: 0 auto;
 }
 
-.hq-dashboard__hero,
-.hq-panel,
-.hq-stat-card {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  background: var(--panel-color);
-  box-shadow: var(--shadow-sm);
-  transition:
-    background var(--transition-normal),
-    border-color var(--transition-normal),
-    color var(--transition-normal);
-}
-
-.hq-dashboard__hero {
+/* HERO */
+.hq-hero {
   display: flex;
   min-height: 88px;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 20px 24px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--panel-color);
+  box-shadow: var(--shadow-sm);
 }
-
-.hq-dashboard__eyebrow {
+.hq-hero__copy { display: flex; flex-direction: column; gap: 4px; }
+.hq-hero__eyebrow {
   color: var(--muted-text);
   font-size: 12px;
   font-weight: 600;
 }
-
-.hq-dashboard__hero h2 {
-  margin-top: 4px;
+.hq-hero__title {
   color: var(--text-primary);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
 }
-
-.hq-dashboard__summary {
-  display: block;
-  margin-top: 6px;
+.hq-hero__org {
   color: var(--muted-text);
+  font-weight: 600;
+  font-size: 16px;
+  margin-left: 4px;
+}
+.hq-hero__sub {
+  color: var(--subtle-text);
   font-size: 13px;
 }
 
-.hq-dashboard__status,
-.hq-panel__header span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: var(--radius-full);
-  background: var(--color-primary-500);
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 700;
+/* ERROR */
+.hq-error-banner {
+  padding: 10px 14px;
+  border: 1px solid var(--color-danger);
+  background: var(--color-danger-light);
+  color: var(--color-danger-dark);
+  border-radius: var(--radius-md);
+  font-size: 13px;
 }
 
-.hq-dashboard__stats {
+/* STATS */
+.hq-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
 
-.hq-stat-card {
-  min-height: 134px;
-  padding: 22px 24px;
-}
-
-.hq-stat-card p {
-  color: var(--muted-text);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.hq-stat-card strong {
-  display: block;
-  margin: 8px 0 4px;
-  color: var(--text-primary);
-  font-size: 32px;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.hq-stat-card span {
-  color: var(--subtle-text);
-  font-size: 13px;
-}
-
-.hq-stat-card__caption--positive {
-  color: var(--color-success) !important;
-  font-weight: 600;
-}
-
-.hq-dashboard__grid {
+/* GRID */
+.hq-grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
   gap: 16px;
 }
 
-.hq-dashboard__grid--bottom {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.62fr);
-}
-
 .hq-panel {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--panel-color);
+  box-shadow: var(--shadow-sm);
   padding: 20px;
 }
 
@@ -279,277 +379,88 @@ const reviews = [
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
-
 .hq-panel__header h3 {
   color: var(--text-primary);
   font-size: 18px;
   font-weight: 700;
 }
 
-.hq-panel__header button {
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: var(--radius-md);
-  background: var(--color-primary-500);
-  color: #ffffff;
+/* 필터 토글 */
+.hq-panel__filters {
+  display: inline-flex;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--panel-muted);
+  padding: 3px;
+  gap: 2px;
+}
+.hq-panel__filter {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
-  transition: background var(--transition-fast);
+  transition: background 0.15s, color 0.15s;
+}
+.hq-panel__filter:hover { color: var(--text-primary); }
+.hq-panel__filter--active {
+  background: var(--color-primary-500);
+  color: #fff;
 }
 
-.hq-panel__header button:hover {
-  background: var(--color-primary-600);
-}
-
+/* 리스트 */
 .hq-progress-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.hq-progress-row {
-  display: grid;
-  grid-template-columns: 148px minmax(0, 1fr) 52px;
-  align-items: center;
-  gap: 14px;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-.hq-progress-row__track {
-  height: 8px;
-  overflow: hidden;
-  border-radius: var(--radius-full);
-  background: var(--badge-bg);
-}
-
-.hq-progress-row__track i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--color-primary-500);
-}
-
-.hq-progress-row strong {
-  color: var(--text-primary);
-  font-size: 13px;
-  text-align: right;
-}
-
-.hq-activity-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.hq-activity {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.hq-activity__avatar {
-  display: flex;
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--badge-bg);
-  color: var(--badge-text);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.hq-activity__avatar--primary {
-  background: var(--color-primary-500);
-  color: #ffffff;
-}
-
-.hq-activity p {
-  color: var(--text-primary);
-  font-size: 14px;
-  line-height: 1.45;
-}
-
-.hq-activity span {
-  display: block;
-  margin-top: 2px;
-  color: var(--subtle-text);
-  font-size: 12px;
-}
-
-.hq-content-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.hq-content-card {
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  background: var(--panel-color);
-  cursor: pointer;
-  transition:
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    transform var(--transition-fast);
-}
-
-.hq-content-card:hover {
-  border-color: var(--color-primary-300);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
-}
-
-.hq-content-card__thumb {
-  display: flex;
-  height: 150px;
-  align-items: center;
-  justify-content: center;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--badge-bg);
-}
-
-.hq-content-card__thumb--primary {
-  background: var(--color-primary-600);
-}
-
-.hq-content-card__thumb span {
-  color: var(--badge-text);
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 2px;
-}
-
-.hq-content-card__thumb--primary span {
-  color: #ffffff;
-}
-
-.hq-content-card__body {
-  padding: 14px 16px 16px;
-}
-
-.hq-content-card__body strong {
-  display: block;
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hq-content-card__body p {
-  margin: 4px 0 10px;
-  overflow: hidden;
-  color: var(--muted-text);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hq-badge {
-  display: inline-flex;
-  min-height: 24px;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: var(--radius-full);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.hq-badge--review {
-  background: var(--badge-bg);
-  color: var(--badge-text);
-}
-
-.hq-badge--draft {
-  background: var(--panel-muted);
-  color: var(--muted-text);
-}
-
-.hq-badge--revision {
-  background: var(--color-warning-light);
-  color: var(--color-warning-dark);
-}
-
-:global(:root[data-theme='dark']) .hq-badge--revision {
-  background: rgba(245, 158, 11, 0.16);
-  color: #fbbf24;
-}
-
-.hq-chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.hq-chip-list span {
-  padding: 7px 10px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-full);
-  background: var(--panel-muted);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.hq-review-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
-
-.hq-review-list div {
-  padding: 14px;
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
+.hq-upcoming-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.hq-review-list span {
-  display: block;
+/* 비어있음 안내 */
+.hq-empty-hint {
   color: var(--muted-text);
-  font-size: 12px;
+  font-size: 13px;
+  padding: 28px 0;
+  text-align: center;
 }
 
-.hq-review-list strong {
-  display: block;
-  margin-top: 4px;
-  color: var(--text-primary);
-  font-size: 22px;
-  font-weight: 700;
+/* 더보기 */
+.hq-panel__more {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+.hq-panel__more button {
+  padding: 6px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color 0.15s, color 0.15s;
+}
+.hq-panel__more button:hover {
+  border-color: var(--color-primary-300);
+  color: var(--color-primary-600);
 }
 
 @media (max-width: 1100px) {
-  .hq-dashboard__stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .hq-dashboard__grid,
-  .hq-dashboard__grid--bottom {
-    grid-template-columns: 1fr;
-  }
+  .hq-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hq-grid { grid-template-columns: 1fr; }
 }
-
 @media (max-width: 760px) {
-  .hq-dashboard__hero {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .hq-dashboard__stats,
-  .hq-content-grid,
-  .hq-review-list {
-    grid-template-columns: 1fr;
-  }
-
-  .hq-progress-row {
-    grid-template-columns: 108px minmax(0, 1fr) 48px;
-  }
+  .hq-hero { flex-direction: column; align-items: flex-start; }
+  .hq-stats { grid-template-columns: 1fr; }
 }
 </style>

@@ -23,8 +23,9 @@ function unwrapResponse(response) {
   return payload.data
 }
 
-export const ListCampaign = async () => {
-  return unwrapResponse(await api.get('/campaigns'))
+export const ListCampaign = async (params = {}) => {
+  // params.scope: "mine" | "org" — 미지정 시 백엔드 default = mine
+  return unwrapResponse(await api.get('/campaigns', { params }))
 }
 export const GetCampaignDetails = async (taps) => {
   return unwrapResponse(

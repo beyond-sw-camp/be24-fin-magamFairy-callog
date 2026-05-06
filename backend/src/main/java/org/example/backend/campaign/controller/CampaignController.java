@@ -25,9 +25,12 @@ public class CampaignController {
     private final CampaignService campaignService;
 
     @GetMapping
-    public ResponseEntity<BaseResponse> listCampaigns(@AuthenticationPrincipal AuthUserDetails user) {
+    public ResponseEntity<BaseResponse> listCampaigns(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "mine") String scope
+    ) {
         return ResponseEntity.ok(BaseResponse.success(
-                campaignService.listCampaigns(user.getIdx())
+                campaignService.listCampaigns(user.getIdx(), scope)
         ));
     }
 
