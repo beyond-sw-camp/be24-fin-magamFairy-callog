@@ -6,6 +6,7 @@ import org.example.backend.config.filter.LoginFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -40,7 +41,7 @@ public class SecurityConfig {
 
         http.sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
-
+     
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/login", "/login", "/error").permitAll()
                 .requestMatchers("/auth/reissue", "/auth/logout", "/matching/evaluation/collect").permitAll()
@@ -63,6 +64,7 @@ public class SecurityConfig {
                         "/api/sse/**",
                         "/sse/**"
                 ).permitAll()
+                .requestMatchers("/ad/**").authenticated()
                 .requestMatchers(HttpMethod.GET,    "/campaigns/*/members").authenticated()
                 .requestMatchers(HttpMethod.GET,    "/campaigns/*/members/candidates/**")
                     .hasAnyAuthority("ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
