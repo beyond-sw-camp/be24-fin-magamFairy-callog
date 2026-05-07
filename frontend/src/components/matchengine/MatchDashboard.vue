@@ -13,7 +13,7 @@ const summaryStats = [
   { label: '제안 접수', value: '8', helper: '오늘 3건', stage: 'Intake' },
   { label: '자동 평가', value: '6', helper: '검토 대기 3건', stage: 'Scoring' },
   { label: '조합 추천', value: '3', helper: '90점 이상 1건', stage: 'Matching' },
-  { label: '운영 전환', value: '2', helper: '보드 생성', stage: 'Handoff' },
+  { label: '운영 시작', value: '2', helper: '진행 결정', stage: 'Handoff' },
 ]
 
 const stageNotes = {
@@ -29,18 +29,18 @@ const stageNotes = {
   },
   Scoring: {
     title: '자동 평가 단계 · 점수 검토 후 컷오프 적용',
-    description: '85점 이상 6건 중 3건이 사람 검토 대기입니다. 평균 처리 18분.',
+    description: '85점 이상 6건 중 3건이 사람 검토 대기입니다.',
     action: '검토 열기',
   },
   Matching: {
-    title: '조합 추천 단계 · 추천 조합 1건 승인 대기',
-    description: '나이키 코리아 × 러닝 멤버십 · 매칭 점수 85 · 담당자 확인 필요',
-    action: '승인 요청',
+    title: '조합 추천 단계 · 추천 조합 1건 검토 대기',
+    description: '나이키 코리아 × 러닝 멤버십 · 매칭 점수 85',
+    action: '추천 조합 보기',
   },
   Handoff: {
-    title: '운영 전환 단계 · 운영 보드로 전달',
-    description: '승인된 조합은 운영팀 칸반에 카드로 생성됩니다.',
-    action: '전달하기',
+    title: '운영 시작 단계 · 파트너 평가에서 처리',
+    description: '진행 결정된 조합은 파트너 평가 탭에서 운영 시작 상태로 관리합니다.',
+    action: '파트너 평가 보기',
   },
 }
 
@@ -127,6 +127,26 @@ const partnerProposals = [
   },
 ]
 
+const trendWeeks = [
+  { label: 'W-3', proposals: 5, handoff: 1 },
+  { label: 'W-2', proposals: 6, handoff: 1 },
+  { label: 'W-1', proposals: 6, handoff: 2 },
+  { label: '이번 주', proposals: 8, handoff: 2 },
+]
+
+const actionSummaries = [
+  { label: '검토 대기', count: 3, desc: '자동 평가 완료 후 사람 확인 필요', target: '파트너 평가' },
+  { label: '보완 요청 대기', count: 1, desc: '비용 부담/유효 기간 미입력', target: '혜택 제안' },
+  { label: '운영 시작 대기', count: 2, desc: '진행 결정 완료, 운영 시작 가능', target: '파트너 평가' },
+]
+
+const recentCampaigns = [
+  { title: '나이키 코리아', status: '조건 협의 중' },
+  { title: '스타벅스 코리아', status: '최우선 추천 승인' },
+  { title: 'CGV', status: '보완 요청 대기' },
+  { title: 'LG 생활건강', status: '평가 완료' },
+]
+
 const selectedProposalId = ref(partnerProposals[1].id)
 const activeStage = ref('Matching')
 const activeStageIndex = computed(() =>
@@ -180,100 +200,72 @@ function gradeClass(score) {
           <span>{{ activeStageNote.description }}</span>
         </div>
         <div class="dash-stage-note__actions">
-          <button type="button" class="dash-stage-note__secondary">미루기</button>
           <button type="button" class="dash-stage-note__primary">{{ activeStageNote.action }} →</button>
         </div>
       </div>
     </div>
 
-    <div class="dash-layout">
-      <article class="dash-panel dash-panel--wide">
-        <div class="dash-panel__head">
-          <h3>신규 파트너 제안</h3>
-          <span>최신순</span>
-        </div>
-
-        <div class="dash-table">
-          <div class="dash-table__head">
-            <span>파트너</span>
-            <span>혜택</span>
-            <span>담당</span>
-            <span>점수</span>
-            <span>등급</span>
+    <div class="dash-overview-layout">
+      <section class="dash-overview-main">
+        <article class="dash-panel dash-trend-panel">
+          <div class="dash-panel__head">
+            <h3>최근 4주 흐름</h3>
+            <span>제안 접수 / 운영 시작</span>
           </div>
-          <button
-            v-for="proposal in partnerProposals"
-            :key="proposal.id"
-            type="button"
-            class="dash-table__row"
-            :class="{ 'dash-table__row--active': selectedProposal.id === proposal.id }"
-            @click="selectedProposalId = proposal.id"
-          >
-            <strong>{{ proposal.partnerName }}</strong>
-            <span>{{ proposal.benefitSummary }}</span>
-            <span>{{ proposal.owner }}</span>
-            <b>{{ proposal.totalScore }}</b>
-            <em :class="gradeClass(proposal.totalScore)">{{ proposal.grade }}</em>
-          </button>
-        </div>
-      </article>
-
-      <aside class="dash-panel dash-detail">
-        <div class="dash-panel__head">
-          <h3>제안 상세</h3>
-          <button type="button" class="dash-detail__link">조건 협상</button>
-        </div>
-
-        <div class="dash-detail__summary">
-          <span class="dash-detail__logo">{{ selectedProposal.logo }}</span>
-          <div class="dash-detail__title">
-            <strong>{{ selectedProposal.partnerName }}</strong>
-            <p>{{ selectedProposal.benefitSummary }}</p>
-          </div>
-        </div>
-
-        <dl class="dash-detail__meta">
-          <div>
-            <dt>담당</dt>
-            <dd>{{ selectedProposal.owner }}</dd>
-          </div>
-          <div>
-            <dt>응답</dt>
-            <dd>{{ selectedProposal.contact }}</dd>
-          </div>
-          <div>
-            <dt>혜택 조건</dt>
-            <dd>{{ selectedProposal.condition }}</dd>
-          </div>
-        </dl>
-
-        <section class="dash-detail__section">
-          <h4>점수 근거</h4>
-          <dl class="dash-score-list">
-            <div
-              v-for="item in selectedProposal.scoreBreakdown"
-              :key="item.label"
-              class="dash-score-line"
-            >
-              <dt>{{ item.label }}</dt>
-              <dd>{{ item.value }}</dd>
+          <div class="dash-trend-chart">
+            <div v-for="week in trendWeeks" :key="week.label" class="dash-trend-bar">
+              <div class="dash-trend-bar__track">
+                <i class="proposals" :style="{ height: week.proposals * 10 + '%' }" />
+                <i class="handoff" :style="{ height: week.handoff * 18 + '%' }" />
+              </div>
+              <strong>{{ week.label }}</strong>
+              <span>{{ week.proposals }}건 / {{ week.handoff }}건</span>
             </div>
-          </dl>
-        </section>
+          </div>
+        </article>
 
-        <section class="dash-detail__section">
-          <h4>리스크</h4>
-          <ul>
-            <li v-for="item in selectedProposal.risks" :key="item">{{ item }}</li>
-          </ul>
-        </section>
+        <article class="dash-panel dash-actions-panel">
+          <div class="dash-panel__head">
+            <h3>액션 필요 요약</h3>
+            <span>해당 탭에서 처리</span>
+          </div>
+          <div class="dash-action-list">
+            <button v-for="item in actionSummaries" :key="item.label" type="button" class="dash-action-item">
+              <b>{{ item.count }}</b>
+              <span>
+                <strong>{{ item.label }}</strong>
+                <small>{{ item.desc }}</small>
+              </span>
+              <em>{{ item.target }} →</em>
+            </button>
+          </div>
+        </article>
+      </section>
 
-        <div class="dash-detail__actions">
-          <button type="button" class="dash-detail__reject">반려</button>
-          <button type="button" class="dash-detail__approve">승인 요청 →</button>
-        </div>
-      </aside>
+      <section class="dash-overview-side">
+        <article class="dash-panel dash-activity-panel">
+          <div class="dash-panel__head">
+            <h3>최근 업데이트 캠페인</h3>
+          </div>
+          <ol class="dash-activity-list dash-activity-list--simple">
+            <li v-for="item in recentCampaigns" :key="item.title">
+              <strong>{{ item.title }}</strong>
+              <small>{{ item.status }}</small>
+            </li>
+          </ol>
+        </article>
 
+        <article class="dash-panel dash-quick-panel">
+          <div class="dash-panel__head">
+            <h3>빠른 이동</h3>
+          </div>
+          <div class="dash-quick-actions">
+            <button type="button">신규 자산 등록</button>
+            <button type="button">목표 추가</button>
+            <button type="button">추천 조합 보기</button>
+          </div>
+        </article>
+      </section>
     </div>
   </section>
 </template>
@@ -836,48 +828,194 @@ function gradeClass(score) {
   color: #ffffff;
 }
 
+
+/* Overview-only dashboard layout */
+.dash-overview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+  grid-template-areas:
+    'main side';
+  gap: 0.7rem;
+  min-height: 0;
+}
+
+.dash-overview-main {
+  grid-area: main;
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.dash-overview-side {
+  grid-area: side;
+  display: grid;
+  align-content: start;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.dash-trend-chart {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+  min-height: 15rem;
+  align-items: end;
+}
+
+.dash-trend-bar {
+  display: grid;
+  gap: 0.38rem;
+  justify-items: center;
+}
+
+.dash-trend-bar__track {
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 0.28rem;
+  width: 100%;
+  height: 10rem;
+  border-radius: 8px;
+  background: var(--panel-muted);
+  padding: 0.65rem;
+}
+
+.dash-trend-bar__track i {
+  display: block;
+  width: 1.35rem;
+  min-height: 0.35rem;
+  border-radius: 999px 999px 4px 4px;
+}
+
+.dash-trend-bar__track .proposals {
+  background: var(--accent-color);
+}
+
+.dash-trend-bar__track .handoff {
+  background: color-mix(in srgb, var(--accent-color) 48%, var(--panel-color));
+}
+
+.dash-trend-bar strong {
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.dash-trend-bar span {
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 760;
+}
+
+.dash-action-list,
+.dash-quick-actions {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.dash-action-item {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  padding: 0.62rem 0.7rem;
+  text-align: left;
+}
+
+.dash-action-item b {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent-color) 16%, var(--panel-color));
+  color: var(--accent-color);
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.dash-action-item span {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.dash-action-item strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+}
+
+.dash-action-item small {
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 760;
+}
+
+.dash-action-item em {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.dash-activity-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dash-activity-list li {
+  display: grid;
+  gap: 0.16rem;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.4rem 0 0.5rem;
+}
+
+.dash-activity-list li:last-child {
+  border-bottom: 0;
+}
+
+.dash-activity-list strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.dash-activity-list small {
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 760;
+}
+
+.dash-quick-actions button {
+  min-height: 2.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
 @media (max-width: 1180px) {
-  .dash-layout {
+  .dash-overview-layout {
     grid-template-columns: 1fr;
-  }
-
-  .dash-pipeline-strip {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .dash-pipeline-step {
-    width: 100%;
-    border-right: 1px solid var(--border-color);
-    border-bottom: 1px solid var(--border-color);
-    padding-left: 1rem;
-  }
-
-  .dash-pipeline-step + .dash-pipeline-step {
-    padding-left: 1rem;
-  }
-
-  .dash-pipeline-step:first-child,
-  .dash-pipeline-step:last-child {
-    border-radius: 0;
-  }
-
-  .dash-pipeline-step::before,
-  .dash-pipeline-step::after {
-    display: none;
-  }
-
-  .dash-stage-note {
-    align-items: stretch;
-    grid-template-columns: 1fr;
-  }
-
-  .dash-stage-note__actions {
-    justify-content: stretch;
-  }
-
-  .dash-stage-note__actions button {
-    flex: 1;
+    grid-template-areas:
+      'main'
+      'side';
   }
 }
+
+@media (max-width: 680px) {
+  .dash-trend-chart,
+  .dash-action-item {
+    grid-template-columns: 1fr;
+  }
+}
+
 </style>
