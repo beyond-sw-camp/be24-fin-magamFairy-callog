@@ -1,6 +1,7 @@
 package org.example.backend.campaign.model;
 
 import lombok.Builder;
+import org.example.backend.kpi.dto.CreateContributionRequest;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -19,7 +20,17 @@ public class CampaignDto {
             List<String> partners,
             String goals,
             String mainMessage,
-            String color
+            List<CreateContributionRequest> contributions,
+            String assetName,
+            String assetDescription,
+            String primaryGoal,
+            List<String> campaignMethods,
+            String maxCost,
+            String minRevenue,
+            String ownerName,
+            String ownerEmail,
+            String color,
+            String icon
     ) {
     }
 
@@ -42,8 +53,17 @@ public class CampaignDto {
             List<String> partners,
             String goals,
             String mainMessage,
+            String assetName,
+            String assetDescription,
+            String primaryGoal,
+            List<String> campaignMethods,
+            String maxCost,
+            String minRevenue,
+            String ownerName,
+            String ownerEmail,
             String status,
             String initials,
+            String icon,
             String color,
             Date createdAt,
             Date updatedAt,
@@ -67,8 +87,17 @@ public class CampaignDto {
                     .partners(List.copyOf(entity.getPartners()))
                     .goals(entity.getGoals())
                     .mainMessage(entity.getMainMessage())
+                    .assetName(entity.getAssetName())
+                    .assetDescription(entity.getAssetDescription())
+                    .primaryGoal(entity.getPrimaryGoal())
+                    .campaignMethods(List.copyOf(entity.getCampaignMethods()))
+                    .maxCost(entity.getMaxCost())
+                    .minRevenue(entity.getMinRevenue())
+                    .ownerName(entity.getOwnerName())
+                    .ownerEmail(entity.getOwnerEmail())
                     .status(entity.getStatus())
                     .initials(entity.getInitials())
+                    .icon(entity.getIcon())
                     .color(entity.getColor())
                     .createdAt(entity.getCreatedAt())
                     .updatedAt(entity.getUpdatedAt())

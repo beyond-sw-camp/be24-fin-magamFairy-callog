@@ -9,7 +9,7 @@ defineProps({
   },
 })
 
-const emit = defineEmits(['asset-count-change'])
+const emit = defineEmits(['asset-count-change', 'request-matching'])
 
 const currentSubTab = ref('assets')
 const assets = ref([])
@@ -638,46 +638,18 @@ const emptyAssetMetaItems = computed(() =>
     <article class="asset-panel">
       <div class="asset-panel__head">
         <div class="asset-panel__title">
-          <h3>{{ currentSubTab === 'assets' ? '보유 자산 풀' : '혜택 제안' }}</h3>
-          <p>
-            {{
-              currentSubTab === 'assets'
-                ? '여러 캠페인에서 재사용할 수 있는 본사 보유 자산입니다.'
-                : '파트너사가 제출한 혜택을 조회하고 매칭 평가에 반영합니다.'
-            }}
-          </p>
+          <h3>매칭 추천</h3>
+          <p>입력한 캠페인 조건을 기준으로 추천 조합을 확인합니다.</p>
         </div>
 
         <div class="asset-toolbar">
           <button
-            v-if="currentSubTab === 'assets'"
             type="button"
-            class="asset-primary"
-            aria-label="자산 등록"
-            title="자산 등록"
-            @click="openAssetForm"
+            class="asset-recommend"
+            @click="emit('request-matching')"
           >
-            +
+            매칭 추천 받기
           </button>
-
-          <div class="asset-segment" role="tablist" aria-label="매칭 입력값 유형">
-            <button
-              type="button"
-              :class="{ active: currentSubTab === 'assets' }"
-              @click="currentSubTab = 'assets'"
-            >
-              보유 자산
-              <span>{{ assets.length }}</span>
-            </button>
-            <button
-              type="button"
-              :class="{ active: currentSubTab === 'benefits' }"
-              @click="currentSubTab = 'benefits'"
-            >
-              혜택 제안
-              <span>{{ partnerProposals.length }}</span>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -1351,6 +1323,21 @@ const emptyAssetMetaItems = computed(() =>
   font-size: 1.35rem;
   font-weight: 900;
   line-height: 1;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+
+.asset-recommend {
+  display: inline-flex;
+  min-height: 2.55rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent-color);
+  color: #fff;
+  padding: 0 1rem;
+  font-size: 0.82rem;
+  font-weight: 900;
+  white-space: nowrap;
   box-shadow: 0 8px 18px color-mix(in srgb, var(--accent-color) 18%, transparent);
 }
 

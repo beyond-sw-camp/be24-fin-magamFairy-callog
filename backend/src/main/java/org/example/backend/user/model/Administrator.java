@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.backend.organization.model.Organization;
 import org.example.backend.organization.service.OrganizationService;
 import org.example.backend.user.repository.UserRepository;
-import org.example.backend.userInfo.userProfile.service.UserProfileService;
+import org.example.backend.userInfo.service.UserProfileService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;

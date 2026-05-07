@@ -15,7 +15,24 @@ const props = defineProps({
 const emit = defineEmits(['decided'])
 
 const proposalQueue = ref([])
-const proposals = computed(() => proposalQueue.value)
+
+const statusTabs = [
+  { key: 'new', label: '신규 추천' },
+  { key: 'proceed', label: '진행 결정' },
+  { key: 'hold', label: '보류' },
+  { key: 'exclude', label: '제외' },
+]
+const activeStatus = ref('new')
+const proposals = computed(() =>
+  proposalQueue.value.filter((proposal) => proposal.reviewStatus === activeStatus.value),
+)
+const totalProposalCount = computed(() => proposalQueue.value.length)
+const statusCounts = computed(() =>
+  statusTabs.reduce((counts, tab) => {
+    counts[tab.key] = proposalQueue.value.filter((proposal) => proposal.reviewStatus === tab.key).length
+    return counts
+  }, {}),
+)
 
 function getScoreFromBreakdown(candidate, label, fallback) {
   return candidate.scoreBreakdown?.find((item) => item.label === label)?.score ?? fallback
@@ -53,7 +70,8 @@ function mapCandidateToProposal(candidate) {
     benefitSummary: candidate.offer ?? candidate.title ?? '혜택 정보 미입력',
     goalLabel: goalLabels[candidate.goal] ?? candidate.goalLabel ?? '목표 미지정',
     period: scheduleMeta,
-    status: '검토 중',
+    status: candidate.statusLabel ?? '신규 추천',
+    reviewStatus: candidate.reviewStatus ?? 'new',
     scores: {
       customerFit: getScoreFromBreakdown(candidate, '고객 적합도', fallback),
       revenue: getScoreFromBreakdown(candidate, '수익 기여도', fallback),
@@ -105,6 +123,89 @@ function mapCandidateToProposal(candidate) {
     manualScore: score || null,
   }
 }
+
+const defaultCandidates = [
+  {
+    id: 'recommended-hotelnd',
+    isSample: true,
+    goal: 'PURCHASE_BOOKING',
+    title: '호텔앤드 리조트 액티브 스테이',
+    partner: '호텔앤드',
+    offer: '객실 패키지, 리조트 이용권',
+    asset: 'VIP 고객층 앱 배너와 예약 유도 채널',
+    target: '2030 액티브 레저 고객',
+    schedule: '2026.05.06 ~ 2026.06.05',
+    risk: '오프라인 클래스 일정 확정 필요',
+    score: 88,
+    reasons: [
+      '캠페인 목표와 파트너 고객군이 잘 맞아 예약 전환 가능성이 높습니다.',
+      '패키지 예약과 챌린지를 함께 운영하면 참여 행동을 만들기 좋습니다.',
+      '오프라인 일정만 먼저 확정하면 실행 리스크를 줄일 수 있습니다.',
+    ],
+    scoreBreakdown: [
+      { label: '고객 적합도', score: 90 },
+      { label: '수익 기여도', score: 86 },
+      { label: '비용 효율성', score: 84 },
+      { label: '운영 용이성', score: 82 },
+      { label: '브랜드 적합도', score: 88 },
+    ],
+    targetKpis: ['패키지 예약 300건', '클래스 참여 1,000명', '예약 전환율 7% 이상'],
+  },
+  {
+    id: 'recommended-galleria',
+    isSample: true,
+    goal: 'UPSELL',
+    title: '갤러리아 VIP 프리미엄 리프레시',
+    partner: '갤러리아',
+    offer: 'VIP 리워드 쿠폰, 프리미엄 굿즈',
+    asset: 'VIP 앱 활성 고객 5만 명',
+    target: '고가 구매 경험이 있는 VIP 고객',
+    schedule: '2026.05.06 ~ 2026.05.29',
+    risk: '쿠폰 소진 속도 제한 필요',
+    score: 94,
+    reasons: [
+      'VIP 고객층과 프리미엄 혜택의 결이 잘 맞습니다.',
+      '자사 앱과 파트너 채널을 동시에 활용할 수 있어 도달 효율이 높습니다.',
+      '쿠폰 발급량만 조절하면 비용 통제가 가능합니다.',
+    ],
+    scoreBreakdown: [
+      { label: '고객 적합도', score: 95 },
+      { label: '수익 기여도', score: 92 },
+      { label: '비용 효율성', score: 90 },
+      { label: '운영 용이성', score: 95 },
+      { label: '브랜드 적합도', score: 96 },
+    ],
+    targetKpis: ['VIP 앱 활성 고객 5만 명 도달', '구매 전환율 7% 이상', '쿠폰 사용률 60% 이상'],
+  },
+  {
+    id: 'recommended-cgv',
+    isSample: true,
+    goal: 'MEMBER_SIGNUP',
+    title: 'CGV 신규 가입 시네마 베네핏',
+    partner: 'CGV',
+    offer: '프리미엄 상영관 1+1 예매권',
+    asset: '신규 가입 온보딩 화면과 쿠폰함',
+    target: '미가입 기존 구매 고객',
+    schedule: '2026.05.06 ~ 2026.05.20',
+    risk: '예매권 조건 문구 검수 필요',
+    score: 82,
+    reasons: [
+      '미가입 고객에게 가입 이유를 직접 제시할 수 있습니다.',
+      '쿠폰함과 메시지 채널이 전환 경로를 짧게 만듭니다.',
+      '예매권 사용 조건은 법무 검수를 먼저 거치는 편이 안전합니다.',
+    ],
+    scoreBreakdown: [
+      { label: '고객 적합도', score: 84 },
+      { label: '수익 기여도', score: 82 },
+      { label: '비용 효율성', score: 80 },
+      { label: '운영 용이성', score: 90 },
+      { label: '브랜드 적합도', score: 76 },
+    ],
+    targetKpis: ['신규 회원 가입 30,000건', 'D7 유지율 18%', '쿠폰 등록률 45%'],
+  },
+]
+
+proposalQueue.value = defaultCandidates.map(mapCandidateToProposal)
 
 const metrics = [
   { key: 'customerFit', label: '고객 적합도', weight: 25 },
@@ -163,6 +264,7 @@ const pendingDecision = ref(null)
 const decisionReason = ref('')
 const isFormulaOpen = ref(false)
 const isConditionsOpen = ref(false)
+const showCompactActions = ref(false)
 
 const selectedProposal = computed(
   () => proposals.value.find((proposal) => proposal.id === selectedId.value) ?? proposals.value[0] ?? null,
@@ -221,6 +323,29 @@ const scoreFormula = computed(() => {
     })
     .join(' + ')
 })
+const radarLevels = [20, 40, 60, 80, 100]
+const radarCenter = 96
+const radarRadius = 68
+const radarAxes = computed(() => {
+  const total = metrics.length
+  return metrics.map((metric, index) => ({
+    ...metric,
+    point: radarPoint(100, index, total),
+    labelPoint: radarPoint(117, index, total),
+  }))
+})
+const radarPolygonPoints = computed(() => {
+  if (!selectedProposal.value) return ''
+  return metrics
+    .map((metric, index) => radarPoint(selectedProposal.value.scores[metric.key], index, metrics.length))
+    .join(' ')
+})
+const radarGridPolygons = computed(() => {
+  return radarLevels.map((level) => ({
+    level,
+    points: metrics.map((_, index) => radarPoint(level, index, metrics.length)).join(' '),
+  }))
+})
 const decisionConfig = {
   proceed: {
     label: '진행하기',
@@ -253,9 +378,40 @@ const decisionConfig = {
 
 const currentDecisionConfig = computed(() => decisionConfig[pendingDecision.value] ?? null)
 
+function getStatusLabel(statusKey) {
+  return statusTabs.find((tab) => tab.key === statusKey)?.label ?? '신규 추천'
+}
+
+function getDecisionStatus(decision) {
+  if (decision === 'proceed') return 'proceed'
+  if (decision === 'hold') return 'hold'
+  if (decision === 'exclude') return 'exclude'
+  return 'new'
+}
+
+function setActiveStatus(statusKey) {
+  activeStatus.value = statusKey
+  const firstVisible = proposals.value[0]
+  if (!proposals.value.some((proposal) => proposal.id === selectedId.value)) {
+    selectedId.value = firstVisible?.id ?? null
+  }
+}
+
 function openDecisionConfirm(decision) {
   pendingDecision.value = decision
   decisionReason.value = ''
+}
+
+function handleDetailScroll(event) {
+  showCompactActions.value = event.currentTarget.scrollTop > 118
+}
+
+function radarPoint(percent, index, total) {
+  const angle = -Math.PI / 2 + index * ((Math.PI * 2) / total)
+  const radius = (percent / 100) * radarRadius
+  const x = radarCenter + Math.cos(angle) * radius
+  const y = radarCenter + Math.sin(angle) * radius
+  return `${x.toFixed(1)},${y.toFixed(1)}`
 }
 
 function closeDecisionConfirm() {
@@ -267,6 +423,18 @@ function confirmDecision() {
   const config = currentDecisionConfig.value
   if (!config) return
   if (config.requireReason && !decisionReason.value.trim()) return
+  const nextStatus = getDecisionStatus(pendingDecision.value)
+  const index = proposalQueue.value.findIndex((proposal) => proposal.id === selectedProposal.value?.id)
+  if (index >= 0) {
+    proposalQueue.value[index] = {
+      ...proposalQueue.value[index],
+      reviewStatus: nextStatus,
+      status: getStatusLabel(nextStatus),
+      decisionReason: decisionReason.value.trim() || proposalQueue.value[index].decisionReason,
+    }
+    activeStatus.value = nextStatus
+    selectedId.value = proposalQueue.value[index].id
+  }
   emit('decided', {
     decision: pendingDecision.value,
     reason: decisionReason.value.trim() || null,
@@ -280,6 +448,7 @@ watch(selectedId, () => {
   closeDecisionConfirm()
   isFormulaOpen.value = false
   isConditionsOpen.value = false
+  showCompactActions.value = false
 })
 
 watch(
@@ -288,8 +457,10 @@ watch(
     if (!candidate?.id) return
     const mapped = mapCandidateToProposal(candidate)
     const index = proposalQueue.value.findIndex((proposal) => proposal.id === mapped.id)
-    if (index >= 0) proposalQueue.value.splice(index, 1, mapped)
-    else proposalQueue.value.unshift(mapped)
+    const newProposal = { ...mapped, reviewStatus: 'new', status: '신규 추천' }
+    if (index >= 0) proposalQueue.value.splice(index, 1, { ...proposalQueue.value[index], ...newProposal })
+    else proposalQueue.value.unshift(newProposal)
+    activeStatus.value = 'new'
     selectedId.value = mapped.id
   },
   { immediate: true },
@@ -318,138 +489,182 @@ function grade(score) {
 </script>
 
 <template>
-  <section class="eval-workspace">
-    <aside class="eval-list">
-      <div class="eval-head">
-        <h3>평가 목록</h3>
-        <span>{{ proposals.length }}건</span>
+  <section class="partner-eval">
+    <aside class="pe-sidebar">
+      <header class="pe-sidebar__head">
+        <strong>파트너 평가</strong>
+        <span>전체 {{ totalProposalCount }}</span>
+      </header>
+
+      <label class="pe-search">
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2" />
+          <path d="m16 16 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+        <input type="text" placeholder="파트너명 검색" />
+      </label>
+
+      <div class="pe-candidate-list">
+        <section v-for="tab in statusTabs" :key="tab.key" class="pe-status-section">
+          <button
+            type="button"
+            class="pe-filter"
+            :class="{ active: activeStatus === tab.key }"
+            @click="setActiveStatus(tab.key)"
+          >
+            <span>{{ tab.label }}</span>
+            <b>{{ statusCounts[tab.key] }}</b>
+          </button>
+
+          <div v-if="activeStatus === tab.key" class="pe-status-panel">
+            <button
+              v-for="proposal in proposals"
+              :key="proposal.id"
+              type="button"
+              class="pe-candidate"
+              :class="{ active: selectedId === proposal.id }"
+              @click="selectedId = proposal.id"
+            >
+              <span class="pe-candidate__top">
+                <strong>{{ proposal.partnerName }}</strong>
+                <em v-if="proposal.isSample">샘플</em>
+                <small>{{ tab.label }}</small>
+                <b>{{ calculateScore(proposal) }}</b>
+              </span>
+              <small>{{ proposal.benefitSummary }}</small>
+              <i><span :style="{ width: `${calculateScore(proposal)}%` }" /></i>
+            </button>
+
+            <p v-if="!proposals.length" class="pe-empty">이 상태의 후보가 없습니다.</p>
+          </div>
+        </section>
       </div>
-
-      <button
-        v-for="proposal in proposals"
-        :key="proposal.id"
-        type="button"
-        class="eval-item"
-        :class="{ active: selectedId === proposal.id }"
-        @click="selectedId = proposal.id"
-      >
-        <span>
-          <span class="eval-item__titleline">
-            <strong>{{ proposal.partnerName }}</strong>
-            <em v-if="proposal.isSample" class="sample-badge">샘플</em>
-          </span>
-          <small>{{ proposal.benefitSummary }}</small>
-        </span>
-        <b>{{ calculateScore(proposal) }}</b>
-      </button>
-
-      <p v-if="!proposals.length" class="eval-empty-list">
-        추천 조합에서 평가로 보낸 후보가 없습니다.
-      </p>
     </aside>
 
-    <article v-if="selectedProposal" class="eval-detail">
-      <section class="eval-hero">
-        <div class="eval-hero__main">
+    <article v-if="selectedProposal" class="pe-detail" @scroll="handleDetailScroll">
+      <div v-show="showCompactActions" class="pe-mini-actions">
+        <strong>{{ selectedProposal.partnerName }}</strong>
+        <span>{{ selectedScore }}점</span>
+        <button type="button" class="primary" @click="openDecisionConfirm('proceed')">진행</button>
+        <button type="button" @click="openDecisionConfirm('hold')">보류</button>
+        <button type="button" class="danger" @click="openDecisionConfirm('exclude')">제외</button>
+      </div>
+
+      <section class="pe-hero pe-card">
+        <div class="pe-hero__icon">{{ selectedProposal.partnerName.slice(0, 1) }}</div>
+        <div class="pe-hero__copy">
+          <span>매칭 후보</span>
+          <h3>
+            {{ selectedProposal.campaignName }}
+            <em v-if="selectedProposal.isSample">샘플</em>
+          </h3>
+          <p>{{ selectedProposal.partnerName }} · {{ selectedProposal.benefitSummary }}</p>
           <div>
-            <span class="eval-hero__eyebrow">캠페인 평가</span>
-            <div class="eval-hero__titleline">
-              <h3>{{ selectedProposal.campaignName }}</h3>
-              <em v-if="selectedProposal.isSample" class="sample-badge">샘플</em>
-            </div>
-            <p>{{ selectedProposal.partnerName }} · {{ selectedProposal.benefitSummary }}</p>
-            <div class="eval-hero__meta">
-              <span>목표 {{ selectedProposal.goalLabel }}</span>
-              <span>기간 {{ selectedProposal.period }}</span>
-              <b>{{ selectedProposal.status }}</b>
-            </div>
+            <small>목표 <b>{{ selectedProposal.goalLabel }}</b></small>
+            <small>기간 <b>{{ selectedProposal.period }}</b></small>
+            <small class="pe-status">{{ selectedProposal.status }}</small>
           </div>
-          <div class="eval-score">
+        </div>
+        <div class="pe-hero__side">
+          <div class="pe-score">
             <strong>{{ selectedScore }}</strong>
             <span>{{ grade(selectedScore) }}</span>
           </div>
-        </div>
-
-        <section v-if="overallAssessment" class="eval-assessment">
-          <div class="eval-assessment__head">
-            <span>종합 평가</span>
-            <b>{{ overallAssessment.recommendation }}</b>
+          <div class="pe-hero__actions">
+            <button type="button" class="primary" @click="openDecisionConfirm('proceed')">진행하기</button>
+            <button type="button" @click="openDecisionConfirm('hold')">보류</button>
+            <button type="button" class="danger" @click="openDecisionConfirm('exclude')">제외</button>
           </div>
-          <p>{{ overallAssessment.description }}</p>
-        </section>
-
-        <button type="button" class="formula-toggle" @click="isFormulaOpen = !isFormulaOpen">
-          점수 산식 {{ isFormulaOpen ? '접기 ▴' : '보기 ▾' }}
-        </button>
-        <p v-if="isFormulaOpen" class="score-formula">{{ selectedScore }} = {{ scoreFormula }}</p>
+        </div>
       </section>
 
-      <section class="eval-what">
-        <div class="section-head">
-          <h4>세부 평가</h4>
-          <span>막대를 클릭해 항목별 근거 보기</span>
-        </div>
+      <section v-if="overallAssessment" class="pe-callout">
+        <span>종합 평가</span>
+        <p>{{ overallAssessment.description }}</p>
+        <button type="button" @click="isFormulaOpen = !isFormulaOpen">
+          점수 산식 {{ isFormulaOpen ? '접기' : '보기' }}
+        </button>
+        <small v-if="isFormulaOpen">{{ selectedScore }} = {{ scoreFormula }}</small>
+      </section>
 
-        <div class="metric-layout">
-          <div class="metric-bars">
-            <button
-              v-for="metric in metrics"
-              :key="metric.key"
-              type="button"
-              class="eval-bar"
-              :class="{ active: activeMetricKey === metric.key }"
-              @click="activeMetricKey = metric.key"
-            >
-              <span>{{ metric.label }} <small>{{ metric.weight }}%</small></span>
-              <div class="eval-bar__meter">
-                <div class="eval-bar__track"><i :style="{ width: `${selectedProposal.scores[metric.key]}%` }" /></div>
-                <strong>{{ selectedProposal.scores[metric.key] }}</strong>
-              </div>
-            </button>
+      <section class="pe-card">
+        <header class="pe-section-head">
+          <h4>세부 평가</h4>
+        </header>
+
+        <div class="pe-eval-grid">
+          <div class="pe-radar-panel">
+            <svg class="pe-radar" viewBox="0 0 192 192" role="img" aria-label="세부 평가 레이더 차트">
+              <polygon
+                v-for="grid in radarGridPolygons"
+                :key="grid.level"
+                :points="grid.points"
+                class="pe-radar__grid"
+              />
+              <line
+                v-for="axis in radarAxes"
+                :key="axis.key"
+                :x1="radarCenter"
+                :y1="radarCenter"
+                :x2="axis.point.split(',')[0]"
+                :y2="axis.point.split(',')[1]"
+                class="pe-radar__axis"
+              />
+              <polygon :points="radarPolygonPoints" class="pe-radar__shape" />
+              <circle
+                v-for="axis in radarAxes"
+                :key="axis.key + '-point'"
+                :cx="radarPoint(selectedProposal.scores[axis.key], metrics.findIndex((metric) => metric.key === axis.key), metrics.length).split(',')[0]"
+                :cy="radarPoint(selectedProposal.scores[axis.key], metrics.findIndex((metric) => metric.key === axis.key), metrics.length).split(',')[1]"
+                r="3"
+                class="pe-radar__point"
+              />
+              <text
+                v-for="axis in radarAxes"
+                :key="axis.key + '-label'"
+                :x="axis.labelPoint.split(',')[0]"
+                :y="axis.labelPoint.split(',')[1]"
+                text-anchor="middle"
+                dominant-baseline="middle"
+              >
+                {{ axis.label }} {{ selectedProposal.scores[axis.key] }}
+              </text>
+            </svg>
           </div>
 
-          <aside class="metric-evidence">
-            <div class="metric-evidence__head">
-              <span>{{ activeMetric.label }} 근거</span>
-              <strong>{{ selectedProposal.scores[activeMetric.key] }}점</strong>
+          <aside class="pe-evidence">
+            <div>
+              <h5>{{ activeMetric.label }} 근거</h5>
+              <strong>{{ selectedProposal.scores[activeMetric.key] }} / 100</strong>
+            </div>
+            <div class="pe-stat-grid">
+              <button
+                v-for="metric in metrics"
+                :key="metric.key"
+                type="button"
+                :class="{ active: activeMetricKey === metric.key }"
+                @click="activeMetricKey = metric.key"
+              >
+                {{ metric.label }}
+                <b>{{ selectedProposal.scores[metric.key] }}점 · {{ metric.weight }}%</b>
+              </button>
             </div>
             <p>{{ activeMetricEvidence }}</p>
             <ul>
               <li v-for="reason in activeMetricDetails.reasons" :key="reason">{{ reason }}</li>
             </ul>
-            <div class="metric-compare">
-              <div>
-                <span>선택 제안</span>
-                <b>{{ selectedProposal.scores[activeMetric.key] }}</b>
-              </div>
-              <div>
-                <span>같은 목표 평균</span>
-                <b>{{ selectedProposal.comparison.goalAverage }}</b>
-              </div>
-              <div>
-                <span>파트너 과거 평균</span>
-                <b>{{ selectedProposal.comparison.partnerAverage }}</b>
-              </div>
-              <div>
-                <span>평가 분포</span>
-                <b>{{ selectedProposal.comparison.percentile }}</b>
-              </div>
-              <div class="metric-compare__bar">
-                <i :style="{ width: selectedProposal.scores[activeMetric.key] + '%' }" />
-                <em :style="{ left: selectedProposal.comparison.goalAverage + '%' }" />
-              </div>
-              <small>같은 목표 유형 {{ selectedProposal.comparison.goalSample }}건 기준 · 과거 {{ selectedProposal.comparison.partnerCases }}건 비교</small>
+            <div class="pe-dist">
+              <i :style="{ left: `${selectedProposal.scores[activeMetric.key]}%` }" />
             </div>
           </aside>
         </div>
       </section>
 
-      <section class="eval-composition">
-        <div class="section-head">
+      <section class="pe-card">
+        <header class="pe-section-head">
           <h4>조합 구성과 운영 정보</h4>
-        </div>
-
-        <dl class="composition-grid">
+        </header>
+        <dl class="pe-info-grid">
           <div v-for="card in selectedProposal.detailCards" :key="card.label">
             <dt>{{ card.label }}</dt>
             <dd>
@@ -460,61 +675,44 @@ function grade(score) {
         </dl>
       </section>
 
-      <section class="eval-now">
-        <div class="section-head">
+      <section class="pe-card">
+        <header class="pe-section-head">
           <h4>목표와 실행</h4>
-        </div>
-
-        <div class="now-grid">
-          <section class="now-panel">
+        </header>
+        <div class="pe-action-grid pe-action-grid--single">
+          <section>
             <h5>목표 KPI</h5>
-            <ul v-if="selectedProposal.targetKpis.length" class="target-kpi-list">
-              <li v-for="kpi in selectedProposal.targetKpis" :key="kpi">
-                {{ kpi }}
-              </li>
+            <ul v-if="selectedProposal.targetKpis.length">
+              <li v-for="kpi in selectedProposal.targetKpis" :key="kpi">{{ kpi }}</li>
             </ul>
-            <p v-else class="target-kpi-empty">KPI가 설정되지 않았습니다.</p>
-          </section>
-
-          <section class="now-panel now-panel--actions">
-            <h5>결정</h5>
-            <p class="decision-help">결정 버튼을 누르면 자동 처리 내용을 확인한 뒤 확정합니다.</p>
-            <div class="decision-actions decision-actions--modal">
-              <button type="button" class="decision-btn decision-btn--primary" @click="openDecisionConfirm('proceed')">
-                진행하기
-              </button>
-              <button type="button" class="decision-btn decision-btn--ghost" @click="openDecisionConfirm('hold')">
-                보류
-              </button>
-              <button type="button" class="decision-btn decision-btn--danger-ghost" @click="openDecisionConfirm('exclude')">
-                제외
-              </button>
-            </div>
+            <p v-else>KPI가 설정되지 않았습니다.</p>
           </section>
         </div>
       </section>
 
-      <section class="eval-collab">
-        <section class="collab-panel">
-          <div class="section-head">
-            <h4>코멘트</h4>
-            <span>{{ selectedProposal.comments.length }}건</span>
-          </div>
-          <ol class="comment-list">
-            <li v-for="comment in selectedProposal.comments" :key="comment.author + comment.time">
-              <strong>{{ comment.author }}</strong>
-              <small>{{ comment.time }}</small>
-              <p>{{ comment.text }}</p>
-            </li>
-          </ol>
-          <button type="button" class="subtle-add">+ 코멘트 작성</button>
-        </section>
+      <section class="pe-card pe-comments">
+        <header class="pe-section-head">
+          <h4>코멘트</h4>
+          <span>{{ selectedProposal.comments.length }}건</span>
+        </header>
+        <ol>
+          <li v-for="comment in selectedProposal.comments" :key="comment.author + comment.time">
+            <b>{{ comment.author }}</b>
+            <small>{{ comment.time }}</small>
+            <p>{{ comment.text }}</p>
+          </li>
+        </ol>
+        <div class="pe-comment-input">
+          <span>AD</span>
+          <input type="text" placeholder="코멘트를 작성하세요..." />
+          <button type="button">등록</button>
+        </div>
       </section>
     </article>
 
-    <article v-else class="eval-detail eval-detail--empty">
+    <article v-else class="pe-detail pe-empty-detail">
       <strong>평가할 후보가 없습니다.</strong>
-      <p>추천 조합 탭에서 후보를 평가로 보내면 이곳에 표시됩니다.</p>
+      <p>추천 후보를 평가로 보내면 이곳에 표시됩니다.</p>
     </article>
 
     <Transition name="modal">
@@ -568,6 +766,861 @@ function grade(score) {
 </template>
 
 <style scoped>
+.partner-eval {
+  --pe-bg: #f7f7f9;
+  --pe-surface: #ffffff;
+  --pe-muted: #fafafb;
+  --pe-line: #ecedf0;
+  --pe-line-strong: #dee0e5;
+  --pe-text: #0f1115;
+  --pe-text-2: #4a4f5a;
+  --pe-text-3: #8a8f99;
+  --pe-brand: #5b5bf5;
+  --pe-brand-strong: #4848e0;
+  --pe-brand-soft: #eef0ff;
+  --pe-violet: #7c5cfa;
+  --pe-green: #16a368;
+  --pe-green-soft: #e5f6ee;
+  --pe-amber: #c97a0e;
+  --pe-amber-soft: #fbefd7;
+  --pe-rose: #d0395f;
+  display: grid;
+  grid-template-columns: 18rem minmax(0, 1fr);
+  gap: 0.85rem;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--pe-text);
+}
+
+.pe-sidebar,
+.pe-detail {
+  min-height: 0;
+  border: 1px solid var(--pe-line);
+  border-radius: 12px;
+  background: var(--pe-surface);
+}
+
+.pe-sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pe-sidebar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 0.9rem 0.5rem;
+}
+
+.pe-sidebar__head strong {
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.pe-sidebar__head span,
+.pe-section-head span {
+  color: var(--pe-text-3);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.pe-search {
+  display: flex;
+  height: 2rem;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--pe-line);
+  border-radius: 8px;
+  background: var(--pe-muted);
+  margin: 0 0.85rem 0.75rem;
+  padding: 0 0.6rem;
+  color: var(--pe-text-3);
+}
+
+.pe-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--pe-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.pe-filter {
+  display: grid;
+  width: 100%;
+  min-height: 2.1rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border: 0;
+  border-top: 1px solid var(--pe-line);
+  border-bottom: 1px solid var(--pe-line);
+  background: transparent;
+  color: var(--pe-text-2);
+  padding: 0 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pe-filter span {
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.pe-filter b {
+  display: inline-flex;
+  min-width: 1.18rem;
+  height: 1.18rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--pe-line);
+  color: var(--pe-text-2);
+  font-size: 0.64rem;
+  font-weight: 900;
+}
+
+.pe-filter.active {
+  background: var(--pe-surface);
+  color: var(--pe-text);
+}
+
+.pe-filter.active b {
+  background: var(--pe-text);
+  color: #fff;
+}
+
+.pe-candidate-list {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  background: var(--pe-muted);
+  padding: 0;
+}
+
+.pe-status-section {
+  background: var(--pe-muted);
+}
+
+.pe-status-section + .pe-status-section .pe-filter {
+  border-top: 0;
+}
+
+.pe-status-panel {
+  position: relative;
+  background: var(--pe-surface);
+  margin: 0.42rem 0.55rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--pe-brand) 20%, var(--pe-line));
+  border-radius: 10px;
+  box-shadow: inset 3px 0 0 var(--pe-brand);
+  overflow: hidden;
+}
+
+.pe-status-panel::before {
+  position: absolute;
+  top: -0.42rem;
+  left: 1rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--pe-brand) 20%, var(--pe-line));
+  border-left: 1px solid color-mix(in srgb, var(--pe-brand) 20%, var(--pe-line));
+  background: var(--pe-surface);
+  content: '';
+  transform: rotate(45deg);
+}
+
+.pe-status-panel::after {
+  position: absolute;
+  top: 0.85rem;
+  bottom: 0.85rem;
+  left: 0.78rem;
+  width: 1px;
+  background: color-mix(in srgb, var(--pe-brand) 22%, transparent);
+  content: '';
+}
+
+.pe-candidate {
+  position: relative;
+  display: grid;
+  width: 100%;
+  gap: 0.4rem;
+  border: 0;
+  border-bottom: 1px solid var(--pe-line);
+  background: var(--pe-surface);
+  padding: 0.9rem 0.95rem 0.9rem 1.45rem;
+  text-align: left;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.pe-candidate::before {
+  position: absolute;
+  top: 1.35rem;
+  left: 0.78rem;
+  width: 0.35rem;
+  height: 1px;
+  background: color-mix(in srgb, var(--pe-brand) 36%, transparent);
+  content: '';
+}
+
+.pe-candidate:hover,
+.pe-candidate.active {
+  background: var(--pe-brand-soft);
+}
+
+.pe-candidate.active {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--pe-brand) 70%, #fff);
+}
+
+.pe-candidate__top {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.pe-candidate__top strong {
+  overflow: hidden;
+  color: var(--pe-text);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pe-candidate__top em,
+.pe-hero h3 em,
+.pe-status,
+.pe-candidate__top small {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pe-brand) 12%, #fff);
+  color: var(--pe-brand);
+  padding: 0.16rem 0.42rem;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.pe-candidate__top small {
+  background: transparent;
+  color: var(--pe-brand);
+  padding: 0;
+  font-size: 0.68rem;
+}
+
+.pe-candidate__top b {
+  margin-left: auto;
+  color: var(--pe-text);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.pe-candidate small {
+  overflow: hidden;
+  color: var(--pe-text-3);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pe-candidate i {
+  height: 0.24rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--pe-line);
+}
+
+.pe-candidate i span,
+.pe-bar-row i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--pe-violet), var(--pe-brand));
+}
+
+.pe-empty {
+  color: var(--pe-text-3);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 1rem;
+}
+
+.pe-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow: auto;
+  padding: 0.85rem;
+  background: var(--pe-bg);
+}
+
+.pe-mini-actions {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  align-items: center;
+  gap: 0.45rem;
+  border: 0;
+  border-bottom: 1px solid var(--pe-line);
+  border-radius: 12px 12px 0 0;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 18px rgba(15, 17, 21, 0.08);
+  margin: -0.85rem -0.85rem 0;
+  padding: 0.42rem 0.85rem;
+  backdrop-filter: blur(10px);
+}
+
+.pe-mini-actions strong {
+  overflow: hidden;
+  color: var(--pe-text);
+  font-size: 0.8rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pe-mini-actions span {
+  color: var(--pe-brand);
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.pe-mini-actions button,
+.pe-hero__actions button {
+  min-height: 1.9rem;
+  border: 1px solid var(--pe-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--pe-text-2);
+  padding: 0 0.72rem;
+  font-size: 0.7rem;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pe-mini-actions .primary,
+.pe-hero__actions .primary {
+  border-color: var(--pe-brand);
+  background: var(--pe-brand);
+  color: #fff;
+}
+
+.pe-mini-actions .danger,
+.pe-hero__actions .danger {
+  color: var(--pe-rose);
+}
+
+.pe-card,
+.pe-callout {
+  border: 1px solid var(--pe-line);
+  border-radius: 12px;
+  background: var(--pe-surface);
+  padding: 1rem;
+}
+
+.pe-hero {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) 19rem;
+  gap: 1rem;
+  align-items: start;
+}
+
+.pe-hero__icon {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--pe-violet), var(--pe-brand));
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.pe-hero__copy span,
+.pe-callout span {
+  color: var(--pe-text-3);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.pe-hero h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.22rem 0 0;
+  color: var(--pe-text);
+  font-size: 1.12rem;
+  font-weight: 950;
+}
+
+.pe-hero p,
+.pe-callout p,
+.pe-action-grid p,
+.pe-comments p {
+  margin: 0.35rem 0 0;
+  color: var(--pe-text-2);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.pe-hero__copy div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 0.65rem;
+}
+
+.pe-hero__copy small {
+  color: var(--pe-text-3);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.pe-hero__copy small b {
+  color: var(--pe-text);
+}
+
+.pe-hero__side {
+  align-self: stretch;
+  border-left: 1px solid var(--pe-line);
+  display: grid;
+  align-content: space-between;
+  gap: 0.8rem;
+  margin: -1rem -1rem -1rem 0;
+  border-radius: 0 12px 12px 0;
+  background: linear-gradient(180deg, #ffffff, var(--pe-muted));
+  padding: 1rem;
+}
+
+.pe-score {
+  text-align: right;
+}
+
+.pe-score strong {
+  display: block;
+  color: var(--pe-text);
+  font-size: 2rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.pe-score span {
+  color: var(--pe-text-3);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.pe-hero__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.pe-callout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem 0.85rem;
+  border-color: color-mix(in srgb, var(--pe-brand) 24%, var(--pe-line));
+  background: linear-gradient(135deg, #f7f5ff, #f0f2ff);
+}
+
+.pe-callout span,
+.pe-callout p,
+.pe-callout small {
+  grid-column: 1;
+}
+
+.pe-callout button,
+.pe-section-head button {
+  align-self: start;
+  border: 1px solid color-mix(in srgb, var(--pe-brand) 22%, var(--pe-line));
+  border-radius: 8px;
+  background: #fff;
+  color: var(--pe-brand);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.68rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.pe-callout small {
+  color: var(--pe-brand);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.pe-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.pe-section-head h4,
+.pe-action-grid h5 {
+  margin: 0;
+  color: var(--pe-text);
+  font-size: 0.86rem;
+  font-weight: 950;
+}
+
+.pe-eval-grid {
+  display: grid;
+  grid-template-columns: minmax(15rem, 0.78fr) minmax(20rem, 1.22fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.pe-radar-panel {
+  display: grid;
+  min-height: 18rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--pe-brand) 14%, var(--pe-line));
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, color-mix(in srgb, var(--pe-brand) 4%, #fff));
+  padding: 0.75rem;
+}
+
+.pe-radar {
+  width: min(100%, 19rem);
+  height: auto;
+  overflow: visible;
+}
+
+.pe-radar__grid {
+  fill: color-mix(in srgb, var(--pe-brand) 5%, transparent);
+  stroke: color-mix(in srgb, var(--pe-brand) 20%, var(--pe-line));
+  stroke-width: 1;
+}
+
+.pe-radar__axis {
+  stroke: color-mix(in srgb, var(--pe-brand) 18%, var(--pe-line));
+  stroke-width: 1;
+}
+
+.pe-radar__shape {
+  fill: color-mix(in srgb, var(--pe-brand) 24%, transparent);
+  stroke: var(--pe-brand);
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+}
+
+.pe-radar__point {
+  fill: #fff;
+  stroke: var(--pe-brand);
+  stroke-width: 2;
+}
+
+.pe-radar text {
+  fill: var(--pe-text-2);
+  font-size: 0.48rem;
+  font-weight: 850;
+}
+
+.pe-evidence {
+  border: 1px solid var(--pe-line);
+  border-radius: 10px;
+  background: var(--pe-muted);
+  padding: 0.85rem;
+}
+
+.pe-evidence > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.pe-evidence h5 {
+  margin: 0;
+  color: var(--pe-text);
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.pe-evidence > div:first-child strong {
+  color: var(--pe-brand);
+  font-size: 0.8rem;
+  font-weight: 950;
+}
+
+.pe-evidence ul,
+.pe-action-grid ul,
+.pe-comments ol {
+  display: grid;
+  gap: 0.32rem;
+  margin: 0.5rem 0 0;
+  padding-left: 1rem;
+}
+
+.pe-evidence li,
+.pe-action-grid li {
+  color: var(--pe-text-2);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.pe-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.pe-stat-grid span,
+.pe-stat-grid button {
+  border: 1px solid var(--pe-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--pe-text-3);
+  padding: 0.55rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pe-stat-grid button.active {
+  border-color: color-mix(in srgb, var(--pe-brand) 38%, var(--pe-line));
+  background: var(--pe-brand-soft);
+  color: var(--pe-brand);
+}
+
+.pe-stat-grid b {
+  display: block;
+  margin-top: 0.18rem;
+  color: var(--pe-text);
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
+.pe-dist {
+  position: relative;
+  height: 0.44rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f2eeff, #eceeff 42%, #dedfff 72%, var(--pe-brand));
+  margin-top: 0.75rem;
+}
+
+.pe-dist i {
+  position: absolute;
+  top: -0.22rem;
+  width: 0.12rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  background: var(--pe-text);
+}
+
+.pe-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.pe-info-grid div {
+  border: 1px solid var(--pe-line);
+  border-radius: 9px;
+  background: var(--pe-muted);
+  padding: 0.72rem;
+}
+
+.pe-info-grid dt {
+  color: var(--pe-text-3);
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
+.pe-info-grid dd {
+  display: grid;
+  gap: 0.18rem;
+  margin: 0.3rem 0 0;
+}
+
+.pe-info-grid strong {
+  color: var(--pe-text);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.pe-info-grid small {
+  color: var(--pe-text-3);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.pe-action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.pe-action-grid--single {
+  grid-template-columns: 1fr;
+}
+
+.pe-action-grid section {
+  border: 1px solid var(--pe-line);
+  border-radius: 10px;
+  background: var(--pe-muted);
+  padding: 0.85rem;
+}
+
+.pe-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.pe-actions button {
+  min-height: 2rem;
+  border: 1px solid var(--pe-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--pe-text-2);
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.pe-actions .primary {
+  border-color: var(--pe-brand);
+  background: var(--pe-brand);
+  color: #fff;
+}
+
+.pe-actions .danger {
+  color: var(--pe-rose);
+}
+
+.pe-comments ol {
+  list-style: none;
+  padding: 0;
+}
+
+.pe-comments li {
+  position: relative;
+  padding-left: 1.8rem;
+}
+
+.pe-comments li::before,
+.pe-comment-input span {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--pe-brand-soft);
+  color: var(--pe-text-2);
+  font-size: 0.62rem;
+  font-weight: 900;
+}
+
+.pe-comments li::before {
+  position: absolute;
+  left: 0;
+  top: 0;
+  content: 'AD';
+}
+
+.pe-comments li b {
+  color: var(--pe-text);
+  font-size: 0.74rem;
+}
+
+.pe-comments li small {
+  margin-left: 0.35rem;
+  color: var(--pe-text-3);
+  font-size: 0.66rem;
+}
+
+.pe-comment-input {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+  border: 1px solid var(--pe-line);
+  border-radius: 10px;
+  background: var(--pe-muted);
+  margin-top: 0.85rem;
+  padding: 0.45rem;
+}
+
+.pe-comment-input input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--pe-text);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.pe-comment-input button {
+  border: 0;
+  border-radius: 7px;
+  background: var(--pe-brand);
+  color: #fff;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.pe-empty-detail {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  text-align: center;
+}
+
+@media (max-width: 1100px) {
+  .partner-eval,
+  .pe-eval-grid,
+  .pe-action-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .pe-hero,
+  .pe-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pe-hero__side {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .pe-score {
+    text-align: left;
+  }
+
+  .pe-mini-actions {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .pe-mini-actions button {
+    width: 100%;
+  }
+}
+
 .eval-workspace {
   display: grid;
   grid-template-columns: minmax(260px, 0.55fr) minmax(0, 1.45fr);
@@ -639,6 +1692,58 @@ function grade(score) {
   font-size: 0.76rem;
 }
 
+.eval-status-tabs {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.eval-status-tab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 2.2rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  padding: 0 0.58rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.eval-status-tab span {
+  overflow: hidden;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eval-status-tab b {
+  display: inline-flex;
+  min-width: 1.28rem;
+  min-height: 1.28rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--panel-muted);
+  color: var(--muted-text);
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
+.eval-status-tab:hover,
+.eval-status-tab.active {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-strong));
+  background: color-mix(in srgb, var(--accent-color) 9%, var(--panel-color));
+  color: var(--text-primary);
+}
+
+.eval-status-tab.active b {
+  background: var(--accent-color);
+  color: #fff;
+}
+
 .eval-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 2.6rem;
@@ -702,6 +1807,20 @@ function grade(score) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.eval-item__status {
+  display: inline-flex !important;
+  width: fit-content;
+  min-height: 1.25rem;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-color) 7%, var(--panel-color));
+  color: var(--accent-color) !important;
+  padding: 0 0.46rem;
+  font-size: 0.64rem !important;
+  font-weight: 900 !important;
 }
 
 .eval-item b,

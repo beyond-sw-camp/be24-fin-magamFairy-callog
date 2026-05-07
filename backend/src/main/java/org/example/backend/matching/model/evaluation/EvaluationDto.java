@@ -14,6 +14,7 @@ public class EvaluationDto {
     @Builder
     public static class StartEvaluationReq {
         private Double dependency;
+        private Long campaignIdx;
         private Long assetIdx;
         private Long benefitIdx;
         private Long goalIdx;
@@ -23,6 +24,7 @@ public class EvaluationDto {
     @Builder
     public static class StartEvaluation {
         private Double dependency; // 0.5와 같은 소수점을 처리하기 위해 Double 사용
+        private Long campaignIdx;
         private MatchingDto.AssetRes asset;
         private MatchingDto.BenefitRes benefit;
         private CampaignGoalRes goal;
@@ -83,6 +85,7 @@ public class EvaluationDto {
         private Integer overallScore;
         private List<String> improvementDirections;
         private String uuid;
+        private Long campaignIdx;
 
         @Getter
         @Builder

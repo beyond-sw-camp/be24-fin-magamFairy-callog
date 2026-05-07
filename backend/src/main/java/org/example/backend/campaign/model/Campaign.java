@@ -65,6 +65,34 @@ public class Campaign extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String mainMessage;
 
+    @Column(length = 160)
+    private String assetName;
+
+    @Column(columnDefinition = "TEXT")
+    private String assetDescription;
+
+    @Column(length = 120)
+    private String primaryGoal;
+
+    @Builder.Default
+    @ElementCollection
+    @CollectionTable(name = "campaign_method", joinColumns = @JoinColumn(name = "campaign_idx"))
+    @Column(name = "method", length = 120)
+    @org.hibernate.annotations.BatchSize(size = 50)
+    private List<String> campaignMethods = new ArrayList<>();
+
+    @Column(length = 80)
+    private String maxCost;
+
+    @Column(length = 80)
+    private String minRevenue;
+
+    @Column(length = 80)
+    private String ownerName;
+
+    @Column(length = 160)
+    private String ownerEmail;
+
     @Builder.Default
     @Column(nullable = false, length = 30)
     private String status = "draft";
@@ -83,6 +111,9 @@ public class Campaign extends BaseEntity {
     @Column(nullable = false, length = 20)
     private String initials;
 
+    @Column(length = 40)
+    private String icon;
+
     @Column(nullable = false, length = 20)
     private String color;
 
@@ -95,7 +126,16 @@ public class Campaign extends BaseEntity {
             List<String> partners,
             String goals,
             String mainMessage,
+            String assetName,
+            String assetDescription,
+            String primaryGoal,
+            List<String> campaignMethods,
+            String maxCost,
+            String minRevenue,
+            String ownerName,
+            String ownerEmail,
             String initials,
+            String icon,
             String color
     ) {
         this.name = name;
@@ -108,7 +148,17 @@ public class Campaign extends BaseEntity {
         this.partners.addAll(partners);
         this.goals = goals;
         this.mainMessage = mainMessage;
+        this.assetName = assetName;
+        this.assetDescription = assetDescription;
+        this.primaryGoal = primaryGoal;
+        this.campaignMethods.clear();
+        this.campaignMethods.addAll(campaignMethods);
+        this.maxCost = maxCost;
+        this.minRevenue = minRevenue;
+        this.ownerName = ownerName;
+        this.ownerEmail = ownerEmail;
         this.initials = initials;
+        this.icon = icon;
         this.color = color;
     }
 
