@@ -51,7 +51,7 @@ public class EvaluationService {
         EvaluationDto.StartEvaluation eval;
         eval = EvaluationDto.StartEvaluation.builder()
                 .dependency(dto.getDependency())
-                .campaignIdx(dto.getCampaignIdx())
+                .campaignIdx(campaign.getIdx())
                 .asset(MatchingDto.AssetRes.toDto(requiredAsset))
                 .benefit(MatchingDto.BenefitRes.toDto(requiredBenefit))
                 .goal(EvaluationDto.StartEvaluation.CampaignGoalRes.toDto(requiredGoal))
@@ -84,7 +84,15 @@ public class EvaluationService {
         String category = dto.getCategory();
         // 1. 현재 세션(Evaluation) 조회
         Evaluation evaluation = evaluationRepository.findBySessionId(dto.getUuid())
-                .orElseGet(() -> evaluationRepository.save(new Evaluation(dto.getUuid())));
+                .orElseGet(() -> {
+                    Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
+                            .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + dto.getCampaignIdx()));
+                    Evaluation newEval = Evaluation.builder()
+                            .sessionId(dto.getUuid())
+                            .campaign(campaign)
+                            .build();
+                    return evaluationRepository.save(newEval);
+                });
 
         // 2. DTO를 해당 카테고리의 엔티티로 변환
         Object evalEntity = switch (category) {

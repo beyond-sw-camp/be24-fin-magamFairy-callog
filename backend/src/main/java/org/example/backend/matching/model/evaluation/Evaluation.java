@@ -15,6 +15,8 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @EntityListeners(AuditingEntityListener.class) // 시간 자동 기록을 위한 리스너
 public class Evaluation {
 
@@ -27,7 +29,7 @@ public class Evaluation {
 
     @Setter
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "campaign_idx", unique = true)
+    @JoinColumn(name = "campaign_idx", unique = false)
     private Campaign campaign;
 
     @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
