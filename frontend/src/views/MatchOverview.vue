@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
+import { startEvaluation } from '@/api/evaluation'
 
 import BenefitProposalInbox from '@/components/matchengine/BenefitProposalInbox.vue'
 import MatchDashboard from '@/components/matchengine/MatchDashboard.vue'
@@ -14,7 +15,6 @@ const props = defineProps({
 const store = usePlannerStore()
 
 const isDark = computed(() => store.theme === 'dark')
-const isScopedToCampaign = computed(() => props.campaignId != null && props.campaignId !== '')
 const currentTab = ref('dashboard')
 const matchingCriteria = ref(null)
 const evaluationCandidate = ref(null)
@@ -30,7 +30,7 @@ const tabs = computed(() => [
   },
   {
     id: 'benefits',
-    name: '혜택 제안',
+    name: '혜택 평가',
     caption: '검토',
     count: 4,
     component: BenefitProposalInbox,
@@ -64,9 +64,12 @@ function moveToMatchingTab(criteria) {
   currentTab.value = 'evaluation'
 }
 
-function moveToEvaluationTab(candidate) {
+function requestEvaluation(candidate) {
   evaluationCandidate.value = candidate ?? null
-  currentTab.value = 'evaluation'
+  console.log(candidate)
+  console.log("ㅎㅇ")
+  startEvaluation(evaluationCandidate.value);
+  // currentTab.value = 'evaluation'
 }
 
 function handleDashboardNavigation(target) {
@@ -111,7 +114,7 @@ function handleMatchingComplete(target) {
         :recommendationCriteria="matchingCriteria"
         :evaluationCandidate="evaluationCandidate"
         @request-matching="moveToMatchingTab"
-        @request-evaluation="moveToEvaluationTab"
+        @request-evaluation="requestEvaluation"
         @navigate="handleDashboardNavigation"
         @action="handleDashboardAction"
         @matching-complete="handleMatchingComplete"
