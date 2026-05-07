@@ -1,1021 +1,1347 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
-defineProps({
+const props = defineProps({
   isDark: {
     type: Boolean,
     default: false,
   },
+  stats: {
+    type: Object,
+    default: () => ({
+      proposals: 8,
+      pendingReview: 6,
+      running: 2,
+      averageScore: 82.4,
+      matchingCount: 128,
+      processHours: 3.7,
+    }),
+  },
+  days: {
+    type: Array,
+    default: () => [
+      { date: '2026-04-23', score: 78.2, matches: 8, hours: 4.2 },
+      { date: '2026-04-24', score: 80.1, matches: 9, hours: 4.0 },
+      { date: '2026-04-25', score: 79.5, matches: 7, hours: 3.9 },
+      { date: '2026-04-26', score: 81.3, matches: 10, hours: 3.8 },
+      { date: '2026-04-27', score: 80.7, matches: 9, hours: 4.1 },
+      { date: '2026-04-28', score: 82.0, matches: 11, hours: 3.7 },
+      { date: '2026-04-29', score: 81.5, matches: 10, hours: 3.6 },
+      { date: '2026-04-30', score: 83.2, matches: 12, hours: 3.5 },
+      { date: '2026-05-01', score: 82.8, matches: 11, hours: 3.6 },
+      { date: '2026-05-02', score: 84.0, matches: 13, hours: 3.4 },
+      { date: '2026-05-03', score: 83.5, matches: 12, hours: 3.5 },
+      { date: '2026-05-04', score: 82.9, matches: 11, hours: 3.7 },
+      { date: '2026-05-05', score: 81.8, matches: 10, hours: 3.8 },
+      { date: '2026-05-06', score: 82.4, matches: 13, hours: 3.7 },
+    ],
+  },
+  actions: {
+    type: Array,
+    default: () => [
+      {
+        id: 'pending_review',
+        label: '검토 대기',
+        count: 3,
+        description: '파트너 혜택 제안 확인 필요',
+        actionLabel: '검토 시작',
+        target: { tab: 'benefits', filter: 'new' },
+        tone: 'primary',
+      },
+      {
+        id: 'needs_supplement',
+        label: '보완 요청 대기',
+        count: 1,
+        description: '비용 부담/유효 기간 미입력',
+        actionLabel: '보완 요청',
+        target: { tab: 'benefits', filter: 'incomplete' },
+        tone: 'warning',
+      },
+      {
+        id: 'ready_to_run',
+        label: '운영 시작 대기',
+        count: 2,
+        description: '진행 결정 완료, 운영 시작 가능',
+        actionLabel: '운영 시작',
+        target: { tab: 'evaluation', filter: 'proceed' },
+        tone: 'success',
+      },
+    ],
+  },
 })
 
-const summaryStats = [
-  { label: '등록 자산', value: '12', helper: '활성 9건', stage: 'Asset Pool' },
-  { label: '제안 접수', value: '8', helper: '오늘 3건', stage: 'Intake' },
-  { label: '자동 평가', value: '6', helper: '검토 대기 3건', stage: 'Scoring' },
-  { label: '조합 추천', value: '3', helper: '90점 이상 1건', stage: 'Matching' },
-  { label: '운영 시작', value: '2', helper: '진행 결정', stage: 'Handoff' },
-]
+const emit = defineEmits(['action', 'matching-complete'])
 
-const stageNotes = {
-  'Asset Pool': {
-    title: '등록 자산 단계 · 중복 자산 3건 정리',
-    description: '동일 키워드 자산이 중복 등록되어 있어요. 병합하면 추천 정확도가 올라갑니다.',
-    action: '정리하기',
-  },
-  Intake: {
-    title: '제안 접수 단계 · 담당자 배정 대기 3건',
-    description: '오늘 들어온 제안 중 3건이 담당자 배정 대기 중입니다.',
-    action: '배정 시작',
-  },
-  Scoring: {
-    title: '자동 평가 단계 · 점수 검토 후 컷오프 적용',
-    description: '85점 이상 6건 중 3건이 사람 검토 대기입니다.',
-    action: '검토 열기',
-  },
-  Matching: {
-    title: '조합 추천 단계 · 추천 조합 1건 검토 대기',
-    description: '나이키 코리아 × 러닝 멤버십 · 매칭 점수 85',
-    action: '추천 조합 보기',
-  },
-  Handoff: {
-    title: '운영 시작 단계 · 파트너 평가에서 처리',
-    description: '진행 결정된 조합은 파트너 평가 탭에서 운영 시작 상태로 관리합니다.',
-    action: '파트너 평가 보기',
-  },
-}
+const matchingSteps = ['입력 조건 분석', '목표 조건 매핑', '파트너 풀 검색', '점수 산정', '추천 조합 생성']
 
-const partnerProposals = [
-  {
-    id: 1,
-    logo: 'SBX',
-    partnerName: '스타벅스 코리아',
-    benefitSummary: '시즌 음료 사이즈업 쿠폰 1만장 및 앱 배너 노출',
-    totalScore: 94,
-    grade: '최우선 추천',
-    date: '04.28',
-    owner: '브랜드제휴팀',
-    status: '평가 완료',
-    contact: '파트너 제휴팀 / 응답 1일 이내',
-    condition: '쿠폰 10,000장, 스타벅스 앱 동시 공지 가능',
-    scoreBreakdown: [
-      { label: '고객 적합도', value: 96 },
-      { label: '혜택 매력도', value: 92 },
-      { label: '운영 난이도', value: 88 },
-    ],
-    risks: ['쿠폰 조기 소진 가능성', 'VIP 고객 중복 노출 빈도 관리 필요'],
-    actions: ['추천 조합 생성', '혜택 조건서 검토', '파트너 미팅 일정 등록'],
-  },
-  {
-    id: 2,
-    logo: 'NIKE',
-    partnerName: '나이키 코리아',
-    benefitSummary: '러닝앱 멤버십 공동 챌린지 및 리미티드 굿즈',
-    totalScore: 85,
-    grade: '우선 검토',
-    date: '04.27',
-    owner: '호텔마케팅팀',
-    status: '조건 협의',
-    contact: 'NRC 마케팅 담당 / 일정 확인 중',
-    condition: '러닝 챌린지 4주 운영, 리워드 굿즈 2,000개',
-    scoreBreakdown: [
-      { label: '고객 적합도', value: 90 },
-      { label: '수익 기여도', value: 85 },
-      { label: '브랜드 적합도', value: 95 },
-    ],
-    risks: ['오프라인 클래스 일정 촉박', '우천 시 대체 미션 필요'],
-    actions: ['운영 가능 일정 확인', '패키지 가격안 작성', '법무 유의사항 검토'],
-  },
-  {
-    id: 3,
-    logo: 'CGV',
-    partnerName: 'CGV',
-    benefitSummary: 'VIP 고객 대상 프리미엄 관람권 1+1 혜택',
-    totalScore: 76,
-    grade: '조건부 검토',
-    date: '04.25',
-    owner: 'CRM팀',
-    status: '검토 대기',
-    contact: 'CGV 제휴 담당 / 응답 2일 이내',
-    condition: '프리미엄 상영관 예매권 1+1, 앱 신규 가입 CTA 연동',
-    scoreBreakdown: [
-      { label: '고객 적합도', value: 78 },
-      { label: '전환 기대', value: 84 },
-      { label: '운영 난이도', value: 86 },
-    ],
-    risks: ['예매권 사용 조건 복잡', '가입 전환 추적 코드 필요'],
-    actions: ['쿠폰 조건 단순화 요청', '가입 랜딩 문구 작성', 'A/B 테스트 설계'],
-  },
-  {
-    id: 4,
-    logo: 'LG',
-    partnerName: 'LG 생활건강',
-    benefitSummary: '신규 뷰티 브랜드 런칭 기념 샘플링 키트 제공',
-    totalScore: 65,
-    grade: '보완 필요',
-    date: '04.24',
-    owner: '브랜드제휴팀',
-    status: '보완 요청',
-    contact: '브랜드 BM / 샘플 수량 확인 중',
-    condition: '샘플링 키트 8,500개, 객실 비치형 전환 검토',
-    scoreBreakdown: [
-      { label: '비용 효율성', value: 85 },
-      { label: '고객 적합도', value: 70 },
-      { label: '브랜드 적합도', value: 60 },
-    ],
-    risks: ['타깃 고객층 불명확', '브랜드 이미지 연결 근거 부족'],
-    actions: ['대상 고객군 재정의', '제품 라인업 재요청', '객실 비치 비용 산정'],
-  },
-]
-
-const trendWeeks = [
-  { label: 'W-3', proposals: 5, handoff: 1 },
-  { label: 'W-2', proposals: 6, handoff: 1 },
-  { label: 'W-1', proposals: 6, handoff: 2 },
-  { label: '이번 주', proposals: 8, handoff: 2 },
-]
-
-const actionSummaries = [
-  { label: '검토 대기', count: 3, desc: '자동 평가 완료 후 사람 확인 필요', target: '파트너 평가' },
-  { label: '보완 요청 대기', count: 1, desc: '비용 부담/유효 기간 미입력', target: '혜택 제안' },
-  { label: '운영 시작 대기', count: 2, desc: '진행 결정 완료, 운영 시작 가능', target: '파트너 평가' },
-]
-
-const recentCampaigns = [
-  { title: '나이키 코리아', status: '조건 협의 중' },
-  { title: '스타벅스 코리아', status: '최우선 추천 승인' },
-  { title: 'CGV', status: '보완 요청 대기' },
-  { title: 'LG 생활건강', status: '평가 완료' },
-]
-
-const selectedProposalId = ref(partnerProposals[1].id)
-const activeStage = ref('Matching')
-const activeStageIndex = computed(() =>
-  summaryStats.findIndex((stat) => stat.stage === activeStage.value),
+const visibleActions = computed(() => props.actions.filter((action) => action.count > 0))
+const hasActions = computed(() => visibleActions.value.length > 0)
+const totalActions = computed(() =>
+  visibleActions.value.reduce((sum, action) => sum + Number(action.count || 0), 0),
 )
-const activeStageNote = computed(() => stageNotes[activeStage.value] ?? stageNotes.Matching)
-const selectedProposal = computed(
+const averageScore = computed(() => props.stats.averageScore ?? 82.4)
+const matchingCount = computed(() => props.stats.matchingCount ?? 128)
+const processHours = computed(() => props.stats.processHours ?? 3.7)
+const selectedIndex = ref(Math.max(props.days.length - 1, 0))
+const selectedDay = computed(
   () =>
-    partnerProposals.find((proposal) => proposal.id === selectedProposalId.value) ??
-    partnerProposals[0],
+    props.days[selectedIndex.value] ??
+    props.days[props.days.length - 1] ?? {
+      date: '',
+      score: averageScore.value,
+      matches: matchingCount.value,
+      hours: processHours.value,
+    },
 )
+const maxScore = computed(() => Math.max(...props.days.map((day) => day.score), averageScore.value) * 1.1)
+const minScore = computed(() => Math.min(...props.days.map((day) => day.score), averageScore.value) * 0.85)
+const avgScore = computed(() => {
+  if (!props.days.length) return Number(averageScore.value)
+  const sum = props.days.reduce((acc, day) => acc + Number(day.score || 0), 0)
+  return Number((sum / props.days.length).toFixed(1))
+})
+const avgMatches = computed(() => {
+  if (!props.days.length) return Number(matchingCount.value)
+  const sum = props.days.reduce((acc, day) => acc + Number(day.matches || 0), 0)
+  return Math.round(sum / props.days.length)
+})
+const avgHours = computed(() => {
+  if (!props.days.length) return Number(processHours.value)
+  const sum = props.days.reduce((acc, day) => acc + Number(day.hours || 0), 0)
+  return Number((sum / props.days.length).toFixed(1))
+})
+const scoreDiff = computed(() => Number((selectedDay.value.score - avgScore.value).toFixed(1)))
+const matchesDiff = computed(() => Number(selectedDay.value.matches || 0) - avgMatches.value)
+const hoursDiff = computed(() => Number((selectedDay.value.hours - avgHours.value).toFixed(1)))
+const kpis = computed(() => [
+  {
+    id: 'proposals',
+    label: '받은 제안',
+    value: props.stats.proposals,
+    unit: '건',
+    sub: '오늘 접수',
+    delta: '+3',
+    tone: 'neutral',
+    icon: 'box',
+    spark: 'M0,22 L15,18 L30,20 L45,12 L60,15 L75,8 L100,4',
+  },
+  {
+    id: 'pending',
+    label: '검토 대기',
+    value: props.stats.pendingReview,
+    unit: '건',
+    sub: '혜택 제안 확인 필요 · 평균 SLA 4h',
+    tone: 'brand',
+    icon: 'clock',
+    spark: 'M0,10 L20,14 L40,8 L60,18 L80,12 L100,15',
+  },
+  {
+    id: 'running',
+    label: '운영 중',
+    value: props.stats.running,
+    unit: '건',
+    sub: '진행 결정 완료',
+    tone: 'green',
+    icon: 'check',
+    spark: 'M0,20 L20,18 L40,16 L60,10 L80,8 L100,5',
+  },
+  {
+    id: 'score',
+    label: '평균 매칭 점수',
+    value: averageScore.value,
+    unit: '',
+    sub: '지난주 대비',
+    delta: '+4.1',
+    tone: 'neutral',
+    icon: 'score',
+    spark: 'M0,20 L15,18 L30,14 L45,16 L60,10 L75,12 L100,6',
+  },
+])
 
-function gradeClass(score) {
-  if (score >= 90) return 'dash-grade--strong'
-  if (score >= 80) return 'dash-grade--info'
-  if (score >= 70) return 'dash-grade--warning'
-  return 'dash-grade--danger'
+const isMatching = ref(false)
+const activeStepIndex = ref(0)
+let matchingTimer = null
+
+function clearMatchingTimer() {
+  if (matchingTimer) {
+    window.clearInterval(matchingTimer)
+    matchingTimer = null
+  }
 }
+
+function startMatching() {
+  clearMatchingTimer()
+  isMatching.value = true
+  activeStepIndex.value = 0
+
+  matchingTimer = window.setInterval(() => {
+    if (activeStepIndex.value < matchingSteps.length - 1) {
+      activeStepIndex.value += 1
+      return
+    }
+
+    clearMatchingTimer()
+    isMatching.value = false
+    emit('matching-complete', { tab: 'evaluation', filter: 'new' })
+  }, 850)
+}
+
+function cancelMatching() {
+  clearMatchingTimer()
+  isMatching.value = false
+  activeStepIndex.value = 0
+}
+
+function handleAction(action) {
+  emit('action', action)
+}
+
+function barHeight(score) {
+  const range = maxScore.value - minScore.value
+  if (!range) return 50
+  return ((score - minScore.value) / range) * 100
+}
+
+function selectBar(index) {
+  selectedIndex.value = index
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`
+}
+
+function formatWeekday(dateStr) {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return ['일', '월', '화', '수', '목', '금', '토'][date.getDay()]
+}
+
+onBeforeUnmount(clearMatchingTimer)
 </script>
 
 <template>
-  <section class="match-dashboard">
-    <div class="dash-flow">
-      <div class="dash-pipeline-strip" aria-label="매칭 처리 단계">
-        <button
-          v-for="(stat, index) in summaryStats"
-          :key="stat.label"
-          type="button"
-          class="dash-pipeline-step"
-          :class="{
-            'dash-pipeline-step--active': activeStage === stat.stage,
-            'dash-pipeline-step--done': index < activeStageIndex,
-          }"
-          @click="activeStage = stat.stage"
-        >
-          <span>{{ index + 1 }}</span>
-          <strong>{{ stat.label }}</strong>
-          <em>{{ stat.helper }}</em>
-          <b>{{ stat.value }}</b>
-        </button>
-      </div>
+  <section class="matching-overview" :class="{ 'matching-overview--dark': isDark }">
+    <div class="matching-overview__main">
+      <section class="matching-hero">
+        <div class="matching-hero__copy">
+          <span class="matching-hero__eyebrow">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path
+                d="M12 3 4 7l8 4 8-4-8-4ZM4 12l8 4 8-4M4 17l8 4 8-4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            매칭 워크스페이스
+          </span>
+          <h3>저장된 조건으로<br />추천 후보를 생성합니다.</h3>
 
-      <div class="dash-stage-note">
-        <span class="dash-stage-note__icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
-          </svg>
-        </span>
-        <div class="dash-stage-note__copy">
-          <strong>{{ activeStageNote.title }}</strong>
-          <span>{{ activeStageNote.description }}</span>
-        </div>
-        <div class="dash-stage-note__actions">
-          <button type="button" class="dash-stage-note__primary">{{ activeStageNote.action }} →</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="dash-overview-layout">
-      <section class="dash-overview-main">
-        <article class="dash-panel dash-trend-panel">
-          <div class="dash-panel__head">
-            <h3>최근 4주 흐름</h3>
-            <span>제안 접수 / 운영 시작</span>
-          </div>
-          <div class="dash-trend-chart">
-            <div v-for="week in trendWeeks" :key="week.label" class="dash-trend-bar">
-              <div class="dash-trend-bar__track">
-                <i class="proposals" :style="{ height: week.proposals * 10 + '%' }" />
-                <i class="handoff" :style="{ height: week.handoff * 18 + '%' }" />
-              </div>
-              <strong>{{ week.label }}</strong>
-              <span>{{ week.proposals }}건 / {{ week.handoff }}건</span>
-            </div>
-          </div>
-        </article>
-
-        <article class="dash-panel dash-actions-panel">
-          <div class="dash-panel__head">
-            <h3>액션 필요 요약</h3>
-            <span>해당 탭에서 처리</span>
-          </div>
-          <div class="dash-action-list">
-            <button v-for="item in actionSummaries" :key="item.label" type="button" class="dash-action-item">
-              <b>{{ item.count }}</b>
-              <span>
-                <strong>{{ item.label }}</strong>
-                <small>{{ item.desc }}</small>
-              </span>
-              <em>{{ item.target }} →</em>
+          <div class="matching-hero__actions">
+            <button type="button" class="mf-btn mf-btn--primary mf-btn--lg" @click="startMatching">
+              매칭 실행
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                <path
+                  d="M5 12h14m-6-6 6 6-6 6"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
             </button>
           </div>
-        </article>
+
+          <div class="matching-hero__helper">
+            이번 주 평균 매칭 시간 <b>{{ processHours }}시간</b> · 평균 점수 <b>{{ averageScore }}</b>
+          </div>
+        </div>
+
+        <aside class="score-panel">
+          <header class="score-panel__head">
+            <h4>최근 14일 매칭 점수 추이</h4>
+            <span>실시간</span>
+          </header>
+          <div class="score-bars" role="group" aria-label="일별 매칭 점수">
+            <button
+              v-for="(day, index) in days"
+              :key="day.date"
+              type="button"
+              class="score-bar"
+              :class="{ 'score-bar--active': selectedIndex === index }"
+              :aria-label="`${formatDate(day.date)} 점수 ${day.score}`"
+              :aria-pressed="selectedIndex === index"
+              @click="selectBar(index)"
+            >
+              <span class="score-bar__fill" :style="{ height: `${barHeight(day.score)}%` }">
+                <span v-if="selectedIndex === index" class="score-bar__tooltip">
+                  <strong>{{ day.score.toFixed(1) }}</strong>
+                  <small>{{ formatDate(day.date) }} ({{ formatWeekday(day.date) }})</small>
+                </span>
+              </span>
+              <span v-if="selectedIndex === index" class="score-bar__indicator" />
+            </button>
+          </div>
+          <div class="score-panel__stats">
+            <article>
+              <span>평균 점수</span>
+              <strong>{{ selectedDay.score.toFixed(1) }}</strong>
+              <em :class="scoreDiff >= 0 ? 'up' : 'down'">
+                {{ scoreDiff >= 0 ? '▲' : '▼' }} {{ Math.abs(scoreDiff) }}
+              </em>
+            </article>
+            <article>
+              <span>매칭 수</span>
+              <strong>{{ selectedDay.matches }}</strong>
+              <em :class="matchesDiff >= 0 ? 'up' : 'down'">
+                {{ matchesDiff >= 0 ? '▲' : '▼' }} {{ Math.abs(matchesDiff) }}
+              </em>
+            </article>
+            <article>
+              <span>처리 시간</span>
+              <strong>{{ selectedDay.hours }}h</strong>
+              <em :class="hoursDiff <= 0 ? 'up' : 'down'">
+                {{ hoursDiff <= 0 ? '▼' : '▲' }} {{ Math.abs(hoursDiff) }}h
+              </em>
+            </article>
+          </div>
+        </aside>
       </section>
 
-      <section class="dash-overview-side">
-        <article class="dash-panel dash-activity-panel">
-          <div class="dash-panel__head">
-            <h3>최근 업데이트 캠페인</h3>
+      <aside class="today-panel">
+        <header class="today-panel__head">
+          <div>
+            <span>Today</span>
+            <h3>오늘 처리</h3>
           </div>
-          <ol class="dash-activity-list dash-activity-list--simple">
-            <li v-for="item in recentCampaigns" :key="item.title">
-              <strong>{{ item.title }}</strong>
-              <small>{{ item.status }}</small>
-            </li>
-          </ol>
-        </article>
+          <strong v-if="hasActions">{{ totalActions }}건</strong>
+        </header>
 
-        <article class="dash-panel dash-quick-panel">
-          <div class="dash-panel__head">
-            <h3>빠른 이동</h3>
-          </div>
-          <div class="dash-quick-actions">
-            <button type="button">신규 자산 등록</button>
-            <button type="button">목표 추가</button>
-            <button type="button">추천 조합 보기</button>
-          </div>
-        </article>
-      </section>
+        <div v-if="hasActions" class="today-list">
+          <button
+            v-for="action in visibleActions"
+            :key="action.id"
+            type="button"
+            class="today-item"
+            :class="`today-item--${action.tone}`"
+            @click="handleAction(action)"
+          >
+            <span class="today-item__count">{{ action.count }}</span>
+            <span class="today-item__copy">
+              <strong>{{ action.label }}</strong>
+              <small>{{ action.description }}</small>
+            </span>
+            <span class="today-item__go">
+              {{ action.actionLabel }}
+              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                <path
+                  d="m9 18 6-6-6-6"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+          </button>
+        </div>
+
+        <div v-else class="today-empty">
+          <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true">
+            <path
+              d="M5 13l4 4L19 7"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <p>지금 처리할 일이 없습니다.</p>
+        </div>
+      </aside>
     </div>
+
+    <section class="kpi-grid" aria-label="매칭 현황 요약">
+      <article v-for="kpi in kpis" :key="kpi.id" class="kpi-card" :class="`kpi-card--${kpi.tone}`">
+        <div class="kpi-card__label">
+          <svg v-if="kpi.icon === 'box'" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path
+              d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <svg v-else-if="kpi.icon === 'clock'" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
+            <path
+              d="M12 6v6l4 2"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <svg v-else-if="kpi.icon === 'check'" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path
+              d="M20 6 9 17l-5-5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path
+              d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          {{ kpi.label }}
+        </div>
+        <strong class="kpi-card__value">
+          {{ kpi.value }}<small v-if="kpi.unit">{{ kpi.unit }}</small>
+        </strong>
+        <p class="kpi-card__sub">
+          <span v-if="kpi.delta" class="kpi-card__delta">▲ {{ kpi.delta.replace('+', '') }}</span>
+          {{ kpi.sub }}
+        </p>
+        <svg class="kpi-card__spark" viewBox="0 0 100 30" fill="none" aria-hidden="true">
+          <path :d="kpi.spark" />
+        </svg>
+      </article>
+    </section>
+
+    <Teleport to="body">
+      <Transition name="matching-modal">
+        <section v-if="isMatching" class="matching-overlay" role="dialog" aria-modal="true">
+          <div class="matching-modal">
+            <header class="matching-modal__head">
+              <span>Matching</span>
+              <h3>매칭 진행 중</h3>
+              <p>추천 후보를 만들고 있습니다. 완료되면 파트너 평가 화면으로 이동합니다.</p>
+            </header>
+
+            <div class="matching-progress" aria-hidden="true">
+              <span
+                v-for="(_, index) in matchingSteps"
+                :key="index"
+                :class="{
+                  done: index < activeStepIndex,
+                  active: index === activeStepIndex,
+                }"
+              />
+            </div>
+
+            <ol class="matching-steps">
+              <li
+                v-for="(step, index) in matchingSteps"
+                :key="step"
+                :class="{
+                  done: index < activeStepIndex,
+                  active: index === activeStepIndex,
+                }"
+              >
+                <span>
+                  <svg
+                    v-if="index < activeStepIndex"
+                    viewBox="0 0 24 24"
+                    width="13"
+                    height="13"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M5 13l4 4L19 7"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.4"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  <i v-else-if="index === activeStepIndex" />
+                  <b v-else />
+                </span>
+                <strong>{{ step }}</strong>
+                <em v-if="index === activeStepIndex">진행 중</em>
+                <em v-else-if="index < activeStepIndex">완료</em>
+                <em v-else>대기</em>
+              </li>
+            </ol>
+
+            <footer class="matching-modal__foot">
+              <span>예상 소요: 약 5초</span>
+              <button type="button" @click="cancelMatching">취소</button>
+            </footer>
+          </div>
+        </section>
+      </Transition>
+    </Teleport>
+
   </section>
 </template>
 
 <style scoped>
-.match-dashboard {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 0.8rem;
-  height: 100%;
+.matching-overview {
+  --mf-bg: #f7f7f9;
+  --mf-surface: #ffffff;
+  --mf-surface-2: #fafafb;
+  --mf-line: #ecedf0;
+  --mf-line-strong: #dee0e5;
+  --mf-text: #0f1115;
+  --mf-text-2: #4a4f5a;
+  --mf-text-3: #8a8f99;
+  --mf-text-4: #b6bac2;
+  --mf-brand: #5b5bf5;
+  --mf-brand-strong: #4848e0;
+  --mf-brand-soft: #eef0ff;
+  --mf-green: #16a368;
+  --mf-green-soft: #e5f6ee;
+  --mf-amber: #c97a0e;
+  --mf-amber-soft: #fbefd7;
+  --mf-rose: #d0395f;
+  --mf-shadow-1: 0 1px 0 rgba(15, 17, 21, 0.04), 0 1px 2px rgba(15, 17, 21, 0.04);
+  display: flex;
   min-height: 0;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+  color: var(--mf-text);
 }
 
-.dash-panel {
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: var(--panel-color);
-  box-shadow: 0 6px 18px rgba(19, 35, 68, 0.04);
-}
-
-.dash-panel__head span,
-.dash-table__head span,
-.dash-table__row span {
-  color: var(--muted-text);
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.dash-layout {
+.matching-overview__main {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
-  gap: 0.7rem;
-  min-height: 0;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+  gap: 16px;
 }
 
-.dash-panel {
+.matching-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(310px, 0.92fr);
+  gap: 28px;
+  align-items: stretch;
+  border: 1px solid var(--mf-line);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 90% at 100% 0%, #eceeff 0%, transparent 55%),
+    radial-gradient(90% 90% at 0% 100%, #f2ebff 0%, transparent 55%),
+    var(--mf-surface);
+  padding: 28px;
+}
+
+.matching-hero__copy {
+  display: flex;
   min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  padding: 0.8rem;
+  flex-direction: column;
+  justify-content: center;
 }
 
-.dash-panel__head {
+.matching-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #1b1e59;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.matching-hero__eyebrow svg {
+  color: var(--mf-brand);
+}
+
+.matching-hero h3 {
+  margin: 14px 0 8px;
+  color: var(--mf-text);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.matching-hero h3 em {
+  color: var(--mf-brand);
+  font-style: normal;
+}
+
+.matching-hero p {
+  max-width: 480px;
+  margin: 0;
+  color: var(--mf-text-2);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.65;
+}
+
+.matching-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.matching-hero__helper {
+  margin-top: 14px;
+  color: var(--mf-text-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.matching-hero__helper b {
+  color: var(--mf-text-2);
+  font-weight: 800;
+}
+
+.mf-btn {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--mf-line);
+  border-radius: 8px;
+  background: var(--mf-surface);
+  color: var(--mf-text);
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.mf-btn:hover {
+  background: var(--mf-surface-2);
+}
+
+.mf-btn--primary {
+  border-color: var(--mf-brand);
+  background: var(--mf-brand);
+  color: #ffffff;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.mf-btn--primary:hover {
+  border-color: var(--mf-brand-strong);
+  background: var(--mf-brand-strong);
+}
+
+.mf-btn--lg {
+  height: 42px;
+  border-radius: 10px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+
+.score-panel {
+  display: flex;
+  min-height: 235px;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--mf-line);
+  border-radius: 14px;
+  background: var(--mf-surface);
+  box-shadow: var(--mf-shadow-1);
+  padding: 18px;
+}
+
+.score-panel__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.65rem;
+  gap: 12px;
 }
 
-.dash-panel__head h3 {
-  color: var(--text-primary);
-  font-size: 0.95rem;
+.score-panel__head h4 {
+  margin: 0;
+  color: var(--mf-text);
+  font-size: 13px;
+  font-weight: 800;
 }
 
-.dash-table {
-  display: grid;
-  gap: 0.4rem;
-}
-
-.dash-table__head,
-.dash-table__row {
-  display: grid;
-  grid-template-columns: minmax(130px, 0.8fr) minmax(260px, 1.7fr) minmax(100px, 0.7fr) 50px 96px;
+.score-panel__head span {
+  display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 6px;
+  color: var(--mf-green);
+  font-size: 11px;
+  font-weight: 800;
 }
 
-.dash-table__head {
-  padding: 0 0.55rem 0.25rem;
+.score-panel__head span::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--mf-green);
+  box-shadow: 0 0 0 3px rgba(22, 163, 104, 0.15);
 }
 
-.dash-table__row {
-  min-height: 3.25rem;
-  border: 1px solid var(--border-color);
+.score-bars {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  height: 80px;
+  align-items: flex-end;
+  gap: 5px;
+  padding: 18px 2px 4px;
+}
+
+.score-bar {
+  position: relative;
+  display: flex;
+  height: 100%;
+  align-items: flex-end;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.score-bar:hover {
+  transform: translateY(-2px);
+}
+
+.score-bar__fill {
+  position: relative;
+  width: 100%;
+  min-height: 8px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, #eef0ff, #c9ccff);
+  transition:
+    background 0.2s,
+    height 0.3s ease;
+}
+
+.score-bar:hover .score-bar__fill {
+  background: linear-gradient(180deg, #dddfff, #b8bcff);
+}
+
+.score-bar--active .score-bar__fill {
+  background: linear-gradient(180deg, var(--mf-brand), #8e8eff);
+}
+
+.score-bar__indicator {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--mf-brand);
+  border-radius: 999px;
+  background: #ffffff;
+  transform: translateX(-50%);
+}
+
+.score-bar__tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
   border-radius: 7px;
-  background: var(--panel-muted);
-  padding: 0.55rem;
+  background: var(--mf-text);
+  color: #ffffff;
+  padding: 6px 8px;
+  pointer-events: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.score-bar__tooltip::after {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: 4px solid transparent;
+  border-top-color: var(--mf-text);
+  content: '';
+  transform: translateX(-50%);
+}
+
+.score-bar__tooltip strong {
+  font-size: 12px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-bar__tooltip small {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.86;
+}
+
+.score-panel__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.score-panel__stats article {
+  border: 1px solid var(--mf-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.score-panel__stats span {
+  color: var(--mf-text-3);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.score-panel__stats strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--mf-text);
+  font-size: 18px;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.score-panel__stats em {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.score-panel__stats .up {
+  color: var(--mf-green);
+}
+
+.score-panel__stats .down {
+  color: var(--mf-rose);
+}
+
+.today-panel {
+  border: 1px solid var(--mf-line);
+  border-radius: 16px;
+  background: var(--mf-surface);
+  padding: 20px;
+}
+
+.today-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.today-panel__head span {
+  color: var(--mf-text-3);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.today-panel__head h3 {
+  margin: 2px 0 0;
+  color: var(--mf-text);
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.today-panel__head strong {
+  border-radius: 999px;
+  background: var(--mf-brand-soft);
+  color: var(--mf-brand);
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.today-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.today-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  border: 1px solid var(--mf-line);
+  border-radius: 12px;
+  background: var(--mf-surface);
+  padding: 14px;
   text-align: left;
   cursor: pointer;
   transition:
-    border-color var(--transition-fast),
-    background-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
-.dash-table__row:hover,
-.dash-table__row--active {
-  border-color: color-mix(in srgb, var(--accent-color) 42%, var(--border-strong));
-  background: color-mix(in srgb, var(--accent-color) 8%, var(--panel-color));
+.today-item:hover {
+  border-color: var(--mf-brand);
+  box-shadow: 0 0 0 3px var(--mf-brand-soft);
 }
 
-.dash-table__row--active {
-  box-shadow:
-    0 5px 14px rgba(19, 35, 68, 0.06),
-    inset 3px 0 0 var(--accent-color);
+.today-item__count {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--mf-brand-soft);
+  color: var(--mf-brand);
+  font-size: 14px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
 }
 
-.dash-table__row strong {
-  color: var(--text-primary);
-  font-size: 0.84rem;
+.today-item--warning .today-item__count {
+  background: var(--mf-amber-soft);
+  color: var(--mf-amber);
 }
 
-.dash-table__row span {
+.today-item--success .today-item__count {
+  background: var(--mf-green-soft);
+  color: var(--mf-green);
+}
+
+.today-item__copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.today-item__copy strong {
   overflow: hidden;
+  color: var(--mf-text);
+  font-size: 14px;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.dash-table__row b {
-  color: var(--accent-color);
-  font-size: 0.92rem;
-}
-
-.dash-table__row em {
-  display: inline-flex;
-  min-height: 1.45rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 0 0.48rem;
-  font-size: 0.66rem;
-  font-style: normal;
-  font-weight: 900;
+.today-item__copy small {
+  overflow: hidden;
+  color: var(--mf-text-3);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.dash-grade--strong {
-  background: var(--color-primary-50);
-  color: var(--color-primary-700);
-}
-
-.dash-grade--info {
-  background: var(--color-info-light);
-  color: var(--color-info-dark);
-}
-
-.dash-grade--warning {
-  background: var(--color-warning-light);
-  color: var(--color-warning-dark);
-}
-
-.dash-grade--danger {
-  background: var(--color-danger-light);
-  color: var(--color-danger-dark);
-}
-
-.dash-flow {
-  display: grid;
-  gap: 0.55rem;
-}
-
-.dash-pipeline-strip {
-  display: flex;
-  min-width: 0;
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--panel-color);
-}
-
-.dash-pipeline-step {
-  position: relative;
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  height: 56px;
+.today-item__go {
+  display: inline-flex;
   align-items: center;
-  gap: 0.56rem;
-  border: 0;
-  border-top: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
-  background: var(--panel-color);
-  color: var(--text-primary);
-  padding: 0 1.1rem 0 1.75rem;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background-color var(--transition-fast),
-    border-color var(--transition-fast),
-    color var(--transition-fast);
+  gap: 4px;
+  border: 1px solid var(--mf-line);
+  border-radius: 8px;
+  background: var(--mf-surface-2);
+  color: var(--mf-text-2);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
-.dash-pipeline-step + .dash-pipeline-step {
-  padding-left: 2rem;
-}
-
-.dash-pipeline-step:first-child {
-  border-left: 1px solid var(--border-color);
-  border-radius: 6px 0 0 6px;
-  padding-left: 1rem;
-}
-
-.dash-pipeline-step:last-child {
-  border-right: 1px solid var(--border-color);
-  border-radius: 0 6px 6px 0;
-  padding-right: 1rem;
-}
-
-.dash-pipeline-step::before,
-.dash-pipeline-step::after {
-  content: '';
-  position: absolute;
-  width: 0;
-  height: 0;
-  top: 0;
-  right: -13px;
-  z-index: 1;
-  border-top: 28px solid transparent;
-  border-bottom: 28px solid transparent;
-  border-left: 13px solid var(--border-color);
-}
-
-.dash-pipeline-step::after {
-  right: -12px;
-  z-index: 2;
-  border-left-color: var(--panel-color);
-}
-
-.dash-pipeline-step:last-child::before,
-.dash-pipeline-step:last-child::after {
-  display: none;
-}
-
-.dash-pipeline-step:hover {
-  background: color-mix(in srgb, var(--accent-color) 5%, var(--panel-color));
-}
-
-.dash-pipeline-step:hover::after {
-  border-left-color: color-mix(in srgb, var(--accent-color) 5%, var(--panel-color));
-}
-
-.dash-pipeline-step--done {
-  border-color: color-mix(in srgb, var(--accent-color) 16%, var(--border-color));
-  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-color));
-  color: color-mix(in srgb, var(--accent-color) 76%, var(--text-primary));
-}
-
-.dash-pipeline-step--done::before {
-  border-left-color: color-mix(in srgb, var(--accent-color) 16%, var(--border-color));
-}
-
-.dash-pipeline-step--done::after {
-  border-left-color: color-mix(in srgb, var(--accent-color) 10%, var(--panel-color));
-}
-
-.dash-pipeline-step--active {
-  z-index: 2;
-  border-color: #14152b;
-  background: #14152b;
+.today-item:hover .today-item__go {
+  border-color: var(--mf-brand);
+  background: var(--mf-brand);
   color: #ffffff;
 }
 
-.dash-pipeline-step--active::before,
-.dash-pipeline-step--active::after {
-  border-left-color: #14152b;
+.today-empty {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--mf-text-3);
+  text-align: center;
 }
 
-.dash-pipeline-step span {
-  display: inline-flex;
-  width: 1.5rem;
-  height: 1.5rem;
-  flex: 0 0 1.5rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent-color) 18%, var(--panel-color));
-  color: var(--accent-color);
-  font-size: 0.7rem;
-  font-weight: 900;
+.today-empty svg {
+  color: var(--mf-green);
 }
 
-.dash-pipeline-step strong {
+.today-empty p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.kpi-card {
+  position: relative;
+  min-height: 110px;
+  border: 1px solid var(--mf-line);
+  border-radius: 16px;
+  background: var(--mf-surface);
+  padding: 18px 20px;
   overflow: hidden;
-  flex: 1;
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  font-weight: 900;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.dash-pipeline-step b {
-  color: var(--text-primary);
-  flex: 0 0 auto;
-  font-size: 1.08rem;
-  font-variant-numeric: tabular-nums;
-  font-weight: 900;
+.kpi-card__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mf-text-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.kpi-card__label svg {
+  color: var(--mf-text-4);
+}
+
+.kpi-card__value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--mf-text);
+  font-size: 28px;
+  font-weight: 850;
   line-height: 1;
 }
 
-.dash-pipeline-step em {
-  overflow: hidden;
-  flex: 0 1 auto;
-  color: var(--muted-text);
-  font-size: 0.65rem;
-  font-style: normal;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dash-pipeline-step--done span {
-  background: color-mix(in srgb, var(--accent-color) 18%, #ffffff);
-  color: var(--accent-color);
-}
-
-.dash-pipeline-step--done strong,
-.dash-pipeline-step--done b {
-  color: color-mix(in srgb, var(--accent-color) 74%, var(--text-primary));
-}
-
-.dash-pipeline-step--active span {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
-}
-
-.dash-pipeline-step--active strong,
-.dash-pipeline-step--active b {
-  color: #ffffff;
-}
-
-.dash-pipeline-step--active em {
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.dash-stage-note {
-  display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
-  min-height: 2.9rem;
-  align-items: center;
-  gap: 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 18%, var(--border-color));
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent-color) 6%, var(--panel-color));
-  padding: 0.52rem 0.72rem;
-}
-
-.dash-stage-note__icon {
-  display: grid;
-  width: 1.75rem;
-  height: 1.75rem;
-  place-items: center;
-  border-radius: 5px;
-  background: var(--accent-color);
-  color: #ffffff;
-}
-
-.dash-stage-note__icon svg {
-  width: 0.95rem;
-  height: 0.95rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
-}
-
-.dash-stage-note__copy {
-  display: grid;
-  gap: 0.18rem;
-  min-width: 0;
-}
-
-.dash-stage-note__copy strong {
-  color: var(--text-primary);
-  font-size: 0.78rem;
-}
-
-.dash-stage-note__copy span {
-  overflow: hidden;
-  color: var(--muted-text);
-  font-size: 0.7rem;
+.kpi-card__value small {
+  color: var(--mf-text-3);
+  font-size: 14px;
   font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.dash-stage-note__actions {
+.kpi-card--brand .kpi-card__value {
+  color: var(--mf-brand);
+}
+
+.kpi-card--green .kpi-card__value {
+  color: var(--mf-green);
+}
+
+.kpi-card__sub {
   display: flex;
-  gap: 0.35rem;
-  justify-content: flex-end;
-}
-
-.dash-stage-note__actions button {
-  min-height: 1.8rem;
-  border-radius: 6px;
-  font-size: 0.7rem;
-  font-weight: 900;
-  padding: 0 0.68rem;
-  white-space: nowrap;
-}
-
-.dash-stage-note__secondary {
-  border: 1px solid var(--border-color);
-  background: var(--panel-color);
-  color: var(--text-secondary);
-}
-
-.dash-stage-note__primary {
-  border: 0;
-  background: #14152b;
-  color: #ffffff;
-}
-
-.dash-detail {
-  display: grid;
-  align-content: start;
-  gap: 0.72rem;
-  padding-bottom: 0;
-}
-
-.dash-detail__link {
-  border: 0;
-  background: transparent;
-  color: var(--accent-color);
-  font-size: 0.7rem;
-  font-weight: 900;
-  padding: 0;
-}
-
-.dash-detail__summary {
-  display: grid;
-  grid-template-columns: 2.25rem minmax(0, 1fr);
   align-items: center;
-  gap: 0.62rem;
+  gap: 6px;
+  margin: 6px 0 0;
+  color: var(--mf-text-3);
+  font-size: 12px;
+  font-weight: 650;
 }
 
-.dash-detail__logo {
-  display: inline-flex;
-  width: 2.25rem;
-  height: 2.25rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  background: #ff671f;
-  color: #ffffff;
-  font-size: 0.66rem;
-  font-weight: 900;
+.kpi-card__delta {
+  color: var(--mf-green);
+  font-weight: 850;
 }
 
-.dash-detail__title {
-  min-width: 0;
+.kpi-card__spark {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 80px;
+  height: 30px;
+  opacity: 0.86;
 }
 
-.dash-detail__title strong {
-  color: var(--text-primary);
-  font-size: 0.9rem;
+.kpi-card__spark path {
+  stroke: var(--mf-brand);
+  stroke-width: 1.5;
 }
 
-.dash-detail__title p,
-.dash-detail__meta dd,
-.dash-detail__section li {
-  color: var(--text-secondary);
-  font-size: 0.74rem;
-  line-height: 1.42;
+.kpi-card--green .kpi-card__spark path {
+  stroke: var(--mf-green);
 }
 
-.dash-detail__meta {
+.matching-overlay {
+  --mf-bg: #f7f7f9;
+  --mf-surface: #ffffff;
+  --mf-surface-2: #fafafb;
+  --mf-line: #ecedf0;
+  --mf-text: #0f1115;
+  --mf-text-2: #4a4f5a;
+  --mf-text-3: #8a8f99;
+  --mf-brand: #5b5bf5;
+  --mf-brand-soft: #eef0ff;
+  --mf-green: #16a368;
+  --mf-green-soft: #e5f6ee;
+  position: fixed;
+  inset: 0;
+  z-index: 220;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem 0.7rem;
-  margin: 0;
+  place-items: center;
+  background: rgba(15, 17, 21, 0.56);
+  padding: 1rem;
 }
 
-.dash-detail__meta div:nth-child(3) {
-  grid-column: 1 / -1;
+.matching-modal {
+  width: min(460px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--mf-line);
+  border-radius: 16px;
+  background: var(--mf-surface);
+  box-shadow: 0 24px 70px rgba(15, 17, 21, 0.3);
 }
 
-.dash-detail__meta dt,
-.dash-detail__section h4 {
-  margin-bottom: 0.24rem;
-  color: var(--muted-text);
+.matching-modal__head {
+  display: grid;
+  gap: 0.34rem;
+  background:
+    radial-gradient(120% 100% at 100% 0%, #eceeff 0%, transparent 55%),
+    #ffffff;
+  border-bottom: 1px solid var(--mf-line);
+  padding: 1.2rem;
+}
+
+.matching-modal__head span {
+  color: var(--mf-brand);
   font-size: 0.68rem;
-  font-weight: 900;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.dash-detail__meta dd {
+.matching-modal__head h3 {
   margin: 0;
+  color: var(--mf-text);
+  font-size: 1.18rem;
+  font-weight: 950;
+}
+
+.matching-modal__head p {
+  margin: 0;
+  color: var(--mf-text-2);
+  font-size: 0.76rem;
   font-weight: 700;
+  line-height: 1.45;
 }
 
-.dash-detail__section ul {
+.matching-progress {
   display: grid;
-  gap: 0.32rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.38rem;
+  padding: 1rem 1.2rem 0;
+}
+
+.matching-progress span {
+  height: 0.38rem;
+  border-radius: 999px;
+  background: var(--mf-brand-soft);
+}
+
+.matching-progress span.done,
+.matching-progress span.active {
+  background: var(--mf-brand);
+}
+
+.matching-steps {
+  display: grid;
+  gap: 0.48rem;
   margin: 0;
-  padding-left: 0;
+  padding: 0.95rem 1.2rem 0;
   list-style: none;
 }
 
-.dash-score-list {
+.matching-steps li {
   display: grid;
-  gap: 0.34rem;
-  margin: 0;
+  grid-template-columns: 1.45rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid var(--mf-line);
+  border-radius: 9px;
+  background: var(--mf-surface);
+  padding: 0.58rem 0.68rem;
 }
 
-.dash-score-line {
+.matching-steps li.active {
+  border-color: var(--mf-brand);
+  background: var(--mf-brand-soft);
+}
+
+.matching-steps span {
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--mf-surface-2);
+  color: var(--mf-brand);
+}
+
+.matching-steps i {
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 999px;
+  background: var(--mf-brand);
+  animation: matching-pulse 0.9s ease-in-out infinite;
+}
+
+.matching-steps b {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: var(--mf-text-4);
+}
+
+.matching-steps strong {
+  color: var(--mf-text);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.matching-steps em {
+  color: var(--mf-text-3);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.matching-steps li.active em {
+  color: var(--mf-brand);
+}
+
+.matching-modal__foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.7rem;
-  min-height: 1.05rem;
+  gap: 0.8rem;
+  border-top: 1px solid var(--mf-line);
+  margin-top: 1rem;
+  padding: 0.85rem 1.2rem 1.05rem;
 }
 
-.dash-score-line dt {
-  position: relative;
-  min-width: 0;
-  padding-left: 0.8rem;
-  color: var(--text-secondary);
+.matching-modal__foot span {
+  color: var(--mf-text-3);
   font-size: 0.74rem;
   font-weight: 800;
-  line-height: 1.2;
 }
 
-.dash-score-line dt::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 0.34rem;
-  height: 0.34rem;
-  border-radius: 999px;
-  background: var(--accent-color);
-  transform: translateY(-50%);
-}
-
-.dash-score-line dd {
-  margin: 0;
-  color: var(--text-primary);
+.matching-modal__foot button {
+  height: 2rem;
+  border: 1px solid var(--mf-line);
+  border-radius: 7px;
+  background: var(--mf-surface);
+  color: var(--mf-text-2);
+  padding: 0 0.8rem;
   font-size: 0.74rem;
-  font-variant-numeric: tabular-nums;
   font-weight: 900;
-  line-height: 1.2;
+  cursor: pointer;
 }
 
-.dash-detail__actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.42rem;
-  border-top: 1px solid var(--border-color);
-  margin: 0 -0.8rem;
-  padding: 0.62rem 0.8rem 0.8rem;
+.matching-modal-enter-active,
+.matching-modal-leave-active {
+  transition: opacity 0.18s ease;
 }
 
-.dash-detail__actions button {
-  min-height: 2.2rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 900;
+.matching-modal-enter-active .matching-modal,
+.matching-modal-leave-active .matching-modal {
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease;
 }
 
-.dash-detail__reject {
-  border: 1px solid var(--border-color);
-  background: var(--panel-color);
-  color: var(--text-secondary);
+.matching-modal-enter-from,
+.matching-modal-leave-to {
+  opacity: 0;
 }
 
-.dash-detail__approve {
-  border: 0;
-  background: var(--accent-color);
-  color: #ffffff;
+.matching-modal-enter-from .matching-modal,
+.matching-modal-leave-to .matching-modal {
+  transform: scale(0.96);
+  opacity: 0;
 }
 
+@keyframes matching-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.84);
+  }
 
-/* Overview-only dashboard layout */
-.dash-overview-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
-  grid-template-areas:
-    'main side';
-  gap: 0.7rem;
-  min-height: 0;
-}
-
-.dash-overview-main {
-  grid-area: main;
-  display: grid;
-  gap: 0.7rem;
-  min-width: 0;
-}
-
-.dash-overview-side {
-  grid-area: side;
-  display: grid;
-  align-content: start;
-  gap: 0.7rem;
-  min-width: 0;
-}
-
-.dash-trend-chart {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.7rem;
-  min-height: 15rem;
-  align-items: end;
-}
-
-.dash-trend-bar {
-  display: grid;
-  gap: 0.38rem;
-  justify-items: center;
-}
-
-.dash-trend-bar__track {
-  display: flex;
-  align-items: end;
-  justify-content: center;
-  gap: 0.28rem;
-  width: 100%;
-  height: 10rem;
-  border-radius: 8px;
-  background: var(--panel-muted);
-  padding: 0.65rem;
-}
-
-.dash-trend-bar__track i {
-  display: block;
-  width: 1.35rem;
-  min-height: 0.35rem;
-  border-radius: 999px 999px 4px 4px;
-}
-
-.dash-trend-bar__track .proposals {
-  background: var(--accent-color);
-}
-
-.dash-trend-bar__track .handoff {
-  background: color-mix(in srgb, var(--accent-color) 48%, var(--panel-color));
-}
-
-.dash-trend-bar strong {
-  color: var(--text-primary);
-  font-size: 0.76rem;
-  font-weight: 900;
-}
-
-.dash-trend-bar span {
-  color: var(--muted-text);
-  font-size: 0.68rem;
-  font-weight: 760;
-}
-
-.dash-action-list,
-.dash-quick-actions {
-  display: grid;
-  gap: 0.45rem;
-}
-
-.dash-action-item {
-  display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.65rem;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: var(--panel-muted);
-  padding: 0.62rem 0.7rem;
-  text-align: left;
-}
-
-.dash-action-item b {
-  display: grid;
-  width: 1.8rem;
-  height: 1.8rem;
-  place-items: center;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--accent-color) 16%, var(--panel-color));
-  color: var(--accent-color);
-  font-size: 0.9rem;
-  font-weight: 900;
-}
-
-.dash-action-item span {
-  display: grid;
-  gap: 0.12rem;
-  min-width: 0;
-}
-
-.dash-action-item strong {
-  color: var(--text-primary);
-  font-size: 0.82rem;
-}
-
-.dash-action-item small {
-  color: var(--muted-text);
-  font-size: 0.7rem;
-  font-weight: 760;
-}
-
-.dash-action-item em {
-  color: var(--text-secondary);
-  font-size: 0.7rem;
-  font-style: normal;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.dash-activity-list {
-  display: grid;
-  gap: 0.45rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.dash-activity-list li {
-  display: grid;
-  gap: 0.16rem;
-  border-bottom: 1px solid var(--border-color);
-  padding: 0.4rem 0 0.5rem;
-}
-
-.dash-activity-list li:last-child {
-  border-bottom: 0;
-}
-
-.dash-activity-list strong {
-  color: var(--text-primary);
-  font-size: 0.78rem;
-}
-
-.dash-activity-list small {
-  color: var(--muted-text);
-  font-size: 0.7rem;
-  font-weight: 760;
-}
-
-.dash-quick-actions button {
-  min-height: 2.25rem;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: var(--panel-muted);
-  color: var(--text-primary);
-  font-size: 0.76rem;
-  font-weight: 900;
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @media (max-width: 1180px) {
-  .dash-overview-layout {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      'main'
-      'side';
-  }
-}
-
-@media (max-width: 680px) {
-  .dash-trend-chart,
-  .dash-action-item {
+  .matching-overview__main {
     grid-template-columns: 1fr;
   }
 }
 
+@media (max-width: 920px) {
+  .matching-hero,
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .matching-hero,
+  .today-panel,
+  .kpi-card {
+    padding: 16px;
+  }
+
+  .matching-hero h3 {
+    font-size: 24px;
+  }
+
+  .matching-hero__actions,
+  .matching-modal__foot {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mf-btn,
+  .matching-modal__foot button {
+    width: 100%;
+  }
+
+  .score-panel__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .today-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .today-item__copy small,
+  .today-item__copy strong {
+    white-space: normal;
+  }
+
+  .today-item__go {
+    width: 100%;
+    justify-content: center;
+  }
+}
 </style>

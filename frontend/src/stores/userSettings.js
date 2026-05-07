@@ -21,6 +21,24 @@ const defaultThemeUi = {
   highContrast: false,
 }
 
+const defaultNotifications = {
+  enabled: true,
+  methods: {
+    inApp: true,
+    email: false,
+    browser: false,
+  },
+  level: 'normal',
+  conditions: {
+    taskAssigned: true,
+    taskStatusChanged: true,
+    qaReview: true,
+    deadline: true,
+    campaign: true,
+    aiAnalysis: false,
+  },
+}
+
 function getStorage() {
   return typeof window === 'undefined' ? null : window.localStorage
 }
@@ -83,6 +101,33 @@ function normalizeThemeUi(source = {}) {
     density: normalizeDensity(source.density),
     reduceMotion: Boolean(source.reduceMotion),
     highContrast: Boolean(source.highContrast),
+  }
+}
+
+function normalizeNotificationLevel(value) {
+  return ['essential', 'normal', 'all'].includes(value) ? value : 'normal'
+}
+
+function normalizeBooleanOptions(source = {}, defaults = {}) {
+  const nextSource = source && typeof source === 'object' ? source : {}
+
+  return Object.fromEntries(
+    Object.entries(defaults).map(([key, defaultValue]) => [
+      key,
+      typeof nextSource[key] === 'boolean' ? nextSource[key] : defaultValue,
+    ]),
+  )
+}
+
+function normalizeNotifications(source = {}) {
+  const nextSource = source && typeof source === 'object' ? source : {}
+
+  return {
+    enabled:
+      typeof nextSource.enabled === 'boolean' ? nextSource.enabled : defaultNotifications.enabled,
+    methods: normalizeBooleanOptions(nextSource.methods, defaultNotifications.methods),
+    level: normalizeNotificationLevel(nextSource.level),
+    conditions: normalizeBooleanOptions(nextSource.conditions, defaultNotifications.conditions),
   }
 }
 
@@ -283,6 +328,7 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
   const activeUserKey = ref('guest')
   const profile = reactive({ ...fallbackProfile })
   const themeUi = reactive({ ...defaultThemeUi })
+  const notifications = reactive(normalizeNotifications())
   const generatorPrompt = ref('')
   const generatorStatus = ref('ready')
   const generatorMessage = ref('OpenAI 이미지 생성 API 연동 전 준비 상태입니다.')
@@ -307,6 +353,11 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
       JSON.stringify({
         profile: createPersistableProfile(profile),
         themeUi: { ...themeUi },
+        notifications: {
+          ...notifications,
+          methods: { ...notifications.methods },
+          conditions: { ...notifications.conditions },
+        },
         generatorPrompt: generatorPrompt.value,
       }),
     )
@@ -319,9 +370,11 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     const savedSettings = safeParse(storage?.getItem(storageKey.value)) ?? {}
     const nextProfile = normalizeProfile(sanitizeSavedProfile(savedSettings.profile), rawUser)
     const nextThemeUi = normalizeThemeUi(savedSettings.themeUi)
+    const nextNotifications = normalizeNotifications(savedSettings.notifications)
 
     assignState(profile, nextProfile)
     assignState(themeUi, nextThemeUi)
+    assignState(notifications, nextNotifications)
     applyThemeUiPreferences(themeUi)
 
     generatorPrompt.value = String(savedSettings.generatorPrompt ?? '')
@@ -350,6 +403,53 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
 
     assignState(themeUi, nextThemeUi)
     applyThemeUiPreferences(themeUi)
+    persist()
+  }
+
+  function updateNotifications(patch) {
+    const nextNotifications = normalizeNotifications({
+      ...notifications,
+      ...(patch ?? {}),
+      methods: {
+        ...notifications.methods,
+        ...(patch?.methods ?? {}),
+      },
+      conditions: {
+        ...notifications.conditions,
+        ...(patch?.conditions ?? {}),
+      },
+    })
+
+    assignState(notifications, nextNotifications)
+    persist()
+  }
+
+  function updateNotificationMethod(key, value) {
+    if (!Object.prototype.hasOwnProperty.call(defaultNotifications.methods, key)) {
+      return
+    }
+
+    updateNotifications({
+      methods: {
+        [key]: Boolean(value),
+      },
+    })
+  }
+
+  function updateNotificationCondition(key, value) {
+    if (!Object.prototype.hasOwnProperty.call(defaultNotifications.conditions, key)) {
+      return
+    }
+
+    updateNotifications({
+      conditions: {
+        [key]: Boolean(value),
+      },
+    })
+  }
+
+  function resetNotifications() {
+    assignState(notifications, normalizeNotifications())
     persist()
   }
 
@@ -514,12 +614,17 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     generatorStatus,
     loadUserSettings,
     markImageGenerationReady,
+    notifications,
     profile,
     profileCardData,
     profileInitials,
+    resetNotifications,
     resetThemeUi,
     setGeneratorPrompt,
     themeUi,
+    updateNotificationCondition,
+    updateNotificationMethod,
+    updateNotifications,
     updateProfile,
     updateThemeUi,
   }

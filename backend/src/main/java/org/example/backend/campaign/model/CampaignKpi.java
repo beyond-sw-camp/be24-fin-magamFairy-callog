@@ -3,6 +3,7 @@ package org.example.backend.campaign.model;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.backend.common.model.BaseEntity;
+import org.example.backend.kpi.model.EsgCategory;
 import org.example.backend.user.model.User;
 
 import java.math.BigDecimal;
@@ -64,4 +65,20 @@ public class CampaignKpi extends BaseEntity {
 
     @Setter
     private LocalDateTime measuredAt;
+
+    /**
+     * 옵션: 어떤 상위 OrganizationKpi에 cascade되는가 (기여 매핑은 CampaignKpiContribution에 별도 저장).
+     */
+    @Setter
+    @Column(name = "parent_org_kpi_id")
+    private Long parentOrgKpiId;
+
+    /**
+     * KpiCategory에서 ESG가 분리된 후 ESG KPI를 표현하기 위한 보조 필드.
+     * null이면 일반 KPI, 값이 있으면 ESG KPI (E/S/G 분류).
+     */
+    @Setter
+    @Enumerated(EnumType.STRING)
+    @Column(name = "esg_category", length = 30)
+    private EsgCategory esgCategory;
 }

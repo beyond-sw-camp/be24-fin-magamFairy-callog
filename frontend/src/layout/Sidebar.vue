@@ -1,11 +1,21 @@
 <script setup>
+import { computed } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 const route = useRoute()
 const store = usePlannerStore()
+const authStore = useAuthStore()
 
-const navItems = [
+const orgType = computed(() => {
+  const fromOrg = authStore.user?.organization?.type
+  if (fromOrg) return String(fromOrg).toUpperCase()
+  const fromClaim = authStore.user?.orgType
+  return fromClaim ? String(fromClaim).toUpperCase() : ''
+})
+
+const allNavItems = [
   {
     id: 'dashboard',
     to: '/dashboard',
@@ -31,6 +41,13 @@ const navItems = [
     icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 1 0-7l1.5-1.5a5 5 0 0 1 7 7L17 13"/><path d="M14 11a5 5 0 0 1 0 7l-1.5 1.5a5 5 0 0 1-7-7L7 11"/></svg>`,
   },
   {
+    id: 'organization-kpis',
+    to: '/organization-kpis',
+    label: '분기 목표',
+    requiresOrgTypes: ['HQ', 'AFFILIATE'],
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
+  },
+  {
     id: 'frames',
     to: '/frames',
     label: '캠페인 프레임',
@@ -43,6 +60,14 @@ const navItems = [
     icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>`,
   },
 ]
+
+const navItems = computed(() =>
+  allNavItems.filter((item) => {
+    if (!item.requiresOrgTypes || item.requiresOrgTypes.length === 0) return true
+    if (!orgType.value) return true // 정보 없을 때는 일단 노출 (게이팅은 페이지 안에서)
+    return item.requiresOrgTypes.includes(orgType.value)
+  }),
+)
 
 function isActive(item) {
   return route.path === item.to || route.path.startsWith(`${item.to}/`)
