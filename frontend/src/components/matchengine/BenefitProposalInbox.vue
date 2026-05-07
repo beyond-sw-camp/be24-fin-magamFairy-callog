@@ -1,5 +1,15 @@
 <script setup>
-import EvaluationModal from './EvaluationModal.vue';
+import { computed, ref } from 'vue'
+import EvaluationModal from './EvaluationModal.vue'
+
+defineProps({
+  isDark: {
+    type: Boolean,
+    default: false,
+  },
+})
+
+const emit = defineEmits(['navigate'])
 
 const isEvaluationModalOpen = ref(false)
 
@@ -21,147 +31,167 @@ function handleEvaluationSubmit(payload) {
   alert('선택한 혜택의 평가가 요청되었습니다.')
 }
 
-import { computed, ref } from 'vue'
-
-defineProps({
-  isDark: {
-    type: Boolean,
-    default: false,
-  },
-})
-
-const emit = defineEmits(['navigate'])
-
+// 실제 상태 코드에 맞게 필터 ID 변경
 const statusFilters = [
   { id: 'all', label: '전체' },
-  { id: 'new', label: '새 제안' },
-  { id: 'incomplete', label: '보완 필요' },
-  { id: 'approved', label: '승인됨' },
-  { id: 'hold', label: '보류' },
+  { id: 'PENDING', label: '새 제안' },
+  { id: 'INCOMPLETE', label: '보완 필요' },
+  { id: 'APPROVED', label: '승인됨' },
+  { id: 'HOLD', label: '보류' },
 ]
 
-const proposals = ref([
+function getStatusLabel(status) {
+  const filter = statusFilters.find(f => f.id === status)
+  return filter ? filter.label : status
+}
+
+// 실제 데이터 구조가 반영된 더미 데이터 (benefits)
+const benefits = ref([
   {
-    id: 1,
-    partner: '럭시드',
-    name: '핸드크림 10ml 샘플',
-    type: '체험/사은품',
-    target: '2040 뷰티 고객, VIP/프리미엄',
-    quantity: '10,000개',
-    value: '총 5,000만원',
-    period: '2026.05.01 - 2026.06.30',
+    id: 1, // 리스트 v-for용 고유 ID
+    name: "핸드크림 10ml 샘플",
+    type: "체험/사은품",
+    description: "럭시드 핸드크림 샘플을 VIP 고객에게 제공하는 체험형 혜택입니다.",
+    quantity: 10000,
+    quantityUnit: "개",
+    valuePerPerson: 5000,
+    periodStart: "2026.05.01",
+    periodEnd: "2026.06.30",
+    alwaysNegotiable: false,
+    prepDays: 10,
+    targetAudience: "2040 뷰티 고객, VIP/프리미엄",
+    expectedReach: 8000,
+    costBearer: "PARTNER",
+    costPartnerPercent: "100",
+    costOursPercent: "0",
+    costDetails: "파트너 전액 부담",
+    exposureChannels: "자사 앱, 알림톡, 제휴사 채널",
+    requiredCollaborations: "샘플 재고 소진 시 대체 혜택 필요",
+    conditions: "VIP 고객층과 적합도 높음",
+    desiredAssets: "갤러리아 VIP 고객층",
+    autoRecommend: true,
+    managerName: "럭시드",
+    managerEmail: "contact@luxeed.com",
+    managerPhone: "010-1234-5678",
+    status: "PENDING",
+    campaignIdx: 1,
+    totalValue: 50000000,
+    // 화면 표시용 부가 데이터 (실제 응답에 없다면 프론트에서 가공)
     receivedAt: '오늘 09:42',
-    owner: '제휴 검토 필요',
-    status: 'new',
-    statusLabel: '새 제안',
-    matchAsset: '갤러리아 VIP 고객층',
     matchScore: 87,
-    cost: '파트너 전액 부담',
-    channels: '자사 앱, 알림톡, 제휴사 채널',
-    summary: '럭시드 핸드크림 샘플을 VIP 고객에게 제공하는 체험형 혜택입니다.',
-    strengths: ['파트너 전액 부담으로 비용 리스크가 낮음', 'VIP 고객층과 적합도 87%', '준비 기간 10일로 단기 실행 가능'],
-    risks: ['샘플 재고 소진 시 대체 혜택 필요', '배송비 포함 범위 확인 필요'],
   },
   {
     id: 2,
-    partner: '메리오',
-    name: '전시 시설 30% 할인권',
-    type: '할인/쿠폰',
-    target: '패밀리, 4050 기존 고객',
-    quantity: '제한 없음',
-    value: '할인율 기반 정산',
-    period: '상시 협의',
+    name: "전시 시설 30% 할인권",
+    type: "할인/쿠폰",
+    description: "전시 시설 할인권을 활용해 기존 고객의 재방문을 유도하는 제안입니다.",
+    quantity: 9999, // 무제한 등을 표현
+    quantityUnit: "건",
+    valuePerPerson: 15000,
+    periodStart: "",
+    periodEnd: "",
+    alwaysNegotiable: true,
+    prepDays: 5,
+    targetAudience: "패밀리, 4050 기존 고객",
+    expectedReach: 5000,
+    costBearer: "PARTNER",
+    costPartnerPercent: "100",
+    costOursPercent: "0",
+    costDetails: "파트너 전액 부담 (할인율 기반 정산)",
+    exposureChannels: "앱, SNS, 오프라인 매장",
+    requiredCollaborations: "운영비 부담 기준은 추가 협의 필요",
+    conditions: "기존 고객 재방문 목표와 연결이 명확함",
+    desiredAssets: "호텔 객실 패키지",
+    autoRecommend: false,
+    managerName: "메리오",
+    managerEmail: "mkt@merio.com",
+    managerPhone: "02-987-6543",
+    status: "APPROVED",
+    campaignIdx: 1,
+    totalValue: 0,
     receivedAt: '어제 16:20',
-    owner: '제휴마케팅팀',
-    status: 'approved',
-    statusLabel: '승인됨',
-    matchAsset: '호텔 객실 패키지',
     matchScore: 82,
-    cost: '파트너 전액 부담',
-    channels: '앱, SNS, 오프라인 매장',
-    summary: '전시 시설 할인권을 활용해 기존 고객의 재방문을 유도하는 제안입니다.',
-    strengths: ['기존 고객 재방문 목표와 연결이 명확함', '할인 비용을 파트너가 부담'],
-    risks: ['운영비 부담 기준은 추가 협의 필요'],
   },
   {
     id: 3,
-    partner: '어반스테이지',
-    name: '오리지널 콘텐츠 공동 프로모션',
-    type: '콘텐츠/이벤트',
-    target: '미입력',
-    quantity: '미입력',
-    value: '미입력',
-    period: '미입력',
+    name: "오리지널 콘텐츠 공동 프로모션",
+    type: "콘텐츠/이벤트",
+    description: "오리지널 콘텐츠를 활용한 공동 프로모션 제안입니다.",
+    quantity: 0,
+    quantityUnit: "건",
+    valuePerPerson: 0,
+    periodStart: "미입력",
+    periodEnd: "미입력",
+    alwaysNegotiable: false,
+    prepDays: 0,
+    targetAudience: "미입력",
+    expectedReach: 0,
+    costBearer: "UNKNOWN",
+    costPartnerPercent: "",
+    costOursPercent: "",
+    costDetails: "비용 부담 구조 미입력",
+    exposureChannels: "보도자료, 영상 콘텐츠 협의 필요",
+    requiredCollaborations: "대상 고객, 비용 부담, 유효 기간이 없어 검토 불가",
+    conditions: "콘텐츠 협업 형태로 브랜드 노출 가능",
+    desiredAssets: "매칭 불가",
+    autoRecommend: false,
+    managerName: "어반스테이지",
+    managerEmail: "info@urban.com",
+    managerPhone: "-",
+    status: "INCOMPLETE",
+    campaignIdx: 1,
+    totalValue: 0,
     receivedAt: '2일 전',
-    owner: '담당자 미지정',
-    status: 'incomplete',
-    statusLabel: '보완 필요',
-    matchAsset: '매칭 불가',
     matchScore: null,
-    cost: '비용 부담 구조 미입력',
-    channels: '보도자료, 영상 콘텐츠 협의 필요',
-    summary: '오리지널 콘텐츠를 활용한 공동 프로모션 제안입니다.',
-    strengths: ['콘텐츠 협업 형태로 브랜드 노출 가능'],
-    risks: ['대상 고객, 비용 부담, 유효 기간이 없어 검토 불가'],
-  },
-  {
-    id: 4,
-    partner: '하이테이블',
-    name: '프리미엄 다이닝 코스 업그레이드',
-    type: '멤버십 혜택',
-    target: 'VIP, 기념일 고객',
-    quantity: '300건',
-    value: '1인 8만원 상당',
-    period: '2026.06.01 - 2026.07.31',
-    receivedAt: '3일 전',
-    owner: 'CRM팀',
-    status: 'hold',
-    statusLabel: '보류',
-    matchAsset: 'VIP 앱 고객층',
-    matchScore: 74,
-    cost: '공동 부담',
-    channels: '앱 푸시, 카카오 알림톡',
-    summary: '프리미엄 다이닝 업그레이드 혜택으로 고가 고객군의 반응을 확인하는 제안입니다.',
-    strengths: ['VIP 고객에게 매력적인 고관여 혜택', '기념일 타깃 캠페인에 활용 가능'],
-    risks: ['공동 부담 비율과 예약 취소 정책 확인 필요'],
-  },
+  }
 ])
 
 const activeFilter = ref('all')
-const selectedId = ref(proposals.value[0]?.id ?? null)
+const selectedId = ref(benefits.value[0]?.id ?? null)
 
-const filteredProposals = computed(() => {
-  if (activeFilter.value === 'all') return proposals.value
-  return proposals.value.filter((proposal) => proposal.status === activeFilter.value)
+const filteredBenefits = computed(() => {
+  if (activeFilter.value === 'all') return benefits.value
+  return benefits.value.filter((benefit) => benefit.status === activeFilter.value)
 })
 
-const selectedProposal = computed(() => {
-  return proposals.value.find((proposal) => proposal.id === selectedId.value) ?? filteredProposals.value[0] ?? null
+const selectedBenefit = computed(() => {
+  return benefits.value.find((benefit) => benefit.id === selectedId.value) ?? filteredBenefits.value[0] ?? null
 })
 
 const summary = computed(() => ({
-  total: proposals.value.length,
-  new: proposals.value.filter((proposal) => proposal.status === 'new').length,
-  incomplete: proposals.value.filter((proposal) => proposal.status === 'incomplete').length,
-  approved: proposals.value.filter((proposal) => proposal.status === 'approved').length,
+  total: benefits.value.length,
+  new: benefits.value.filter((benefit) => benefit.status === 'PENDING').length,
+  incomplete: benefits.value.filter((benefit) => benefit.status === 'INCOMPLETE').length,
+  approved: benefits.value.filter((benefit) => benefit.status === 'APPROVED').length,
 }))
 
 function selectFilter(filterId) {
   activeFilter.value = filterId
-  const first = filteredProposals.value[0]
-  if (first && !filteredProposals.value.some((proposal) => proposal.id === selectedId.value)) {
+  const first = filteredBenefits.value[0]
+  if (first && !filteredBenefits.value.some((benefit) => benefit.id === selectedId.value)) {
     selectedId.value = first.id
   }
 }
 
 function statusTone(status) {
-  if (status === 'new') return 'primary'
-  if (status === 'incomplete') return 'warning'
-  if (status === 'approved') return 'success'
+  if (status === 'PENDING') return 'primary'
+  if (status === 'INCOMPLETE') return 'warning'
+  if (status === 'APPROVED') return 'success'
   return 'muted'
 }
 
+// UI 출력을 위한 유틸리티 함수
+function formatQuantity(benefit) {
+  if (benefit.alwaysNegotiable && benefit.quantity === 9999) return '제한 없음'
+  if (benefit.quantity === 0) return '미입력'
+  return `${benefit.quantity.toLocaleString()}${benefit.quantityUnit}`
+}
 
+function formatPeriod(benefit) {
+  if (benefit.alwaysNegotiable) return '상시 협의'
+  if (!benefit.periodStart || benefit.periodStart === '미입력') return '미입력'
+  return `${benefit.periodStart} - ${benefit.periodEnd}`
+}
 </script>
 
 <template>
@@ -175,14 +205,7 @@ function statusTone(status) {
       <button type="button" class="benefit-inbox__primary" @click="openEvaluationModal">
         평가 진행하기
         <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
-          <path
-            d="M5 12h14m-6-6 6 6-6 6"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
+          <path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </button>
     </header>
@@ -222,91 +245,95 @@ function statusTone(status) {
 
         <section class="benefit-table" aria-label="들어온 혜택 제안 목록">
           <div class="benefit-table__head">
-            <span>파트너</span>
+            <span>파트너/담당자</span>
             <span>혜택</span>
             <span>규모/기간</span>
-            <span>매칭</span>
+            <span>매칭 자산</span>
             <span>상태</span>
           </div>
           <button
-            v-for="proposal in filteredProposals"
-            :key="proposal.id"
+            v-for="benefit in filteredBenefits"
+            :key="benefit.id"
             type="button"
             class="benefit-row"
-            :class="{ selected: selectedProposal?.id === proposal.id }"
-            @click="selectedId = proposal.id"
+            :class="{ selected: selectedBenefit?.id === benefit.id }"
+            @click="selectedId = benefit.id"
           >
-            <strong>{{ proposal.partner }}</strong>
+            <strong>{{ benefit.managerName }}</strong>
             <span>
-              <b>{{ proposal.name }}</b>
-              <small>{{ proposal.type }} · {{ proposal.target }}</small>
+              <b>{{ benefit.name }}</b>
+              <small>{{ benefit.type }} · {{ benefit.targetAudience }}</small>
             </span>
             <span>
-              <b>{{ proposal.quantity }}</b>
-              <small>{{ proposal.period }}</small>
+              <b>{{ formatQuantity(benefit) }}</b>
+              <small>{{ formatPeriod(benefit) }}</small>
             </span>
-            <span :class="{ muted: !proposal.matchScore }">
-              <b>{{ proposal.matchAsset }}</b>
-              <small>{{ proposal.matchScore ? `적합도 ${proposal.matchScore}%` : '필수 정보 누락' }}</small>
+            <span :class="{ muted: !benefit.matchScore }">
+              <b>{{ benefit.desiredAssets }}</b>
+              <small>{{ benefit.matchScore ? `적합도 ${benefit.matchScore}%` : '매칭 점수 없음' }}</small>
             </span>
-            <em :class="`tone-${statusTone(proposal.status)}`">{{ proposal.statusLabel }}</em>
+            <em :class="`tone-${statusTone(benefit.status)}`">{{ getStatusLabel(benefit.status) }}</em>
           </button>
 
-          <p v-if="!filteredProposals.length" class="benefit-empty">해당 상태의 제안이 없습니다.</p>
+          <p v-if="!filteredBenefits.length" class="benefit-empty">해당 상태의 제안이 없습니다.</p>
         </section>
       </div>
 
-      <aside v-if="selectedProposal" class="benefit-detail">
+      <aside v-if="selectedBenefit" class="benefit-detail">
         <div class="benefit-detail__scroll">
           <header>
             <div>
-              <span>{{ selectedProposal.receivedAt }}</span>
-              <h4>{{ selectedProposal.partner }} · {{ selectedProposal.name }}</h4>
-              <p>{{ selectedProposal.summary }}</p>
+              <span>{{ selectedBenefit.receivedAt }}</span>
+              <h4>{{ selectedBenefit.managerName }} · {{ selectedBenefit.name }}</h4>
+              <p>{{ selectedBenefit.description }}</p>
             </div>
-            <strong :class="{ muted: !selectedProposal.matchScore }">
-              {{ selectedProposal.matchScore ? `${selectedProposal.matchScore}점` : '보완 필요' }}
+            <strong :class="{ muted: !selectedBenefit.matchScore }">
+              {{ selectedBenefit.matchScore ? `${selectedBenefit.matchScore}점` : '보완 필요' }}
             </strong>
           </header>
 
           <dl class="benefit-detail__grid">
             <div>
               <dt>혜택 유형</dt>
-              <dd>{{ selectedProposal.type }}</dd>
+              <dd>{{ selectedBenefit.type }}</dd>
             </div>
             <div>
               <dt>대상 고객</dt>
-              <dd>{{ selectedProposal.target }}</dd>
+              <dd>{{ selectedBenefit.targetAudience }}</dd>
             </div>
             <div>
               <dt>규모/가치</dt>
-              <dd>{{ selectedProposal.quantity }} · {{ selectedProposal.value }}</dd>
+              <!-- totalValue가 있으면 포맷팅, 없으면 미입력 처리 -->
+              <dd>{{ formatQuantity(selectedBenefit) }} · {{ selectedBenefit.totalValue ? `총 ${selectedBenefit.totalValue.toLocaleString()}원` : '미산정' }}</dd>
             </div>
             <div>
               <dt>비용 부담</dt>
-              <dd>{{ selectedProposal.cost }}</dd>
+              <dd>{{ selectedBenefit.costDetails }}</dd>
             </div>
             <div>
               <dt>유효 기간</dt>
-              <dd>{{ selectedProposal.period }}</dd>
+              <dd>{{ formatPeriod(selectedBenefit) }}</dd>
             </div>
             <div>
-              <dt>담당</dt>
-              <dd>{{ selectedProposal.owner }}</dd>
+              <dt>담당 연락처</dt>
+              <dd>{{ selectedBenefit.managerEmail }}<br/><small>{{ selectedBenefit.managerPhone }}</small></dd>
             </div>
           </dl>
 
           <section class="benefit-notes">
             <div>
-              <h5>강점</h5>
+              <h5>제안 조건 및 강점</h5>
               <ul>
-                <li v-for="item in selectedProposal.strengths" :key="item">{{ item }}</li>
+                <!-- 문자열 기반 데이터를 배열 형태로 화면에 뿌려줌 -->
+                <li v-if="selectedBenefit.conditions">{{ selectedBenefit.conditions }}</li>
+                <li v-else>기재된 내용이 없습니다.</li>
               </ul>
             </div>
             <div>
-              <h5>확인 필요</h5>
+              <h5>요구 사항 (확인 필요)</h5>
               <ul>
-                <li v-for="item in selectedProposal.risks" :key="item">{{ item }}</li>
+                <li v-if="selectedBenefit.requiredCollaborations">{{ selectedBenefit.requiredCollaborations }}</li>
+                <li v-else>기재된 내용이 없습니다.</li>
               </ul>
             </div>
           </section>
@@ -319,18 +346,20 @@ function statusTone(status) {
         </footer>
       </aside>
     </div>
-  <!-- benefit-inbox 닫는 태그 바로 앞 -->
+
+    <!-- 모달: proposals Prop에는 바뀐 변수명인 benefits를 전달 -->
     <EvaluationModal
       v-model:isOpen="isEvaluationModalOpen"
       :campaign-info="campaignInfo"
-      :proposals="proposals"
-      :initial-selected-id="selectedProposal?.id"
+      :proposals="benefits" 
+      :initial-selected-id="selectedBenefit?.id"
       @submit="handleEvaluationSubmit"
     />
   </section>
 </template>
 
 <style scoped>
+/* 기존의 CSS와 100% 동일하므로 UI가 깨지지 않습니다. */
 .benefit-inbox {
   --benefit-surface: #ffffff;
   --benefit-muted: #fafafb;

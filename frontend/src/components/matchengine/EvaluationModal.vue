@@ -22,14 +22,15 @@ const props = defineProps({
 
 const emit = defineEmits(['update:isOpen', 'submit'])
 
-const selectedBenefitIds = ref([])
+// 복수 선택용 배열([])에서 단일 선택용 값(null)으로 변경
+const selectedBenefitId = ref(null)
 
-// 모달이 열릴 때마다 부모에서 전달한 초기 선택값(현재 보고 있는 제안)으로 세팅
+// 모달이 열릴 때마다 부모에서 전달한 초기 선택값으로 세팅
 watch(
   () => props.isOpen,
   (newVal) => {
     if (newVal) {
-      selectedBenefitIds.value = props.initialSelectedId ? [props.initialSelectedId] : []
+      selectedBenefitId.value = props.initialSelectedId || null
     }
   }
 )
@@ -39,18 +40,19 @@ function closeModal() {
 }
 
 function submitRequest() {
-  if (selectedBenefitIds.value.length === 0) {
-    alert('평가할 혜택을 하나 이상 선택해주세요.')
+  // 선택된 값이 없는 경우 검증
+  if (!selectedBenefitId.value) {
+    alert('평가할 혜택을 선택해주세요.')
     return
   }
 
-  // 선택된 혜택의 전체 객체를 추출
-  const selectedBenefits = props.proposals.filter((p) => selectedBenefitIds.value.includes(p.id))
+  // 선택된 단일 혜택 객체 추출 (filter 대신 find 사용)
+  const selectedBenefit = props.proposals.find((p) => p.id === selectedBenefitId.value)
 
-  // 부모 컴포넌트로 데이터 전송
+  // 부모 컴포넌트로 데이터 전송 (부모가 배열을 기대할 경우를 대비해 배열로 감싸서 전달)
   emit('submit', {
     campaign: props.campaignInfo,
-    benefits: selectedBenefits,
+    benefits: [selectedBenefit],
   })
 
   closeModal()
@@ -81,10 +83,12 @@ function submitRequest() {
 
         <section class="modal-section">
           <h5>제안된 혜택 선택</h5>
-          <p class="modal-desc">이 캠페인에 적용할 혜택을 모두 선택해주세요.</p>
+          <!-- 문구 수정 -->
+          <p class="modal-desc">이 캠페인에 적용할 혜택을 하나만 선택해주세요.</p>
           <div class="benefit-check-list">
             <label v-for="proposal in proposals" :key="proposal.id" class="check-item">
-              <input type="checkbox" :value="proposal.id" v-model="selectedBenefitIds" />
+              <!-- checkbox를 radio로 변경하고 v-model 대상을 단일 id로 변경 -->
+              <input type="radio" name="benefitSelection" :value="proposal.id" v-model="selectedBenefitId" />
               <div class="check-item__info">
                 <strong>{{ proposal.partner }}</strong>
                 <span>{{ proposal.name }}</span>
@@ -218,12 +222,15 @@ function submitRequest() {
   border-color: var(--benefit-brand, #5b5bf5);
   background: var(--benefit-brand-soft, #eef0ff);
 }
-.check-item input[type="checkbox"] {
+
+/* checkbox -> radio로 CSS 선택자 수정 */
+.check-item input[type="radio"] {
   width: 18px;
   height: 18px;
   accent-color: var(--benefit-brand, #5b5bf5);
   cursor: pointer;
 }
+
 .check-item__info {
   display: flex;
   flex-direction: column;
