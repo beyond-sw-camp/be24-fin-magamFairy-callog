@@ -1388,7 +1388,7 @@ watch(
     </section>
 
     <section v-else-if="activeTab === '검수/승인'" class="tab-surface">
-      <ReviewApprovalView />
+      <ReviewApprovalView :campaign-id="campaignId" />
     </section>
 
     <section v-else-if="activeTab === '참여자 설정'" class="tab-surface">
