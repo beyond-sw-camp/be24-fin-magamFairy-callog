@@ -3,6 +3,7 @@ package org.example.backend.matching.service;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.Campaign;
+import org.example.backend.campaign.model.CampaignDto;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.matching.model.*;
@@ -26,11 +27,7 @@ import org.springframework.web.client.RestClientException;
 @RequiredArgsConstructor
 public class EvaluationService {
     private final EvaluationRepository evaluationRepository;
-    private final CampaignParticipantRepository participantRepository;
-    private final UserRepository userRepository;
-    private final AssetRepository assetRepository;
     private final BenefitRepository benefitRepository;
-    private final GoalRepository goalRepository;
     private final CampaignRepository campaignRepository;
     private final RestClient restClient;
 
@@ -38,23 +35,16 @@ public class EvaluationService {
     String n8nWebhookUrl;
 
     public void startEvaluation(EvaluationDto.StartEvaluationReq dto) {
-
-        Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
-                .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + dto.getCampaignIdx()));
-        MarketingAsset requiredAsset = assetRepository.findById(dto.getAssetIdx())
-                .orElseThrow(() -> new EntityNotFoundException("해당 Asset을 찾을 수 없습니다. Asset ID: " + dto.getAssetIdx()));
         PartnerBenefits requiredBenefit = benefitRepository.findById(dto.getBenefitIdx())
                 .orElseThrow(() -> new EntityNotFoundException("해당 Benefit을 찾을 수 없습니다. Benefit ID: " + dto.getBenefitIdx()));
-        CampaignGoal requiredGoal = goalRepository.findById(dto.getGoalIdx())
-                .orElseThrow(() -> new EntityNotFoundException("해당 Goal을 찾을 수 없습니다. Goal ID: " + dto.getGoalIdx()));
+        Long campaignIdx = requiredBenefit.getCampaign().getIdx();
+        Campaign campaign = campaignRepository.findById(campaignIdx)
+                .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + campaignIdx));
 
         EvaluationDto.StartEvaluation eval;
         eval = EvaluationDto.StartEvaluation.builder()
-                .dependency(dto.getDependency())
-                .campaignIdx(campaign.getIdx())
-                .asset(MatchingDto.AssetRes.toDto(requiredAsset))
+                .campaign(CampaignDto.Res.from(campaign))
                 .benefit(MatchingDto.BenefitRes.toDto(requiredBenefit))
-                .goal(EvaluationDto.StartEvaluation.CampaignGoalRes.toDto(requiredGoal))
                 .build();
 
         try {

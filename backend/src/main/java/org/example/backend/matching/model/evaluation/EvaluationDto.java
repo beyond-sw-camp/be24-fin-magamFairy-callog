@@ -3,6 +3,7 @@ package org.example.backend.matching.model.evaluation;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.*;
+import org.example.backend.campaign.model.CampaignDto;
 import org.example.backend.matching.model.*;
 
 import java.time.LocalDate;
@@ -13,21 +14,18 @@ public class EvaluationDto {
     @Getter
     @Builder
     public static class StartEvaluationReq {
-        private Double dependency;
-        private Long campaignIdx;
-        private Long assetIdx;
+//        private Double dependency;
         private Long benefitIdx;
-        private Long goalIdx;
     }
 
     @Getter
     @Builder
     public static class StartEvaluation {
-        private Double dependency; // 0.5와 같은 소수점을 처리하기 위해 Double 사용
-        private Long campaignIdx;
-        private MatchingDto.AssetRes asset;
+//        private Double dependency; // 0.5와 같은 소수점을 처리하기 위해 Double 사용
+        private CampaignDto.Res campaign;
+//        private MatchingDto.AssetRes asset;
         private MatchingDto.BenefitRes benefit;
-        private CampaignGoalRes goal;
+//        private CampaignGoalRes goal;
 
         @Getter
         @Builder
