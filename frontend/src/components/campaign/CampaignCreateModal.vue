@@ -168,6 +168,14 @@ function hydrateForm(values) {
   nextForm.endDate = source.endDate ?? ''
   nextForm.goals = source.goals ?? ''
   nextForm.mainMessage = source.mainMessage ?? ''
+  nextForm.assetName = source.assetName ?? ''
+  nextForm.assetDescription = source.assetDescription ?? ''
+  nextForm.primaryGoal = source.primaryGoal ?? nextForm.primaryGoal
+  nextForm.campaignMethods = Array.isArray(source.campaignMethods) ? [...source.campaignMethods] : []
+  nextForm.maxCost = source.maxCost ?? ''
+  nextForm.minRevenue = source.minRevenue ?? ''
+  nextForm.ownerName = source.ownerName ?? ''
+  nextForm.ownerEmail = source.ownerEmail ?? ''
   nextForm.color = source.color ?? ''
   nextForm.icon = source.icon ?? '🎯'
   Object.assign(form, nextForm)
@@ -230,34 +238,28 @@ function goPrev() {
 
 function submitForm() {
   if (!canSubmit.value) return
-  const goalsText = [
-    `주 목표: ${resolvedPrimaryGoal.value}`,
-    form.goals ? `상세 목표: ${form.goals}` : '',
-    form.maxCost ? `최대 부담 비용: ${form.maxCost}원` : '',
-    form.minRevenue ? `최소 기대 매출: ${form.minRevenue}원` : '',
-  ].filter(Boolean).join('\n')
-
-  const purposeText = [
-    form.purpose || '캠페인 매칭을 위한 신규 캠페인입니다.',
-    `활용 자산: ${form.assetName}`,
-    form.assetDescription ? `자산 설명: ${form.assetDescription}` : '',
-    form.campaignMethods.length ? `캠페인 방식: ${form.campaignMethods.join(', ')}` : '',
-  ].filter(Boolean).join('\n')
-
-  const messageText = [
-    form.mainMessage,
-    `담당자: ${form.ownerName} · ${form.ownerEmail}`,
-  ].filter(Boolean).join('\n')
+  const submittedPartners = [
+    ...partners.value,
+    form.partnerInput.trim(),
+  ].filter(Boolean)
 
   emit('submit', {
     name: form.name,
-    purpose: purposeText,
+    purpose: form.purpose,
     tags: tagList.value,
     startDate: form.startDate,
     endDate: form.endDate,
-    partners: partners.value,
-    goals: goalsText,
-    mainMessage: messageText,
+    partners: [...new Set(submittedPartners)],
+    goals: form.goals,
+    mainMessage: form.mainMessage,
+    assetName: form.assetName,
+    assetDescription: form.assetDescription,
+    primaryGoal: resolvedPrimaryGoal.value,
+    campaignMethods: [...form.campaignMethods],
+    maxCost: form.maxCost,
+    minRevenue: form.minRevenue,
+    ownerName: form.ownerName,
+    ownerEmail: form.ownerEmail,
     color: form.color,
     icon: form.icon,
   })

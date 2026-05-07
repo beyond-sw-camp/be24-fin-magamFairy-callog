@@ -108,6 +108,14 @@ public class CampaignService {
                 .partners(normalizeList(dto.partners()))
                 .goals(normalizeText(dto.goals()))
                 .mainMessage(normalizeText(dto.mainMessage()))
+                .assetName(normalizeText(dto.assetName()))
+                .assetDescription(normalizeText(dto.assetDescription()))
+                .primaryGoal(normalizeText(dto.primaryGoal()))
+                .campaignMethods(normalizeList(dto.campaignMethods()))
+                .maxCost(normalizeText(dto.maxCost()))
+                .minRevenue(normalizeText(dto.minRevenue()))
+                .ownerName(normalizeText(dto.ownerName()))
+                .ownerEmail(normalizeText(dto.ownerEmail()))
                 .status("draft")
                 .initials(createInitials(name))
                 .icon(normalizeIcon(dto.icon()))
@@ -151,6 +159,14 @@ public class CampaignService {
                 normalizeList(dto.partners()),
                 normalizeText(dto.goals()),
                 normalizeText(dto.mainMessage()),
+                normalizeText(dto.assetName()),
+                normalizeText(dto.assetDescription()),
+                normalizeText(dto.primaryGoal()),
+                normalizeList(dto.campaignMethods()),
+                normalizeText(dto.maxCost()),
+                normalizeText(dto.minRevenue()),
+                normalizeText(dto.ownerName()),
+                normalizeText(dto.ownerEmail()),
                 createInitials(name),
                 normalizeIcon(dto.icon()),
                 normalizeColor(dto.color())
