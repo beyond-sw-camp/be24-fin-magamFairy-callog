@@ -1,4 +1,26 @@
 <script setup>
+import EvaluationModal from './EvaluationModal.vue';
+
+const isEvaluationModalOpen = ref(false)
+
+const campaignInfo = ref({
+  title: '2026 상반기 VIP 스프링 프로모션',
+  asset: 'VIP 전용 앱 푸시 및 라운지 배너',
+  target: '기존 VIP 및 신규 프리미엄 등급 진입 고객',
+})
+
+// 버튼 클릭 시 호출
+function openEvaluationModal() {
+  isEvaluationModalOpen.value = true
+}
+
+// 자식 모달에서 최종 선택 완료 후 submit 이벤트 발생 시 실행됨
+function handleEvaluationSubmit(payload) {
+  console.log('최종 제출된 데이터:', payload)
+  emit('requestEvaluation', payload)
+  alert('선택한 혜택의 평가가 요청되었습니다.')
+}
+
 import { computed, ref } from 'vue'
 
 defineProps({
@@ -139,9 +161,7 @@ function statusTone(status) {
   return 'muted'
 }
 
-function moveToEvaluation() {
-  emit('navigate', { tab: 'evaluation', filter: 'new', proposal: selectedProposal.value })
-}
+
 </script>
 
 <template>
@@ -152,8 +172,8 @@ function moveToEvaluation() {
         <h3>혜택 제안</h3>
         <p>파트너가 보낸 혜택 제안을 검토하고 매칭 평가로 넘깁니다.</p>
       </div>
-      <button type="button" class="benefit-inbox__primary" @click="moveToEvaluation">
-        평가로 보내기
+      <button type="button" class="benefit-inbox__primary" @click="openEvaluationModal">
+        평가 진행하기
         <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
           <path
             d="M5 12h14m-6-6 6 6-6 6"
@@ -295,10 +315,18 @@ function moveToEvaluation() {
         <footer class="benefit-actions">
           <button type="button">보완 요청</button>
           <button type="button">보류</button>
-          <button type="button" class="primary" @click="moveToEvaluation">평가로 보내기</button>
+          <button type="button" class="primary" @click="openEvaluationModal">평가 진행하기</button>
         </footer>
       </aside>
     </div>
+  <!-- benefit-inbox 닫는 태그 바로 앞 -->
+    <EvaluationModal
+      v-model:isOpen="isEvaluationModalOpen"
+      :campaign-info="campaignInfo"
+      :proposals="proposals"
+      :initial-selected-id="selectedProposal?.id"
+      @submit="handleEvaluationSubmit"
+    />
   </section>
 </template>
 
