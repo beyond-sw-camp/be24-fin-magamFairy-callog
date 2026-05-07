@@ -85,9 +85,14 @@ public class UserDto {
             String role,
             String companyName,
             String department,
-            Boolean active
+            Boolean active,
+            String profileImageUrl
     ) {
         public static ManageableUserRes from(User entity) {
+            return from(entity, null);
+        }
+
+        public static ManageableUserRes from(User entity, String profileImageUrl) {
             return ManageableUserRes.builder()
                     .idx(entity.getIdx())
                     .id(entity.getId())
@@ -98,6 +103,7 @@ public class UserDto {
                     .department(entity.getDepartment())
                     .active(Boolean.TRUE.equals(entity.getEnable())
                             && UserAccountStatus.ACTIVE.equals(entity.getAccountStatus()))
+                    .profileImageUrl(profileImageUrl)
                     .build();
         }
     }

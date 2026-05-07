@@ -115,7 +115,7 @@ const routes = [
         component: () => import('@/views/UserProvisioningView.vue'),
         meta: {
           requiresAccountCreator: true,
-          title: '인사관리',
+          title: '사용자관리',
           section: '계정 생성 · 계정 삭제 · 비밀번호 재발급',
         },
       },

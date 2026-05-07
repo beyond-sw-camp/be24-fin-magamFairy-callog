@@ -211,7 +211,7 @@ public class UserService implements UserDetailsService {
                         .comparing((User user) -> sortableText(user.getDepartment()))
                         .thenComparing(user -> sortableText(user.getName()))
                         .thenComparing(user -> sortableText(user.getId())))
-                .map(UserDto.ManageableUserRes::from)
+                .map(user -> UserDto.ManageableUserRes.from(user, userProfileService.getProfileImageUrl(user)))
                 .toList();
     }
 
