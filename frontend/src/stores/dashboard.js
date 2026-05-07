@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as dashApi from '@/api/dashboard'
+import { ListCampaign } from '@/api/campaigns'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   const summary = ref(null)
@@ -8,6 +9,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const partnerProgress = ref([])
   const reviewQueue = ref([])
   const blockers = ref([])
+  const assetCategories = ref({})       // { "EVENT": 42, ... }
+  const kpiCategories = ref({})          // { "IMPRESSION": 87, ... }
+  const myCampaigns = ref([])           // [{ idx, name, status, color, ... }]
   const loading = ref(false)
   const errorMessage = ref(null)
   const usingMock = ref(false)
@@ -23,6 +27,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
       ['partnerProgress', () => dashApi.GetPartnerProgress()],
       ['reviewQueue', () => dashApi.GetReviewQueue()],
       ['blockers', () => dashApi.GetBlockers()],
+      ['assetCategories', () => dashApi.GetAssetCategories()],
+      ['kpiCategories', () => dashApi.GetKpiCategories()],
+      ['myCampaigns', () => ListCampaign({ scope: 'mine' })],
     ]
 
     const results = await Promise.allSettled(tasks.map(([, fn]) => fn()))
@@ -35,6 +42,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
         if (key === 'partnerProgress') partnerProgress.value = normalizeArray(result.value)
         if (key === 'reviewQueue') reviewQueue.value = normalizeArray(result.value)
         if (key === 'blockers') blockers.value = normalizeArray(result.value)
+        if (key === 'assetCategories') assetCategories.value = result.value ?? {}
+        if (key === 'kpiCategories') kpiCategories.value = result.value ?? {}
+        if (key === 'myCampaigns') myCampaigns.value = normalizeArray(result.value)
       } else {
         usingMock.value = true
         console.warn(`[mock fallback] dashboard.${key} 실패`, result.reason)
@@ -48,6 +58,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
       if (!partnerProgress.value.length) partnerProgress.value = mock.partnerProgress
       if (!reviewQueue.value.length) reviewQueue.value = mock.reviewQueue
       if (!blockers.value.length) blockers.value = mock.blockers
+      if (Object.keys(assetCategories.value).length === 0) assetCategories.value = mock.assetCategories
+      if (Object.keys(kpiCategories.value).length === 0) kpiCategories.value = mock.kpiCategories
+      if (!myCampaigns.value.length) myCampaigns.value = mock.myCampaigns
     }
 
     loading.value = false
@@ -59,6 +72,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
     partnerProgress,
     reviewQueue,
     blockers,
+    assetCategories,
+    kpiCategories,
+    myCampaigns,
     loading,
     errorMessage,
     usingMock,
@@ -108,6 +124,27 @@ function buildMockDashboard() {
     ],
     blockers: [
       { count: 2, kind: 'PARTNER_LOW' },
+    ],
+    assetCategories: {
+      '이벤트/프로모션': 42,
+      '제품 협찬': 28,
+      '디지털 콘텐츠': 18,
+      '매장/오프라인': 12,
+      '미디어 노출': 8,
+    },
+    kpiCategories: {
+      IMPRESSION: 87,
+      ENGAGEMENT: 73,
+      CONVERSION: 64,
+      REVENUE: 81,
+      BRAND: 92,
+    },
+    myCampaigns: [
+      { idx: 1, id: '1', name: '여름 호텔 협업',      status: 'live',   color: '#9D85FF', initials: 'SH' },
+      { idx: 2, id: '2', name: '한화 데이 그룹 통합', status: 'live',   color: '#FF8A5C', initials: 'HD' },
+      { idx: 3, id: '3', name: '청년 보험 디지털',    status: 'review', color: '#5DAFD8', initials: 'YI' },
+      { idx: 4, id: '4', name: 'ESG 친환경',          status: 'draft',  color: '#6FBF87', initials: 'EG' },
+      { idx: 5, id: '5', name: '가을 럭셔리 패키지',  status: 'draft',  color: '#FF7A6B', initials: 'AL' },
     ],
   }
 }

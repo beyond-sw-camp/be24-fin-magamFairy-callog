@@ -43,10 +43,20 @@ export const GetBlockers = async () => {
   return unwrapResponse(await api.get('/dashboard/blockers'))
 }
 
+export const GetAssetCategories = async () => {
+  return unwrapResponse(await api.get('/dashboard/asset-categories'))
+}
+
+export const GetKpiCategories = async () => {
+  return unwrapResponse(await api.get('/dashboard/kpi-categories'))
+}
+
 export default {
   GetDashboardSummary,
   GetQuarterGoals,
   GetPartnerProgress,
   GetReviewQueue,
   GetBlockers,
+  GetAssetCategories,
+  GetKpiCategories,
 }
