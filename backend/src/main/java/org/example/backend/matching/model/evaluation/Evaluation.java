@@ -1,10 +1,7 @@
 package org.example.backend.matching.model.evaluation;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.matching.model.PartnerBenefits;
 import org.example.backend.organization.model.Organization;
@@ -27,6 +24,11 @@ public class Evaluation {
 
     @Column(unique = true, nullable = false, updatable = false)
     private String sessionId; // n8n에서 발급한 UUID를 담을 필드
+
+    @Setter
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "campaign_idx", unique = true)
+    private Campaign campaign;
 
     @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "customer_idx", unique = true)

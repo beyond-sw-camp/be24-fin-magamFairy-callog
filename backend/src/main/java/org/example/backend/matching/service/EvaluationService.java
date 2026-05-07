@@ -2,7 +2,9 @@ package org.example.backend.matching.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
+import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.matching.model.*;
 import org.example.backend.matching.model.evaluation.CustomerEval;
 import org.example.backend.matching.model.evaluation.Evaluation;
@@ -29,6 +31,7 @@ public class EvaluationService {
     private final AssetRepository assetRepository;
     private final BenefitRepository benefitRepository;
     private final GoalRepository goalRepository;
+    private final CampaignRepository campaignRepository;
     private final RestClient restClient;
 
     @Value("${custom.n8n.webhook-url}/evaluation")
@@ -36,6 +39,8 @@ public class EvaluationService {
 
     public void startEvaluation(EvaluationDto.StartEvaluationReq dto) {
 
+        Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
+                .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + dto.getCampaignIdx()));
         MarketingAsset requiredAsset = assetRepository.findById(dto.getAssetIdx())
                 .orElseThrow(() -> new EntityNotFoundException("해당 Asset을 찾을 수 없습니다. Asset ID: " + dto.getAssetIdx()));
         PartnerBenefits requiredBenefit = benefitRepository.findById(dto.getBenefitIdx())
@@ -46,6 +51,7 @@ public class EvaluationService {
         EvaluationDto.StartEvaluation eval;
         eval = EvaluationDto.StartEvaluation.builder()
                 .dependency(dto.getDependency())
+                .campaignIdx(dto.getCampaignIdx())
                 .asset(MatchingDto.AssetRes.toDto(requiredAsset))
                 .benefit(MatchingDto.BenefitRes.toDto(requiredBenefit))
                 .goal(EvaluationDto.StartEvaluation.CampaignGoalRes.toDto(requiredGoal))
@@ -73,7 +79,9 @@ public class EvaluationService {
     }
 
     @Transactional
-    public void collect(EvaluationDto.CollectDto dto, String category) {
+    public void collect(EvaluationDto.CollectDto dto) {
+
+        String category = dto.getCategory();
         // 1. 현재 세션(Evaluation) 조회
         Evaluation evaluation = evaluationRepository.findBySessionId(dto.getUuid())
                 .orElseGet(() -> evaluationRepository.save(new Evaluation(dto.getUuid())));
