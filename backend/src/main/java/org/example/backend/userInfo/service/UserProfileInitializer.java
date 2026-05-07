@@ -1,4 +1,4 @@
-package org.example.backend.userInfo.userProfile.service;
+package org.example.backend.userInfo.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;

@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/be24-fin-magamFairy-callog.iml" filepath="$PROJECT_DIR$/.idea/be24-fin-magamFairy-callog.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/callog.main.iml" filepath="$PROJECT_DIR$/.idea/modules/callog.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/callog.test.iml" filepath="$PROJECT_DIR$/.idea/modules/callog.test.iml" />
     </modules>
   </component>
 </project>

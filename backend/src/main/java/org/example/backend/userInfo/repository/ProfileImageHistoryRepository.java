@@ -1,7 +1,7 @@
-package org.example.backend.userInfo.userProfile.repository;
+package org.example.backend.userInfo.repository;
 
-import org.example.backend.userInfo.userProfile.model.ProfileImageHistory;
-import org.example.backend.userInfo.userProfile.model.ProfileImageHistoryType;
+import org.example.backend.userInfo.model.ProfileImageHistory;
+import org.example.backend.userInfo.model.ProfileImageHistoryType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

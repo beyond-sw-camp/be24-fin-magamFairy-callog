@@ -1,24 +1,28 @@
 import api from '/plugins/interceptor.js'
 
 export const getNoti = async (count) => {
-  if(count){
-    return res = await api.get(`/notifications/list?count=${count}`)
+  if (count) {
+    return api.get('/notifications/list', {
+      params: {
+        count,
+      },
+    })
   }
-  else{
-    return res = await api.get(`/notifications/list`)
-  }
+
+  return api.get('/notifications/list')
 }
 
-export const confirm = async (idx) => {
-  return res = await api.patch(`/notifications/confirm?idx=${idx}`)
-}
+export const confirm = async (idx) =>
+  api.patch('/notifications/confirm', null, {
+    params: {
+      idx,
+    },
+  })
 
-export const sendNoti = async (body) => {
-  return res = await api.patch("/notifications/", body)
-}
+export const sendNoti = async (body) => api.patch('/notifications/', body)
 
 export default {
   getNoti,
   confirm,
-  sendNoti
+  sendNoti,
 }

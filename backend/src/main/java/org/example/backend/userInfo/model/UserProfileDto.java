@@ -1,4 +1,4 @@
-package org.example.backend.userInfo.userProfile.model;
+package org.example.backend.userInfo.model;
 
 import lombok.Builder;
 import org.example.backend.user.model.User;
