@@ -31,6 +31,12 @@ const tabs = [
     summary: '개인 정보와 프로필 이미지를 관리합니다.',
   },
   {
+    id: 'notifications',
+    label: '알림',
+    icon: 'notifications',
+    summary: '알림 수신 방식과 조건을 관리합니다.',
+  },
+  {
     id: 'theme',
     label: '테마/UI',
     icon: 'contrast',
@@ -47,6 +53,75 @@ const tabs = [
 const densityOptions = [
   { value: 'comfortable', label: '기본', description: '정보 간격을 여유 있게 표시합니다.' },
   { value: 'compact', label: '컴팩트', description: '반복 작업에 맞춰 간격을 줄입니다.' },
+]
+
+const notificationMethodOptions = [
+  {
+    key: 'inApp',
+    label: '앱 내 알림',
+    description: '헤더 알림 패널과 알림 센터에 표시합니다.',
+  },
+  {
+    key: 'email',
+    label: '이메일',
+    description: '계정 이메일로 주요 알림을 전달합니다.',
+  },
+  {
+    key: 'browser',
+    label: '브라우저 알림',
+    description: '브라우저 권한이 허용된 경우 데스크톱 알림으로 표시합니다.',
+  },
+]
+
+const notificationLevelOptions = [
+  {
+    value: 'essential',
+    label: '중요만',
+    description: '마감 임박, 지연, 검수 요청처럼 놓치면 안 되는 알림만 받습니다.',
+  },
+  {
+    value: 'normal',
+    label: '기본',
+    description: '업무, QA, 캠페인 변경 등 협업에 필요한 핵심 알림을 받습니다.',
+  },
+  {
+    value: 'all',
+    label: '전체',
+    description: 'AI 분석과 세부 활동 변경까지 최대한 넓게 받습니다.',
+  },
+]
+
+const notificationConditionOptions = [
+  {
+    key: 'taskAssigned',
+    label: '업무 생성/배정',
+    description: '새 업무가 생성되거나 담당자로 배정될 때 알림을 받습니다.',
+  },
+  {
+    key: 'taskStatusChanged',
+    label: '업무 상태 변경',
+    description: '진행중, 검토, 완료 등 주요 상태가 바뀔 때 알림을 받습니다.',
+  },
+  {
+    key: 'qaReview',
+    label: 'QA 검수',
+    description: '검수 요청, 승인, 반려, 수정 요청 결과를 알림으로 받습니다.',
+  },
+  {
+    key: 'deadline',
+    label: '마감 임박/지연',
+    description: '마감 24시간 전, 1시간 전, 지연 상태 알림을 받습니다.',
+  },
+  {
+    key: 'campaign',
+    label: '캠페인 초대/변경',
+    description: '캠페인 초대, 승인/반려, 구성원 추가 알림을 받습니다.',
+  },
+  {
+    key: 'aiAnalysis',
+    label: 'AI 분석',
+    description: '리스크, 병목, 성과 저하 등 AI 기반 알림을 받습니다.',
+  },
 ]
 
 const ALLOWED_PROFILE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
@@ -79,13 +154,14 @@ const feedback = reactive({
   securityError: '',
 })
 
+const isProfileImageModalOpen = ref(false)
 const isImageGenerationModalOpen = ref(false)
+const isPasswordModalOpen = ref(false)
 const imageGenerationPrompt = ref('')
 const isSavingProfile = ref(false)
 const isGeneratingImage = ref(false)
 const isLoadingImageHistories = ref(false)
 const isChangingPassword = ref(false)
-const isRefreshingSession = ref(false)
 const selectingHistoryId = ref(null)
 const pendingProfileImageFile = ref(null)
 const shouldRemoveProfileImage = ref(false)
@@ -103,7 +179,6 @@ const currentTab = computed(() => tabs.find((tab) => tab.id === activeTab.value)
 const isDarkMode = computed(() => plannerStore.theme === 'dark')
 const userKey = computed(() => resolveUserKey(authStore.user))
 const accountEmail = computed(() => profileForm.email || userSettingsStore.profile.email)
-const tokenStatus = computed(() => (authStore.hasFreshAccessToken?.() ? '활성 세션' : '갱신 필요'))
 const accountRows = computed(() => [
   { label: '로그인 ID', value: readUserValue(['id', 'loginId', 'sub']) || userKey.value },
   { label: '이름', value: profileForm.name },
@@ -111,7 +186,6 @@ const accountRows = computed(() => [
   { label: '부서', value: profileForm.department },
   { label: '권한', value: profileForm.role },
   { label: '이메일', value: accountEmail.value },
-  { label: '세션', value: tokenStatus.value },
 ])
 const passwordPolicyItems = computed(() => {
   const value = passwordForm.newPassword
@@ -137,6 +211,28 @@ const isPasswordFormReady = computed(
     Boolean(passwordForm.newPassword) &&
     passwordForm.newPassword === passwordForm.confirmPassword &&
     isPasswordPolicyValid.value,
+)
+const hasPendingProfileImageChange = computed(
+  () => Boolean(pendingProfileImageFile.value) || shouldRemoveProfileImage.value,
+)
+const notificationMethodSummary = computed(() => {
+  const selectedMethods = notificationMethodOptions
+    .filter((option) => userSettingsStore.notifications.methods[option.key])
+    .map((option) => option.label)
+
+  return selectedMethods.length ? selectedMethods.join(', ') : '선택 없음'
+})
+const notificationConditionCount = computed(
+  () =>
+    notificationConditionOptions.filter(
+      (option) => userSettingsStore.notifications.conditions[option.key],
+    ).length,
+)
+const notificationLevelLabel = computed(
+  () =>
+    notificationLevelOptions.find(
+      (option) => option.value === userSettingsStore.notifications.level,
+    )?.label ?? '기본',
 )
 
 function resolveUserKey(user) {
@@ -263,6 +359,31 @@ function resetDisplaySettings() {
   userSettingsStore.resetThemeUi()
 }
 
+function toggleNotificationEnabled() {
+  userSettingsStore.updateNotifications({
+    enabled: !userSettingsStore.notifications.enabled,
+  })
+}
+
+function toggleNotificationMethod(key) {
+  userSettingsStore.updateNotificationMethod(key, !userSettingsStore.notifications.methods[key])
+}
+
+function setNotificationLevel(value) {
+  userSettingsStore.updateNotifications({ level: value })
+}
+
+function toggleNotificationCondition(key) {
+  userSettingsStore.updateNotificationCondition(
+    key,
+    !userSettingsStore.notifications.conditions[key],
+  )
+}
+
+function resetNotificationSettings() {
+  userSettingsStore.resetNotifications()
+}
+
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -340,6 +461,15 @@ function clearCompanyLogo() {
   profileForm.companyLogoDataUrl = ''
 }
 
+async function openProfileImageModal() {
+  isProfileImageModalOpen.value = true
+  await loadProfileImageHistories()
+}
+
+function closeProfileImageModal() {
+  isProfileImageModalOpen.value = false
+}
+
 function openImageGenerationModal() {
   imageGenerationPrompt.value = userSettingsStore.generatorPrompt
   isImageGenerationModalOpen.value = true
@@ -347,6 +477,20 @@ function openImageGenerationModal() {
 
 function closeImageGenerationModal() {
   isImageGenerationModalOpen.value = false
+}
+
+function openPasswordModal() {
+  feedback.security = ''
+  feedback.securityError = ''
+  isPasswordModalOpen.value = true
+}
+
+function closePasswordModal() {
+  if (isChangingPassword.value) {
+    return
+  }
+
+  isPasswordModalOpen.value = false
 }
 
 function applyProfileImageHistories(payload) {
@@ -439,6 +583,36 @@ async function applyProfileImageHistory(history) {
   }
 }
 
+async function saveProfileImageChanges() {
+  if (!hasPendingProfileImageChange.value || isSavingProfile.value) {
+    return
+  }
+
+  feedback.profile = ''
+  feedback.profileError = ''
+  isSavingProfile.value = true
+
+  try {
+    const response = await syncProfileImageToServer()
+
+    if (response) {
+      applyRemoteProfile(response.data)
+    }
+
+    pendingProfileImageFile.value = null
+    shouldRemoveProfileImage.value = false
+    syncProfileForm()
+    await loadProfileImageHistories()
+    closeProfileImageModal()
+    feedback.profile = '프로필 이미지가 저장되었습니다.'
+  } catch (error) {
+    console.error('Profile image save failed.', error)
+    feedback.profileError = '프로필 이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    isSavingProfile.value = false
+  }
+}
+
 async function syncProfileImageToServer() {
   if (pendingProfileImageFile.value) {
     const file = pendingProfileImageFile.value
@@ -517,31 +691,6 @@ async function loadRemoteProfile() {
   }
 }
 
-async function refreshSession() {
-  feedback.security = ''
-  feedback.securityError = ''
-  isRefreshingSession.value = true
-
-  try {
-    const refreshed = await authStore.refreshSession()
-
-    if (!refreshed) {
-      feedback.securityError = '세션을 갱신하지 못했습니다. 다시 로그인해 주세요.'
-      await router.replace('/user/login')
-      return
-    }
-
-    feedback.security = '세션을 갱신했습니다.'
-  } finally {
-    isRefreshingSession.value = false
-  }
-}
-
-async function logout() {
-  await authStore.logout()
-  await router.replace('/user/login')
-}
-
 async function changePassword() {
   feedback.security = ''
   feedback.securityError = ''
@@ -613,11 +762,7 @@ watch(
   <section class="settings-page ui-page">
     <header class="settings-header">
       <div>
-        <p class="settings-eyebrow">SETTING_001</p>
         <h2 class="settings-heading">환경설정</h2>
-        <p class="settings-subtitle">
-          계정 기준으로 적용되는 개인 환경 설정을 확인하고 즉시 변경합니다.
-        </p>
       </div>
       <div class="settings-status" :class="{ 'is-dark': isDarkMode }">
         <span class="settings-status__dot" />
@@ -675,119 +820,10 @@ watch(
               <button
                 type="button"
                 class="settings-button settings-button--ghost"
-                @click="openImageGenerationModal"
+                @click="openProfileImageModal"
               >
-                이미지 생성
+                프로필 이미지 변경
               </button>
-              <label class="settings-button settings-button--ghost">
-                이미지 선택
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  class="settings-file"
-                  @change="handleProfileImageUpload"
-                />
-              </label>
-              <button
-                type="button"
-                class="settings-button settings-button--ghost"
-                @click="clearProfileImage"
-              >
-                이미지 제거
-              </button>
-            </div>
-          </section>
-
-          <section class="profile-history">
-            <div class="profile-history__section">
-              <div class="profile-history__head">
-                <strong>최근 적용한 이미지</strong>
-                <span>{{
-                  isLoadingImageHistories
-                    ? '불러오는 중'
-                    : `${profileImageHistories.appliedImages.length}/3`
-                }}</span>
-              </div>
-              <div v-if="profileImageHistories.appliedImages.length" class="profile-history__grid">
-                <article
-                  v-for="image in profileImageHistories.appliedImages"
-                  :key="`applied-${image.id}`"
-                  class="profile-history-card"
-                  :class="{
-                    'is-current':
-                      image.objectKey && image.objectKey === profileForm.profileImageKey,
-                  }"
-                >
-                  <img :src="image.imageUrl" alt="" crossorigin="anonymous" />
-                  <div>
-                    <strong>{{ image.source === 'AI' ? 'AI 이미지' : '업로드 이미지' }}</strong>
-                    <small>{{ image.prompt || '직접 업로드' }}</small>
-                  </div>
-                  <button
-                    type="button"
-                    class="settings-button settings-button--ghost"
-                    :disabled="
-                      selectingHistoryId === image.id ||
-                      (image.objectKey && image.objectKey === profileForm.profileImageKey)
-                    "
-                    @click="applyProfileImageHistory(image)"
-                  >
-                    {{
-                      image.objectKey && image.objectKey === profileForm.profileImageKey
-                        ? '사용 중'
-                        : '적용'
-                    }}
-                  </button>
-                </article>
-              </div>
-              <p v-else class="profile-history__empty">아직 적용 기록이 없습니다.</p>
-            </div>
-
-            <div class="profile-history__section">
-              <div class="profile-history__head">
-                <strong>최근 생성한 이미지</strong>
-                <span>{{
-                  isLoadingImageHistories
-                    ? '불러오는 중'
-                    : `${profileImageHistories.generatedImages.length}/3`
-                }}</span>
-              </div>
-              <div
-                v-if="profileImageHistories.generatedImages.length"
-                class="profile-history__grid"
-              >
-                <article
-                  v-for="image in profileImageHistories.generatedImages"
-                  :key="`generated-${image.id}`"
-                  class="profile-history-card"
-                  :class="{
-                    'is-current':
-                      image.objectKey && image.objectKey === profileForm.profileImageKey,
-                  }"
-                >
-                  <img :src="image.imageUrl" alt="" crossorigin="anonymous" />
-                  <div>
-                    <strong>생성 이미지</strong>
-                    <small>{{ image.prompt || '프롬프트 없음' }}</small>
-                  </div>
-                  <button
-                    type="button"
-                    class="settings-button settings-button--ghost"
-                    :disabled="
-                      selectingHistoryId === image.id ||
-                      (image.objectKey && image.objectKey === profileForm.profileImageKey)
-                    "
-                    @click="applyProfileImageHistory(image)"
-                  >
-                    {{
-                      image.objectKey && image.objectKey === profileForm.profileImageKey
-                        ? '사용 중'
-                        : '적용'
-                    }}
-                  </button>
-                </article>
-              </div>
-              <p v-else class="profile-history__empty">생성한 이미지가 여기에 표시됩니다.</p>
             </div>
           </section>
 
@@ -866,6 +902,106 @@ watch(
             </button>
           </footer>
         </form>
+
+        <div v-else-if="activeTab === 'notifications'" class="settings-pane">
+          <section class="settings-block settings-block--split">
+            <div>
+              <strong>알림 사용</strong>
+              <p>전체 알림 수신 여부를 관리합니다. 변경 사항은 브라우저에 즉시 저장됩니다.</p>
+            </div>
+            <button
+              type="button"
+              class="ui-toggle"
+              :class="{ 'is-active': userSettingsStore.notifications.enabled }"
+              :aria-pressed="userSettingsStore.notifications.enabled"
+              aria-label="알림 사용 설정"
+              @click="toggleNotificationEnabled"
+            >
+              <span class="ui-toggle-thumb" />
+            </button>
+          </section>
+
+          <section class="settings-block">
+            <div>
+              <strong>알림 방법</strong>
+              <p>notification 기능 구현 시 선택한 채널 기준으로 알림을 전달합니다.</p>
+            </div>
+            <div class="notification-methods" role="group" aria-label="알림 방법 선택">
+              <button
+                v-for="option in notificationMethodOptions"
+                :key="option.key"
+                type="button"
+                class="notification-method"
+                :class="{
+                  'is-active': userSettingsStore.notifications.methods[option.key],
+                }"
+                :disabled="!userSettingsStore.notifications.enabled"
+                @click="toggleNotificationMethod(option.key)"
+              >
+                <span class="notification-method__check material-symbols-outlined">
+                  {{
+                    userSettingsStore.notifications.methods[option.key]
+                      ? 'check_circle'
+                      : 'radio_button_unchecked'
+                  }}
+                </span>
+                <span>
+                  <strong>{{ option.label }}</strong>
+                  <small>{{ option.description }}</small>
+                </span>
+              </button>
+            </div>
+          </section>
+
+          <section class="settings-block settings-block--split">
+            <div>
+              <strong>알림 정도</strong>
+              <p>알림을 얼마나 넓은 범위로 받을지 선택합니다.</p>
+            </div>
+            <div class="settings-segmented" role="group" aria-label="알림 정도 선택">
+              <button
+                v-for="option in notificationLevelOptions"
+                :key="option.value"
+                type="button"
+                :title="option.description"
+                :class="{ 'is-active': userSettingsStore.notifications.level === option.value }"
+                :disabled="!userSettingsStore.notifications.enabled"
+                @click="setNotificationLevel(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+          </section>
+
+
+          <div><strong>알림 세부 설정</strong></div>
+          <section class="settings-list" aria-label="알림 조건">
+            <div
+              v-for="option in notificationConditionOptions"
+              :key="option.key"
+              class="settings-row"
+            >
+              <div>
+                <strong>{{ option.label }}</strong>
+                <p>{{ option.description }}</p>
+              </div>
+              <button
+                type="button"
+                class="ui-toggle"
+                :class="{
+                  'is-active': userSettingsStore.notifications.conditions[option.key],
+                }"
+                :aria-pressed="userSettingsStore.notifications.conditions[option.key]"
+                :aria-label="`${option.label} 알림 조건 설정`"
+                :disabled="!userSettingsStore.notifications.enabled"
+                @click="toggleNotificationCondition(option.key)"
+              >
+                <span class="ui-toggle-thumb" />
+              </button>
+            </div>
+          </section>
+
+        </div>
 
         <div v-else-if="activeTab === 'theme'" class="settings-pane">
           <section class="settings-block settings-block--split">
@@ -974,63 +1110,104 @@ watch(
           <section class="settings-security-actions">
             <button
               type="button"
-              class="settings-button settings-button--ghost"
-              :disabled="isRefreshingSession"
-              @click="refreshSession"
+              class="settings-button settings-button--primary"
+              @click="openPasswordModal"
             >
-              {{ isRefreshingSession ? '갱신 중' : '세션 갱신' }}
-            </button>
-            <button type="button" class="settings-button settings-button--danger" @click="logout">
-              로그아웃
+              비밀번호 변경
             </button>
           </section>
+          <p v-if="feedback.security" class="settings-success">{{ feedback.security }}</p>
+        </div>
+      </article>
+    </div>
 
-          <form class="settings-password" @submit.prevent="changePassword">
-            <div>
-              <strong>내 비밀번호 변경</strong>
-              <p>성공 시 현재 refresh token을 삭제하고 다시 로그인이 필요합니다.</p>
-            </div>
-            <div class="settings-form-grid">
-              <label class="settings-field">
-                <span>현재 비밀번호</span>
-                <input
-                  v-model="passwordForm.currentPassword"
-                  type="password"
-                  autocomplete="current-password"
-                />
-              </label>
-              <label class="settings-field">
-                <span>새 비밀번호</span>
-                <input
-                  v-model="passwordForm.newPassword"
-                  type="password"
-                  autocomplete="new-password"
-                />
-              </label>
-              <label class="settings-field">
-                <span>새 비밀번호 확인</span>
-                <input
-                  v-model="passwordForm.confirmPassword"
-                  type="password"
-                  autocomplete="new-password"
-                />
-              </label>
-            </div>
-            <ul class="password-policy">
-              <li
-                v-for="item in passwordPolicyItems"
-                :key="item.key"
-                :class="{ 'is-valid': item.valid }"
+    <Teleport to="body">
+      <Transition name="settings-modal">
+        <div
+          v-if="isPasswordModalOpen"
+          class="settings-modal"
+          role="presentation"
+          @click.self="closePasswordModal"
+        >
+          <form
+            class="settings-modal__panel password-modal"
+            aria-label="비밀번호 변경"
+            @submit.prevent="changePassword"
+          >
+            <header class="settings-modal__header">
+              <div>
+                <p class="settings-eyebrow">계정 보안</p>
+                <h3>비밀번호 변경</h3>
+              </div>
+              <button
+                type="button"
+                class="settings-modal__close"
+                aria-label="닫기"
+                :disabled="isChangingPassword"
+                @click="closePasswordModal"
               >
-                <span class="password-policy__dot" />
-                {{ item.label }}
-              </li>
-            </ul>
-            <footer class="settings-actions">
+                x
+              </button>
+            </header>
+
+            <div class="settings-modal__body">
+              <div class="settings-password">
+                <div>
+                  <strong>내 비밀번호 변경</strong>
+                  <p>성공 시 현재 refresh token을 삭제하고 다시 로그인이 필요합니다.</p>
+                </div>
+                <div class="settings-form-grid">
+                  <label class="settings-field">
+                    <span>현재 비밀번호</span>
+                    <input
+                      v-model="passwordForm.currentPassword"
+                      type="password"
+                      autocomplete="current-password"
+                      autofocus
+                    />
+                  </label>
+                  <label class="settings-field">
+                    <span>새 비밀번호</span>
+                    <input
+                      v-model="passwordForm.newPassword"
+                      type="password"
+                      autocomplete="new-password"
+                    />
+                  </label>
+                  <label class="settings-field">
+                    <span>새 비밀번호 확인</span>
+                    <input
+                      v-model="passwordForm.confirmPassword"
+                      type="password"
+                      autocomplete="new-password"
+                    />
+                  </label>
+                </div>
+                <ul class="password-policy">
+                  <li
+                    v-for="item in passwordPolicyItems"
+                    :key="item.key"
+                    :class="{ 'is-valid': item.valid }"
+                  >
+                    <span class="password-policy__dot" />
+                    {{ item.label }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <footer class="settings-modal__actions">
               <p v-if="feedback.securityError" class="settings-error">
                 {{ feedback.securityError }}
               </p>
-              <p v-else-if="feedback.security" class="settings-success">{{ feedback.security }}</p>
+              <button
+                type="button"
+                class="settings-button settings-button--ghost"
+                :disabled="isChangingPassword"
+                @click="closePasswordModal"
+              >
+                취소
+              </button>
               <button
                 type="submit"
                 class="settings-button settings-button--primary"
@@ -1041,8 +1218,207 @@ watch(
             </footer>
           </form>
         </div>
-      </article>
-    </div>
+      </Transition>
+    </Teleport>
+
+    <Teleport to="body">
+      <Transition name="settings-modal">
+        <div
+          v-if="isProfileImageModalOpen"
+          class="settings-modal"
+          role="presentation"
+          @click.self="closeProfileImageModal"
+        >
+          <section
+            class="settings-modal__panel profile-image-modal"
+            aria-label="프로필 이미지 변경"
+          >
+            <header class="settings-modal__header">
+              <div>
+                <p class="settings-eyebrow">프로필 이미지</p>
+                <h3>프로필 이미지 변경</h3>
+              </div>
+              <button
+                type="button"
+                class="settings-modal__close"
+                aria-label="닫기"
+                @click="closeProfileImageModal"
+              >
+                x
+              </button>
+            </header>
+
+            <div class="settings-modal__body profile-image-modal__body">
+              <section class="profile-image-manager">
+                <div class="profile-preview">
+                  <div class="profile-preview__image profile-preview__image--large">
+                    <img
+                      v-if="profileForm.imageDataUrl"
+                      :src="profileForm.imageDataUrl"
+                      alt=""
+                      crossorigin="anonymous"
+                      referrerpolicy="strict-origin-when-cross-origin"
+                    />
+                    <span v-else>{{ userSettingsStore.profileInitials }}</span>
+                  </div>
+                  <div>
+                    <strong>{{ profileForm.name || 'Callog User' }}</strong>
+                    <p>{{ profileForm.company }} · {{ profileForm.department }}</p>
+                    <small
+                      v-if="hasPendingProfileImageChange"
+                      class="profile-image-manager__pending"
+                    >
+                      저장 전 변경사항이 있습니다.
+                    </small>
+                  </div>
+                </div>
+
+                <div class="profile-actions profile-actions--modal">
+                  <button
+                    type="button"
+                    class="settings-button settings-button--ghost"
+                    @click="openImageGenerationModal"
+                  >
+                    이미지 생성
+                  </button>
+                  <label class="settings-button settings-button--ghost">
+                    이미지 선택
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      class="settings-file"
+                      @change="handleProfileImageUpload"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    class="settings-button settings-button--ghost"
+                    :disabled="!profileForm.imageDataUrl && !pendingProfileImageFile"
+                    @click="clearProfileImage"
+                  >
+                    이미지 제거
+                  </button>
+                </div>
+              </section>
+
+              <section class="profile-history">
+                <div class="profile-history__section">
+                  <div class="profile-history__head">
+                    <strong>최근 적용한 이미지</strong>
+                    <span>{{
+                      isLoadingImageHistories
+                        ? '불러오는 중'
+                        : `${profileImageHistories.appliedImages.length}/3`
+                    }}</span>
+                  </div>
+                  <div
+                    v-if="profileImageHistories.appliedImages.length"
+                    class="profile-history__grid"
+                  >
+                    <article
+                      v-for="image in profileImageHistories.appliedImages"
+                      :key="`applied-${image.id}`"
+                      class="profile-history-card"
+                      :class="{
+                        'is-current':
+                          image.objectKey && image.objectKey === profileForm.profileImageKey,
+                      }"
+                    >
+                      <img :src="image.imageUrl" alt="" crossorigin="anonymous" />
+                      <div>
+                        <strong>{{ image.source === 'AI' ? 'AI 이미지' : '업로드 이미지' }}</strong>
+                        <small>{{ image.prompt || '직접 업로드' }}</small>
+                      </div>
+                      <button
+                        type="button"
+                        class="settings-button settings-button--ghost"
+                        :disabled="
+                          selectingHistoryId === image.id ||
+                          (image.objectKey && image.objectKey === profileForm.profileImageKey)
+                        "
+                        @click="applyProfileImageHistory(image)"
+                      >
+                        {{
+                          image.objectKey && image.objectKey === profileForm.profileImageKey
+                            ? '사용 중'
+                            : '적용'
+                        }}
+                      </button>
+                    </article>
+                  </div>
+                  <p v-else class="profile-history__empty">아직 적용 기록이 없습니다.</p>
+                </div>
+
+                <div class="profile-history__section">
+                  <div class="profile-history__head">
+                    <strong>최근 생성한 이미지</strong>
+                    <span>{{
+                      isLoadingImageHistories
+                        ? '불러오는 중'
+                        : `${profileImageHistories.generatedImages.length}/3`
+                    }}</span>
+                  </div>
+                  <div
+                    v-if="profileImageHistories.generatedImages.length"
+                    class="profile-history__grid"
+                  >
+                    <article
+                      v-for="image in profileImageHistories.generatedImages"
+                      :key="`generated-${image.id}`"
+                      class="profile-history-card"
+                      :class="{
+                        'is-current':
+                          image.objectKey && image.objectKey === profileForm.profileImageKey,
+                      }"
+                    >
+                      <img :src="image.imageUrl" alt="" crossorigin="anonymous" />
+                      <div>
+                        <strong>생성 이미지</strong>
+                        <small>{{ image.prompt || '프롬프트 없음' }}</small>
+                      </div>
+                      <button
+                        type="button"
+                        class="settings-button settings-button--ghost"
+                        :disabled="
+                          selectingHistoryId === image.id ||
+                          (image.objectKey && image.objectKey === profileForm.profileImageKey)
+                        "
+                        @click="applyProfileImageHistory(image)"
+                      >
+                        {{
+                          image.objectKey && image.objectKey === profileForm.profileImageKey
+                            ? '사용 중'
+                            : '적용'
+                        }}
+                      </button>
+                    </article>
+                  </div>
+                  <p v-else class="profile-history__empty">생성한 이미지가 여기에 표시됩니다.</p>
+                </div>
+              </section>
+            </div>
+
+            <footer class="settings-modal__actions">
+              <button
+                type="button"
+                class="settings-button settings-button--ghost"
+                @click="closeProfileImageModal"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                class="settings-button settings-button--primary"
+                :disabled="isSavingProfile || !hasPendingProfileImageChange"
+                @click="saveProfileImageChanges"
+              >
+                {{ isSavingProfile ? '저장 중' : '변경 저장' }}
+              </button>
+            </footer>
+          </section>
+        </div>
+      </Transition>
+    </Teleport>
 
     <Teleport to="body">
       <Transition name="settings-modal">
@@ -1672,6 +2048,94 @@ watch(
   color: #ffffff;
 }
 
+.settings-segmented button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.notification-methods {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.notification-method {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 96px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.notification-method.is-active {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 11%, var(--surface-card));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-color) 28%, transparent);
+}
+
+.notification-method:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.notification-method__check {
+  color: var(--accent-color);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.notification-method strong {
+  display: block;
+  color: var(--text-heading);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.notification-method small {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.notification-summary__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notification-summary__chips span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface-control);
+  padding: 0 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notification-summary__chips span.is-active {
+  border-color: color-mix(in srgb, var(--accent-color) 40%, var(--line-soft));
+  background: color-mix(in srgb, var(--accent-color) 12%, var(--surface-control));
+  color: var(--text-heading);
+}
+
 .settings-preview {
   display: grid;
   gap: 14px;
@@ -1806,6 +2270,17 @@ watch(
   color: var(--text-body);
 }
 
+.profile-image-modal {
+  display: grid;
+  width: min(920px, 100%);
+  max-height: min(820px, calc(100vh - 48px));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.password-modal {
+  width: min(560px, 100%);
+}
+
 .settings-modal__header {
   display: flex;
   align-items: center;
@@ -1845,6 +2320,39 @@ watch(
   padding: 20px;
 }
 
+.profile-image-modal__body {
+  overflow: auto;
+}
+
+.profile-image-manager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: var(--density-card-padding, 14px);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-card-muted);
+}
+
+.profile-preview__image--large {
+  width: 96px;
+  height: 96px;
+}
+
+.profile-image-manager__pending {
+  display: inline-flex;
+  margin-top: 6px;
+  color: var(--accent-color);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.profile-actions--modal {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .settings-modal__preview {
   display: grid;
   width: 240px;
@@ -1879,10 +2387,15 @@ watch(
 
 .settings-modal__actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
   padding: 14px 20px 18px;
   border-top: 1px solid var(--line-soft);
+}
+
+.settings-modal__actions .settings-error {
+  margin-right: auto;
 }
 
 .settings-modal-enter-active,
@@ -1915,7 +2428,11 @@ watch(
   }
 
   .settings-tabs {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .notification-methods {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1926,6 +2443,7 @@ watch(
 
   .settings-header,
   .settings-profile,
+  .profile-image-manager,
   .settings-logo-panel,
   .settings-block--split,
   .settings-row,
@@ -1944,6 +2462,7 @@ watch(
 
   .settings-tabs,
   .settings-form-grid,
+  .notification-methods,
   .password-policy {
     grid-template-columns: 1fr;
   }
