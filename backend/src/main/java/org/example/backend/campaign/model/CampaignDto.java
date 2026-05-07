@@ -1,6 +1,7 @@
 package org.example.backend.campaign.model;
 
 import lombok.Builder;
+import org.example.backend.kpi.dto.CreateContributionRequest;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -19,7 +20,8 @@ public class CampaignDto {
             List<String> partners,
             String goals,
             String mainMessage,
-            String color
+            String color,
+            List<CreateContributionRequest> contributions
     ) {
     }
 

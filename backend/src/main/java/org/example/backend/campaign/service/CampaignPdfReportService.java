@@ -189,9 +189,9 @@ public class CampaignPdfReportService {
         }
         Integer overallPct = measuredCount > 0 ? sumPct / measuredCount : null;
 
-        // ESG
+        // ESG (KpiCategory에서 ESG가 분리됨 → CampaignKpi.esgCategory 필드 기준 필터링)
         List<CampaignKpi> esgKpis = kpis.stream()
-                .filter(k -> k.getCategory() != null && "ESG".equals(k.getCategory().name()))
+                .filter(k -> k.getEsgCategory() != null)
                 .toList();
         int esgTotal = esgKpis.size();
         int esgDone = (int) esgKpis.stream()
@@ -385,7 +385,7 @@ public class CampaignPdfReportService {
 
         StringBuilder erows = new StringBuilder();
         List<CampaignKpi> esgKpis = kpis.stream()
-                .filter(k -> k.getCategory() != null && "ESG".equals(k.getCategory().name()))
+                .filter(k -> k.getEsgCategory() != null)
                 .toList();
         if (esgKpis.isEmpty()) {
             erows.append("<tr><td colspan='4' class='empty-row'>등록된 ESG KPI가 없습니다.</td></tr>");

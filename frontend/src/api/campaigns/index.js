@@ -37,6 +37,16 @@ export const GetCampaignDetails = async (taps) => {
   );
 };
 
+/**
+ * 캠페인 생성.
+ *
+ * payload는 기존 캠페인 필드(name, purpose, tags, startDate, endDate, partners, goals,
+ * mainMessage, color)에 더해 KPI cascade 매핑을 위한 `contributions`를 포함할 수 있다.
+ *
+ *   contributions: [{ targetOrgKpiId: number, committedValue: number }]
+ *
+ * 매핑이 없으면 빈 배열을 보낸다.
+ */
 export const CreateCampaign = async (payload) => {
   return unwrapResponse(await api.post('/campaigns/new', payload))
 }

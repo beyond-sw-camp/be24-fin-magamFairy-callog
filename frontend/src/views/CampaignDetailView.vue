@@ -10,6 +10,7 @@ import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
 import MatchOverview from '@/views/MatchOverview.vue'
 import CampaignMembersPanel from '@/components/campaign/CampaignMembersPanel.vue'
 import CampaignKpiTab from '@/components/campaign/kpi/CampaignKpiTab.vue'
+import CampaignKpiCascadeView from '@/components/campaign/CampaignKpiCascadeView.vue'
 import CampaignExportModal from '@/components/campaign/CampaignExportModal.vue'
 import {
   ListMilestones,
@@ -124,6 +125,36 @@ const handleTabClick = async (tabName) => {
 };
 
 const campaignId = computed(() => route.params.campaignId)
+
+// ───── 캠페인 KPI cascade contributions (Phase B)
+const kpiCascadeContributions = ref([])
+const kpiCascadeLoading = ref(false)
+async function loadKpiCascadeContributions() {
+  const cid = campaignId.value
+  if (!cid) return
+  kpiCascadeLoading.value = true
+  try {
+    const { default: api } = await import('/plugins/interceptor.js')
+    const response = await api.get(`/campaigns/${cid}/kpi-contributions`)
+    const payload = response?.data
+    const data = payload?.data ?? payload
+    kpiCascadeContributions.value = Array.isArray(data) ? data : data?.items ?? []
+  } catch (error) {
+    console.warn('[mock fallback] cascade contributions 가져오기 실패', error)
+    kpiCascadeContributions.value = []
+  } finally {
+    kpiCascadeLoading.value = false
+  }
+}
+watch(
+  [() => campaignId.value, () => activeTab.value],
+  ([cid, tab]) => {
+    if (cid && tab === '캠페인 성과/KPI') {
+      void loadKpiCascadeContributions()
+    }
+  },
+  { immediate: true },
+)
 
 const activeCampaign = computed(() => {
   const cid = String(route.params.campaignId ?? '')
@@ -1396,6 +1427,11 @@ watch(
     </section>
 
     <section v-else-if="activeTab === '캠페인 성과/KPI'" class="tab-surface">
+      <CampaignKpiCascadeView
+        :contributions="kpiCascadeContributions"
+        :loading="kpiCascadeLoading"
+        style="margin-bottom: 16px;"
+      />
       <CampaignKpiTab :campaign-id="campaignId" />
     </section>
 

@@ -10,6 +10,7 @@ import org.example.backend.campaign.model.CampaignRole;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.kpi.service.CampaignKpiContributionService;
 import org.example.backend.organization.model.OrganizationType;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
@@ -61,6 +62,7 @@ public class CampaignService {
     private final UserRepository userRepository;
     private final CampaignParticipantRepository participantRepository;
     private final CampaignMemberRepository memberRepository;
+    private final CampaignKpiContributionService contributionService;
 
     public List<CampaignDto.Res> listCampaigns(Long userIdx) {
         return listCampaigns(userIdx, "mine");
@@ -130,6 +132,11 @@ public class CampaignService {
                 .joinedAt(LocalDateTime.now())
                 .build();
         memberRepository.save(ownerMember);
+
+        // KPI cascade: 캠페인 생성 시 상위 OrganizationKpi에 contribution 등록 (옵션)
+        if (dto.contributions() != null && !dto.contributions().isEmpty()) {
+            contributionService.bulkCreate(saved, dto.contributions());
+        }
 
         return buildResponseFor(saved, owner);
     }
