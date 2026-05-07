@@ -20,6 +20,7 @@ import org.example.backend.kpi.model.OrganizationKpi;
 import org.example.backend.kpi.repository.CampaignKpiContributionRepository;
 import org.example.backend.kpi.repository.OrganizationKpiRepository;
 import org.example.backend.matching.repository.AssetRepository;
+import org.example.backend.matching.repository.BenefitRepository;
 import org.example.backend.organization.model.Organization;
 import org.example.backend.organization.model.OrganizationType;
 import org.example.backend.organization.repository.OrganizationRepository;
@@ -60,6 +61,7 @@ public class DashboardAggregateService {
     private final CampaignKpiContributionRepository contributionRepository;
     private final TaskRepository taskRepository;
     private final AssetRepository assetRepository;
+    private final BenefitRepository benefitRepository;
 
     // ── 1. Summary ──────────────────────────────────────────
 
@@ -81,13 +83,15 @@ public class DashboardAggregateService {
                     .toList();
         Integer avg = averageAchievement(kpis);
 
-        // 검수 대기 (REVIEW 상태 Task)
-        List<Task> reviewTasks = filterTasksForScope(scope).stream()
-                .filter(t -> t.getStatus() == TaskStatus.REVIEW)
-                .toList();
-        long pending = reviewTasks.size();
+        // 검수 대기 / 패스율 (REVIEW vs DONE 비율)
+        List<Task> scopedTasks = filterTasksForScope(scope);
+        long pending = scopedTasks.stream().filter(t -> t.getStatus() == TaskStatus.REVIEW).count();
+        long doneCnt = scopedTasks.stream().filter(t -> t.getStatus() == TaskStatus.DONE).count();
+        long reviewedTotal = pending + doneCnt;
+        Integer passPct = reviewedTotal == 0 ? null
+                : (int) Math.round(doneCnt * 100.0 / reviewedTotal);
 
-        // 협력사 수 (참여 organization 중 EXTERNAL_PARTNER/AFFILIATE)
+        // 협력사 수 (참여 organization)
         Set<Long> orgIds = new HashSet<>();
         for (Campaign c : visibleCampaigns) {
             for (CampaignParticipant cp : participantRepository.findAllByCampaignIdx(c.getIdx())) {
@@ -98,7 +102,37 @@ public class DashboardAggregateService {
         }
         long partnerCount = orgIds.size();
 
-        return new DashboardSummaryDto(active, avg, pending, partnerCount, scope.label);
+        // 자산 LIVE 카운트 (visible 캠페인 범위)
+        long liveAssetCount = assetRepository.findAll().stream()
+                .filter(a -> {
+                    if (scope.allCampaigns) return true;
+                    Long camp = a.getCampaign() != null ? a.getCampaign().getIdx() : null;
+                    Long org = a.getOrganization() != null ? a.getOrganization().getIdx() : null;
+                    return (camp != null && visibleCampaignIds.contains(camp))
+                            || (scope.ownerOrgId != null && Objects.equals(scope.ownerOrgId, org));
+                })
+                .count();
+
+        // 매칭 평균 — KPI 평균 달성률을 차용 (별도 매칭 점수 데이터 없을 때)
+        Integer matchAvg = avg;
+
+        // RFP 응모 = PartnerBenefits 전체 카운트 (Phase 2: visible 캠페인 범위로 좁히기)
+        long rfpCount = benefitRepository.count();
+
+        // 신규 협력사 — Organization.createdAt 없음 → 현재 partnerCount stub
+        long newPartnerCount = partnerCount;
+
+        List<DashboardSummaryDto.MiniStat> miniStats = List.of(
+                new DashboardSummaryDto.MiniStat("검수 패스율", passPct == null ? "-" : passPct + "%"),
+                new DashboardSummaryDto.MiniStat("매칭 평균", matchAvg == null ? "-" : matchAvg + "점"),
+                new DashboardSummaryDto.MiniStat("자산 LIVE", String.valueOf(liveAssetCount))
+        );
+
+        return new DashboardSummaryDto(
+                active, avg, avg,
+                pending, partnerCount, newPartnerCount, rfpCount,
+                0, miniStats, scope.label
+        );
     }
 
     // ── 2. Quarter Goals ────────────────────────────────────
@@ -119,6 +153,12 @@ public class DashboardAggregateService {
         BigDecimal actual = contributionRepository.sumActualByTargetOrgKpi(k.getIdx());
         Integer pct = calcPercent(actual, k.getTargetValue());
 
+        // 월별 stub: actualSum / 3 균등 분배. (월별 스냅샷 테이블 도입 전 임시)
+        int actualInt = actual == null ? 0 : actual.intValue();
+        int targetInt = k.getTargetValue() == null ? 0 : k.getTargetValue().intValue();
+        List<Integer> monthlyActuals = List.of(actualInt / 3, actualInt / 3, actualInt - 2 * (actualInt / 3));
+        List<Integer> monthlyTargets = List.of(targetInt / 3, targetInt / 3, targetInt - 2 * (targetInt / 3));
+
         return new QuarterGoalProgressDto(
                 k.getIdx(),
                 k.getName(),
@@ -129,7 +169,9 @@ public class DashboardAggregateService {
                 pct,
                 k.getPeriodCode(),
                 k.getOwner() != null ? k.getOwner().getIdx() : null,
-                k.getOwner() != null ? k.getOwner().getName() : null
+                k.getOwner() != null ? k.getOwner().getName() : null,
+                monthlyActuals,
+                monthlyTargets
         );
     }
 
@@ -163,14 +205,25 @@ public class DashboardAggregateService {
         }
 
         return partners.values().stream()
-                .map(org -> new PartnerProgressDto(
-                        org.getIdx(),
-                        org.getName(),
-                        totalByOrg.getOrDefault(org.getIdx(), 0L),
-                        activeByOrg.getOrDefault(org.getIdx(), 0L),
-                        averageAchievement(kpisByOrg.getOrDefault(org.getIdx(), List.of()))
-                ))
+                .map(org -> {
+                    Integer avgPct = averageAchievement(kpisByOrg.getOrDefault(org.getIdx(), List.of()));
+                    return new PartnerProgressDto(
+                            org.getIdx(),
+                            org.getName(),
+                            totalByOrg.getOrDefault(org.getIdx(), 0L),
+                            activeByOrg.getOrDefault(org.getIdx(), 0L),
+                            avgPct,
+                            stubSparkline(avgPct)
+                    );
+                })
                 .toList();
+    }
+
+    /** 일별 스냅샷 테이블 도입 전 임시 sparkline. 평균 점수 기준 7일치 ±2 변동. */
+    private static List<Integer> stubSparkline(Integer avg) {
+        if (avg == null) return List.of();
+        int base = Math.max(0, avg - 4);
+        return List.of(base, base + 1, base + 2, base + 2, base + 3, base + 4, avg);
     }
 
     // ── 4. Review Queue ─────────────────────────────────────

@@ -63,19 +63,22 @@ const TODAY_KPIS = [
 ]
 
 const ROLE_KPI = computed(() => {
+  const s = dashboardStore.summary
   if (role.value === 'GM') return {
     key: 'gm', label: '분기 달성률',
-    value: dashboardStore.summary?.progressPct ?? 73, unit: '%',
-    delta: `+${dashboardStore.summary?.trend ?? 4.2}%p 지난주`,
-    deltaPositive: (dashboardStore.summary?.trend ?? 4.2) >= 0,
+    value: s?.progressPct ?? 73, unit: '%',
+    delta: `+${s?.trend ?? 4.2}%p 지난주`,
+    deltaPositive: (s?.trend ?? 4.2) >= 0,
     icon: '🎯', bg: '#E7E1FF', iconBg: '#9D85FF' }
   if (role.value === 'MGR') return {
-    key: 'mgr', label: '우리 팀 진행', value: 18, unit: '건',
-    delta: '+3 이번주', deltaPositive: true,
+    key: 'mgr', label: '진행 중 캠페인',
+    value: s?.activeCampaigns ?? 18, unit: '건',
+    delta: '권한 범위 내', deltaPositive: true,
     icon: '👥', bg: '#DCEEFA', iconBg: '#5DAFD8' }
   return {
-    key: 'usr', label: '내 할 일', value: 5, unit: '건',
-    delta: '+1 오늘', deltaPositive: true,
+    key: 'usr', label: '내 검수 대기',
+    value: s?.pendingReviews ?? 5, unit: '건',
+    delta: '본인 할당분', deltaPositive: true,
     icon: '✅', bg: '#D7EFDD', iconBg: '#6FBF87' }
 })
 
@@ -88,6 +91,9 @@ const KPI_LIST = computed(() => {
   if (s?.miniStats?.[0]) mapped[1].value = parseNumeric(s.miniStats[0].value, mapped[1].value)
   if (s?.miniStats?.[1]) mapped[2].value = parseNumeric(s.miniStats[1].value, mapped[2].value)
   if (s?.miniStats?.[2]) mapped[3].value = parseNumeric(s.miniStats[2].value, mapped[3].value)
+  // 신규 협력사 / RFP 응모
+  if (s?.newPartnerCount != null) mapped[4].value = s.newPartnerCount
+  if (s?.rfpCount != null) mapped[5].value = s.rfpCount
   // 1번은 권한별 ROLE_KPI로 교체
   return [ROLE_KPI.value, ...mapped.slice(1)]
 })
@@ -289,15 +295,21 @@ const PARTNER_RANK = computed(() => {
   const fromStore = dashboardStore.partnerProgress ?? []
   if (fromStore.length === 0) return PARTNER_RANK_FALLBACK
   const colors = ['#9D85FF', '#FF8A5C', '#5DAFD8', '#6FBF87', '#FFC36B']
-  return fromStore.slice(0, 5).map((p, i) => ({
-    rank: i + 1,
-    name: p.name,
-    score: p.progress ?? p.score ?? 0,
-    prevRank: i + 1,         // 백엔드 응답에 없음
-    delta: p.delta ?? 0,
-    spark: p.spark ?? PARTNER_RANK_FALLBACK[i]?.spark ?? [],   // sparkline은 Phase 2에서 백엔드 보강
-    color: colors[i],
-  }))
+  return fromStore.slice(0, 5).map((p, i) => {
+    const score = p.averageKpiAchievementPercent ?? p.progress ?? p.score ?? 0
+    const spark = (p.recent7d && p.recent7d.length > 0)
+      ? p.recent7d
+      : (p.spark ?? PARTNER_RANK_FALLBACK[i]?.spark ?? [])
+    return {
+      rank: i + 1,
+      name: p.organizationName ?? p.name ?? '제휴사',
+      score,
+      prevRank: i + 1,
+      delta: p.delta ?? 0,
+      spark,
+      color: colors[i],
+    }
+  })
 })
 
 /* ═══════════ helpers ═══════════ */
