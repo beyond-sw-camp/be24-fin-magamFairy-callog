@@ -11,7 +11,7 @@ const props = defineProps({
     default: null,
   },
 })
-const emit = defineEmits(['request-evaluation'])
+const emit = defineEmits(['request-matching', 'request-evaluation'])
 
 const selectedGoal = ref('PURCHASE_BOOKING')
 const drawerComboId = ref(null)
@@ -386,6 +386,15 @@ const operationProgress = computed(() => Math.round((completedTaskCount.value / 
 function tasksByStatus(status) {
   return operationTasks.filter((task) => task.status === status)
 }
+
+function requestRecommendation() {
+  emit('request-matching', {
+    goalType: selectedGoal.value,
+    campaignMethods: [],
+    benefitIds: [],
+    sortType: 'HIGH_SCORE',
+  })
+}
 </script>
 
 <template>
@@ -445,6 +454,9 @@ function tasksByStatus(status) {
           <h3>추천 조합</h3>
           <span class="match-main__count">{{ visibleCombinations.length }}건</span>
         </div>
+        <button type="button" class="match-main__recommend" @click="requestRecommendation">
+          매칭 추천 받기
+        </button>
       </header>
 
       <p v-if="isFallbackRecommendation" class="match-fallback">
@@ -1466,6 +1478,19 @@ function tasksByStatus(status) {
   font-size: 0.7rem;
   font-weight: 900;
   padding: 0 0.45rem;
+}
+
+.match-main__recommend {
+  min-height: 2.35rem;
+  border: 1px solid var(--accent-color);
+  border-radius: 7px;
+  background: var(--accent-color);
+  color: #fff;
+  padding: 0 0.95rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 900;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent-color) 18%, transparent);
 }
 
 .match-criteria {

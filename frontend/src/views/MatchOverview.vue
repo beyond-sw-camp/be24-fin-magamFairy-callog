@@ -4,7 +4,6 @@ import { usePlannerStore } from '@/stores/planner'
 
 import CampaignMatching from '@/components/matchengine/CampaignMatching.vue'
 import MatchDashboard from '@/components/matchengine/MatchDashboard.vue'
-import MatchSettings from '@/components/matchengine/MatchSettings.vue'
 import PartnerEvaluation from '@/components/matchengine/PartnerEvaluation.vue'
 
 const props = defineProps({
@@ -17,12 +16,8 @@ const store = usePlannerStore()
 const isDark = computed(() => store.theme === 'dark')
 const isScopedToCampaign = computed(() => props.campaignId != null && props.campaignId !== '')
 const currentTab = ref('dashboard')
-const goalCount = ref(2)
-const assetBenefitCount = ref(0)
-const partnerProposalCount = 3
 const matchingCriteria = ref(null)
 const evaluationCandidate = ref(null)
-const settingCount = computed(() => goalCount.value + assetBenefitCount.value)
 
 const tabs = computed(() => [
   {
@@ -32,14 +27,6 @@ const tabs = computed(() => [
     count: 8,
     component: MatchDashboard,
     icon: 'M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-3H4v3Z',
-  },
-  {
-    id: 'settings',
-    name: '매칭 설정',
-    caption: '입력값',
-    count: settingCount.value,
-    component: MatchSettings,
-    icon: 'M12 3v18M3 12h18',
   },
   {
     id: 'matching',
@@ -67,16 +54,13 @@ function resolveTabCount(tab) {
   return typeof tab.count === 'object' ? tab.count.value : tab.count
 }
 
-function updateAssetBenefitCount(assetCount) {
-  assetBenefitCount.value = Number(assetCount ?? 0) + partnerProposalCount
-}
-
-function updateGoalCount(count) {
-  goalCount.value = Number(count ?? 0)
-}
-
 function moveToMatchingTab(criteria) {
-  matchingCriteria.value = criteria ?? null
+  matchingCriteria.value = criteria ?? {
+    goalType: 'PURCHASE_BOOKING',
+    campaignMethods: [],
+    benefitIds: [],
+    sortType: 'HIGH_SCORE',
+  }
   currentTab.value = 'matching'
 }
 
@@ -110,8 +94,6 @@ function moveToEvaluationTab(candidate) {
         :isDark="isDark"
         :recommendationCriteria="matchingCriteria"
         :evaluationCandidate="evaluationCandidate"
-        @asset-count-change="updateAssetBenefitCount"
-        @goal-count-change="updateGoalCount"
         @request-matching="moveToMatchingTab"
         @request-evaluation="moveToEvaluationTab"
       />
