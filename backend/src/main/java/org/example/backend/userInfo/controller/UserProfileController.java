@@ -1,9 +1,9 @@
-package org.example.backend.userInfo.userProfile.controller;
+package org.example.backend.userInfo.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.example.backend.common.model.BaseResponse;
-import org.example.backend.userInfo.userProfile.model.UserProfileDto;
-import org.example.backend.userInfo.userProfile.service.UserProfileService;
+import org.example.backend.userInfo.model.UserProfileDto;
+import org.example.backend.userInfo.service.UserProfileService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;

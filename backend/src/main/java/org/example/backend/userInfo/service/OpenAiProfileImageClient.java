@@ -1,4 +1,4 @@
-package org.example.backend.userInfo.userProfile.service;
+package org.example.backend.userInfo.service;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.beans.factory.annotation.Value;

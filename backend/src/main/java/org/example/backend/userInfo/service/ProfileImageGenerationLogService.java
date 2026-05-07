@@ -1,9 +1,9 @@
-package org.example.backend.userInfo.userProfile.service;
+package org.example.backend.userInfo.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.backend.user.model.User;
-import org.example.backend.userInfo.userProfile.model.ProfileImageGenerationLog;
-import org.example.backend.userInfo.userProfile.repository.ProfileImageGenerationLogRepository;
+import org.example.backend.userInfo.model.ProfileImageGenerationLog;
+import org.example.backend.userInfo.repository.ProfileImageGenerationLogRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
