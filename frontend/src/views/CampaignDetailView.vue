@@ -1427,6 +1427,13 @@ watch(
     </section>
 
     <section v-else-if="activeTab === '캠페인 성과/KPI'" class="tab-surface">
+      <div class="kpi-tab-legend">
+        <span class="kpi-tab-legend__chip kpi-tab-legend__chip--cascade">🟣 cascade</span>
+        <span class="kpi-tab-legend__text">상위 KPI(본사·계열사)에 기여하는 매핑</span>
+        <span class="kpi-tab-legend__divider">·</span>
+        <span class="kpi-tab-legend__chip kpi-tab-legend__chip--ops">🔵 운영</span>
+        <span class="kpi-tab-legend__text">캠페인 자체 metric (CTR / 노출 등)</span>
+      </div>
       <CampaignKpiCascadeView
         :contributions="kpiCascadeContributions"
         :loading="kpiCascadeLoading"
@@ -3966,4 +3973,38 @@ textarea:disabled {
   from { transform: translateX(0); }
   to   { transform: translateX(100%); }
 }
+
+/* ───── KPI 탭 분류 안내 (Q2 C) ───── */
+.kpi-tab-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--panel-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 6px 14px;
+  margin-bottom: 14px;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.kpi-tab-legend__chip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 999px;
+}
+.kpi-tab-legend__chip--cascade {
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+.kpi-tab-legend__chip--ops {
+  background: #dbeafe;
+  color: #2563eb;
+}
+.kpi-tab-legend__text { font-weight: 600; color: var(--text-secondary); }
+.kpi-tab-legend__divider { color: var(--subtle-text); margin: 0 4px; }
 </style>

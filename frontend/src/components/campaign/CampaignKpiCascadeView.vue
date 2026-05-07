@@ -50,7 +50,15 @@ function tone(pct) {
             </span>
             <div>
               <p class="cascade-row__name">{{ c.targetOrgKpiName ?? c.name }}</p>
-              <p class="cascade-row__owner">{{ c.ownerOrgName ?? '본사' }} · {{ c.periodCode ?? '' }}</p>
+              <p class="cascade-row__owner">
+                <span
+                  class="cascade-chip"
+                  :class="(c.ownerOrgType === 'HQ' || !c.ownerOrgType) ? 'cascade-chip--hq' : 'cascade-chip--ga'"
+                >
+                  {{ (c.ownerOrgType === 'HQ' || !c.ownerOrgType) ? '🟣 본사 cascade' : '🟢 계열사 cascade' }}
+                </span>
+                <span class="cascade-row__owner-name">{{ c.ownerOrgName ?? '본사' }} · {{ c.periodCode ?? '' }}</span>
+              </p>
             </div>
           </div>
           <div class="cascade-row__numbers">
@@ -173,10 +181,33 @@ function tone(pct) {
   color: var(--text-primary);
 }
 .cascade-row__owner {
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   font-size: 11px;
   color: var(--muted-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
+.cascade-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.cascade-chip--hq {
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+.cascade-chip--ga {
+  background: #d1fae5;
+  color: #047857;
+}
+.cascade-row__owner-name { color: var(--muted-text); }
 
 .cascade-row__numbers {
   display: inline-flex;
