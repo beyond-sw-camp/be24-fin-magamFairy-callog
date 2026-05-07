@@ -38,8 +38,6 @@ const statusColumns = [
   { id: 'done', label: '완료', sub: 'Done' },
 ]
 
-const companies = []
-
 const tasks = ref([])
 
 const priorityLabels = {
@@ -51,9 +49,20 @@ const priorityLabels = {
 
 const searchText = ref('')
 const selectedPriority = ref('all')
-const selectedCompanyId = ref(null)
 
-const selectedCompany = computed(() => companies.find((company) => company.id === selectedCompanyId.value))
+// tasks에서 고유 회사 목록을 동적으로 추출
+const companies = computed(() => {
+  const seen = new Set()
+  const result = []
+  for (const t of tasks.value) {
+    const name = t.companyName || '미지정'
+    if (!seen.has(name)) {
+      seen.add(name)
+      result.push({ id: name, name })
+    }
+  }
+  return result
+})
 
 const filteredTasks = computed(() => {
   const query = searchText.value.trim().toLowerCase()
@@ -61,7 +70,7 @@ const filteredTasks = computed(() => {
   return tasks.value.filter((task) => {
     const matchesQuery =
       !query ||
-      [task.title, task.part].some((value) =>
+      [task.title, task.part, task.milestone, task.companyName].some((value) =>
         String(value ?? '').toLowerCase().includes(query),
       )
     const matchesPriority = selectedPriority.value === 'all' || task.priority === selectedPriority.value
@@ -76,16 +85,10 @@ const boardMetrics = computed(() => ({
   blocked: tasks.value.filter((task) => task.status === 'blocked').length,
 }))
 
-function getTasks(companyId, statusId, source = filteredTasks.value) {
-  return source.filter((task) => task.companyId === companyId && task.status === statusId)
-}
-
-function getCompanyTasks(statusId) {
-  if (!selectedCompany.value) {
-    return []
-  }
-
-  return getTasks(selectedCompany.value.id, statusId, tasks.value)
+function getTasks(companyId, statusId) {
+  return filteredTasks.value.filter(
+    (task) => (task.companyName || '미지정') === companyId && task.status === statusId,
+  )
 }
 
 async function loadTasksFromBackend() {
@@ -98,6 +101,8 @@ async function loadTasksFromBackend() {
       status: STATUS_MAP[task.status] ?? 'backlog',
       title: task.name ?? '',
       part: task.taskPartName ?? '-',
+      milestone: task.milestoneName ?? '',
+      companyName: task.companyName ?? null,
       dueDate: formatDueDateLabel(task.dueDate),
       ownerInitial: task.assigneeName ? task.assigneeName.charAt(0) : '?',
       priority: PRIORITY_MAP[task.priority] ?? 'medium',
@@ -108,14 +113,6 @@ async function loadTasksFromBackend() {
 }
 
 onMounted(loadTasksFromBackend)
-
-function openCompanyBoard(companyId) {
-  selectedCompanyId.value = companyId
-}
-
-function closeCompanyBoard() {
-  selectedCompanyId.value = null
-}
 
 function getStatusTone(statusId) {
   if (statusId === 'done') return 'success'
@@ -161,35 +158,32 @@ function getStatusTone(statusId) {
     </div>
 
     <div class="main-board" :style="{ '--board-column-count': statusColumns.length }">
+      <!-- 헤더 행 -->
       <div class="main-board__head">
-        <span>참여사</span>
+        <span class="main-board__company-label">참여사</span>
         <span v-for="column in statusColumns" :key="column.id">
           {{ column.label }} <small>{{ column.sub }}</small>
         </span>
       </div>
 
+      <!-- 데이터가 없을 때 -->
+      <div v-if="companies.length === 0" class="main-board__empty">
+        등록된 업무가 없습니다.
+      </div>
+
+      <!-- 회사별 행 -->
       <div v-for="company in companies" :key="company.id" class="main-board__row">
         <aside class="company-cell">
-          <div class="company-cell__title">
-            <div>
-              <strong>{{ company.name }}</strong>
-              <span>{{ company.role }}</span>
-            </div>
-            <button type="button" aria-label="회사 전용 보드 열기" @click="openCompanyBoard(company.id)">↗</button>
-          </div>
-          <p>{{ company.scope }}</p>
-          <div class="company-progress">
-            <i :class="`fill-${company.color}`" :style="{ width: `${company.progress}%` }"></i>
-          </div>
-          <small>{{ company.progress }}% 진행</small>
+          <strong>{{ company.name }}</strong>
         </aside>
 
         <div v-for="column in statusColumns" :key="column.id" class="board-column">
+          <p v-if="getTasks(company.id, column.id).length === 0" class="board-column__empty">—</p>
           <article
             v-for="task in getTasks(company.id, column.id)"
             :key="task.id"
             class="board-task"
-            :class="[`board-task--${getStatusTone(task.status)}`, { 'board-task--urgent': task.priority === 'critical' }]"
+            :class="[`board-task--${getStatusTone(column.id)}`, { 'board-task--urgent': task.priority === 'critical' }]"
           >
             <div class="board-task__top">
               <span>{{ task.part }}</span>
@@ -204,42 +198,6 @@ function getStatusTone(statusId) {
         </div>
       </div>
     </div>
-
-    <Teleport to="body">
-      <div v-if="selectedCompany" class="company-modal-backdrop" @click.self="closeCompanyBoard">
-        <section class="company-modal" role="dialog" aria-modal="true" :aria-label="`${selectedCompany.name} 전용 보드`">
-          <header class="company-modal__header">
-            <div>
-              <h2>{{ selectedCompany.name }} 전용 보드</h2>
-              <p>해당 협력사가 로그인했을 때 보게 되는 단독 칸반 보드입니다. 타사의 업무나 예산 등 민감 정보는 제외됩니다.</p>
-            </div>
-            <button type="button" aria-label="닫기" @click="closeCompanyBoard">×</button>
-          </header>
-
-          <div class="company-modal__board">
-            <section v-for="column in statusColumns" :key="column.id" class="company-modal__column">
-              <h3>{{ column.label }}</h3>
-              <article
-                v-for="task in getCompanyTasks(column.id)"
-                :key="task.id"
-                class="board-task"
-                :class="[`board-task--${getStatusTone(task.status)}`, { 'board-task--urgent': task.priority === 'critical' }]"
-              >
-                <div class="board-task__top">
-                  <span>{{ task.part }}</span>
-                  <small>{{ priorityLabels[task.priority] }}</small>
-                </div>
-                <strong>{{ task.title }}</strong>
-                <footer>
-                  <span :class="{ warning: task.dueDate.includes('지연') }">{{ task.dueDate }}</span>
-                  <em>{{ task.ownerInitial }}</em>
-                </footer>
-              </article>
-            </section>
-          </div>
-        </section>
-      </div>
-    </Teleport>
   </section>
 </template>
 
@@ -301,12 +259,9 @@ function getStatusTone(statusId) {
 }
 
 .team-board-summary span,
-.company-cell p,
-.company-cell small,
 .board-task p,
 .board-task footer small,
-.main-board__head small,
-.company-modal__header p {
+.main-board__head small {
   color: var(--muted-text);
   font-size: 12px;
 }
@@ -348,8 +303,8 @@ function getStatusTone(statusId) {
 .main-board__head,
 .main-board__row {
   display: grid;
-  min-width: 1380px;
-  grid-template-columns: 230px repeat(var(--board-column-count, 5), minmax(210px, 1fr));
+  min-width: 1280px;
+  grid-template-columns: 200px repeat(var(--board-column-count, 5), minmax(200px, 1fr));
 }
 
 .main-board__head {
@@ -359,103 +314,60 @@ function getStatusTone(statusId) {
   font-weight: 850;
 }
 
-.main-board__head > span,
-.company-cell,
-.board-column {
+.main-board__head > span {
   padding: 14px;
+}
+
+.main-board__company-label {
+  padding: 14px;
+  border-right: 1px solid var(--border-color);
 }
 
 .main-board__row {
   border-top: 1px solid var(--border-color);
 }
 
+.main-board__empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--muted-text);
+  font-size: 13px;
+  border-top: 1px solid var(--border-color);
+}
+
 .company-cell {
-  display: grid;
-  align-content: start;
-  gap: 10px;
+  display: flex;
+  align-items: flex-start;
+  padding: 14px;
   border-right: 1px solid var(--border-color);
 }
 
-.company-cell__title {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-}
-
 .company-cell strong {
-  display: block;
   color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 850;
-}
-
-.company-cell__title span {
-  display: block;
-  margin-top: 4px;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.company-cell button {
-  display: inline-grid;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--panel-muted);
-  color: var(--color-danger);
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.company-progress {
-  height: 8px;
-  overflow: hidden;
-  border-radius: var(--radius-full);
-  background: var(--panel-muted);
-}
-
-.company-progress i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-}
-
-.fill-primary {
-  background: var(--color-primary-500);
-}
-
-.fill-green {
-  background: var(--color-success);
-}
-
-.fill-blue {
-  background: var(--color-info);
-}
-
-.fill-pink {
-  background: #db2777;
-}
-
-.fill-amber {
-  background: var(--color-warning);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .board-column {
   display: grid;
   align-content: start;
   gap: 10px;
-  min-height: 148px;
+  min-height: 120px;
+  padding: 14px;
   border-right: 1px solid var(--border-color);
   background: color-mix(in srgb, var(--panel-muted) 52%, var(--panel-color));
 }
 
 .board-column:last-child {
   border-right: 0;
+}
+
+.board-column__empty {
+  color: var(--muted-text);
+  font-size: 12px;
+  text-align: center;
+  padding: 12px 0;
 }
 
 .board-task {
@@ -549,88 +461,6 @@ function getStatusTone(statusId) {
   font-weight: 850;
 }
 
-.company-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: grid;
-  place-items: center;
-  overflow-y: auto;
-  background: rgba(15, 23, 42, 0.5);
-  padding: 24px;
-}
-
-.company-modal {
-  width: min(980px, 100%);
-  max-height: calc(100vh - 48px);
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-color);
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
-}
-
-.company-modal__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  border-bottom: 1px solid var(--border-color);
-  padding: 22px 24px 18px;
-}
-
-.company-modal__header h2 {
-  color: var(--text-primary);
-  font-size: 20px;
-  font-weight: 850;
-}
-
-.company-modal__header p {
-  margin-top: 7px;
-  line-height: 1.6;
-}
-
-.company-modal__header button {
-  display: inline-grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--panel-muted);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 20px;
-}
-
-.company-modal__board {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(170px, 1fr));
-  gap: 0;
-  max-height: calc(100vh - 190px);
-  overflow: auto;
-}
-
-.company-modal__column {
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  min-height: 360px;
-  border-right: 1px solid var(--border-color);
-  background: color-mix(in srgb, var(--panel-muted) 52%, var(--panel-color));
-  padding: 14px;
-}
-
-.company-modal__column:last-child {
-  border-right: 0;
-}
-
-.company-modal__column h3 {
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 850;
-}
 
 @media (max-width: 900px) {
   .team-board-hero,

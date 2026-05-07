@@ -1,61 +1,100 @@
 package org.example.backend.matching.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.example.backend.campaign.model.Campaign;
 import org.example.backend.organization.model.Organization;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
-
-import static org.example.backend.common.Constants.DEFAULT_ASSET_STATUS;
 
 public class MatchingDto {
 
     @Getter
     @Builder
-    public static class ProposalRes{
-        private Long idx;
-        private String partnerName;
-        private String logo; //URL 혹은 쌩 String
-        private String benefitSummary;
-        private Integer totalScore;
-        private String grade;
-        private String date;
-        private String owner;
-        private String status;
-        private String condition;
-        private List<String> scoreBreakDown;
-        private List<String> risks;
-        private List<String> actions;
-
-    }
-
-    @Getter
-    @Builder
-    public static class Added{
-
-    }
-
-    @Getter
-    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class AddBenefit {
+        private Long campaignIdx;
+
+        // [기본 정보]
         private String name;
         private String type;
-        private String scale;
-        private String target;
-        private String cost;
+        private String description;
+
+        // [규모·재고]
+        private Long quantity;
+        private String quantityUnit;
+        private Long valuePerPerson;
+        private Long totalValue;
+
+        // [기간]
+        private LocalDate periodStart;
+        private LocalDate periodEnd;
+        private Boolean alwaysNegotiable;
+        private Integer prepDays;
+
+        // [대상]
+        private String targetAudience;
+        private Long expectedReach;
+
+        // [비용 부담]
+        private String costBearer;
+        private Integer costPartnerPercent;
+        private Integer costOursPercent;
+        private String costDetails;
+
+        // [운영 조건]
+        private String exposureChannels;
+        private String requiredCollaborations;
+        private String conditions;
+
+        // [연결 자산]
+        private String desiredAssets;
+        private Boolean autoRecommend;
+
+        // [담당자]
+        private String managerName;
+        private String managerEmail;
+        private String managerPhone;
+
+        // 상태
         private String status;
 
-        public PartnerBenefits toEntity(Organization organization) {
+        public PartnerBenefits toEntity(Organization organization, Campaign campaign) {
             return PartnerBenefits.builder()
+                    .organization(organization)
+                    .campaign(campaign)
                     .name(this.name)
                     .type(this.type)
-                    .scale(this.scale)
-                    .target(this.target)
+                    .description(this.description)
+                    .quantity(this.quantity)
+                    .quantityUnit(this.quantityUnit)
+                    .valuePerPerson(this.valuePerPerson)
+                    .totalValue(this.totalValue)
+                    .periodStart(this.periodStart)
+                    .periodEnd(this.periodEnd)
+                    .alwaysNegotiable(this.alwaysNegotiable)
+                    .prepDays(this.prepDays)
+                    .targetAudience(this.targetAudience)
+                    .expectedReach(this.expectedReach)
+                    .costBearer(this.costBearer)
+                    .costPartnerPercent(this.costPartnerPercent)
+                    .costOursPercent(this.costOursPercent)
+                    .costDetails(this.costDetails)
+                    .exposureChannels(this.exposureChannels)
+                    .requiredCollaborations(this.requiredCollaborations)
+                    .conditions(this.conditions)
+                    .desiredAssets(this.desiredAssets)
+                    .autoRecommend(this.autoRecommend)
+                    .managerName(this.managerName)
+                    .managerEmail(this.managerEmail)
+                    .managerPhone(this.managerPhone)
                     .status(this.status)
-                    .cost(this.cost)
-                    .organization(organization)
                     .build();
         }
     }
@@ -86,44 +125,126 @@ public class MatchingDto {
     @Builder
     public static class BenefitRes {
         private Long idx;
+        private String affiliate; // Organization 이름
+        private Long campaignIdx;
+
+        // [기본 정보]
         private String name;
         private String type;
-        private String affiliate;
-        private String scale;
-        private String target;
-        private String cost;
-        private String status;
+        private String description;
 
-        public static BenefitRes toDto(PartnerBenefits entity){
+        // [규모·재고]
+        private Long quantity;
+        private String quantityUnit;
+        private Long valuePerPerson;
+        private Long totalValue;
+
+        // [기간]
+        private LocalDate periodStart;
+        private LocalDate periodEnd;
+        private Boolean alwaysNegotiable;
+        private Integer prepDays;
+
+        // [대상]
+        private String targetAudience;
+        private Long expectedReach;
+
+        // [비용 부담]
+        private String costBearer;
+        private Integer costPartnerPercent;
+        private Integer costOursPercent;
+        private String costDetails;
+
+        // [운영 조건]
+        private String exposureChannels;
+        private String requiredCollaborations;
+        private String conditions;
+
+        // [연결 자산]
+        private String desiredAssets;
+        private Boolean autoRecommend;
+
+        // [담당자]
+        private String managerName;
+        private String managerEmail;
+        private String managerPhone;
+
+        // 상태 및 생성일
+        private String status;
+        private LocalDateTime createdAt;
+
+        public static BenefitRes toDto(PartnerBenefits entity) {
             return BenefitRes.builder()
                     .idx(entity.getIdx())
+                    // null safe 처리 (Organization, Campaign 매핑이 없을 경우 대비)
+                    .affiliate(entity.getOrganization() != null ? entity.getOrganization().getName() : null)
+                    .campaignIdx(entity.getCampaign() != null ? entity.getCampaign().getIdx() : null)
                     .name(entity.getName())
                     .type(entity.getType())
-                    .affiliate(entity.getOrganization().getName())
-                    .scale(entity.getScale())
-                    .target(entity.getTarget())
-                    .cost(entity.getCost())
+                    .description(entity.getDescription())
+                    .quantity(entity.getQuantity())
+                    .quantityUnit(entity.getQuantityUnit())
+                    .valuePerPerson(entity.getValuePerPerson())
+                    .totalValue(entity.getTotalValue())
+                    .periodStart(entity.getPeriodStart())
+                    .periodEnd(entity.getPeriodEnd())
+                    .alwaysNegotiable(entity.getAlwaysNegotiable())
+                    .prepDays(entity.getPrepDays())
+                    .targetAudience(entity.getTargetAudience())
+                    .expectedReach(entity.getExpectedReach())
+                    .costBearer(entity.getCostBearer())
+                    .costPartnerPercent(entity.getCostPartnerPercent())
+                    .costOursPercent(entity.getCostOursPercent())
+                    .costDetails(entity.getCostDetails())
+                    .exposureChannels(entity.getExposureChannels())
+                    .requiredCollaborations(entity.getRequiredCollaborations())
+                    .conditions(entity.getConditions())
+                    .desiredAssets(entity.getDesiredAssets())
+                    .autoRecommend(entity.getAutoRecommend())
+                    .managerName(entity.getManagerName())
+                    .managerEmail(entity.getManagerEmail())
+                    .managerPhone(entity.getManagerPhone())
                     .status(entity.getStatus())
+                    .createdAt(entity.getCreatedAt())
                     .build();
         }
     }
 
     @Getter
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class AddAsset {
+        private String affiliate;
+        private List<String> blockedPartners;
+        private String category;
+        private String conditions;
+        private String customAffiliate;
+        private String exposureValue;
+        private String matchingStatus;
+        private List<String> partnerFit;
+        private String performance;
+        private String publicStatus;
+        private String scale;
         private String target;
         private String type;
-        private String scale;
-        private String conditions;
 
         public MarketingAsset toEntity(Organization organization) {
             return MarketingAsset.builder()
                     .organization(organization)
-                    .target(this.target)
-                    .scale(this.scale)
-                    .type(this.type)
+                    .affiliate(this.affiliate)
+                    .blockedPartners(this.blockedPartners)
+                    .category(this.category)
                     .conditions(this.conditions)
-                    .isActive(DEFAULT_ASSET_STATUS)
+                    .customAffiliate(this.customAffiliate)
+                    .exposureValue(this.exposureValue)
+                    .matchingStatus(this.matchingStatus)
+                    .partnerFit(this.partnerFit)
+                    .performance(this.performance)
+                    .publicStatus(this.publicStatus)
+                    .scale(this.scale)
+                    .target(this.target)
+                    .type(this.type)
                     .build();
         }
     }
@@ -154,34 +275,51 @@ public class MatchingDto {
     @Builder
     public static class AssetRes{
         private Long idx;
-        private String type;
+        private String owner;
         private String affiliate;
-        private String target;
-        private String scale;
+        private List<String> blockedPartners;
+        private String category;
         private String conditions;
-        private Boolean isActive;
-        private String createdAt;
+        private String customAffiliate;
+        private String exposureValue;
+        private String matchingStatus;
+        private List<String> partnerFit;
+        private String performance;
+        private String publicStatus;
+        private String scale;
+        private String target;
+        private String type;
 
         public static AssetRes toDto(MarketingAsset entity){
             return AssetRes.builder()
                     .idx(entity.getIdx())
-                    .type(entity.getType())
-                    .affiliate(entity.getOrganization().getName())
-                    .target(entity.getTarget())
-                    .scale(entity.getScale())
+                    .affiliate(entity.getAffiliate())
+                    .blockedPartners(entity.getBlockedPartners())
+                    .category(entity.getCategory())
                     .conditions(entity.getConditions())
-                    .isActive(entity.getIsActive())
-                    .createdAt(entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString())
+                    .customAffiliate(entity.getCustomAffiliate())
+                    .exposureValue(entity.getExposureValue())
+                    .matchingStatus(entity.getMatchingStatus())
+                    .partnerFit(entity.getPartnerFit())
+                    .performance(entity.getPerformance())
+                    .publicStatus(entity.getPublicStatus())
+                    .scale(entity.getScale())
+                    .target(entity.getTarget())
+                    .type(entity.getType())
+                    .owner(entity.getOrganization().getName())
                     .build();
         }
     }
 
     @Getter
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class AddGoal {
         private String name;
         private GoalType primaryType;
         private GoalType secondaryType;
+        private CampaignMethod campaignMethod;
 
         private String kpiPrimary;
         private String kpiSecondary;

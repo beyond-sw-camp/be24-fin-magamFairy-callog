@@ -20,6 +20,17 @@ project:
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
   secure-cookie: ${SECURE_COOKIE:false}
+aws:
+  s3:
+    bucket-name: ${AWS_BUCKET_NAME}
+    access-key: ${AWS_ACCESS_KEY}
+    secret-key: ${AWS_SECRET_KEY}
+    region: ap-northeast-2
+openai:
+  image:
+    api-key: ${OPEN_API_IMAGE:}
+    model: ${OPENAI_IMAGE_MODEL:gpt-image-1.5}
+    quality: ${OPENAI_IMAGE_QUALITY:low}
 admin:
   id: ${ADMIN_ID}
   email: ${ADMIN_EMAIL}
@@ -46,6 +57,11 @@ spring:
       hibernate:
         format_sql: true
 
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
 logging:
   level:
     org.hibernate.SQL: debug
@@ -60,3 +76,6 @@ logging:
 custom:
   n8n:
     webhook-url: ${N8N_URL}
+    ad-check-url: ${N8N_AD_CHECK_URL}
+  ocr:
+    url: ${OCR_SERVICE_URL:http://localhost:8000/ocr}

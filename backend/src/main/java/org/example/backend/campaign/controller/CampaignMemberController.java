@@ -26,6 +26,13 @@ public class CampaignMemberController {
         return ResponseEntity.ok(BaseResponse.success(result));
     }
 
+    @GetMapping("/participants")
+    public ResponseEntity<?> listParticipants(
+            @PathVariable Long campaignId,
+            @AuthenticationPrincipal AuthUserDetails user) {
+        return ResponseEntity.ok(BaseResponse.success(memberService.listParticipants(campaignId)));
+    }
+
     @GetMapping("/candidates/team")
     public ResponseEntity<?> teamCandidates(
             @PathVariable Long campaignId,

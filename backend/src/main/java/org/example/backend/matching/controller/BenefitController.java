@@ -61,7 +61,7 @@ public class BenefitController {
     public ResponseEntity addBenefit(@RequestBody MatchingDto.AddBenefit dto,
                                    @AuthenticationPrincipal AuthUserDetails user){
         try {
-            benefitService.addBenefit(dto, user);
+            benefitService.addBenefit( dto, user);
             return  ResponseEntity.status(HttpStatus.CREATED)
                     .body(BaseResponse.success(BaseResponseStatus.BENEFIT_ADD_SUCCESS));
         }

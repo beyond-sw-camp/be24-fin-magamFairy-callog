@@ -1,8 +1,12 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { CheckAdFile } from '@/api/adcheck/index.js'
 
 const isAnalysisOpen = ref(false)
 const selectedAnalysisFile = ref(null)
+const isAnalyzing = ref(false)
+const analysisResult = ref(null)
+const analysisError = ref('')
 
 const campaign = {
   title: '파트너 공동 혜택 프로모션',
@@ -94,38 +98,71 @@ const approvalSteps = [
   { step: '04', title: '오픈 확정', desc: '최종 승인 후 운영 일정 반영' },
 ]
 
-const analysisIssues = [
-  {
-    category: '요구사항',
-    title: '혜택 수치 근거 확인 필요',
-    source: '캠페인 요구사항: 혜택 조건과 적용 기준 동시 표기',
-    target: '"최대 30% 혜택"',
-    detail: '최대 할인율을 쓰려면 적용 조건, 제외 대상, 산정 기준이 같은 소재 또는 랜딩에 함께 노출되어야 합니다.',
-  },
-  {
-    category: '가이드라인',
-    title: '파트너 로고 사용 승인 필요',
-    source: '파트너 브랜드 가이드: 로고 병기 및 메인 영역 노출 승인',
-    target: '메인 배너 우측 상단 로고 병기',
-    detail: '파트너 로고가 메인 히어로 영역에 노출되므로 브랜드 승인 이력이 확인되어야 합니다.',
-  },
-  {
+const TONE_MAP = { violation: 'danger', warning: 'warning', pass: 'ready' }
+const STATUS_MAP = { violation: '위반 의심', warning: '주의 필요', pass: '이상 없음' }
+
+function normalizeAnalysisStatus(status) {
+  const value = String(status ?? '').trim().toLowerCase()
+  if (['violation', 'warning', 'pass'].includes(value)) return value
+  return ''
+}
+
+const normalizedAnalysisStatus = computed(() => normalizeAnalysisStatus(analysisResult.value?.status))
+
+const analysisChecks = computed(() => {
+  if (analysisError.value) {
+    return [
+      { label: '가이드라인', status: '확인 필요', tone: 'warning' },
+      { label: '요구사항', status: '확인 필요', tone: 'warning' },
+      { label: '법적/고지', status: '검수 실패', tone: 'danger' },
+      { label: '금지어/민감표현', status: '검수 실패', tone: 'danger' },
+    ]
+  }
+
+  if (!analysisResult.value) {
+    return [
+      { label: '가이드라인', status: '대기', tone: 'ready' },
+      { label: '요구사항', status: '대기', tone: 'ready' },
+      { label: '법적/고지', status: '대기', tone: 'ready' },
+      { label: '금지어/민감표현', status: '대기', tone: 'ready' },
+    ]
+  }
+  const { violationText } = analysisResult.value
+  const status = normalizedAnalysisStatus.value
+  const tone = TONE_MAP[status] ?? 'ready'
+  const label = STATUS_MAP[status] ?? '결과 확인 필요'
+  return [
+    { label: '가이드라인', status: '이상 없음', tone: 'ready' },
+    { label: '요구사항', status: '이상 없음', tone: 'ready' },
+    { label: '법적/고지', status: label, tone },
+    { label: '금지어/민감표현', status: violationText ? '위반 표현 있음' : '이상 없음', tone: violationText ? 'danger' : 'ready' },
+  ]
+})
+
+const analysisIssues = computed(() => {
+  if (!analysisResult.value || normalizedAnalysisStatus.value === 'pass') return []
+  const { law, violationText, reason, suggestion } = analysisResult.value
+  const status = normalizedAnalysisStatus.value
+  if (!status) {
+    return [{
+      category: 'AI 응답',
+      title: '검수 결과 확인 필요',
+      source: '응답 형식 오류',
+      target: analysisResult.value.status || '',
+      detail: 'AI 검수 결과의 status 값이 violation, warning, pass 중 하나가 아닙니다.',
+    }]
+  }
+
+  return [{
     category: '법적/고지',
-    title: '유의사항 가독성 보강 필요',
-    source: '소비자 고지 기준: 제한 조건의 명확한 고지',
-    target: '하단 작은 안내 문구',
-    detail: '모바일 배너에서 유의사항이 작게 보여 혜택 제한 조건을 충분히 인지하기 어렵습니다.',
-  },
-]
+    title: status === 'violation' ? '광고법 위반 표현 발견' : '주의가 필요한 표현 발견',
+    source: law || '표시광고법',
+    target: violationText || '',
+    detail: [reason, suggestion ? `수정 제안: ${suggestion}` : ''].filter(Boolean).join(' · '),
+  }]
+})
 
-const analysisChecks = [
-  { label: '가이드라인', status: '확인 필요', tone: 'warning' },
-  { label: '요구사항', status: '위반 의심', tone: 'danger' },
-  { label: '법적/고지', status: '보강 필요', tone: 'approval' },
-  { label: '금지어/민감표현', status: '이상 없음', tone: 'ready' },
-]
-
-const analysisHasIssues = computed(() => analysisIssues.length > 0)
+const analysisHasIssues = computed(() => analysisIssues.value.length > 0)
 
 const analysisFileInfo = computed(() => {
   if (!selectedAnalysisFile.value) {
@@ -149,9 +186,26 @@ function closeAnalysisRequest() {
   isAnalysisOpen.value = false
 }
 
-function handleAnalysisFileChange(event) {
+async function handleAnalysisFileChange(event) {
   const [file] = event.target.files ?? []
   selectedAnalysisFile.value = file ?? null
+  analysisResult.value = null
+  analysisError.value = ''
+  if (!file) return
+
+  isAnalyzing.value = true
+  try {
+    const result = await CheckAdFile(file)
+    analysisResult.value = result
+    if (!normalizeAnalysisStatus(result?.status)) {
+      analysisError.value = 'AI 검수 결과 형식이 올바르지 않습니다. 서버 응답을 확인해주세요.'
+    }
+  } catch (e) {
+    console.error('AI 검수 오류:', e)
+    analysisError.value = e?.message ?? 'AI 검수 요청에 실패했습니다.'
+  } finally {
+    isAnalyzing.value = false
+  }
 }
 </script>
 
@@ -199,15 +253,16 @@ function handleAnalysisFileChange(event) {
               id="analysisFile"
               class="upload-box__input"
               type="file"
-              accept="image/*,.pdf,.ppt,.pptx,.doc,.docx"
+              accept=".txt,.pdf,image/*"
+              :disabled="isAnalyzing"
               @change="handleAnalysisFileChange"
             />
             <label for="analysisFile" class="upload-box__label">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5-5 5 5M12 5v12" />
               </svg>
-              <strong>검수할 파일 업로드</strong>
-              <span>배너 이미지, 랜딩 PDF, 제안서, FAQ 문서를 올릴 수 있습니다.</span>
+              <strong>광고 카피 파일 업로드</strong>
+              <span>TXT · PDF · 이미지 파일을 올리면 AI가 광고법 위반 여부를 분석합니다.</span>
             </label>
           </div>
 
@@ -244,8 +299,9 @@ function handleAnalysisFileChange(event) {
           <div
             class="analysis-verdict"
             :class="{
-              'analysis-verdict--empty': !analysisFileInfo,
-              'analysis-verdict--clear': analysisFileInfo && !analysisHasIssues,
+              'analysis-verdict--empty': !analysisFileInfo || isAnalyzing,
+              'analysis-verdict--error': analysisError,
+              'analysis-verdict--clear': analysisFileInfo && !isAnalyzing && !analysisError && normalizedAnalysisStatus === 'pass',
             }"
           >
             <span>AI 1차 판단</span>
@@ -253,18 +309,30 @@ function handleAnalysisFileChange(event) {
               {{
                 !analysisFileInfo
                   ? '파일 업로드 대기'
-                  : analysisHasIssues
-                    ? '확인 필요한 항목 발견'
-                    : '이상 없음'
+                  : isAnalyzing
+                    ? 'AI 분석 중...'
+                    : analysisError
+                      ? '검수 실패'
+                      : analysisHasIssues
+                        ? '확인 필요한 항목 발견'
+                        : normalizedAnalysisStatus === 'pass'
+                          ? '이상 없음'
+                          : '결과 확인 필요'
               }}
             </strong>
             <p>
               {{
                 !analysisFileInfo
-                  ? '파일을 올리면 기준 자료와 비교해 위반 의심 항목만 표시합니다.'
-                  : analysisHasIssues
-                    ? '가이드라인, 요구사항, 법적 고지 기준에 걸리는 부분을 확인해주세요.'
-                    : '가이드라인, 요구사항, 법적 리스크에 걸리는 항목이 발견되지 않았습니다.'
+                  ? '광고 카피 텍스트 파일을 올리면 AI가 광고법 위반 여부를 분석합니다.'
+                  : isAnalyzing
+                    ? 'AI가 광고 카피를 분석하고 있습니다. 잠시 기다려 주세요.'
+                    : analysisError
+                      ? analysisError
+                      : analysisHasIssues
+                        ? '법적 고지 기준에 걸리는 부분을 확인해주세요.'
+                        : normalizedAnalysisStatus === 'pass'
+                          ? '광고법 위반 또는 주의가 필요한 항목이 발견되지 않았습니다.'
+                          : 'AI 응답 형식을 확인해야 합니다.'
               }}
             </p>
           </div>
@@ -276,13 +344,21 @@ function handleAnalysisFileChange(event) {
               :class="`analysis-check analysis-check--${check.tone}`"
             >
               <span>{{ check.label }}</span>
-              <strong>{{ analysisFileInfo ? check.status : '대기' }}</strong>
+              <strong>{{ isAnalyzing ? '분석 중' : analysisFileInfo ? check.status : '대기' }}</strong>
             </article>
           </div>
 
           <div class="analysis-issues">
             <h4>확인 필요한 부분</h4>
-            <template v-if="analysisFileInfo && analysisHasIssues">
+            <article v-if="analysisError" class="analysis-clear analysis-clear--error">
+              <strong>검수 실패</strong>
+              <p>{{ analysisError }}</p>
+            </article>
+            <article v-else-if="analysisFileInfo && isAnalyzing" class="analysis-clear analysis-clear--empty">
+              <strong>분석 중</strong>
+              <p>OCR 추출과 AI 검수가 진행 중입니다. 결과가 도착하면 자동으로 이 영역이 갱신됩니다.</p>
+            </article>
+            <template v-else-if="analysisFileInfo && analysisHasIssues">
               <article v-for="issue in analysisIssues" :key="issue.title" class="analysis-issue">
                 <span>{{ issue.category }}</span>
                 <strong>{{ issue.title }}</strong>
@@ -291,9 +367,13 @@ function handleAnalysisFileChange(event) {
                 <p>{{ issue.detail }}</p>
               </article>
             </template>
-            <article v-else-if="analysisFileInfo" class="analysis-clear">
+            <article v-else-if="analysisFileInfo && normalizedAnalysisStatus === 'pass'" class="analysis-clear">
               <strong>이상 없음</strong>
               <p>등록된 가이드라인, 캠페인 요구사항, 법적 고지 기준에 어긋나는 부분이 발견되지 않았습니다.</p>
+            </article>
+            <article v-else-if="analysisFileInfo" class="analysis-clear analysis-clear--empty">
+              <strong>결과 확인 필요</strong>
+              <p>AI 검수 응답을 아직 받지 못했거나 결과 형식이 올바르지 않습니다.</p>
             </article>
             <article v-else class="analysis-clear analysis-clear--empty">
               <strong>분석 대기</strong>
@@ -301,7 +381,7 @@ function handleAnalysisFileChange(event) {
             </article>
           </div>
 
-          <button type="button" class="approval-button analysis-submit" :disabled="!analysisFileInfo">
+          <button type="button" class="approval-button analysis-submit" :disabled="!analysisFileInfo || isAnalyzing">
             검수 요청 생성
           </button>
         </aside>
@@ -762,6 +842,11 @@ function handleAnalysisFileChange(event) {
   background: color-mix(in srgb, var(--color-success) 12%, var(--panel-color));
 }
 
+.analysis-verdict--error {
+  border-color: color-mix(in srgb, var(--color-danger) 44%, var(--border-color));
+  background: var(--danger-surface);
+}
+
 .analysis-verdict strong {
   color: var(--danger-text-strong);
   font-size: 22px;
@@ -865,10 +950,19 @@ function handleAnalysisFileChange(event) {
   background: var(--panel-muted);
 }
 
+.analysis-clear--error {
+  border-color: color-mix(in srgb, var(--color-danger) 34%, var(--border-color));
+  background: var(--danger-surface);
+}
+
 .analysis-clear strong {
   color: var(--color-success);
   font-size: 15px;
   font-weight: 950;
+}
+
+.analysis-clear--error strong {
+  color: var(--danger-text-strong);
 }
 
 .analysis-clear--empty strong {
@@ -883,6 +977,33 @@ function handleAnalysisFileChange(event) {
 
 .analysis-submit {
   width: 100%;
+}
+
+.analysis-ocr {
+  display: grid;
+  gap: 7px;
+  padding: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+}
+
+.analysis-ocr span {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.analysis-ocr pre {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .queue-list {
