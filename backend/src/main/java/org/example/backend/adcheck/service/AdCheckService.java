@@ -29,6 +29,7 @@ public class AdCheckService {
 
     private final ObjectMapper objectMapper;
     private final TextExtractorService textExtractorService;
+    private final AdCheckFileStorageService adCheckFileStorageService;
 
     @Value("${custom.n8n.ad-check-url}")
     private String adCheckUrl;
@@ -36,11 +37,13 @@ public class AdCheckService {
     public AdCheckService(
             @Qualifier("aiRestClient") RestClient aiRestClient,
             ObjectMapper objectMapper,
-            TextExtractorService textExtractorService
+            TextExtractorService textExtractorService,
+            AdCheckFileStorageService adCheckFileStorageService
     ) {
         this.aiRestClient = aiRestClient;
         this.objectMapper = objectMapper;
         this.textExtractorService = textExtractorService;
+        this.adCheckFileStorageService = adCheckFileStorageService;
     }
 
     public AdCheckDto.Res check(String copy) {
@@ -80,9 +83,18 @@ public class AdCheckService {
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file) {
         try {
+            AdCheckFileStorageService.StoredFile storedFile = adCheckFileStorageService.upload(file);
             String text = textExtractorService.extract(file);
             AdCheckDto.Res result = check(text);
-            return AdCheckDto.FileCheckRes.of(file.getOriginalFilename(), text, result);
+            return AdCheckDto.FileCheckRes.of(
+                    file.getOriginalFilename(),
+                    storedFile.getObjectKey(),
+                    storedFile.getViewUrl(),
+                    storedFile.getContentType(),
+                    storedFile.getFileSize(),
+                    text,
+                    result
+            );
         } catch (IOException e) {
             throw new RuntimeException("파일 처리 중 오류가 발생했습니다.", e);
         }
