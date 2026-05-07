@@ -28,6 +28,7 @@ import java.util.concurrent.ThreadLocalRandom;
 @Transactional(readOnly = true)
 public class CampaignService {
     private static final String DEFAULT_COLOR = "#8B5CF6";
+    private static final String DEFAULT_ICON = "🎯";
     private static final List<String> ALLOWED_STATUSES = List.of("draft", "review", "live", "paused", "completed");
 
     /**
@@ -109,6 +110,7 @@ public class CampaignService {
                 .mainMessage(normalizeText(dto.mainMessage()))
                 .status("draft")
                 .initials(createInitials(name))
+                .icon(normalizeIcon(dto.icon()))
                 .color(pickInitialColor(dto.color()))
                 .build();
 
@@ -150,6 +152,7 @@ public class CampaignService {
                 normalizeText(dto.goals()),
                 normalizeText(dto.mainMessage()),
                 createInitials(name),
+                normalizeIcon(dto.icon()),
                 normalizeColor(dto.color())
         );
 
@@ -274,6 +277,11 @@ public class CampaignService {
     private static String normalizeColor(String color) {
         String normalized = normalizeText(color);
         return normalized.isBlank() ? DEFAULT_COLOR : normalized;
+    }
+
+    private static String normalizeIcon(String icon) {
+        String normalized = normalizeText(icon);
+        return normalized.isBlank() ? DEFAULT_ICON : normalized;
     }
 
     private static String createInitials(String name) {

@@ -19,7 +19,8 @@ public class CampaignDto {
             List<String> partners,
             String goals,
             String mainMessage,
-            String color
+            String color,
+            String icon
     ) {
     }
 
@@ -44,6 +45,7 @@ public class CampaignDto {
             String mainMessage,
             String status,
             String initials,
+            String icon,
             String color,
             Date createdAt,
             Date updatedAt,
@@ -69,6 +71,7 @@ public class CampaignDto {
                     .mainMessage(entity.getMainMessage())
                     .status(entity.getStatus())
                     .initials(entity.getInitials())
+                    .icon(entity.getIcon())
                     .color(entity.getColor())
                     .createdAt(entity.getCreatedAt())
                     .updatedAt(entity.getUpdatedAt())
