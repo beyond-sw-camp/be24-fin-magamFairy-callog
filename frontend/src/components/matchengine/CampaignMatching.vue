@@ -214,7 +214,6 @@ const visibleCombinations = computed(() => {
   const benefitFilters = Array.isArray(criteria.benefitIds) ? criteria.benefitIds : []
 
   const filtered = combinations.filter((combo) => {
-    if (combo.goal !== selectedGoal.value) return false
     if (methodFilters.length && !methodFilters.some((method) => combo.methods?.includes(method))) return false
     if (benefitFilters.length && !benefitFilters.some((benefitId) => combo.benefitIds?.includes(benefitId))) return false
     return true
@@ -224,6 +223,9 @@ const visibleCombinations = computed(() => {
   const sortType = criteria.sortType ?? 'HIGH_SCORE'
 
   return [...results].sort((a, b) => {
+    const aGoalMatch = a.goal === selectedGoal.value ? 1 : 0
+    const bGoalMatch = b.goal === selectedGoal.value ? 1 : 0
+    if (aGoalMatch !== bGoalMatch) return bGoalMatch - aGoalMatch
     if (sortType === 'LOW_EFFORT') return (b.effortScore ?? 0) - (a.effortScore ?? 0)
     if (sortType === 'BRAND_FIT') return (b.brandScore ?? 0) - (a.brandScore ?? 0)
     return (b.score ?? 0) - (a.score ?? 0)
@@ -234,8 +236,8 @@ const isFallbackRecommendation = computed(() => {
   return visibleCombinations.value.some((combo) => combo.goal === selectedGoal.value) === false
 })
 
-const drawerCombo = computed(
-  () => visibleCombinations.value.find((combo) => combo.id === drawerComboId.value) ?? null,
+const selectedCombo = computed(
+  () => visibleCombinations.value.find((combo) => combo.id === drawerComboId.value) ?? visibleCombinations.value[0] ?? null,
 )
 
 const checkedCount = computed(() => {
@@ -398,56 +400,7 @@ function requestRecommendation() {
 </script>
 
 <template>
-  <section class="matching-workspace" :class="{ 'matching-workspace--collapsed': isSidebarCollapsed }">
-    <aside class="match-sidebar">
-      <button
-        type="button"
-        class="match-sidebar__toggle"
-        :aria-label="isSidebarCollapsed ? '목표 패널 펼치기' : '목표 패널 접기'"
-        @click="toggleSidebar"
-      >
-        <svg viewBox="0 0 24 24" width="14" height="14">
-          <path
-            v-if="!isSidebarCollapsed"
-            d="M15 18l-6-6 6-6"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            v-else
-            d="M9 18l6-6-6-6"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </button>
-
-      <div v-if="!isSidebarCollapsed" class="match-sidebar__inner">
-        <div class="match-sidebar__head">
-          <h3>목표</h3>
-          <span>{{ goals.length }}</span>
-        </div>
-
-        <button
-          v-for="goal in goals"
-          :key="goal.id"
-          type="button"
-          class="match-goal"
-          :class="{ 'match-goal--active': selectedGoal === goal.id }"
-          @click="selectGoal(goal.id)"
-        >
-          <strong>{{ goal.name }}</strong>
-          <span>{{ goal.count }}건</span>
-        </button>
-      </div>
-    </aside>
-
+  <section class="matching-workspace matching-workspace--ranking">
     <div class="match-main">
       <header class="match-main__head">
         <div class="match-main__title">
@@ -473,178 +426,165 @@ function requestRecommendation() {
         </div>
       </div>
 
-      <div class="match-listview">
-        <article
-          v-for="combo in visibleCombinations"
-          :key="combo.id"
-          class="match-list-row"
-          :class="{
-            'match-list-row--active': drawerComboId === combo.id,
-            'match-list-row--evaluated': isEvaluated(combo.id),
-            'match-list-row--checked': isChecked(combo.id),
-          }"
-          tabindex="0"
-          role="button"
-          @click="openDrawer(combo.id)"
-          @keydown.enter="openDrawer(combo.id)"
-        >
-          <label class="match-list-row__check" @click.stop>
-            <input type="checkbox" :checked="isChecked(combo.id)" @change="toggleCheck(combo.id, $event)" />
-            <span></span>
-          </label>
+      <div class="match-rank-layout">
+        <section class="match-rank-list" aria-label="추천 조합 랭킹">
+          <article
+            v-for="(combo, index) in visibleCombinations"
+            :key="combo.id"
+            class="match-list-row match-rank-row"
+            :class="{
+              'match-list-row--active': selectedCombo?.id === combo.id,
+              'match-list-row--evaluated': isEvaluated(combo.id),
+              'match-list-row--checked': isChecked(combo.id),
+            }"
+            tabindex="0"
+            role="button"
+            @click="openDrawer(combo.id)"
+            @keydown.enter="openDrawer(combo.id)"
+          >
+            <label class="match-list-row__check" @click.stop>
+              <input type="checkbox" :checked="isChecked(combo.id)" @change="toggleCheck(combo.id, $event)" />
+              <span></span>
+            </label>
 
-          <div class="match-list-row__score">
-            <strong :class="scoreTone(combo.score)">{{ combo.score }}</strong>
-            <span :class="scoreTone(combo.score)">{{ combo.grade }}</span>
-          </div>
-
-          <div class="match-list-row__main">
-            <div class="match-list-row__titleline">
-              <h4>{{ combo.title }}</h4>
-              <span v-if="combo.isSample" class="sample-badge">샘플</span>
-              <small>{{ combo.partner }}</small>
-              <em v-if="isEvaluated(combo.id)">평가 진행 중</em>
+            <div class="match-rank-row__rank">
+              <strong>{{ index + 1 }}순위</strong>
+              <span>{{ combo.score }}점</span>
             </div>
-            <p>{{ combo.reasons[0] }}</p>
-            <dl>
-              <div>
-                <dt>자산</dt>
-                <dd>{{ combo.asset }}</dd>
-              </div>
-              <div>
-                <dt>혜택</dt>
-                <dd>{{ combo.offer }}</dd>
-              </div>
-              <div>
-                <dt>리스크</dt>
-                <dd>{{ combo.riskCount }}건 · {{ combo.risk }}</dd>
-              </div>
-            </dl>
-          </div>
 
-          <div class="match-list-row__actions" @click.stop>
-            <button type="button" class="match-list-row__icon" aria-label="상세보기" @click="openDrawer(combo.id)">→</button>
-            <button v-if="!isEvaluated(combo.id)" type="button" class="match-list-row__primary" @click="sendToEvaluation(combo, $event)">
+            <div class="match-list-row__main">
+              <div class="match-list-row__titleline">
+                <h4>{{ combo.title }}</h4>
+                <span v-if="combo.isSample" class="sample-badge">샘플</span>
+                <em v-if="isEvaluated(combo.id)">평가 진행 중</em>
+              </div>
+              <p>{{ combo.partner }} · {{ combo.reasons[0] }}</p>
+              <dl>
+                <div>
+                  <dt>자산</dt>
+                  <dd>{{ combo.asset }}</dd>
+                </div>
+                <div>
+                  <dt>혜택</dt>
+                  <dd>{{ combo.offer }}</dd>
+                </div>
+              </dl>
+            </div>
+          </article>
+        </section>
+
+        <aside v-if="selectedCombo" class="match-detail-panel">
+          <header class="match-drawer__head">
+            <div class="match-drawer__title">
+              <strong class="match-drawer__score" :class="scoreTone(selectedCombo.score)">{{ selectedCombo.score }}점</strong>
+              <span class="match-drawer__grade" :class="scoreTone(selectedCombo.score)">{{ selectedCombo.grade }}</span>
+            </div>
+            <button
+              v-if="!isEvaluated(selectedCombo.id)"
+              type="button"
+              class="match-list-row__primary"
+              @click="sendToEvaluation(selectedCombo, $event)"
+            >
               평가로 보내기
             </button>
-            <button v-else type="button" class="match-list-row__success" @click="viewEvaluation(combo)">
-              평가 보기
+            <button v-else type="button" class="match-list-row__success" @click="viewEvaluation(selectedCombo)">
+              평가 탭에서 보기
             </button>
+          </header>
+
+          <div class="match-drawer__hero">
+            <div class="match-drawer__titleline">
+              <h3>{{ selectedCombo.title }}</h3>
+              <span v-if="selectedCombo.isSample" class="sample-badge">샘플</span>
+            </div>
+            <p>{{ selectedCombo.partner }} · {{ selectedCombo.target }}</p>
           </div>
-        </article>
-      </div>
-    </div>
 
-    <transition name="drawer">
-      <aside v-if="drawerCombo" class="match-drawer">
-        <header class="match-drawer__head">
-          <div class="match-drawer__title">
-            <strong class="match-drawer__score" :class="scoreTone(drawerCombo.score)">{{ drawerCombo.score }}점</strong>
-            <span class="match-drawer__grade" :class="scoreTone(drawerCombo.score)">{{ drawerCombo.grade }}</span>
-          </div>
-          <button type="button" class="match-drawer__close" aria-label="상세 닫기" @click="closeDrawer">×</button>
-        </header>
+          <ul class="match-reasons">
+            <li class="primary">✓ {{ selectedCombo.reasons[0] }}</li>
+            <li>✓ {{ selectedCombo.reasons[1] }}</li>
+            <li class="risk">! {{ selectedCombo.reasons[2] }}</li>
+          </ul>
 
-        <div class="match-drawer__hero">
-          <div class="match-drawer__titleline">
-            <h3>{{ drawerCombo.title }}</h3>
-            <span v-if="drawerCombo.isSample" class="sample-badge">샘플</span>
-          </div>
-          <p>{{ drawerCombo.partner }} · {{ drawerCombo.target }}</p>
-        </div>
+          <section class="match-drawer__section">
+            <h4>점수 근거</h4>
+            <div class="match-radar">
+              <svg class="match-radar__chart" viewBox="0 0 240 240" role="img" aria-label="점수 근거 레이더 차트">
+                <polygon class="match-radar__grid" :points="radarGridPolygon(100)" />
+                <polygon class="match-radar__grid match-radar__grid--inner" :points="radarGridPolygon(70)" />
+                <line
+                  v-for="(item, index) in selectedCombo.scoreBreakdown"
+                  :key="item.label + '-axis'"
+                  class="match-radar__axis"
+                  :x1="radarCenter"
+                  :y1="radarCenter"
+                  :x2="radarPoint(index).x"
+                  :y2="radarPoint(index).y"
+                />
+                <polygon class="match-radar__area" :points="radarPolygon(selectedCombo.scoreBreakdown)" />
+                <circle
+                  v-for="(item, index) in selectedCombo.scoreBreakdown"
+                  :key="item.label + '-dot'"
+                  class="match-radar__dot"
+                  :cx="radarPoint(index, item.score).x"
+                  :cy="radarPoint(index, item.score).y"
+                  r="4"
+                />
+                <text
+                  v-for="(item, index) in selectedCombo.scoreBreakdown"
+                  :key="item.label + '-label'"
+                  class="match-radar__label"
+                  :x="radarLabelPoint(index).x"
+                  :y="radarLabelPoint(index).y"
+                  text-anchor="middle"
+                >
+                  {{ item.label.replace('도', '') }} {{ item.score }}
+                </text>
+              </svg>
+              <dl class="match-radar__legend">
+                <div v-for="item in selectedCombo.scoreBreakdown" :key="item.label">
+                  <dt>{{ item.label }}</dt>
+                  <dd>{{ item.score }}점 · {{ item.weight }}%</dd>
+                </div>
+              </dl>
+            </div>
+          </section>
 
-        <ul class="match-reasons">
-          <li class="primary">✓ {{ drawerCombo.reasons[0] }}</li>
-          <li>✓ {{ drawerCombo.reasons[1] }}</li>
-          <li class="risk">! {{ drawerCombo.reasons[2] }}</li>
-        </ul>
+          <section class="match-drawer__section">
+            <h4>목표 KPI</h4>
+            <ul class="match-kpis match-kpis--ranked">
+              <li v-for="(kpi, index) in selectedCombo.targetKpis" :key="kpi">
+                <span>{{ index === 0 ? '핵심 KPI' : '보조 KPI' }}</span>
+                <strong>{{ kpi }}</strong>
+              </li>
+            </ul>
+          </section>
 
-                <section class="match-drawer__section">
-          <h4>점수 근거</h4>
-          <div class="match-radar">
-            <svg class="match-radar__chart" viewBox="0 0 240 240" role="img" aria-label="점수 근거 레이더 차트">
-              <polygon class="match-radar__grid" :points="radarGridPolygon(100)" />
-              <polygon class="match-radar__grid match-radar__grid--inner" :points="radarGridPolygon(70)" />
-              <line
-                v-for="(item, index) in drawerCombo.scoreBreakdown"
-                :key="item.label + '-axis'"
-                class="match-radar__axis"
-                :x1="radarCenter"
-                :y1="radarCenter"
-                :x2="radarPoint(index).x"
-                :y2="radarPoint(index).y"
-              />
-              <polygon class="match-radar__area" :points="radarPolygon(drawerCombo.scoreBreakdown)" />
-              <circle
-                v-for="(item, index) in drawerCombo.scoreBreakdown"
-                :key="item.label + '-dot'"
-                class="match-radar__dot"
-                :cx="radarPoint(index, item.score).x"
-                :cy="radarPoint(index, item.score).y"
-                r="4"
-              />
-              <text
-                v-for="(item, index) in drawerCombo.scoreBreakdown"
-                :key="item.label + '-label'"
-                class="match-radar__label"
-                :x="radarLabelPoint(index).x"
-                :y="radarLabelPoint(index).y"
-                text-anchor="middle"
+          <section class="match-drawer__section">
+            <h4>조합 구성</h4>
+            <dl class="match-detail-grid">
+              <div
+                v-for="card in selectedCombo.detailCards"
+                :key="card.label"
+                class="match-detail-card"
+                :class="{ 'match-detail-card--risk': card.label === '리스크' }"
               >
-                {{ item.label.replace('도', '') }} {{ item.score }}
-              </text>
-            </svg>
-            <dl class="match-radar__legend">
-              <div v-for="item in drawerCombo.scoreBreakdown" :key="item.label">
-                <dt>{{ item.label }}</dt>
-                <dd>{{ item.score }}점 · {{ item.weight }}%</dd>
+                <dt>
+                  <span class="match-detail-card__icon">{{ card.label === '보유 자산' ? '◇' : card.label === '파트너 혜택' ? '＋' : card.label === '채널' ? '⌁' : card.label === '산출물' ? '□' : card.label === '일정' ? '◷' : '!' }}</span>
+                  {{ card.label }}
+                </dt>
+                <dd>
+                  <strong>{{ card.value }}</strong>
+                  <small>
+                    <span v-for="part in card.meta.split(' · ')" :key="part">{{ part }}</span>
+                  </small>
+                </dd>
               </div>
             </dl>
-          </div>
-        </section>
-        <section class="match-drawer__section">
-          <h4>목표 KPI</h4>
-          <ul class="match-kpis match-kpis--ranked">
-            <li v-for="(kpi, index) in drawerCombo.targetKpis" :key="kpi">
-              <span>{{ index === 0 ? '핵심 KPI' : '보조 KPI' }}</span>
-              <strong>{{ kpi }}</strong>
-            </li>
-          </ul>
-        </section>
-
-        <section class="match-drawer__section">
-          <h4>조합 구성</h4>
-          <dl class="match-detail-grid">
-            <div
-              v-for="card in drawerCombo.detailCards"
-              :key="card.label"
-              class="match-detail-card"
-              :class="{ 'match-detail-card--risk': card.label === '리스크' }"
-            >
-              <dt>
-                <span class="match-detail-card__icon">{{ card.label === '보유 자산' ? '◇' : card.label === '파트너 혜택' ? '＋' : card.label === '채널' ? '⌁' : card.label === '산출물' ? '□' : card.label === '일정' ? '◷' : '!' }}</span>
-                {{ card.label }}
-              </dt>
-              <dd>
-                <strong>{{ card.value }}</strong>
-                <small>
-                  <span v-for="part in card.meta.split(' · ')" :key="part">{{ part }}</span>
-                </small>
-              </dd>
-            </div>
-          </dl>
-        </section>
-
-        <footer class="match-drawer__foot">
-          <button v-if="!isEvaluated(drawerCombo.id)" type="button" class="match-drawer__primary" @click="sendToEvaluation(drawerCombo, $event)">
-            평가로 보내기
-          </button>
-          <button v-else type="button" class="match-drawer__success" @click="viewEvaluation(drawerCombo)">
-            평가 탭에서 보기 →
-          </button>
-        </footer>
-      </aside>
-    </transition>
+          </section>
+        </aside>
+      </div>
+    </div>
 
     <transition name="toast">
       <div v-if="toastMessage" class="match-toast" role="status">
@@ -2524,6 +2464,114 @@ function requestRecommendation() {
 
   .match-detail-card {
     min-height: auto;
+  }
+}
+
+/* Ranking recommendation view */
+.matching-workspace--ranking {
+  display: block;
+  overflow: hidden;
+}
+
+.matching-workspace--ranking .match-main {
+  height: 100%;
+}
+
+.match-rank-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.82fr) minmax(520px, 1.18fr);
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.match-rank-list {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.1rem;
+}
+
+.match-rank-row {
+  grid-template-columns: 1.45rem 4.9rem minmax(0, 1fr);
+  align-items: start;
+  min-height: 7rem;
+}
+
+.match-rank-row__rank {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: start;
+}
+
+.match-rank-row__rank strong {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-color) 12%, var(--panel-color));
+  color: var(--accent-color);
+  padding: 0 0.62rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.match-rank-row__rank span {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-rank-row .match-list-row__main dl {
+  grid-template-columns: 1fr;
+  gap: 0.3rem;
+}
+
+.match-detail-panel {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel-color);
+}
+
+.match-detail-panel .match-drawer__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel-color);
+}
+
+.match-detail-panel .match-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 1280px) {
+  .match-rank-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .match-rank-list,
+  .match-detail-panel {
+    overflow: visible;
+  }
+}
+
+@media (max-width: 760px) {
+  .match-rank-row {
+    grid-template-columns: 1.45rem minmax(0, 1fr);
+  }
+
+  .match-rank-row__rank,
+  .match-rank-row .match-list-row__main {
+    grid-column: 2;
+  }
+
+  .match-detail-panel .match-detail-grid {
+    grid-template-columns: 1fr;
   }
 }
 

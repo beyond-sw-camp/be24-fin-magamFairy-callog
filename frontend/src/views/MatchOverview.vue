@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
 
-import CampaignMatching from '@/components/matchengine/CampaignMatching.vue'
+import BenefitProposalInbox from '@/components/matchengine/BenefitProposalInbox.vue'
 import MatchDashboard from '@/components/matchengine/MatchDashboard.vue'
 import PartnerEvaluation from '@/components/matchengine/PartnerEvaluation.vue'
 
@@ -29,18 +29,18 @@ const tabs = computed(() => [
     icon: 'M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-3H4v3Z',
   },
   {
-    id: 'matching',
-    name: '추천 조합',
-    caption: '3건',
-    count: 3,
-    component: CampaignMatching,
-    icon: 'M10 13a5 5 0 0 1 0-7l1.5-1.5a5 5 0 0 1 7 7L17 13M14 11a5 5 0 0 1 0 7l-1.5 1.5a5 5 0 0 1-7-7L7 11',
+    id: 'benefits',
+    name: '혜택 제안',
+    caption: '검토',
+    count: 4,
+    component: BenefitProposalInbox,
+    icon: 'M20 12v8H4v-8M22 7H2v5h20V7ZM12 22V7M12 7H7.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7Zm0 0h4.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7Z',
   },
   {
     id: 'evaluation',
     name: '파트너 평가',
-    caption: '2건',
-    count: 2,
+    caption: '3건',
+    count: 3,
     component: PartnerEvaluation,
     icon: 'M12 3l2.7 5.47 6.03.88-4.36 4.25 1.03 6-5.4-2.84L6.1 19.6l1.03-6L2.77 9.35l6.03-.88L12 3Z',
   },
@@ -61,12 +61,26 @@ function moveToMatchingTab(criteria) {
     benefitIds: [],
     sortType: 'HIGH_SCORE',
   }
-  currentTab.value = 'matching'
+  currentTab.value = 'evaluation'
 }
 
 function moveToEvaluationTab(candidate) {
   evaluationCandidate.value = candidate ?? null
   currentTab.value = 'evaluation'
+}
+
+function handleDashboardNavigation(target) {
+  if (target?.tab === 'benefits' || target?.tab === 'evaluation') {
+    currentTab.value = target.tab
+  }
+}
+
+function handleDashboardAction(action) {
+  handleDashboardNavigation(action?.target)
+}
+
+function handleMatchingComplete(target) {
+  handleDashboardNavigation(target)
 }
 
 </script>
@@ -84,7 +98,9 @@ function moveToEvaluationTab(candidate) {
         @click="currentTab = tab.id"
       >
         <strong>{{ tab.name }}</strong>
-        <span class="match-tabs__count">{{ resolveTabCount(tab) }}</span>
+        <span v-if="resolveTabCount(tab) != null" class="match-tabs__count">
+          {{ resolveTabCount(tab) }}
+        </span>
       </button>
     </nav>
 
@@ -96,6 +112,9 @@ function moveToEvaluationTab(candidate) {
         :evaluationCandidate="evaluationCandidate"
         @request-matching="moveToMatchingTab"
         @request-evaluation="moveToEvaluationTab"
+        @navigate="handleDashboardNavigation"
+        @action="handleDashboardAction"
+        @matching-complete="handleMatchingComplete"
       />
     </main>
   </section>
@@ -185,8 +204,10 @@ function moveToEvaluationTab(candidate) {
 .match-view__body {
   display: grid;
   gap: 0;
+  height: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 1200px) {
