@@ -1,17 +1,17 @@
-package org.example.backend.userInfo.userProfile.service;
+package org.example.backend.userInfo.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
-import org.example.backend.userInfo.userProfile.model.ProfileImageGenerationLog;
-import org.example.backend.userInfo.userProfile.model.ProfileImageHistory;
-import org.example.backend.userInfo.userProfile.model.ProfileImageHistoryType;
-import org.example.backend.userInfo.userProfile.model.ProfileImageSource;
-import org.example.backend.userInfo.userProfile.model.UserProfile;
-import org.example.backend.userInfo.userProfile.model.UserProfileDto;
-import org.example.backend.userInfo.userProfile.repository.ProfileImageGenerationLogRepository;
-import org.example.backend.userInfo.userProfile.repository.ProfileImageHistoryRepository;
-import org.example.backend.userInfo.userProfile.repository.UserProfileRepository;
+import org.example.backend.userInfo.model.ProfileImageGenerationLog;
+import org.example.backend.userInfo.model.ProfileImageHistory;
+import org.example.backend.userInfo.model.ProfileImageHistoryType;
+import org.example.backend.userInfo.model.ProfileImageSource;
+import org.example.backend.userInfo.model.UserProfile;
+import org.example.backend.userInfo.model.UserProfileDto;
+import org.example.backend.userInfo.repository.ProfileImageGenerationLogRepository;
+import org.example.backend.userInfo.repository.ProfileImageHistoryRepository;
+import org.example.backend.userInfo.repository.UserProfileRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

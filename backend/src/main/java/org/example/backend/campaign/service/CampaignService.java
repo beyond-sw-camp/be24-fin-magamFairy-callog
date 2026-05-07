@@ -29,6 +29,7 @@ import java.util.concurrent.ThreadLocalRandom;
 @Transactional(readOnly = true)
 public class CampaignService {
     private static final String DEFAULT_COLOR = "#8B5CF6";
+    private static final String DEFAULT_ICON = "🎯";
     private static final List<String> ALLOWED_STATUSES = List.of("draft", "review", "live", "paused", "completed");
 
     /**
@@ -109,8 +110,17 @@ public class CampaignService {
                 .partners(normalizeList(dto.partners()))
                 .goals(normalizeText(dto.goals()))
                 .mainMessage(normalizeText(dto.mainMessage()))
+                .assetName(normalizeText(dto.assetName()))
+                .assetDescription(normalizeText(dto.assetDescription()))
+                .primaryGoal(normalizeText(dto.primaryGoal()))
+                .campaignMethods(normalizeList(dto.campaignMethods()))
+                .maxCost(normalizeText(dto.maxCost()))
+                .minRevenue(normalizeText(dto.minRevenue()))
+                .ownerName(normalizeText(dto.ownerName()))
+                .ownerEmail(normalizeText(dto.ownerEmail()))
                 .status("draft")
                 .initials(createInitials(name))
+                .icon(normalizeIcon(dto.icon()))
                 .color(pickInitialColor(dto.color()))
                 .build();
 
@@ -156,7 +166,16 @@ public class CampaignService {
                 normalizeList(dto.partners()),
                 normalizeText(dto.goals()),
                 normalizeText(dto.mainMessage()),
+                normalizeText(dto.assetName()),
+                normalizeText(dto.assetDescription()),
+                normalizeText(dto.primaryGoal()),
+                normalizeList(dto.campaignMethods()),
+                normalizeText(dto.maxCost()),
+                normalizeText(dto.minRevenue()),
+                normalizeText(dto.ownerName()),
+                normalizeText(dto.ownerEmail()),
                 createInitials(name),
+                normalizeIcon(dto.icon()),
                 normalizeColor(dto.color())
         );
 
@@ -281,6 +300,11 @@ public class CampaignService {
     private static String normalizeColor(String color) {
         String normalized = normalizeText(color);
         return normalized.isBlank() ? DEFAULT_COLOR : normalized;
+    }
+
+    private static String normalizeIcon(String icon) {
+        String normalized = normalizeText(icon);
+        return normalized.isBlank() ? DEFAULT_ICON : normalized;
     }
 
     private static String createInitials(String name) {

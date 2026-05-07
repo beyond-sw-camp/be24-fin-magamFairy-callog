@@ -9,7 +9,7 @@ defineProps({
   },
 })
 
-const emit = defineEmits(['asset-count-change'])
+const emit = defineEmits(['asset-count-change', 'request-matching'])
 
 const currentSubTab = ref('assets')
 const assets = ref([])
@@ -64,12 +64,12 @@ const assetTypes = [
 ]
 
 const affiliateOptions = [
-  '한화갤러리아',
-  '한화호텔앤드리조트',
-  '한화이글스',
-  '한화생명',
-  '한화손해보험',
-  '한화시스템',
+  '브랜드 본사',
+  '리테일 계열사',
+  '호텔/리조트 계열사',
+  '금융 계열사',
+  '스포츠/엔터테인먼트 조직',
+  '디지털 서비스 조직',
   '직접 입력',
 ]
 
@@ -120,57 +120,113 @@ const partnerProposals = [
     id: 1,
     partner: '럭시드',
     name: '핸드크림 10ml 샘플',
-    type: '샘플',
-    target: '2040 뷰티 고객',
+    type: '체험/시승',
+    target: '2040 뷰티 고객 · VIP/프리미엄',
+    reach: '20,000명',
     scale: '10,000개',
-    value: '5,000만 원',
-    unitValue: '단가 5,000원',
+    quantity: '10,000',
+    quantityUnit: '개',
+    value: '총 5,000만 원',
+    unitValue: '1인당 5,000원',
     cost: '파트너 전액 부담',
     costDetail: '혜택 원가+배송비 파트너 부담',
+    costItems: '배송비 포함',
     period: '2026.05.01 - 2026.06.30',
+    prepPeriod: '10일',
+    conditions: '1인 1회 · 중복 사용 불가',
+    channels: '자사 앱, 알림톡/문자, 제휴사 채널',
+    outputs: '쿠폰 코드 발급, 배너/디자인, 알림톡 문구',
+    contact: '이럭시드 / partner@luxid.co.kr',
     matchAsset: '갤러리아 VIP 고객층',
     matchScore: 87,
     category: '뷰티',
     missing: [],
     status: '접수 완료',
+    description: '신제품 핸드크림 10ml 샘플 제공, 럭시드 신규 라인 체험 기회',
+    ourOwner: '지정 필요',
+    strengths: ['갤러리아 VIP 고객층과 적합도 87%', '파트너 전액 부담으로 비용 부담 없음'],
+    risks: ['준비 기간 10일로 캠페인 일정 확인 필요'],
+    scores: { customerFit: 90, revenue: 85, cost: 92, operation: 80, brand: 88 },
   },
   {
     id: 2,
     partner: '멜로우',
     name: '전시 시설 30% 할인권',
-    type: '할인권',
-    target: '휴가철 여행 계획 고객',
+    type: '할인/쿠폰',
+    target: '패밀리 · 4050 · 기존 고객',
+    reach: '50,000명',
     scale: '제한 없음',
-    value: '협의 필요',
-    unitValue: '할인율 기반 정산',
-    cost: '파트너 100% 부담',
+    quantity: '제한 없음',
+    quantityUnit: '건',
+    value: '할인율 기반 정산',
+    unitValue: '1인당 최대 30%',
+    cost: '파트너 전액 부담',
     costDetail: '혜택 원가 부담, 운영비 별도 협의',
+    costItems: '운영비 협의',
     period: '상시 협의',
+    prepPeriod: '1주',
+    conditions: '특정 기간 한정 · 1인 1회',
+    channels: '자사 웹, SNS, 오프라인 매장',
+    outputs: '공동 랜딩페이지, 배너/디자인',
+    contact: '박멜로우 / alliance@mellow.co.kr',
     matchAsset: '호텔 객실 패키지',
     matchScore: 82,
     category: '여행',
     missing: [],
     status: '평가 반영',
+    description: '전시 시설 할인권을 활용해 기존 고객의 재방문을 유도하는 혜택',
+    ourOwner: '제휴마케팅팀',
+    strengths: ['기존 고객 재방문 목표와 연결이 명확함', '할인 비용을 파트너가 부담'],
+    risks: ['운영비 분담 기준은 추가 협의 필요'],
+    scores: { customerFit: 78, revenue: 80, cost: 88, operation: 84, brand: 82 },
   },
   {
     id: 3,
     partner: '어반터치',
     name: '오리지널 콘텐츠 공동 프로모션',
-    type: '공동 콘텐츠',
+    type: '콘텐츠/이벤트',
     target: '미입력',
+    reach: '미입력',
     scale: '1,000만',
+    quantity: '미입력',
+    quantityUnit: '건',
     value: '미입력',
     unitValue: '필수',
     cost: '미입력',
     costDetail: '비용 부담 구조 미입력',
+    costItems: '미입력',
     period: '미입력',
+    prepPeriod: '미입력',
+    conditions: '기타 조건 미입력',
+    channels: '미입력',
+    outputs: '영상 콘텐츠, 보도자료 협의 필요',
+    contact: '미입력',
     matchAsset: '매칭 불가',
     matchScore: null,
     category: '콘텐츠',
     missing: ['대상 고객', '비용 부담', '유효 기간'],
     status: '임시 저장',
+    description: '오리지널 콘텐츠를 활용한 공동 프로모션 제안',
+    ourOwner: '지정 필요',
+    strengths: ['콘텐츠 협업 형태로 브랜드 노출 가능'],
+    risks: ['대상 고객, 비용 부담, 유효 기간이 없어 매칭 판단 불가'],
+    scores: null,
   },
 ]
+
+const selectedBenefitProposalId = ref(partnerProposals[0]?.id ?? null)
+
+const scoreMetrics = [
+  { key: 'customerFit', label: '고객 적합도', weight: 25 },
+  { key: 'revenue', label: '수익 기여도', weight: 25 },
+  { key: 'cost', label: '비용 효율성', weight: 20 },
+  { key: 'operation', label: '운영 용이성', weight: 15 },
+  { key: 'brand', label: '브랜드 적합도', weight: 15 },
+]
+
+const selectedBenefitProposal = computed(
+  () => partnerProposals.find((proposal) => proposal.id === selectedBenefitProposalId.value) ?? partnerProposals[0],
+)
 
 function formatDateValue(value) {
   if (!value) return '-'
@@ -195,7 +251,7 @@ function mapAsset(asset) {
     publicStatus: asset.publicStatus ?? asset.partnerVisibleStatus ?? 'PRIVATE',
     matchingStatus: asset.matchingStatus ?? asset.status ?? (asset.active ?? asset.isActive ? 'ACTIVE' : 'PAUSED'),
     accessPolicy: asset.accessPolicy ?? '공유',
-    owner: asset.owner ?? asset.manager ?? asset.managerName ?? '미입력',
+    owner: asset.owner ?? asset.manager ?? asset.managerName ?? asset.affiliate ?? '미입력',
   }
 }
 
@@ -253,6 +309,16 @@ function proposalStatusLabel(proposal) {
   if (proposal.missing?.length) return `매칭 불가 · ${proposal.missing.length}개 누락`
   if (proposal.matchScore) return `${proposal.status} · ${proposal.matchScore}점`
   return proposal.status
+}
+
+function selectBenefitProposal(proposal) {
+  selectedBenefitProposalId.value = proposal.id
+}
+
+function proposalPrimaryAction(proposal) {
+  if (proposal.missing?.length) return '보완 요청'
+  if (proposal.status === '평가 반영') return '운영 보드로 전환'
+  return '수락하기'
 }
 
 function isFilled(field) {
@@ -515,6 +581,56 @@ const selectedAsset = computed(
     assets.value[0] ??
     null,
 )
+
+function isEmptyAssetValue(value) {
+  return value === null || value === undefined || value === '' || value === '미입력' || value === '-'
+}
+
+const selectedAssetMetrics = computed(() => {
+  const asset = selectedAsset.value
+  if (!asset) return []
+
+  return [
+    {
+      label: '매칭 타깃',
+      value: asset.target,
+      sub: isEmptyAssetValue(asset.exposureValue) ? '' : `노출 가치 ${asset.exposureValue}`,
+    },
+    {
+      label: '공급 한도',
+      value: asset.scale,
+      sub: asset.supplyLimit,
+    },
+    {
+      label: '매칭 가드레일',
+      value: asset.partnerFit,
+      sub: isEmptyAssetValue(asset.blockedPartners) ? '차단 없음' : `차단 ${asset.blockedPartners}`,
+    },
+  ]
+})
+
+const selectedAssetMetaItems = computed(() => {
+  const asset = selectedAsset.value
+  if (!asset) return []
+
+  return [
+    { label: '자산 유형', value: assetCategoryLabel(asset.category), key: 'category' },
+    { label: '소속 RFP', value: asset.affiliate, key: 'affiliate' },
+    { label: '등록/소유 조직', value: asset.affiliate, key: 'organization' },
+    { label: '운영 조건', value: asset.conditions, key: 'conditions' },
+    { label: '과거 성과', value: asset.performance, key: 'performance' },
+    { label: '희망 파트너', value: asset.partnerFit, key: 'partnerFit' },
+    { label: '공개 정책', value: assetStatusLabel(asset), key: 'publicPolicy' },
+  ]
+})
+
+const filledAssetMetaItems = computed(() =>
+  selectedAssetMetaItems.value.filter((item) => !isEmptyAssetValue(item.value)),
+)
+
+const emptyAssetMetaItems = computed(() =>
+  selectedAssetMetaItems.value.filter((item) => isEmptyAssetValue(item.value)),
+)
 </script>
 
 <template>
@@ -522,46 +638,18 @@ const selectedAsset = computed(
     <article class="asset-panel">
       <div class="asset-panel__head">
         <div class="asset-panel__title">
-          <h3>{{ currentSubTab === 'assets' ? '한화 자산 풀' : '파트너 제안' }}</h3>
-          <p>
-            {{
-              currentSubTab === 'assets'
-                ? '여러 캠페인에서 재사용할 수 있는 본사 보유 자산입니다.'
-                : '파트너사가 제출한 혜택을 조회하고 매칭 평가에 반영합니다.'
-            }}
-          </p>
+          <h3>매칭 추천</h3>
+          <p>입력한 캠페인 조건을 기준으로 추천 조합을 확인합니다.</p>
         </div>
 
         <div class="asset-toolbar">
           <button
-            v-if="currentSubTab === 'assets'"
             type="button"
-            class="asset-primary"
-            aria-label="한화 자산 등록"
-            title="한화 자산 등록"
-            @click="openAssetForm"
+            class="asset-recommend"
+            @click="emit('request-matching')"
           >
-            +
+            매칭 추천 받기
           </button>
-
-          <div class="asset-segment" role="tablist" aria-label="매칭 입력값 유형">
-            <button
-              type="button"
-              :class="{ active: currentSubTab === 'assets' }"
-              @click="currentSubTab = 'assets'"
-            >
-              한화 자산
-              <span>{{ assets.length }}</span>
-            </button>
-            <button
-              type="button"
-              :class="{ active: currentSubTab === 'benefits' }"
-              @click="currentSubTab = 'benefits'"
-            >
-              파트너 제안
-              <span>{{ partnerProposals.length }}</span>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -631,16 +719,20 @@ const selectedAsset = computed(
           <p v-if="!filteredAssets.length" class="asset-list-empty">검색 결과가 없습니다.</p>
         </aside>
 
-        <article v-if="selectedAsset" class="asset-detail">
-          <header class="asset-detail__head">
-            <div class="asset-detail__identity">
-              <span>{{ String(selectedAsset.type).slice(0, 2) }}</span>
+        <article v-if="selectedAsset" class="asset-detail asset-detail--refined">
+          <header class="asset-detail__head asset-detail__head--refined">
+            <div class="asset-detail__identity asset-detail__identity--refined">
+              <span class="asset-detail__avatar">{{ String(selectedAsset.type).slice(0, 2) || '?' }}</span>
               <div>
                 <h4>{{ selectedAsset.type }}</h4>
-                <p>{{ selectedAsset.affiliate }} · 등록 {{ selectedAsset.registeredAt }}</p>
+                <p>
+                  <span>{{ selectedAsset.affiliate }}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>등록 {{ selectedAsset.registeredAt }}</span>
+                </p>
               </div>
             </div>
-            <div class="asset-detail__actions">
+            <div class="asset-detail__actions asset-detail__actions--refined">
               <em :class="{ muted: !isAssetAvailable(selectedAsset) }">{{ assetStatusLabel(selectedAsset) }}</em>
               <button type="button" @click="openEditAssetForm(selectedAsset)">수정</button>
               <button
@@ -654,91 +746,43 @@ const selectedAsset = computed(
             </div>
           </header>
 
-          <section class="asset-detail__metrics">
-            <div>
-              <span>매칭 타깃</span>
-              <strong>{{ selectedAsset.target }}</strong>
-              <small>노출 가치 {{ selectedAsset.exposureValue }}</small>
-            </div>
-            <div>
-              <span>공급 한도</span>
-              <strong>{{ selectedAsset.scale }}</strong>
-              <small>{{ selectedAsset.supplyLimit }}</small>
-            </div>
-            <div>
-              <span>매칭 가드레일</span>
-              <strong>{{ selectedAsset.partnerFit }}</strong>
-              <small>차단 {{ selectedAsset.blockedPartners }}</small>
+          <section class="asset-detail__metrics asset-detail__metrics--refined">
+            <div
+              v-for="metric in selectedAssetMetrics"
+              :key="metric.label"
+              :class="{ empty: isEmptyAssetValue(metric.value) }"
+            >
+              <span>{{ metric.label }}</span>
+              <strong>{{ isEmptyAssetValue(metric.value) ? '미입력' : metric.value }}</strong>
+              <small v-if="!isEmptyAssetValue(metric.sub)">{{ metric.sub }}</small>
             </div>
           </section>
 
-          <section class="asset-detail__info">
-            <h5>기본 정보</h5>
-            <dl>
-              <div>
-                <dt>자산명</dt>
-                <dd>
-                  <strong>{{ selectedAsset.type }}</strong>
-                  <small>{{ assetCategoryLabel(selectedAsset.category) }}</small>
-                </dd>
-              </div>
-              <div>
-                <dt>소속 RFP</dt>
-                <dd>
-                  <strong>{{ selectedAsset.affiliate }}</strong>
-                  <small>등록 {{ selectedAsset.registeredAt }}</small>
-                </dd>
-              </div>
-              <div>
-                <dt>담당자</dt>
-                <dd>
-                  <strong>{{ displayValue(selectedAsset.owner) }}</strong>
-                  <small>{{ selectedAsset.registeredAt }} 등록</small>
-                </dd>
-              </div>
-              <div>
-                <dt>운영 조건</dt>
-                <dd>
-                  <strong>{{ displayValue(selectedAsset.conditions) }}</strong>
-                  <small>{{ assetStatusLabel(selectedAsset) }}</small>
-                </dd>
-              </div>
-              <div>
-                <dt>공급 한도</dt>
-                <dd>
-                  <strong>{{ displayValue(selectedAsset.supplyLimit) }}</strong>
-                  <small>{{ displayValue(selectedAsset.scale) }}</small>
-                </dd>
-              </div>
-              <div>
-                <dt>매칭 대상</dt>
-                <dd>
-                  <strong>{{ displayValue(selectedAsset.target) }}</strong>
-                  <small>노출 가치 {{ displayValue(selectedAsset.exposureValue) }}</small>
-                </dd>
-              </div>
-              <div>
-                <dt>과거 성과</dt>
-                <dd>
-                  <strong>{{ displayValue(selectedAsset.performance) }}</strong>
-                  <small>미입력 시 업종 평균값으로 대체</small>
-                </dd>
-              </div>
-              <div>
-                <dt>희망 파트너</dt>
-                <dd>
-                  <strong>{{ displayValue(selectedAsset.partnerFit) }}</strong>
-                  <small>차단 {{ displayValue(selectedAsset.blockedPartners) }}</small>
-                </dd>
-              </div>
-              <div>
-                <dt>공개 정책</dt>
-                <dd>
-                  <strong>{{ displayValue(selectedAsset.accessPolicy) }}</strong>
-                  <small>{{ assetStatusLabel(selectedAsset) }}</small>
-                </dd>
+          <section class="asset-detail__info asset-detail__info--refined">
+            <div class="asset-detail__info-head">
+              <h5>상세 정보</h5>
+              <span v-if="emptyAssetMetaItems.length">{{ emptyAssetMetaItems.length }}개 항목 미입력</span>
+            </div>
+
+            <dl v-if="filledAssetMetaItems.length" class="asset-detail__meta-grid">
+              <div v-for="item in filledAssetMetaItems" :key="item.key">
+                <dt>{{ item.label }}</dt>
+                <dd>{{ item.value }}</dd>
               </div>
             </dl>
+
+            <details v-if="emptyAssetMetaItems.length" class="asset-detail__empty-meta">
+              <summary>
+                <span>미입력 항목 펼쳐 보기</span>
+                <small>{{ emptyAssetMetaItems.length }}개</small>
+              </summary>
+              <dl class="asset-detail__meta-grid asset-detail__meta-grid--empty">
+                <div v-for="item in emptyAssetMetaItems" :key="item.key">
+                  <dt>{{ item.label }}</dt>
+                  <dd>미입력</dd>
+                </div>
+              </dl>
+            </details>
           </section>
         </article>
 
@@ -748,50 +792,131 @@ const selectedAsset = computed(
         </article>
       </div>
 
-      <div v-else class="asset-table asset-table--benefits">
-        <div class="asset-table__head">
-          <span>파트너</span>
-          <span>제안 혜택</span>
-          <span>규모/환산 가치</span>
-          <span>유효 기간</span>
-          <span>비용 부담</span>
-          <span>추천 자산</span>
-          <span>검토 상태</span>
-        </div>
-        <div v-for="proposal in rows" :key="proposal.id" class="asset-table__row">
-          <strong>{{ proposal.partner }}</strong>
-          <span class="proposal-benefit">
-            <b>{{ proposal.name }}</b>
-            <small>{{ proposal.category }} · {{ proposal.type }} · {{ proposal.target }}</small>
-          </span>
-          <span class="proposal-metric">
-            <b>{{ proposal.scale }}</b>
-            <small>{{ proposal.value }} · {{ proposal.unitValue }}</small>
-          </span>
-          <span>{{ proposal.period }}</span>
-          <span class="proposal-metric" :title="proposal.costDetail">
-            <b>{{ proposal.cost }}</b>
-            <small>{{ proposal.costDetail }}</small>
-          </span>
-          <span class="proposal-match" :class="{ muted: !proposal.matchScore }">
-            <b>{{ proposal.matchAsset }}</b>
-            <small v-if="proposal.matchScore">적합도 {{ proposal.matchScore }}%</small>
-            <small v-else>{{ proposal.missing.join(', ') }}</small>
-          </span>
-          <span class="proposal-status">
-            <em :class="{ muted: proposal.missing?.length || proposal.status === '임시 저장' }">
-              {{ proposalStatusLabel(proposal) }}
-            </em>
-            <button v-if="proposal.missing?.length" type="button">보완 요청</button>
-          </span>
-        </div>
+      <div v-else class="benefit-review">
+        <section class="benefit-list-panel">
+          <div class="asset-table asset-table--benefits">
+            <div class="asset-table__head">
+              <span>파트너</span>
+              <span>혜택 제안</span>
+              <span>규모/기간</span>
+              <span>추천 자산</span>
+              <span>검토 상태</span>
+            </div>
+            <button
+              v-for="proposal in rows"
+              :key="proposal.id"
+              type="button"
+              class="asset-table__row benefit-row"
+              :class="{ selected: selectedBenefitProposal?.id === proposal.id }"
+              @click="selectBenefitProposal(proposal)"
+            >
+              <strong>{{ proposal.partner }}</strong>
+              <span class="proposal-benefit">
+                <b>{{ proposal.name }}</b>
+                <small>{{ proposal.type }} · {{ proposal.target }}</small>
+              </span>
+              <span class="proposal-metric">
+                <b>{{ proposal.quantity }}{{ proposal.quantity !== '제한 없음' && proposal.quantity !== '미입력' ? proposal.quantityUnit : '' }}</b>
+                <small>{{ proposal.period }}</small>
+              </span>
+              <span class="proposal-match" :class="{ muted: !proposal.matchScore }">
+                <b>{{ proposal.matchAsset }}</b>
+                <small v-if="proposal.matchScore">적합도 {{ proposal.matchScore }}%</small>
+                <small v-else>{{ proposal.missing.join(', ') }}</small>
+              </span>
+              <span class="proposal-status">
+                <em :class="{ muted: proposal.missing?.length || proposal.status === '임시 저장' }">
+                  {{ proposalStatusLabel(proposal) }}
+                </em>
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <aside v-if="selectedBenefitProposal" class="benefit-detail-panel">
+          <header class="benefit-detail-hero">
+            <div>
+              <strong>{{ selectedBenefitProposal.partner }} — {{ selectedBenefitProposal.name }}</strong>
+              <p>{{ selectedBenefitProposal.type }} · {{ selectedBenefitProposal.target }} · 도달 {{ selectedBenefitProposal.reach }}</p>
+            </div>
+            <span class="benefit-score" :class="{ muted: !selectedBenefitProposal.matchScore }">
+              {{ selectedBenefitProposal.matchScore ? selectedBenefitProposal.matchScore + '점' : '보완 필요' }}
+            </span>
+          </header>
+
+          <ul class="benefit-summary-list">
+            <li v-for="item in selectedBenefitProposal.strengths" :key="item">✓ {{ item }}</li>
+            <li v-for="item in selectedBenefitProposal.risks" :key="item" class="risk">! {{ item }}</li>
+          </ul>
+
+          <section v-if="selectedBenefitProposal.scores" class="benefit-score-grid">
+            <h4>점수 근거</h4>
+            <div v-for="metric in scoreMetrics" :key="metric.key" class="benefit-score-row">
+              <span>{{ metric.label }} <small>{{ metric.weight }}%</small></span>
+              <div><i :style="{ width: selectedBenefitProposal.scores[metric.key] + '%' }" /></div>
+              <strong>{{ selectedBenefitProposal.scores[metric.key] }}</strong>
+            </div>
+          </section>
+
+          <section v-else class="benefit-missing-box">
+            <h4>보완 필요 항목</h4>
+            <span v-for="item in selectedBenefitProposal.missing" :key="item">{{ item }}</span>
+          </section>
+
+          <dl class="benefit-detail-grid">
+            <div>
+              <dt>기본 정보</dt>
+              <dd><strong>{{ selectedBenefitProposal.name }}</strong><small>{{ selectedBenefitProposal.description }}</small></dd>
+            </div>
+            <div>
+              <dt>규모·재고</dt>
+              <dd><strong>{{ selectedBenefitProposal.quantity }}{{ selectedBenefitProposal.quantity !== '제한 없음' && selectedBenefitProposal.quantity !== '미입력' ? selectedBenefitProposal.quantityUnit : '' }}</strong><small>{{ selectedBenefitProposal.unitValue }} · {{ selectedBenefitProposal.value }}</small></dd>
+            </div>
+            <div>
+              <dt>기간</dt>
+              <dd><strong>{{ selectedBenefitProposal.period }}</strong><small>준비 {{ selectedBenefitProposal.prepPeriod }}</small></dd>
+            </div>
+            <div>
+              <dt>대상</dt>
+              <dd><strong>{{ selectedBenefitProposal.target }}</strong><small>예상 도달 {{ selectedBenefitProposal.reach }}</small></dd>
+            </div>
+            <div>
+              <dt>비용 부담</dt>
+              <dd><strong>{{ selectedBenefitProposal.cost }}</strong><small>{{ selectedBenefitProposal.costDetail }} · {{ selectedBenefitProposal.costItems }}</small></dd>
+            </div>
+            <div>
+              <dt>운영 조건</dt>
+              <dd><strong>{{ selectedBenefitProposal.channels }}</strong><small>{{ selectedBenefitProposal.outputs }} · {{ selectedBenefitProposal.conditions }}</small></dd>
+            </div>
+            <div>
+              <dt>연결 자산</dt>
+              <dd><strong>{{ selectedBenefitProposal.matchAsset }}</strong><small>{{ selectedBenefitProposal.matchScore ? '적합도 ' + selectedBenefitProposal.matchScore + '%' : selectedBenefitProposal.missing.join(', ') }}</small></dd>
+            </div>
+            <div>
+              <dt>담당자</dt>
+              <dd><strong>{{ selectedBenefitProposal.contact }}</strong><small>우리 측 담당자: {{ selectedBenefitProposal.ourOwner }}</small></dd>
+            </div>
+          </dl>
+
+          <label class="benefit-comment">
+            <span>코멘트 / 보완 요청</span>
+            <textarea rows="3" placeholder="검토 의견이나 파트너에게 요청할 보완 내용을 입력하세요." />
+          </label>
+
+          <div class="benefit-actions">
+            <button type="button" class="primary">{{ proposalPrimaryAction(selectedBenefitProposal) }}</button>
+            <button type="button">보류</button>
+            <button type="button">보완 요청</button>
+            <button type="button">거절</button>
+          </div>
+        </aside>
       </div>
 
       <div v-if="isAssetFormOpen" class="reg-modal" role="dialog" aria-modal="true" aria-labelledby="asset-reg-title">
         <form class="reg-panel" @submit.prevent="submitAsset">
           <header class="reg-head">
             <div class="reg-head__title">
-              <strong id="asset-reg-title">{{ editingAssetId ? '한화 자산 수정' : '한화 자산 등록' }}</strong>
+              <strong id="asset-reg-title">{{ editingAssetId ? '자산 수정' : '자산 등록' }}</strong>
               <span>파트너 페이지에 노출되는 정보입니다. 정확하게 채울수록 매칭 추천이 정교해집니다.</span>
             </div>
             <div class="reg-head__right">
@@ -840,7 +965,7 @@ const selectedAsset = computed(
                   <span class="reg-field__label">자산명 <em>*</em></span>
                   <input
                     v-model="assetForm.type"
-                    placeholder="예: 갤러리아 VIP 고객층, 한화호텔 객실 재고, 이글스 홈경기 티켓"
+                    placeholder="예: VIP 고객층, 객실 재고, 멤버십 채널, 이벤트 티켓"
                   />
                   <small class="reg-hint">파트너가 이 자산을 명확히 인식할 수 있는 이름으로 입력하세요.</small>
                 </label>
@@ -857,7 +982,7 @@ const selectedAsset = computed(
                     v-if="assetForm.affiliate === '직접 입력'"
                     v-model="assetForm.customAffiliate"
                     class="reg-field__subinput"
-                    placeholder="예: 한화비전 브랜드전략팀"
+                    placeholder="예: 브랜드전략팀, CRM팀, 리테일사업부"
                   />
                   <small class="reg-hint">자산을 소유하거나 운영하는 계열사/부서입니다.</small>
                 </label>
@@ -1198,6 +1323,21 @@ const selectedAsset = computed(
   font-size: 1.35rem;
   font-weight: 900;
   line-height: 1;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+
+.asset-recommend {
+  display: inline-flex;
+  min-height: 2.55rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent-color);
+  color: #fff;
+  padding: 0 1rem;
+  font-size: 0.82rem;
+  font-weight: 900;
+  white-space: nowrap;
   box-shadow: 0 8px 18px color-mix(in srgb, var(--accent-color) 18%, transparent);
 }
 
@@ -1699,7 +1839,7 @@ const selectedAsset = computed(
 
 .asset-table--benefits .asset-table__head,
 .asset-table--benefits .asset-table__row {
-  grid-template-columns: 0.62fr 1.35fr 1fr 0.9fr 1.08fr 1.05fr 1.1fr;
+  grid-template-columns: 0.6fr 1.45fr 0.95fr 1fr 0.9fr;
 }
 
 .asset-table__head {
@@ -1844,6 +1984,272 @@ const selectedAsset = computed(
   padding: 0.2rem 0.45rem;
   font-size: 0.66rem;
   font-weight: 900;
+}
+
+.benefit-review {
+  display: grid;
+  grid-template-columns: minmax(500px, 1fr) minmax(360px, 0.62fr);
+  gap: 0.7rem;
+  min-height: 0;
+}
+
+.benefit-list-panel,
+.benefit-detail-panel {
+  min-width: 0;
+  min-height: 0;
+}
+
+.benefit-list-panel {
+  overflow: auto;
+}
+
+.benefit-row {
+  width: 100%;
+  border-color: var(--border-color);
+  cursor: pointer;
+  text-align: left;
+}
+
+.benefit-row:hover,
+.benefit-row.selected {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-strong));
+  background: color-mix(in srgb, var(--accent-color) 9%, var(--panel-muted));
+}
+
+.benefit-row.selected {
+  box-shadow: inset 3px 0 0 var(--accent-color);
+}
+
+.benefit-detail-panel {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 74%, var(--accent-color));
+  border-radius: 8px;
+  background: var(--panel-color);
+  padding: 0.75rem;
+}
+
+.benefit-detail-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.65rem;
+}
+
+.benefit-detail-hero div {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+}
+
+.benefit-detail-hero strong {
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.benefit-detail-hero p {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 0.72rem;
+  font-weight: 760;
+  line-height: 1.4;
+}
+
+.benefit-score {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.benefit-score.muted {
+  background: var(--color-warning-light);
+  color: var(--color-warning-dark);
+}
+
+.benefit-summary-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent-color) 6%, var(--panel-color));
+  padding: 0.65rem 0.75rem;
+  list-style: none;
+}
+
+.benefit-summary-list li {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 820;
+  line-height: 1.45;
+}
+
+.benefit-summary-list li.risk {
+  color: var(--color-warning-dark, #b45309);
+}
+
+.benefit-score-grid,
+.benefit-missing-box,
+.benefit-detail-grid div,
+.benefit-comment {
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  padding: 0.65rem;
+}
+
+.benefit-score-grid {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.benefit-score-grid h4,
+.benefit-missing-box h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.benefit-score-row {
+  display: grid;
+  grid-template-columns: 6.8rem minmax(0, 1fr) 2rem;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.benefit-score-row span {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.benefit-score-row small {
+  color: var(--muted-text);
+  font-size: 0.6rem;
+}
+
+.benefit-score-row div {
+  height: 0.42rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-color);
+}
+
+.benefit-score-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-color);
+}
+
+.benefit-score-row strong {
+  color: var(--text-primary);
+  font-size: 0.74rem;
+  text-align: right;
+}
+
+.benefit-missing-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.benefit-missing-box h4 {
+  flex-basis: 100%;
+}
+
+.benefit-missing-box span {
+  border-radius: 999px;
+  background: var(--color-warning-light);
+  color: var(--color-warning-dark);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.benefit-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.benefit-detail-grid dt,
+.benefit-comment span {
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.benefit-detail-grid dd {
+  display: grid;
+  gap: 0.18rem;
+  margin: 0.16rem 0 0;
+}
+
+.benefit-detail-grid strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.benefit-detail-grid small {
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 740;
+  line-height: 1.42;
+}
+
+.benefit-comment {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.benefit-comment textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-color);
+  color: var(--text-primary);
+  padding: 0.6rem 0.7rem;
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+.benefit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.benefit-actions button {
+  min-height: 2.15rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  padding: 0 0.75rem;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.benefit-actions button.primary {
+  border-color: var(--accent-color);
+  background: var(--accent-color);
+  color: #fff;
 }
 
 .asset-modal {
@@ -2543,4 +2949,239 @@ const selectedAsset = computed(
     flex-direction: column;
   }
 }
+
+
+.asset-detail--refined {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--panel-color);
+  padding: 1rem 1.1rem 1.1rem;
+}
+
+.asset-detail__head--refined {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.85rem;
+}
+
+.asset-detail__identity--refined {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.asset-detail__avatar {
+  display: inline-flex;
+  width: 2.2rem;
+  height: 2.2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent-color) 14%, var(--panel-muted));
+  color: var(--accent-color);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.asset-detail__identity--refined h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.asset-detail__identity--refined p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.15rem 0 0;
+  color: var(--muted-text);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.asset-detail__actions--refined {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.asset-detail__metrics--refined {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.asset-detail__metrics--refined div {
+  display: flex;
+  min-height: 4.6rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-muted);
+  padding: 0.7rem 0.85rem 0.75rem;
+}
+
+.asset-detail__metrics--refined span {
+  color: var(--muted-text);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.asset-detail__metrics--refined strong {
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.asset-detail__metrics--refined small {
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.asset-detail__metrics--refined div.empty strong {
+  color: var(--subtle-text, #9ca3af);
+  font-size: 0.85rem;
+  font-style: italic;
+  font-weight: 800;
+}
+
+.asset-detail__info--refined {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.asset-detail__info-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.asset-detail__info-head h5 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 900;
+}
+
+.asset-detail__info-head span {
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.asset-detail__meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 1rem;
+  margin: 0;
+}
+
+.asset-detail__meta-grid > div {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.55rem;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.45rem 0;
+}
+
+.asset-detail__meta-grid dt {
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.asset-detail__meta-grid dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.asset-detail__empty-meta {
+  margin-top: 0.3rem;
+}
+
+.asset-detail__empty-meta summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px dashed var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-muted);
+  color: var(--muted-text);
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  list-style: none;
+}
+
+.asset-detail__empty-meta summary::-webkit-details-marker {
+  display: none;
+}
+
+.asset-detail__empty-meta summary::before {
+  content: '▸';
+  font-size: 0.65rem;
+  transition: transform 0.15s;
+}
+
+.asset-detail__empty-meta[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.asset-detail__empty-meta summary small {
+  margin-left: auto;
+  color: var(--subtle-text, #9ca3af);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.asset-detail__meta-grid--empty {
+  margin-top: 0.5rem;
+  opacity: 0.65;
+}
+
+.asset-detail__meta-grid--empty dd {
+  color: var(--subtle-text, #9ca3af);
+  font-style: italic;
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .asset-detail__metrics--refined,
+  .asset-detail__meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .asset-detail__meta-grid > div {
+    grid-template-columns: 6rem minmax(0, 1fr);
+  }
+}
+
 </style>

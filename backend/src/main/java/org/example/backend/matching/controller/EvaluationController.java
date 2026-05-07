@@ -20,10 +20,9 @@ public class EvaluationController {
     private final EvaluationService evaluationService;
 
     @PostMapping("/evaluation/collect")
-    public ResponseEntity collect(@RequestBody EvaluationDto.CollectDto dto,
-                                        @RequestParam String category){
+    public ResponseEntity collect(@RequestBody EvaluationDto.CollectDto dto){
         try {
-            evaluationService.collect(dto, category);
+            evaluationService.collect(dto);
             return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESSFULY_EVALUATED, dto));
         }
         catch (Exception e){
@@ -51,23 +50,5 @@ public class EvaluationController {
             return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
                     .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
         }
-    }
-
-    @GetMapping("/evaluation/list/{campaign_idx}")
-    public ResponseEntity getEvaluationList(@AuthenticationPrincipal AuthUserDetails user, @PathVariable Long campaign_idx) {
-        ResponseEntity result;
-        try {
-            EvaluationDto.EvaluationRes dto = evaluationService.getEvaluationRes(user.getIdx(), campaign_idx);
-            result = ResponseEntity.ok(BaseResponse.success(dto));
-        }
-        catch (AccessDeniedException e) {
-            result = ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(BaseResponse.fail(BaseResponseStatus.ACCESS_DENIED, null));
-        }
-        catch (Exception e){
-            result = ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
-        return result;
     }
 }

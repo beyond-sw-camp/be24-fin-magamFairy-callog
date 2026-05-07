@@ -1,4 +1,4 @@
-package org.example.backend.userInfo.userProfile.model;
+package org.example.backend.userInfo.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -23,7 +23,7 @@ import org.example.backend.user.model.User;
 @Builder
 @Getter
 @Entity
-public class ProfileImageHistory extends BaseEntity {
+public class ProfileImageGenerationLog extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idx;
@@ -32,21 +32,34 @@ public class ProfileImageHistory extends BaseEntity {
     @JoinColumn(name = "user_idx", nullable = false)
     private User user;
 
-    @Column(name = "object_key", nullable = false, length = 512)
-    private String objectKey;
+    @Column(nullable = false, length = 1000)
+    private String prompt;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "history_type", nullable = false, length = 20)
-    private ProfileImageHistoryType historyType;
+    @Column(nullable = false, length = 80)
+    private String model;
 
+    @Column(name = "requested_size", nullable = false)
+    private Integer requestedSize;
+
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private ProfileImageSource source;
+    private ProfileImageGenerationStatus status = ProfileImageGenerationStatus.REQUESTED;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "generation_log_idx")
-    private ProfileImageGenerationLog generationLog;
+    @Column(name = "generated_object_key", length = 512)
+    private String generatedObjectKey;
 
-    @Column(length = 1000)
-    private String prompt;
+    @Column(name = "error_message", length = 1000)
+    private String errorMessage;
+
+    public void markSucceeded(String objectKey) {
+        this.status = ProfileImageGenerationStatus.SUCCEEDED;
+        this.generatedObjectKey = objectKey;
+        this.errorMessage = null;
+    }
+
+    public void markFailed(String message) {
+        this.status = ProfileImageGenerationStatus.FAILED;
+        this.errorMessage = message;
+    }
 }

@@ -11,7 +11,7 @@ import org.example.backend.user.model.UserAccountStatus;
 import org.example.backend.user.model.UserDto;
 import org.example.backend.user.repository.RefreshTokenRepository;
 import org.example.backend.user.repository.UserRepository;
-import org.example.backend.userInfo.userProfile.service.UserProfileService;
+import org.example.backend.userInfo.service.UserProfileService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

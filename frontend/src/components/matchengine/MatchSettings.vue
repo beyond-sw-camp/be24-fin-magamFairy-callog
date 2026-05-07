@@ -1,6 +1,7 @@
 <script setup>
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ListBenefits } from '@/api/matchingBenefits'
+import { CreateAsset } from '@/api/matchingAssets'
 import { CreateGoal, ListGoals } from '@/api/matchingGoals'
 
 const AssetBenefitManagement = defineAsyncComponent(() =>
@@ -43,13 +44,12 @@ const goalTypeValues = [
 ]
 
 const campaignMethods = [
-  '쿠폰/할인 혜택',
-  '체험권/사은품 제공',
-  '멤버십·로열티 강화',
+  '쿠폰/할인',
+  '체험권/사은품',
+  '멤버십 혜택',
   '공동 프로모션',
   '콘텐츠 협업',
-  '채널/앱 프로모션',
-  '기타',
+  '채널/앱 노출',
 ]
 
 const campaignMethodValues = [
@@ -59,7 +59,17 @@ const campaignMethodValues = [
   'JOINT_PROMOTION',
   'CONTENT_COLLABORATION',
   'CHANNEL_APP_PROMOTION',
-  'OTHER',
+]
+
+const partnerCategories = [
+  '패션/뷰티',
+  'F&B',
+  '카드/금융',
+  '여행/항공',
+  '엔터테인먼트',
+  '리빙/홈',
+  '디지털/IT',
+  '자동차',
 ]
 
 const goals = ref([
@@ -102,6 +112,8 @@ const isResizing = ref(false)
 const showAssetBenefitPanel = ref(false)
 const isGoalLoading = ref(false)
 const goalError = ref('')
+const assetPanelKey = ref(0)
+let assetPanelFrame = null
 
 const selectedGoal = computed(
   () => goals.value.find((goal) => goal.id === selectedGoalId.value) ?? goals.value[0],
@@ -112,13 +124,13 @@ const canCreateRecommendation = computed(() => Boolean(recommendationForm.value.
 
 const canAddGoal = computed(() => {
   return (
-    form.value.name.trim() &&
+    form.value.assetName.trim() &&
     form.value.primaryType &&
-    form.value.campaignMethod &&
-    form.value.kpi.trim() &&
     form.value.periodStart &&
     form.value.periodEnd &&
-    form.value.periodEnd >= form.value.periodStart
+    form.value.periodEnd >= form.value.periodStart &&
+    form.value.ownerName.trim() &&
+    form.value.ownerEmail.trim()
   )
 })
 
@@ -128,15 +140,19 @@ const workspaceStyle = computed(() => ({
 
 function createGoalForm() {
   return {
+    assetName: '',
+    assetDescription: '',
     name: '',
     primaryType: '신규 고객 유입',
-    secondaryType: '',
-    campaignMethod: 'COUPON_DISCOUNT',
-    kpi: '',
-    limit: '',
+    campaignMethods: [],
     periodStart: '',
     periodEnd: '',
-    owner: '',
+    maxCost: '',
+    minRevenue: '',
+    partnerFit: [],
+    partnerOther: '',
+    ownerName: '',
+    ownerEmail: '',
     weights: '수익성 40 · 공수 30 · 브랜드 30',
   }
 }
@@ -176,22 +192,51 @@ function fromBackendCampaignMethod(value) {
 }
 
 function createGoalPayload() {
+  const selectedMethods = form.value.campaignMethods.map(toBackendCampaignMethod).filter(Boolean)
+  const financeNotes = [
+    form.value.maxCost ? `최대 부담 비용 ${form.value.maxCost}원` : '',
+    form.value.minRevenue ? `최소 기대 매출 ${form.value.minRevenue}원` : '',
+  ].filter(Boolean)
+
   return {
-    name: form.value.name,
+    name: form.value.name || `${form.value.assetName} 매칭 캠페인`,
     primaryType: toBackendGoalType(form.value.primaryType),
-    secondaryType: form.value.secondaryType ? toBackendGoalType(form.value.secondaryType) : null,
-    campaignMethod: toBackendCampaignMethod(form.value.campaignMethod),
-    kpiPrimary: form.value.kpi,
+    secondaryType: null,
+    campaignMethod: selectedMethods[0] ?? null,
+    kpiPrimary: financeNotes.join(' · '),
     kpiSecondary: '',
-    budgetLimit: form.value.limit,
-    effortLimit: form.value.limit,
+    budgetLimit: form.value.maxCost,
+    effortLimit: '',
     periodStart: form.value.periodStart,
     periodEnd: form.value.periodEnd,
     weightRevenue: 40,
     weightEffort: 30,
     weightBrand: 30,
-    ownerLabel: form.value.owner,
+    ownerLabel: `${form.value.ownerName} · ${form.value.ownerEmail}`,
     status: 'ACTIVE',
+  }
+}
+
+function createAssetPayload() {
+  const partnerFit = [...form.value.partnerFit]
+  const partnerOther = form.value.partnerOther.trim()
+  if (partnerOther) partnerFit.push(partnerOther)
+
+  return {
+    type: form.value.assetName,
+    affiliate: form.value.ownerName,
+    registeredAt: new Date().toISOString().slice(0, 10),
+    category: 'customer',
+    target: form.value.assetDescription,
+    scale: form.value.assetDescription,
+    exposureValue: '',
+    performance: '',
+    conditions: form.value.campaignMethods.map(fromBackendCampaignMethod).filter(Boolean).join(', '),
+    partnerFit,
+    blockedPartners: [],
+    supplyLimit: [form.value.periodStart, form.value.periodEnd].filter(Boolean).join(' ~ '),
+    publicStatus: 'PUBLIC',
+    matchingStatus: 'ACTIVE',
   }
 }
 
@@ -264,20 +309,33 @@ async function loadBenefits() {
 async function addGoal() {
   if (!canAddGoal.value) return
 
+  await CreateAsset(createAssetPayload())
   await CreateGoal(createGoalPayload())
   await loadGoals()
 
   form.value = { ...createGoalForm(), primaryType: 'NEW_CUSTOMER' }
   isAddingGoal.value = false
+  assetPanelKey.value += 1
   emit('goal-count-change', goals.value.length)
+}
+
+function saveGoalDraft() {
+  isAddingGoal.value = false
+}
+
+function toggleMultiValue(field, value) {
+  const values = form.value[field]
+  const index = values.indexOf(value)
+  if (index > -1) values.splice(index, 1)
+  else values.push(value)
+}
+
+function isMultiSelected(field, value) {
+  return form.value[field].includes(value)
 }
 
 function forwardAssetCount(count) {
   emit('asset-count-change', count)
-}
-
-function openAssetBenefitPanel() {
-  showAssetBenefitPanel.value = true
 }
 
 function requestMatching() {
@@ -332,10 +390,15 @@ function stopResize() {
 
 onMounted(() => {
   emit('goal-count-change', goals.value.length)
+
+  assetPanelFrame = window.requestAnimationFrame(() => {
+    showAssetBenefitPanel.value = true
+  })
 })
 
 onBeforeUnmount(() => {
   stopResize()
+  if (assetPanelFrame !== null) window.cancelAnimationFrame(assetPanelFrame)
 })
 </script>
 
@@ -379,92 +442,184 @@ onBeforeUnmount(() => {
       </div>
 
       <button type="button" class="settings-add-goal" @click="isAddingGoal = !isAddingGoal">
-        {{ isAddingGoal ? '목표 입력 닫기' : '+ 목표 추가' }}
+        {{ isAddingGoal ? '매칭 폼 닫기' : '+ 캠페인 매칭 시작하기' }}
       </button>
 
       <form v-if="isAddingGoal" class="settings-goal-form" @submit.prevent="addGoal">
-        <label>
-          <span>목표명</span>
-          <input v-model="form.name" placeholder="예: 2026 Q3 객실 예약 증대" />
-        </label>
-        <label>
-          <span>주 목표 유형</span>
-          <select v-model="form.primaryType">
-            <option v-for="(type, index) in goalTypes" :key="goalTypeValues[index]" :value="goalTypeValues[index]">
-              {{ type }}
-            </option>
-          </select>
-        </label>
-        <label>
-          <span>보조 목표</span>
-          <select v-model="form.secondaryType">
-            <option value="">선택 안 함</option>
-            <option
-              v-for="(type, index) in goalTypes"
-              :key="goalTypeValues[index]"
-              :value="goalTypeValues[index]"
-              :disabled="goalTypeValues[index] === toBackendGoalType(form.primaryType)"
-            >
-              {{ type }}
-            </option>
-          </select>
-        </label>
-        <label>
-          <span>캠페인 방식</span>
-          <select v-model="form.campaignMethod">
-            <option
-              v-for="(method, index) in campaignMethods"
-              :key="campaignMethodValues[index]"
-              :value="campaignMethodValues[index]"
-            >
-              {{ method }}
-            </option>
-          </select>
-        </label>
-        <label>
-          <span>핵심 KPI</span>
-          <input v-model="form.kpi" placeholder="예: 추가 예약 300건, ADR 18만 원 유지" />
-        </label>
-        <label>
-          <span>예산/공수 한도</span>
-          <input v-model="form.limit" placeholder="예: 5,000만 원 · 100시간" />
-        </label>
-        <label>
-          <span>기간</span>
-          <div class="settings-date-range">
-            <input v-model="form.periodStart" type="date" />
-            <input v-model="form.periodEnd" type="date" :min="form.periodStart || undefined" />
+        <header class="match-start-head">
+          <strong>캠페인 매칭 시작하기</strong>
+        </header>
+
+        <section class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__num">1</span>
+            <strong class="form-section__title">무엇을 활용할 건가요? <em>자산</em></strong>
           </div>
-        </label>
-        <label>
-          <span>등록자</span>
-          <input v-model="form.owner" placeholder="예: 갤러리아 마케팅팀 김OO" />
-        </label>
-        <button type="submit" :disabled="!canAddGoal">추가</button>
+          <label>
+            <span>자산명 <em>*</em></span>
+            <input v-model="form.assetName" placeholder="예: 갤러리아 VIP 고객층" />
+          </label>
+          <label>
+            <span>자산 설명</span>
+            <textarea v-model="form.assetDescription" rows="3" placeholder="예: VIP App 활성 고객 5만 명, 앱 배너"></textarea>
+          </label>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__num">2</span>
+            <strong class="form-section__title">무엇을 달성하고 싶나요? <em>목표</em></strong>
+          </div>
+          <div class="settings-goal-form__group">
+            <span>주 목표 <em>*</em></span>
+            <div class="choice-grid">
+              <button
+                v-for="(type, index) in goalTypes"
+                :key="goalTypeValues[index]"
+                type="button"
+                class="choice-card"
+                :class="{ selected: form.primaryType === goalTypeValues[index] }"
+                @click="form.primaryType = goalTypeValues[index]"
+              >
+                {{ type }}
+              </button>
+            </div>
+          </div>
+          <label>
+            <span>캠페인 목표명</span>
+            <input v-model="form.name" placeholder="예: 2026 Q3 객실 예약 증대" />
+          </label>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__num">3</span>
+            <strong class="form-section__title">어떻게 진행할 건가요? <em>조건</em></strong>
+          </div>
+          <div class="settings-goal-form__group">
+            <span>캠페인 방식 <em>다중</em></span>
+            <div class="choice-grid">
+              <button
+                v-for="(method, index) in campaignMethods"
+                :key="campaignMethodValues[index]"
+                type="button"
+                class="choice-card"
+                :class="{ selected: isMultiSelected('campaignMethods', campaignMethodValues[index]) }"
+                @click="toggleMultiValue('campaignMethods', campaignMethodValues[index])"
+              >
+                {{ method }}
+              </button>
+            </div>
+          </div>
+          <label>
+            <span>기간 <em>*</em></span>
+            <div class="settings-date-range">
+              <input v-model="form.periodStart" type="date" />
+              <input v-model="form.periodEnd" type="date" :min="form.periodStart || undefined" />
+            </div>
+          </label>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__num">4</span>
+            <strong class="form-section__title">재무 기준 <em>선택</em></strong>
+          </div>
+          <div class="finance-grid">
+            <label>
+              <span>최대 부담 비용</span>
+              <div class="money-input">
+                <input v-model="form.maxCost" inputmode="numeric" placeholder="예: 50000000" />
+                <b>원</b>
+              </div>
+            </label>
+            <label>
+              <span>최소 기대 매출</span>
+              <div class="money-input">
+                <input v-model="form.minRevenue" inputmode="numeric" placeholder="예: 120000000" />
+                <b>원</b>
+              </div>
+            </label>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section__head">
+            <span class="form-section__num">5</span>
+            <strong class="form-section__title">어떤 파트너와? <em>선택</em></strong>
+          </div>
+          <div class="settings-goal-form__group">
+            <span>선호 파트너 업종 <em>다중</em></span>
+            <div class="choice-grid">
+              <button
+                v-for="category in partnerCategories"
+                :key="category"
+                type="button"
+                class="choice-card"
+                :class="{ selected: isMultiSelected('partnerFit', category) }"
+                @click="toggleMultiValue('partnerFit', category)"
+              >
+                {{ category }}
+              </button>
+            </div>
+          </div>
+          <label>
+            <span>기타 업종</span>
+            <input v-model="form.partnerOther" placeholder="자유 입력" />
+          </label>
+        </section>
+
+        <section class="form-section form-section--contact">
+          <label>
+            <span>담당자 이름 <em>*</em></span>
+            <input v-model="form.ownerName" placeholder="예: 김OO" />
+          </label>
+          <label>
+            <span>담당자 이메일 <em>*</em></span>
+            <input v-model="form.ownerEmail" type="email" placeholder="name@example.com" />
+          </label>
+        </section>
+
+        <footer class="match-start-actions">
+          <button type="button" class="settings-draft" @click="saveGoalDraft">임시 저장</button>
+          <button type="submit" :disabled="!canAddGoal">매칭 시작 →</button>
+        </footer>
       </form>
 
       <section v-if="selectedGoal" class="settings-selected">
         <h4>선택 목표</h4>
         <dl>
           <div>
-            <dt>KPI</dt>
-            <dd>{{ selectedGoal.kpi }}</dd>
+            <dt>목표명</dt>
+            <dd>{{ selectedGoal.name }}</dd>
           </div>
           <div>
-            <dt>한도</dt>
-            <dd>{{ selectedGoal.limit }}</dd>
+            <dt>주 목표 유형</dt>
+            <dd>{{ selectedGoal.primaryType }}</dd>
+          </div>
+          <div>
+            <dt>보조 목표</dt>
+            <dd>{{ selectedGoal.secondaryType || '선택 안 함' }}</dd>
+          </div>
+          <div>
+            <dt>캠페인 방식</dt>
+            <dd>{{ selectedGoal.campaignMethod || '선택 안 함' }}</dd>
+          </div>
+          <div>
+            <dt>핵심 지표</dt>
+            <dd>{{ selectedGoal.kpi || '미입력' }}</dd>
+          </div>
+          <div>
+            <dt>예산/공수 한도</dt>
+            <dd>{{ selectedGoal.limit || '미입력' }}</dd>
           </div>
           <div>
             <dt>기간</dt>
-            <dd>{{ selectedGoal.period }}</dd>
+            <dd>{{ selectedGoal.period || '미입력' }}</dd>
           </div>
           <div>
-            <dt>방식</dt>
-            <dd>{{ selectedGoal.campaignMethod || '-' }}</dd>
-          </div>
-          <div>
-            <dt>가중치</dt>
-            <dd>{{ selectedGoal.weights }}</dd>
+            <dt>담당자/부서</dt>
+            <dd>{{ selectedGoal.owner || '미입력' }}</dd>
           </div>
         </dl>
       </section>
@@ -492,13 +647,13 @@ onBeforeUnmount(() => {
     <section class="settings-assets">
       <AssetBenefitManagement
         v-if="showAssetBenefitPanel"
+        :key="assetPanelKey"
         :isDark="isDark"
         @asset-count-change="forwardAssetCount"
+        @request-matching="requestMatching"
       />
       <div v-else class="settings-assets__placeholder">
-        <strong>자산/혜택 영역</strong>
-        <span>필요할 때 불러오면 설정 탭 진입이 가벼워집니다.</span>
-        <button type="button" @click="openAssetBenefitPanel">자산/혜택 불러오기</button>
+        <strong>자산/혜택을 불러오는 중</strong>
       </div>
     </section>
   </section>
@@ -736,7 +891,7 @@ onBeforeUnmount(() => {
 
 .settings-add-goal,
 .settings-request,
-.settings-goal-form button {
+.match-start-actions button {
   min-height: 2.35rem;
   border-radius: 7px;
   font-size: 0.78rem;
@@ -763,27 +918,99 @@ onBeforeUnmount(() => {
 
 .settings-goal-form {
   display: grid;
-  gap: 0.5rem;
+  gap: 0;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--panel-muted);
-  padding: 0.7rem;
+  padding: 0.85rem;
   margin-top: -0.15rem;
 }
 
-.settings-goal-form label {
+.match-start-head {
+  padding: 0 0 0.75rem;
+}
+
+.match-start-head strong {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.form-section {
+  display: grid;
+  gap: 0.7rem;
+  border-top: 1px solid var(--border-color);
+  padding: 1rem 0;
+}
+
+.form-section__head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.form-section__num {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.form-section__title {
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.form-section__title em {
+  color: var(--muted-text);
+  font-style: normal;
+}
+
+.form-section--contact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-goal-form label,
+.settings-goal-form__group {
   display: grid;
   gap: 0.28rem;
 }
 
-.settings-goal-form span {
+.settings-goal-form span,
+.settings-goal-form__group > span {
   color: var(--text-primary);
   font-size: 0.7rem;
   font-weight: 900;
 }
 
+.settings-goal-form em {
+  margin-left: 0.22rem;
+  color: var(--muted-text);
+  font-size: 0.64rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.settings-goal-form .form-section__num {
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.settings-goal-form .form-section__title {
+  font-size: 0.92rem;
+}
+
 .settings-goal-form input,
-.settings-goal-form select {
+.settings-goal-form select,
+.settings-goal-form textarea {
   height: 2.25rem;
   border: 1px solid var(--border-color);
   border-radius: 7px;
@@ -794,11 +1021,97 @@ onBeforeUnmount(() => {
   font-weight: 750;
 }
 
+.settings-goal-form textarea {
+  height: auto;
+  min-height: 5.2rem;
+  resize: vertical;
+  padding: 0.65rem;
+  line-height: 1.45;
+}
+
 .settings-goal-form input:focus,
-.settings-goal-form select:focus {
+.settings-goal-form select:focus,
+.settings-goal-form textarea:focus {
   outline: none;
   border-color: var(--accent-color);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 16%, transparent);
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.choice-card {
+  display: flex;
+  min-height: 4.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-color);
+  color: var(--text-primary);
+  padding: 0.75rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.25;
+  text-align: center;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease,
+    color 0.14s ease;
+}
+
+.choice-card:hover {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 5%, var(--panel-color));
+}
+
+.choice-card.selected {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 12%, var(--panel-color));
+  color: var(--accent-color);
+}
+
+.finance-grid,
+.match-start-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.money-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--panel-color);
+}
+
+.money-input:focus-within {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 16%, transparent);
+}
+
+.money-input input {
+  border: 0;
+  background: transparent;
+  box-shadow: none !important;
+}
+
+.money-input b {
+  padding-right: 0.7rem;
+  color: var(--muted-text);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.match-start-actions {
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.85rem;
 }
 
 .settings-date-range {
@@ -807,14 +1120,25 @@ onBeforeUnmount(() => {
   gap: 0.4rem;
 }
 
-.settings-goal-form button,
 .settings-request {
   border: 1px solid var(--accent-color);
   background: var(--accent-color);
   color: #fff;
 }
 
-.settings-goal-form button:disabled,
+.match-start-actions button[type='submit'] {
+  border: 1px solid var(--accent-color);
+  background: var(--accent-color);
+  color: #fff;
+}
+
+.settings-draft {
+  border: 1px solid var(--border-color);
+  background: var(--panel-color);
+  color: var(--text-secondary);
+}
+
+.match-start-actions button[type='submit']:disabled,
 .settings-request:disabled {
   cursor: not-allowed;
   opacity: 0.48;
@@ -890,18 +1214,6 @@ onBeforeUnmount(() => {
   color: var(--muted-text);
   font-size: 0.72rem;
   font-weight: 750;
-}
-
-.settings-assets__placeholder button {
-  min-height: 2.25rem;
-  border: 1px solid var(--accent-color);
-  border-radius: 7px;
-  background: var(--accent-color);
-  color: #fff;
-  padding: 0 0.85rem;
-  font-size: 0.76rem;
-  font-weight: 900;
-  cursor: pointer;
 }
 
 .settings-assets :deep(.asset-panel) {

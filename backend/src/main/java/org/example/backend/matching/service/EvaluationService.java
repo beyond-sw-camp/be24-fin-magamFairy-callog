@@ -2,7 +2,9 @@ package org.example.backend.matching.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
+import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.matching.model.*;
 import org.example.backend.matching.model.evaluation.CustomerEval;
 import org.example.backend.matching.model.evaluation.Evaluation;
@@ -29,13 +31,16 @@ public class EvaluationService {
     private final AssetRepository assetRepository;
     private final BenefitRepository benefitRepository;
     private final GoalRepository goalRepository;
+    private final CampaignRepository campaignRepository;
     private final RestClient restClient;
 
-    @Value("${custom.n8n.webhook-url}")
+    @Value("${custom.n8n.webhook-url}/evaluation")
     String n8nWebhookUrl;
 
     public void startEvaluation(EvaluationDto.StartEvaluationReq dto) {
 
+        Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
+                .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + dto.getCampaignIdx()));
         MarketingAsset requiredAsset = assetRepository.findById(dto.getAssetIdx())
                 .orElseThrow(() -> new EntityNotFoundException("해당 Asset을 찾을 수 없습니다. Asset ID: " + dto.getAssetIdx()));
         PartnerBenefits requiredBenefit = benefitRepository.findById(dto.getBenefitIdx())
@@ -46,13 +51,14 @@ public class EvaluationService {
         EvaluationDto.StartEvaluation eval;
         eval = EvaluationDto.StartEvaluation.builder()
                 .dependency(dto.getDependency())
+                .campaignIdx(campaign.getIdx())
                 .asset(MatchingDto.AssetRes.toDto(requiredAsset))
-                .benefit(EvaluationDto.StartEvaluation.BenefitRes.toDto(requiredBenefit))
+                .benefit(MatchingDto.BenefitRes.toDto(requiredBenefit))
                 .goal(EvaluationDto.StartEvaluation.CampaignGoalRes.toDto(requiredGoal))
                 .build();
 
         try {
-            String n8nResponse = restClient.post()
+            restClient.post()
                     .uri(n8nWebhookUrl)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(eval)
@@ -72,62 +78,34 @@ public class EvaluationService {
         }
     }
 
-    private final CustomerEvalRepository customerEvalRepository;
-    private final RevenueEvalRepository revenueEvalRepository;
-    private final CostEvalRepository costEvalRepository;
-    private final OperationEvalRepository operationEvalRepository;
-    private final BrandEvalRepository brandEvalRepository;
-    public void collect(EvaluationDto.CollectDto dto, String category) {
-        switch (category) {
-            case "CUSTOMER":
-                EvaluationDto.CollectDto.Customer customerDto = (EvaluationDto.CollectDto.Customer) dto;
-                customerEvalRepository.save(customerDto.toEntity());
-                break;
-            case "REVENUE":
-                EvaluationDto.CollectDto.Revenue revenueDto = (EvaluationDto.CollectDto.Revenue) dto;
-                revenueEvalRepository.save(revenueDto.toEntity());
-                break;
-            case "COST":
-                EvaluationDto.CollectDto.Cost costDto = (EvaluationDto.CollectDto.Cost) dto;
-                costEvalRepository.save(costDto.toEntity());
-                break;
-            case "OPERATION":
-                EvaluationDto.CollectDto.Operation operationDto = (EvaluationDto.CollectDto.Operation) dto;
-                operationEvalRepository.save(operationDto.toEntity());
-                break;
-            case "BRAND":
-                EvaluationDto.CollectDto.Brand brandDto = (EvaluationDto.CollectDto.Brand) dto;
-                brandEvalRepository.save(brandDto.toEntity());
-                break;
-        }
-    }
+    @Transactional
+    public void collect(EvaluationDto.CollectDto dto) {
 
-    @Transactional(readOnly = true)
-    public EvaluationDto.EvaluationRes getEvaluationRes(Long userIdx, Long campaignIdx) {
-        // 1. 유저의 단체 정보 가져오기
-        Organization organization = userRepository.findById(userIdx)
-                .orElseThrow(() -> new EntityNotFoundException("유저를 찾을 수 없습니다."))
-                .getOrganization();
+        String category = dto.getCategory();
+        // 1. 현재 세션(Evaluation) 조회
+        Evaluation evaluation = evaluationRepository.findBySessionId(dto.getUuid())
+                .orElseGet(() -> {
+                    Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
+                            .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + dto.getCampaignIdx()));
+                    Evaluation newEval = Evaluation.builder()
+                            .sessionId(dto.getUuid())
+                            .campaign(campaign)
+                            .build();
+                    return evaluationRepository.save(newEval);
+                });
 
-        Long organizationIdx = organization.getIdx();
+        // 2. DTO를 해당 카테고리의 엔티티로 변환
+        Object evalEntity = switch (category) {
+            case "CUSTOMER" -> ((EvaluationDto.CollectDto.Customer) dto).toEntity();
+            case "REVENUE" -> ((EvaluationDto.CollectDto.Revenue) dto).toEntity();
+            case "COST" -> ((EvaluationDto.CollectDto.Cost) dto).toEntity();
+            case "OPERATION" -> ((EvaluationDto.CollectDto.Operation) dto).toEntity();
+            case "BRAND" -> ((EvaluationDto.CollectDto.Brand) dto).toEntity();
+            default -> throw new IllegalArgumentException("잘못된 카테고리입니다.");
+        };
 
-        // 2. 매핑 테이블(CampaignParticipant)에서 존재 여부 확인
-        boolean isParticipant = participantRepository.existsByCampaignIdxAndOrganizationIdx(
-                campaignIdx,
-                organizationIdx
-        );
-
-        if (!isParticipant) {
-            // Spring Security를 쓰신다면 아래 예외, 아니면 RuntimeException 사용
-            throw new org.springframework.security.access.AccessDeniedException("해당 캠페인 참여 권한이 없습니다.");
-        }
-        else {
-            // 3. 평가 데이터 조회 및 반환
-            Evaluation evaluation = evaluationRepository.findByCampaignIdxAndOrganizationIdx(campaignIdx, organizationIdx)
-                    .orElseThrow(() -> new EntityNotFoundException("평가 데이터를 찾을 수 없습니다."));
-
-            return EvaluationDto.EvaluationRes.toDto(evaluation);
-        }
+        // 3. 세션 엔티티에 데이터 연결 (Dirty Checking에 의해 자동 업데이트)
+        evaluation.updateEval(evalEntity, category);
     }
 
 

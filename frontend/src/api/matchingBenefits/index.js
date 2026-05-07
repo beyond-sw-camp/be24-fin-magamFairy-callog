@@ -19,6 +19,12 @@ export const ListBenefits = async () => {
   )
 }
 
+export const addBenefit = async (body) => {
+  return await api.post('/matching/benefit/add', body)
+  
+}
+
 export default {
   ListBenefits,
+  addBenefit
 }

@@ -1,8 +1,8 @@
-package org.example.backend.userInfo.userProfile.service;
+package org.example.backend.userInfo.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.backend.user.model.User;
-import org.example.backend.userInfo.userProfile.model.UserProfileDto;
+import org.example.backend.userInfo.model.UserProfileDto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
