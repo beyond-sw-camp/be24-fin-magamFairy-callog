@@ -40,6 +40,7 @@ const dropPlacement = ref('before')
 const folderDropState = ref('idle')
 
 const VIEW_MODE_STORAGE_KEY = 'callog-sidebar2-view-mode'
+const ACTIVE_CAMPAIGN_SESSION_KEY = 'CURRENT_CAMPAIGN'
 const viewMode = ref('compact') // 'compact' | 'kpi'
 
 const contextMenuPosition = reactive({ top: FLOAT_MARGIN, left: FLOAT_MARGIN })
@@ -333,6 +334,11 @@ function closeCreateModal() {
 function selectCampaign(campaignId) {
   closeCampaignMenu()
   store.setActiveCampaign(campaignId)
+
+  if (typeof window !== 'undefined') {
+    window.sessionStorage.setItem(ACTIVE_CAMPAIGN_SESSION_KEY, String(campaignId))
+  }
+
   router.push({ name: 'campaign-detail', params: { campaignId } })
 }
 
@@ -616,6 +622,7 @@ onBeforeUnmount(() => {
             <span class="campaign-card__bar" />
             <span class="campaign-card__body">
               <span class="campaign-card__top">
+                <span v-if="campaign.icon" class="campaign-card__icon">{{ campaign.icon }}</span>
                 <span class="campaign-card__title">{{ campaign.name }}</span>
                 <span v-if="getDaysLeft(campaign.endDate) !== null" class="campaign-card__dday">
                   {{ formatDDay(getDaysLeft(campaign.endDate)) }}
@@ -639,6 +646,7 @@ onBeforeUnmount(() => {
           <!-- kpi (E3) -->
           <template v-else>
             <span class="campaign-card__head">
+              <span v-if="campaign.icon" class="campaign-card__icon">{{ campaign.icon }}</span>
               <span class="campaign-card__title">{{ campaign.name }}</span>
               <span
                 class="campaign-card__chip"
@@ -796,7 +804,7 @@ onBeforeUnmount(() => {
 
           <!-- 캠페인 이니셜 원형 -->
           <div class="chp-cover__logo">
-            <span>{{ hoveredCampaign.initials }}</span>
+            <span>{{ hoveredCampaign.icon || hoveredCampaign.initials }}</span>
           </div>
 
           <!-- 기간 배지 -->
@@ -1109,6 +1117,18 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.campaign-card__icon {
+  display: inline-grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--campaign-color, var(--color-primary-500)) 14%, var(--panel-muted));
+  font-size: 0.9rem;
+  line-height: 1;
 }
 
 .campaign-card--compact .campaign-card__title {

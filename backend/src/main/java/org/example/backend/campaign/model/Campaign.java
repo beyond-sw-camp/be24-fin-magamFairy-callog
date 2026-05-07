@@ -83,6 +83,9 @@ public class Campaign extends BaseEntity {
     @Column(nullable = false, length = 20)
     private String initials;
 
+    @Column(length = 40)
+    private String icon;
+
     @Column(nullable = false, length = 20)
     private String color;
 
@@ -96,6 +99,7 @@ public class Campaign extends BaseEntity {
             String goals,
             String mainMessage,
             String initials,
+            String icon,
             String color
     ) {
         this.name = name;
@@ -109,6 +113,7 @@ public class Campaign extends BaseEntity {
         this.goals = goals;
         this.mainMessage = mainMessage;
         this.initials = initials;
+        this.icon = icon;
         this.color = color;
     }
 
