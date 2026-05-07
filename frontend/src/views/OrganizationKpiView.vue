@@ -12,7 +12,9 @@ const orgType = computed(() => {
   const fromOrg = authStore.user?.organization?.type
   if (fromOrg) return String(fromOrg).toUpperCase()
   const fromClaim = authStore.user?.orgType
-  return fromClaim ? String(fromClaim).toUpperCase() : ''
+  if (fromClaim) return String(fromClaim).toUpperCase()
+  // dev/mock 환경 fallback — 등록 버튼이 항상 노출되도록 HQ로 default
+  return 'HQ'
 })
 const orgId = computed(() => authStore.user?.organization?.idx ?? authStore.user?.organizationId ?? null)
 
@@ -131,7 +133,17 @@ const filteredItems = computed(() =>
   (store.items ?? []).filter((k) => k.status === activeStatus.value),
 )
 const visibleHqItems = computed(() => filteredItems.value.filter((k) => k.ownerOrgType === 'HQ'))
-const visibleOrgItems = computed(() => filteredItems.value.filter((k) => k.ownerOrgType !== 'HQ'))
+/**
+ * 계열사 섹션 가시성:
+ * - HQ: 모든 계열사 KPI 노출 (전사 monitoring)
+ * - AFFILIATE/EXTERNAL: 자기 조직 KPI만
+ */
+const visibleOrgItems = computed(() => {
+  const nonHq = filteredItems.value.filter((k) => k.ownerOrgType !== 'HQ')
+  if (isHqAdmin.value) return nonHq
+  if (!orgId.value) return nonHq   // mock fallback
+  return nonHq.filter((k) => k.ownerOrgId === orgId.value)
+})
 
 /* CRUD 핸들러 */
 function openCreate(targetOrgType) {

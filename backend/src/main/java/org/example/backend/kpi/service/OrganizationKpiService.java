@@ -41,10 +41,36 @@ public class OrganizationKpiService {
 
     // ── 조회 ────────────────────────────────────────────────
 
-    public List<OrganizationKpiDto> list(String periodCode, Long ownerOrgId, GoalStatus status) {
+    public List<OrganizationKpiDto> list(Long callerIdx, String periodCode, Long ownerOrgId, GoalStatus status) {
+        User caller = callerIdx == null ? null : userRepository.findById(callerIdx).orElse(null);
         return kpiRepository.findByFilters(ownerOrgId, normalize(periodCode), status).stream()
+                .filter(kpi -> isVisibleTo(kpi, caller))
                 .map(OrganizationKpiDto::from)
                 .toList();
+    }
+
+    /**
+     * 가시성 규칙:
+     * - HQ: 모든 OrganizationKpi 조회 가능
+     * - AFFILIATE / EXTERNAL_PARTNER: 본사(HQ) KPI + 자기 조직 KPI만 조회 가능
+     * - caller 정보가 없거나 조직 정보 없으면 본사 KPI만 (read-only fallback)
+     */
+    private boolean isVisibleTo(OrganizationKpi kpi, User caller) {
+        Organization owner = kpi.getOwner();
+        if (owner == null) return false;
+        boolean ownerIsHq = owner.getType() == OrganizationType.HQ;
+
+        if (caller == null || caller.getOrganization() == null) {
+            // 인증 정보 없을 때는 본사 KPI만 노출 (방어적 default)
+            return ownerIsHq;
+        }
+        OrganizationType callerType = caller.getOrganization().getType();
+        if (callerType == OrganizationType.HQ) {
+            return true;
+        }
+        // AFFILIATE / EXTERNAL_PARTNER: 본사 KPI 또는 자기 조직 KPI만
+        return ownerIsHq
+                || Objects.equals(owner.getIdx(), caller.getOrganization().getIdx());
     }
 
     public OrganizationKpiDto get(Long id) {
@@ -229,9 +255,15 @@ public class OrganizationKpiService {
         if (caller.getOrganization().getType() == OrganizationType.EXTERNAL_PARTNER) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "외부 파트너는 OrganizationKpi를 관리할 수 없습니다.");
         }
+        // ROLE_USER 차단 — KPI 관리는 GM/MANAGER/ADMIN만
+        String role = caller.getRole();
+        if ("ROLE_USER".equals(role)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "KPI 관리 권한이 없습니다. (GENERAL_MANAGER / MANAGER / ADMIN 필요)");
+        }
         // HQ 관리자는 모든 조직 KPI 관리 가능
         if (caller.getOrganization().getType() == OrganizationType.HQ
-                && "ROLE_ADMIN".equals(caller.getRole())) {
+                && "ROLE_ADMIN".equals(role)) {
             return;
         }
         if (!Objects.equals(caller.getOrganization().getIdx(), targetOrgIdx)) {

@@ -27,7 +27,7 @@ public class OrganizationKpiController {
             @RequestParam(required = false) GoalStatus status,
             @AuthenticationPrincipal AuthUserDetails user) {
         requireAuth(user);
-        return ResponseEntity.ok(BaseResponse.success(kpiService.list(period, owner, status)));
+        return ResponseEntity.ok(BaseResponse.success(kpiService.list(user.getIdx(), period, owner, status)));
     }
 
     @GetMapping("/parents")
