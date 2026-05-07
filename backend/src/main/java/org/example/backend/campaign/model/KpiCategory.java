@@ -6,6 +6,5 @@ public enum KpiCategory {
     CONVERSION,
     REVENUE,
     BRAND,
-    ESG,
     OTHER
 }

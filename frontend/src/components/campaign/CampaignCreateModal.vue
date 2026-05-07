@@ -1,6 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { campaignLabels, campaignModalText } from '@/constants/campaignText'
+import KpiContributionPicker from '@/components/campaign/KpiContributionPicker.vue'
 
 const props = defineProps({
   mode: {
@@ -15,8 +16,9 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'submit'])
 
-const TOTAL_STEPS = 3
+const TOTAL_STEPS = 4
 const currentStep = ref(1)
+const contributions = ref([])
 
 function createEmptyForm() {
   return {
@@ -129,6 +131,7 @@ const tagList = computed(() =>
     .filter(Boolean),
 )
 
+// 각 단계별 진행 가능 조건
 const resolvedPrimaryGoal = computed(() =>
   form.primaryGoal === '기타' ? form.customPrimaryGoal.trim() : form.primaryGoal,
 )
@@ -143,10 +146,17 @@ const campaignMethodSummary = computed(() =>
 )
 const isStep2Valid = computed(() => Boolean(form.startDate) && Boolean(form.endDate))
 const isStep3Valid = computed(() => form.ownerName.trim().length > 0 && form.ownerEmail.trim().length > 0)
+const isStep4Valid = computed(() =>
+  // 기여 KPI는 선택 사항이지만, 매핑된 KPI는 모두 committedValue > 0 이어야 함
+  contributions.value.every((c) => Number(c.committedValue) > 0),
+) 
 
 const canSubmit = computed(() => isStep1Valid.value && isStep2Valid.value && isStep3Valid.value)
 
-const stepValidity = computed(() => [isStep1Valid.value, isStep2Valid.value, isStep3Valid.value])
+
+
+
+const stepValidity = computed(() => [isStep1Valid.value, isStep2Valid.value, isStep3Valid.value, isStep4Valid.value])
 
 function isStepDone(step) {
   return step < currentStep.value && stepValidity.value[step - 1]
@@ -156,6 +166,7 @@ const stepDescriptors = [
   { num: 1, label: '자산 & 목표' },
   { num: 2, label: '조건 & 파트너' },
   { num: 3, label: '재무 & 담당자' },
+  { num: 4, label: '기여 KPI' }
 ]
 
 function hydrateForm(values) {
@@ -180,6 +191,7 @@ function hydrateForm(values) {
   nextForm.icon = source.icon ?? '🎯'
   Object.assign(form, nextForm)
   partners.value = Array.isArray(source.partners) ? [...source.partners] : []
+  contributions.value = Array.isArray(source.contributions) ? [...source.contributions] : []
   expandedPickers.goal = false
   expandedPickers.method = false
 }
@@ -230,6 +242,7 @@ function isListValueSelected(key, value) {
 function goNext() {
   if (currentStep.value === 1 && !isStep1Valid.value) return
   if (currentStep.value === 2 && !isStep2Valid.value) return
+  if (currentStep.value === 3 && !isStep3Valid.value) return
   if (currentStep.value < TOTAL_STEPS) currentStep.value++
 }
 function goPrev() {
@@ -261,6 +274,10 @@ function submitForm() {
     ownerName: form.ownerName,
     ownerEmail: form.ownerEmail,
     color: form.color,
+    contributions: contributions.value.map((c) => ({
+      targetOrgKpiId: c.targetOrgKpiId,
+      committedValue: Number(c.committedValue) || 0,
+    })),
     icon: form.icon,
   })
 }
@@ -575,6 +592,16 @@ function avatarInitial(value) {
               </div>
             </div>
           </div>
+
+          <!-- Step 4: 기여 KPI (cascade) -->
+          <div v-if="currentStep === 4">
+            <div class="step-section-title">기여하는 상위 KPI</div>
+            <div class="step-section-desc">
+              이 캠페인이 어떤 본사·계열사 KPI에 cascade 되는지 선택하세요. 선택한 KPI마다 약속한 기여값을 입력합니다.
+              (선택 사항)
+            </div>
+            <KpiContributionPicker v-model="contributions" />
+          </div>
         </form>
 
         <!-- 푸터 -->
@@ -598,7 +625,7 @@ function avatarInitial(value) {
               v-if="currentStep < TOTAL_STEPS"
               type="button"
               class="btn btn--primary"
-              :disabled="(currentStep === 1 && !isStep1Valid) || (currentStep === 2 && !isStep2Valid)"
+              :disabled="(currentStep === 1 && !isStep1Valid) || (currentStep === 2 && !isStep2Valid) || (currentStep === 3 && !isStep3Valid)"
               @click="goNext"
             >
               <span>다음 </span>
