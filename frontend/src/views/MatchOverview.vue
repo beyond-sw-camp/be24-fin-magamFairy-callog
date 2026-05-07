@@ -69,7 +69,7 @@ function requestEvaluation(candidate) {
   console.log(candidate)
   console.log("ㅎㅇ")
   startEvaluation(evaluationCandidate.value);
-  // currentTab.value = 'evaluation'
+  currentTab.value = 'evaluation'
 }
 
 function handleDashboardNavigation(target) {

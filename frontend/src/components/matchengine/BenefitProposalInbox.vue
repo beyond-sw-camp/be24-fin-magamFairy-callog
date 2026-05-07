@@ -28,7 +28,6 @@ function openEvaluationModal() {
 
 // 자식 모달에서 최종 선택 완료 후 submit 이벤트 발생 시 실행됨
 function handleEvaluationSubmit(payload) {
-  // console.log(payload)
   emit('request-evaluation', payload)
   alert('선택한 혜택의 평가가 요청되었습니다.')
 }
