@@ -220,12 +220,12 @@ const ASSET_CATS = computed(() => {
     .sort((a, b) => b.count - a.count)
     .map((c, i) => ({ ...c, color: ASSET_COLORS[i % ASSET_COLORS.length] }))
 })
-const assetTotal = computed(() => ASSET_CATS.reduce((s, c) => s + c.count, 0))
+const assetTotal = computed(() => ASSET_CATS.value.reduce((s, c) => s + c.count, 0))
 const assetSegments = computed(() => {
   const C = 2 * Math.PI * 50  // r=50
   const total = assetTotal.value || 1
   let acc = 0
-  return ASSET_CATS.map((c) => {
+  return ASSET_CATS.value.map((c) => {
     const len = (c.count / total) * C
     const seg = { ...c, length: len, gap: C - len, offset: -acc, pct: Math.round((c.count / total) * 100) }
     acc += len
