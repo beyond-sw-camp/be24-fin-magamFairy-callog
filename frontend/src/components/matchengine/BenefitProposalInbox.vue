@@ -1,6 +1,8 @@
 <script setup>
 import { computed, ref } from 'vue'
 import EvaluationModal from './EvaluationModal.vue'
+import { ListBenefits } from '@/api/matchingBenefits/index.js'
+import { onMounted } from 'vue';
 
 defineProps({
   isDark: {
@@ -45,106 +47,124 @@ function getStatusLabel(status) {
   return filter ? filter.label : status
 }
 
-// 실제 데이터 구조가 반영된 더미 데이터 (benefits)
-const benefits = ref([
-  {
-    id: 1, // 리스트 v-for용 고유 ID
-    name: "핸드크림 10ml 샘플",
-    type: "체험/사은품",
-    description: "럭시드 핸드크림 샘플을 VIP 고객에게 제공하는 체험형 혜택입니다.",
-    quantity: 10000,
-    quantityUnit: "개",
-    valuePerPerson: 5000,
-    periodStart: "2026.05.01",
-    periodEnd: "2026.06.30",
-    alwaysNegotiable: false,
-    prepDays: 10,
-    targetAudience: "2040 뷰티 고객, VIP/프리미엄",
-    expectedReach: 8000,
-    costBearer: "PARTNER",
-    costPartnerPercent: "100",
-    costOursPercent: "0",
-    costDetails: "파트너 전액 부담",
-    exposureChannels: "자사 앱, 알림톡, 제휴사 채널",
-    requiredCollaborations: "샘플 재고 소진 시 대체 혜택 필요",
-    conditions: "VIP 고객층과 적합도 높음",
-    desiredAssets: "갤러리아 VIP 고객층",
-    autoRecommend: true,
-    managerName: "럭시드",
-    managerEmail: "contact@luxeed.com",
-    managerPhone: "010-1234-5678",
-    status: "PENDING",
-    campaignIdx: 1,
-    totalValue: 50000000,
-    // 화면 표시용 부가 데이터 (실제 응답에 없다면 프론트에서 가공)
-    receivedAt: '오늘 09:42',
-    matchScore: 87,
-  },
-  {
-    id: 2,
-    name: "전시 시설 30% 할인권",
-    type: "할인/쿠폰",
-    description: "전시 시설 할인권을 활용해 기존 고객의 재방문을 유도하는 제안입니다.",
-    quantity: 9999, // 무제한 등을 표현
-    quantityUnit: "건",
-    valuePerPerson: 15000,
-    periodStart: "",
-    periodEnd: "",
-    alwaysNegotiable: true,
-    prepDays: 5,
-    targetAudience: "패밀리, 4050 기존 고객",
-    expectedReach: 5000,
-    costBearer: "PARTNER",
-    costPartnerPercent: "100",
-    costOursPercent: "0",
-    costDetails: "파트너 전액 부담 (할인율 기반 정산)",
-    exposureChannels: "앱, SNS, 오프라인 매장",
-    requiredCollaborations: "운영비 부담 기준은 추가 협의 필요",
-    conditions: "기존 고객 재방문 목표와 연결이 명확함",
-    desiredAssets: "호텔 객실 패키지",
-    autoRecommend: false,
-    managerName: "메리오",
-    managerEmail: "mkt@merio.com",
-    managerPhone: "02-987-6543",
-    status: "APPROVED",
-    campaignIdx: 1,
-    totalValue: 0,
-    receivedAt: '어제 16:20',
-    matchScore: 82,
-  },
-  {
-    id: 3,
-    name: "오리지널 콘텐츠 공동 프로모션",
-    type: "콘텐츠/이벤트",
-    description: "오리지널 콘텐츠를 활용한 공동 프로모션 제안입니다.",
-    quantity: 0,
-    quantityUnit: "건",
-    valuePerPerson: 0,
-    periodStart: "미입력",
-    periodEnd: "미입력",
-    alwaysNegotiable: false,
-    prepDays: 0,
-    targetAudience: "미입력",
-    expectedReach: 0,
-    costBearer: "UNKNOWN",
-    costPartnerPercent: "",
-    costOursPercent: "",
-    costDetails: "비용 부담 구조 미입력",
-    exposureChannels: "보도자료, 영상 콘텐츠 협의 필요",
-    requiredCollaborations: "대상 고객, 비용 부담, 유효 기간이 없어 검토 불가",
-    conditions: "콘텐츠 협업 형태로 브랜드 노출 가능",
-    desiredAssets: "매칭 불가",
-    autoRecommend: false,
-    managerName: "어반스테이지",
-    managerEmail: "info@urban.com",
-    managerPhone: "-",
-    status: "INCOMPLETE",
-    campaignIdx: 1,
-    totalValue: 0,
-    receivedAt: '2일 전',
-    matchScore: null,
+// 1️⃣ 기존 더미 데이터를 지우고 빈 배열로 초기화합니다.
+const benefits = ref([])
+
+// // 실제 데이터 구조가 반영된 더미 데이터 (benefits)
+// const benefits = ref([
+//   {
+//     id: 1, // 리스트 v-for용 고유 ID
+//     name: "핸드크림 10ml 샘플",
+//     type: "체험/사은품",
+//     description: "럭시드 핸드크림 샘플을 VIP 고객에게 제공하는 체험형 혜택입니다.",
+//     quantity: 10000,
+//     quantityUnit: "개",
+//     valuePerPerson: 5000,
+//     periodStart: "2026.05.01",
+//     periodEnd: "2026.06.30",
+//     alwaysNegotiable: false,
+//     prepDays: 10,
+//     targetAudience: "2040 뷰티 고객, VIP/프리미엄",
+//     expectedReach: 8000,
+//     costBearer: "PARTNER",
+//     costPartnerPercent: "100",
+//     costOursPercent: "0",
+//     costDetails: "파트너 전액 부담",
+//     exposureChannels: "자사 앱, 알림톡, 제휴사 채널",
+//     requiredCollaborations: "샘플 재고 소진 시 대체 혜택 필요",
+//     conditions: "VIP 고객층과 적합도 높음",
+//     desiredAssets: "갤러리아 VIP 고객층",
+//     autoRecommend: true,
+//     managerName: "럭시드",
+//     managerEmail: "contact@luxeed.com",
+//     managerPhone: "010-1234-5678",
+//     status: "PENDING",
+//     campaignIdx: 1,
+//     totalValue: 50000000,
+//     // 화면 표시용 부가 데이터 (실제 응답에 없다면 프론트에서 가공)
+//     receivedAt: '오늘 09:42',
+//     matchScore: 87,
+//   },
+//   {
+//     id: 2,
+//     name: "전시 시설 30% 할인권",
+//     type: "할인/쿠폰",
+//     description: "전시 시설 할인권을 활용해 기존 고객의 재방문을 유도하는 제안입니다.",
+//     quantity: 9999, // 무제한 등을 표현
+//     quantityUnit: "건",
+//     valuePerPerson: 15000,
+//     periodStart: "",
+//     periodEnd: "",
+//     alwaysNegotiable: true,
+//     prepDays: 5,
+//     targetAudience: "패밀리, 4050 기존 고객",
+//     expectedReach: 5000,
+//     costBearer: "PARTNER",
+//     costPartnerPercent: "100",
+//     costOursPercent: "0",
+//     costDetails: "파트너 전액 부담 (할인율 기반 정산)",
+//     exposureChannels: "앱, SNS, 오프라인 매장",
+//     requiredCollaborations: "운영비 부담 기준은 추가 협의 필요",
+//     conditions: "기존 고객 재방문 목표와 연결이 명확함",
+//     desiredAssets: "호텔 객실 패키지",
+//     autoRecommend: false,
+//     managerName: "메리오",
+//     managerEmail: "mkt@merio.com",
+//     managerPhone: "02-987-6543",
+//     status: "APPROVED",
+//     campaignIdx: 1,
+//     totalValue: 0,
+//     receivedAt: '어제 16:20',
+//     matchScore: 82,
+//   },
+//   {
+//     id: 3,
+//     name: "오리지널 콘텐츠 공동 프로모션",
+//     type: "콘텐츠/이벤트",
+//     description: "오리지널 콘텐츠를 활용한 공동 프로모션 제안입니다.",
+//     quantity: 0,
+//     quantityUnit: "건",
+//     valuePerPerson: 0,
+//     periodStart: "미입력",
+//     periodEnd: "미입력",
+//     alwaysNegotiable: false,
+//     prepDays: 0,
+//     targetAudience: "미입력",
+//     expectedReach: 0,
+//     costBearer: "UNKNOWN",
+//     costPartnerPercent: "",
+//     costOursPercent: "",
+//     costDetails: "비용 부담 구조 미입력",
+//     exposureChannels: "보도자료, 영상 콘텐츠 협의 필요",
+//     requiredCollaborations: "대상 고객, 비용 부담, 유효 기간이 없어 검토 불가",
+//     conditions: "콘텐츠 협업 형태로 브랜드 노출 가능",
+//     desiredAssets: "매칭 불가",
+//     autoRecommend: false,
+//     managerName: "어반스테이지",
+//     managerEmail: "info@urban.com",
+//     managerPhone: "-",
+//     status: "INCOMPLETE",
+//     campaignIdx: 1,
+//     totalValue: 0,
+//     receivedAt: '2일 전',
+//     matchScore: null,
+//   }
+// ])
+
+onMounted(async () => {
+  try {
+    const response = await ListBenefits()
+    
+    benefits.value = response.benefitList || response 
+
+    if (benefits.value.length > 0) {
+      selectedId.value = benefits.value[0].id
+    }
+  } catch (error) {
+    console.error('혜택 목록을 불러오는데 실패했습니다:', error)
   }
-])
+})
+
 
 const activeFilter = ref('all')
 const selectedId = ref(benefits.value[0]?.id ?? null)
