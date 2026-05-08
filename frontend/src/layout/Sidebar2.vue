@@ -843,6 +843,48 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+          <!-- 자산 (이름 + 설명) -->
+          <div v-if="hoveredCampaign.assetName || hoveredCampaign.assetDescription" class="chp-row">
+            <div class="chp-icon chp-icon--violet">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              </svg>
+            </div>
+            <div class="chp-row__content">
+              <p class="chp-row__label">자산</p>
+              <p v-if="hoveredCampaign.assetName" class="chp-row__text chp-row__text--bold">{{ hoveredCampaign.assetName }}</p>
+              <p v-if="hoveredCampaign.assetDescription" class="chp-row__text">{{ hoveredCampaign.assetDescription }}</p>
+            </div>
+          </div>
+
+          <!-- 캠페인 방식 -->
+          <div v-if="hoveredCampaign.campaignMethods?.length" class="chp-row">
+            <div class="chp-icon chp-icon--sky">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m3 7 9 6 9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/>
+              </svg>
+            </div>
+            <div class="chp-row__content">
+              <p class="chp-row__label">캠페인 방식</p>
+              <div class="chp-chips">
+                <span v-for="m in hoveredCampaign.campaignMethods" :key="m" class="chp-chip chp-chip--soft">{{ m }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 메인 메시지 -->
+          <div v-if="hoveredCampaign.mainMessage" class="chp-row">
+            <div class="chp-icon chp-icon--rose">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m3 11 18-8-8 18-2-8-8-2z"/>
+              </svg>
+            </div>
+            <div class="chp-row__content">
+              <p class="chp-row__label">메인 메시지</p>
+              <p class="chp-row__text">{{ hoveredCampaign.mainMessage }}</p>
+            </div>
+          </div>
+
           <!-- 파트너 및 태그 -->
           <div v-if="hoveredCampaign.partners?.length || hoveredCampaign.tags?.length" class="chp-row">
             <div class="chp-icon chp-icon--emerald">
@@ -858,6 +900,27 @@ onBeforeUnmount(() => {
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" /><line x1="10" y1="3" x2="8" y2="21" /><line x1="16" y1="3" x2="14" y2="21" /></svg>
                   {{ tag }}
                 </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 기여 KPI (캠페인 생성 시 매핑한 OrgKpi contribution) -->
+          <div v-if="hoveredCampaign.contributions?.length" class="chp-row">
+            <div class="chp-icon chp-icon--purple">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/>
+              </svg>
+            </div>
+            <div class="chp-row__content">
+              <p class="chp-row__label">기여 KPI · {{ hoveredCampaign.contributions.length }}개</p>
+              <div class="chp-kpi-list">
+                <div v-for="(c, i) in hoveredCampaign.contributions.slice(0, 3)" :key="i" class="chp-kpi-item">
+                  <span class="chp-kpi-item__name">{{ c.targetOrgKpiName ?? `KPI #${c.targetOrgKpiId}` }}</span>
+                  <span class="chp-kpi-item__val">{{ c.committedValue }}</span>
+                </div>
+                <p v-if="hoveredCampaign.contributions.length > 3" class="chp-kpi-more">
+                  외 {{ hoveredCampaign.contributions.length - 3 }}개
+                </p>
               </div>
             </div>
           </div>
@@ -1030,25 +1093,41 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;            /* flex column 자식이 overflow 인식하도록 */
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;     /* Firefox */
+  scrollbar-color: var(--border-color) transparent;
 }
 
 .campaign-list__nav--compact { padding: 6px 8px; gap: 0; }
 .campaign-list__nav--kpi { padding: 8px; gap: 0; }
 
+/* WebKit 얇은 스크롤바 — 평소 투명, hover/스크롤 중에만 보임 */
 .campaign-list__nav::-webkit-scrollbar {
   width: 4px;
 }
-
+.campaign-list__nav::-webkit-scrollbar-track {
+  background: transparent;
+}
 .campaign-list__nav::-webkit-scrollbar-thumb {
-  background: var(--border-color);
+  background: transparent;
   border-radius: 4px;
+  transition: background var(--transition-fast);
+}
+.campaign-list__nav:hover::-webkit-scrollbar-thumb,
+.campaign-list__nav:focus-within::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+}
+.campaign-list__nav::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }
 
-/* 캠페인 카드 공통 */
+/* 캠페인 카드 공통 — flex-shrink: 0 으로 카드 크기 유지 (개수 많아도 축소 안됨) */
 .campaign-card {
   position: relative;
   width: 100%;
+  flex-shrink: 0;
   background: var(--panel-color);
   border: 1px solid var(--border-color);
   cursor: pointer;
@@ -1532,13 +1611,41 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
 }
-.chp-icon--amber {
-  background: rgba(251, 191, 36, 0.12);
-  color: #d97706;
+.chp-icon--amber   { background: rgba(251, 191, 36, 0.12);  color: #D97706; }
+.chp-icon--emerald { background: rgba(16, 185, 129, 0.12);  color: #059669; }
+.chp-icon--violet  { background: rgba(139, 92, 246, 0.12);  color: #6D28D9; }
+.chp-icon--sky     { background: rgba(14, 165, 233, 0.12);  color: #0369A1; }
+.chp-icon--rose    { background: rgba(244, 63, 94, 0.12);   color: #BE123C; }
+.chp-icon--purple  { background: rgba(168, 85, 247, 0.14);  color: #7E22CE; }
+.chp-chip--soft {
+  background: var(--panel-muted);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }
-.chp-icon--emerald {
-  background: rgba(16, 185, 129, 0.12);
-  color: #059669;
+.chp-kpi-list { display: flex; flex-direction: column; gap: 4px; }
+.chp-kpi-item {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; color: var(--text-primary);
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--panel-muted);
+}
+.chp-kpi-item__name {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600;
+}
+.chp-kpi-item__val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: var(--color-primary-700);
+  margin-left: 8px;
+}
+.chp-kpi-more {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--muted-text);
+  text-align: right;
 }
 .chp-row__content { flex: 1; min-width: 0; }
 .chp-row__label {
