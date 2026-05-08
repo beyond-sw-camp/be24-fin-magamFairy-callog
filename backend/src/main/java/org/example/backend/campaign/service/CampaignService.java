@@ -335,21 +335,21 @@ public class CampaignService {
 
         campaign.updateDetails(
                 name,
-                normalizeText(dto.purpose()),
-                normalizeList(dto.tags()),
-                dto.startDate(),
-                dto.endDate(),
-                normalizeList(dto.partners()),
-                normalizeText(dto.goals()),
-                normalizeText(dto.mainMessage()),
-                normalizeText(dto.assetName()),
-                normalizeText(dto.assetDescription()),
-                normalizeText(dto.primaryGoal()),
-                normalizeList(dto.campaignMethods()),
-                normalizeText(dto.maxCost()),
-                normalizeText(dto.minRevenue()),
-                normalizeText(dto.ownerName()),
-                normalizeText(dto.ownerEmail()),
+                normalizeTextOrCurrent(dto.purpose(), campaign.getPurpose()),
+                normalizeListOrCurrent(dto.tags(), campaign.getTags()),
+                dto.startDate() == null ? campaign.getStartDate() : dto.startDate(),
+                dto.endDate() == null ? campaign.getEndDate() : dto.endDate(),
+                normalizeListOrCurrent(dto.partners(), campaign.getPartners()),
+                normalizeTextOrCurrent(dto.goals(), campaign.getGoals()),
+                normalizeTextOrCurrent(dto.mainMessage(), campaign.getMainMessage()),
+                normalizeTextOrCurrent(dto.assetName(), campaign.getAssetName()),
+                normalizeTextOrCurrent(dto.assetDescription(), campaign.getAssetDescription()),
+                normalizeTextOrCurrent(dto.primaryGoal(), campaign.getPrimaryGoal()),
+                normalizeListOrCurrent(dto.campaignMethods(), campaign.getCampaignMethods()),
+                normalizeTextOrCurrent(dto.maxCost(), campaign.getMaxCost()),
+                normalizeTextOrCurrent(dto.minRevenue(), campaign.getMinRevenue()),
+                normalizeTextOrCurrent(dto.ownerName(), campaign.getOwnerName()),
+                normalizeTextOrCurrent(dto.ownerEmail(), campaign.getOwnerEmail()),
                 createInitials(name),
                 normalizeIcon(dto.icon()),
                 normalizeColor(dto.color())
@@ -453,6 +453,14 @@ public class CampaignService {
                 .map(String::trim)
                 .distinct()
                 .toList());
+    }
+
+    private static String normalizeTextOrCurrent(String value, String current) {
+        return value == null ? normalizeText(current) : normalizeText(value);
+    }
+
+    private static List<String> normalizeListOrCurrent(List<String> values, List<String> current) {
+        return values == null ? normalizeList(current) : normalizeList(values);
     }
 
     /**
