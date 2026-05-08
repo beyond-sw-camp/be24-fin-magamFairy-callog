@@ -130,8 +130,9 @@ public class CampaignExportService {
     private void writeKpiSection(StringBuilder sb, Long campaignId, boolean esgOnly) {
         List<CampaignKpi> kpis = campaignKpiRepository.findAllByCampaignIdxOrderByIdxAsc(campaignId);
         if (esgOnly) {
+            // KpiCategory.ESG가 분리됨 → CampaignKpi.esgCategory 필드 기준 필터링
             kpis = kpis.stream()
-                    .filter(k -> k.getCategory() != null && "ESG".equals(k.getCategory().name()))
+                    .filter(k -> k.getEsgCategory() != null)
                     .toList();
         }
         sb.append(esgOnly ? "[ESG 지표]\r\n" : "[KPI 지표]\r\n");

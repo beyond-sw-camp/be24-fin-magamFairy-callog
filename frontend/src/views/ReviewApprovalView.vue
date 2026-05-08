@@ -1,176 +1,58 @@
 <script setup>
-import { computed, ref } from 'vue'
-import { CheckAdFile } from '@/api/adcheck/index.js'
+import { computed, onMounted, ref, watch } from 'vue'
+import {
+  ApproveAdReviewRequest,
+  CheckAdFile,
+  CreateAdReviewRequest,
+  ListAdReviewRequests,
+  RejectAdReviewRequest,
+} from '@/api/adcheck/index.js'
+import { getCampaignMembers } from '@/api/campaignMembers'
+
+const props = defineProps({
+  campaignId: {
+    type: [String, Number],
+    required: true,
+  },
+})
 
 const isAnalysisOpen = ref(false)
 const selectedAnalysisFile = ref(null)
+const analysisFileInput = ref(null)
+const isUploadDragOver = ref(false)
+const uploadDragDepth = ref(0)
 const isAnalyzing = ref(false)
 const analysisResult = ref(null)
 const analysisError = ref('')
+const reviewRequestMemo = ref('')
+const isSubmittingReviewRequest = ref(false)
+const requestSubmitError = ref('')
 
-const campaign = {
-  title: '파트너 공동 혜택 프로모션',
-  period: '2026.05.01 - 2026.05.31',
-  owner: '제휴운영팀',
-}
+const reviewRequests = ref([])
+const reviewLoadError = ref('')
+const reviewDecisionError = ref('')
+const submittingDecisionId = ref(null)
 
-const reviewStats = [
-  { label: '검수 대기', value: 5, detail: '오늘 처리 권장', tone: 'warning' },
-  { label: '승인 대기', value: 2, detail: '브랜드 1 · 법무 1', tone: 'approval' },
-  { label: '오픈 차단', value: 1, detail: '로고 권리 확인 필요', tone: 'danger' },
-  { label: '사용 가능', value: 8, detail: '최종 승인 완료', tone: 'ready' },
-]
+const memberContext = ref(null)
+const memberContextError = ref('')
 
-const reviewQueue = [
-  {
-    title: '메인 배너 1차 시안',
-    type: '배너',
-    request: '혜택 문구와 파트너 로고 병기 검수',
-    issue: '최대 30% 표현 근거 확인 필요',
-    owner: '브랜드팀',
-    due: '오늘 16:00',
-    status: '검토 필요',
-    tone: 'warning',
-  },
-  {
-    title: '파트너 제안서 공유본',
-    type: '제안서',
-    request: '외부 공유 가능 범위 확인',
-    issue: '정산 조건표 삭제 후 공유 가능',
-    owner: '제휴운영팀',
-    due: '오늘 18:00',
-    status: '수정 요청',
-    tone: 'danger',
-  },
-  {
-    title: '랜딩페이지 혜택 영역',
-    type: '랜딩',
-    request: '대상/기간/유의사항 노출 확인',
-    issue: '하단 유의사항 링크 연결 필요',
-    owner: '마케팅팀',
-    due: '내일 11:00',
-    status: '진행 중',
-    tone: 'approval',
-  },
-  {
-    title: '혜택 적용 FAQ',
-    type: 'FAQ',
-    request: '고객 문의 응대 문구 확인',
-    issue: '혜택 재발급 조건만 보강',
-    owner: 'CS운영팀',
-    due: '내일 15:00',
-    status: '사용 가능',
-    tone: 'ready',
-  },
-]
-
-const approvalMatrix = [
-  {
-    area: '혜택/가격',
-    rule: '할인율, 쿠폰 조건, 적용 기간이 같은 화면에 노출되어야 합니다.',
-    approver: '제휴운영',
-    status: '확인 중',
-  },
-  {
-    area: '파트너 로고',
-    rule: '로고 색상, 여백, 병기 위치는 파트너 가이드 기준을 따릅니다.',
-    approver: '브랜드',
-    status: '승인 대기',
-  },
-  {
-    area: '외부 공유',
-    rule: '정산 조건, 내부 성과, 고객 데이터는 승인 없이는 포함하지 않습니다.',
-    approver: '법무',
-    status: '수정 요청',
-  },
-  {
-    area: '고객 응대',
-    rule: '혜택 적용 기준과 예외 케이스는 동일한 답변 기준을 사용합니다.',
-    approver: 'CS운영',
-    status: '승인 완료',
-  },
-]
-
-const approvalSteps = [
-  { step: '01', title: '검수 요청', desc: '소재와 요청 사유 등록' },
-  { step: '02', title: '담당 검토', desc: '기준 자료와 표현 리스크 확인' },
-  { step: '03', title: '승인/반려', desc: '승인자 의견과 수정 요청 기록' },
-  { step: '04', title: '오픈 확정', desc: '최종 승인 후 운영 일정 반영' },
-]
-
-const TONE_MAP = { violation: 'danger', warning: 'warning', pass: 'ready' }
-const STATUS_MAP = { violation: '위반 의심', warning: '주의 필요', pass: '이상 없음' }
-
-function normalizeAnalysisStatus(status) {
-  const value = String(status ?? '').trim().toLowerCase()
-  if (['violation', 'warning', 'pass'].includes(value)) return value
-  return ''
-}
+const myCampaignRole = computed(() => memberContext.value?.me?.campaignRole ?? null)
+const organizationIsPm = computed(() => Boolean(memberContext.value?.organizationIsPm))
+const canRequestReview = computed(() => !organizationIsPm.value)
+const canFinalReview = computed(() =>
+  organizationIsPm.value
+  && ['MANAGER', 'GENERAL_MANAGER'].includes(myCampaignRole.value),
+)
 
 const normalizedAnalysisStatus = computed(() => normalizeAnalysisStatus(analysisResult.value?.status))
-
-const analysisChecks = computed(() => {
-  if (analysisError.value) {
-    return [
-      { label: '가이드라인', status: '확인 필요', tone: 'warning' },
-      { label: '요구사항', status: '확인 필요', tone: 'warning' },
-      { label: '법적/고지', status: '검수 실패', tone: 'danger' },
-      { label: '금지어/민감표현', status: '검수 실패', tone: 'danger' },
-    ]
-  }
-
-  if (!analysisResult.value) {
-    return [
-      { label: '가이드라인', status: '대기', tone: 'ready' },
-      { label: '요구사항', status: '대기', tone: 'ready' },
-      { label: '법적/고지', status: '대기', tone: 'ready' },
-      { label: '금지어/민감표현', status: '대기', tone: 'ready' },
-    ]
-  }
-  const { violationText } = analysisResult.value
-  const status = normalizedAnalysisStatus.value
-  const tone = TONE_MAP[status] ?? 'ready'
-  const label = STATUS_MAP[status] ?? '결과 확인 필요'
-  return [
-    { label: '가이드라인', status: '이상 없음', tone: 'ready' },
-    { label: '요구사항', status: '이상 없음', tone: 'ready' },
-    { label: '법적/고지', status: label, tone },
-    { label: '금지어/민감표현', status: violationText ? '위반 표현 있음' : '이상 없음', tone: violationText ? 'danger' : 'ready' },
-  ]
-})
-
-const analysisIssues = computed(() => {
-  if (!analysisResult.value || normalizedAnalysisStatus.value === 'pass') return []
-  const { law, violationText, reason, suggestion } = analysisResult.value
-  const status = normalizedAnalysisStatus.value
-  if (!status) {
-    return [{
-      category: 'AI 응답',
-      title: '검수 결과 확인 필요',
-      source: '응답 형식 오류',
-      target: analysisResult.value.status || '',
-      detail: 'AI 검수 결과의 status 값이 violation, warning, pass 중 하나가 아닙니다.',
-    }]
-  }
-
-  return [{
-    category: '법적/고지',
-    title: status === 'violation' ? '광고법 위반 표현 발견' : '주의가 필요한 표현 발견',
-    source: law || '표시광고법',
-    target: violationText || '',
-    detail: [reason, suggestion ? `수정 제안: ${suggestion}` : ''].filter(Boolean).join(' · '),
-  }]
-})
-
-const analysisHasIssues = computed(() => analysisIssues.value.length > 0)
+const normalizedAnalysisPassed = computed(() =>
+  normalizedAnalysisStatus.value === 'pass' && !analysisError.value,
+)
 
 const analysisFileInfo = computed(() => {
-  if (!selectedAnalysisFile.value) {
-    return null
-  }
+  if (!selectedAnalysisFile.value) return null
 
   const fileSize = selectedAnalysisFile.value.size / 1024 / 1024
-
   return {
     name: selectedAnalysisFile.value.name,
     size: `${fileSize.toFixed(fileSize >= 1 ? 1 : 2)}MB`,
@@ -178,7 +60,223 @@ const analysisFileInfo = computed(() => {
   }
 })
 
+const analysisIssues = computed(() => {
+  if (!analysisResult.value || normalizedAnalysisStatus.value === 'pass') return []
+
+  const { law, violationText, reason, suggestion } = analysisResult.value
+  const issueSections = buildIssueSections(reason, suggestion)
+  return [{
+    title: normalizedAnalysisStatus.value === 'violation'
+      ? '광고법 위반 표현 발견'
+      : '주의가 필요한 표현 발견',
+    source: law || 'AI 검수',
+    target: violationText || '',
+    reason: issueSections.reason,
+    suggestion: issueSections.suggestion,
+    suggestionItems: issueSections.suggestionItems,
+  }]
+})
+
+const canCreateReviewRequest = computed(() =>
+  Boolean(
+    analysisFileInfo.value
+    && props.campaignId
+    && canRequestReview.value
+    && analysisResult.value?.fileObjectKey
+    && normalizedAnalysisPassed.value
+    && !isAnalyzing.value
+    && !isSubmittingReviewRequest.value,
+  ),
+)
+
+function normalizeAnalysisStatus(status) {
+  const value = String(status ?? '').trim().toLowerCase()
+  if (['violation', 'warning', 'pass'].includes(value)) return value
+  return ''
+}
+
+function buildIssueSections(reason, suggestion) {
+  const parsedReason = splitSuggestionMarker(reason)
+  const cleanSuggestion = normalizeText(suggestion) || parsedReason.suggestion
+
+  return {
+    reason: parsedReason.reason,
+    suggestion: cleanSuggestion,
+    suggestionItems: splitSuggestionItems(cleanSuggestion),
+  }
+}
+
+function splitSuggestionMarker(value) {
+  const text = normalizeText(value)
+  const marker = text.match(/(?:^|[\s·-])수정\s*제안\s*[:：]\s*/)
+  if (!marker || marker.index === undefined) {
+    return { reason: text, suggestion: '' }
+  }
+
+  return {
+    reason: text.slice(0, marker.index).replace(/[·\s-]+$/, '').trim(),
+    suggestion: text.slice(marker.index + marker[0].length).trim(),
+  }
+}
+
+function splitSuggestionItems(value) {
+  const text = normalizeText(value).replace(/^수정\s*제안\s*[:：]\s*/, '').trim()
+  if (!text) return []
+
+  const bulletParts = text
+    .split(/\n+|[·•]\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  if (bulletParts.length > 1) return bulletParts
+
+  const sentenceParts = text
+    .match(/[^.!?。]+(?:[.!?。]+|$)/g)
+    ?.map((item) => item.trim())
+    .filter(Boolean) ?? []
+
+  return sentenceParts.length > 1 ? sentenceParts : [text]
+}
+
+function normalizeText(value) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim()
+}
+
+function analysisStatusLabel(status) {
+  if (status === 'pass') return '이상 없음'
+  if (status === 'warning') return '주의 필요'
+  if (status === 'violation') return '위반 의심'
+  return '대기'
+}
+
+function reviewStatusLabel(status) {
+  if (status === 'REQUESTED') return '요청'
+  if (status === 'APPROVED') return '검수통과'
+  if (status === 'REJECTED') return '반려'
+  return status ?? '요청'
+}
+
+function reviewStatusTone(status) {
+  if (status === 'APPROVED') return 'ready'
+  if (status === 'REJECTED') return 'danger'
+  return 'approval'
+}
+
+function formatDate(value) {
+  if (!value) return '요청일 없음'
+  return String(value).slice(0, 10)
+}
+
+async function loadMemberContext() {
+  memberContextError.value = ''
+  if (!props.campaignId) return
+
+  try {
+    const response = await getCampaignMembers(props.campaignId)
+    memberContext.value = response?.data?.data ?? null
+  } catch (error) {
+    memberContext.value = null
+    memberContextError.value = error?.message ?? '캠페인 권한 정보를 불러오지 못했습니다.'
+  }
+}
+
+async function loadReviewRequests() {
+  reviewLoadError.value = ''
+  if (!props.campaignId) return
+
+  try {
+    const requests = await ListAdReviewRequests(props.campaignId)
+    reviewRequests.value = Array.isArray(requests) ? requests : []
+  } catch (error) {
+    reviewRequests.value = []
+    reviewLoadError.value = error?.message ?? '검수 요청 목록을 불러오지 못했습니다.'
+  }
+}
+
+async function createReviewRequest() {
+  requestSubmitError.value = ''
+
+  if (!normalizedAnalysisPassed.value) {
+    requestSubmitError.value = 'AI 1차 검수 통과 후 검수 요청을 생성할 수 있습니다.'
+    return
+  }
+
+  if (!analysisResult.value?.fileObjectKey) {
+    requestSubmitError.value = '업로드된 파일 정보를 확인할 수 없습니다.'
+    return
+  }
+
+  isSubmittingReviewRequest.value = true
+  try {
+    const result = await CreateAdReviewRequest(props.campaignId, {
+      fileName: analysisResult.value.fileName ?? analysisFileInfo.value?.name ?? 'upload',
+      fileObjectKey: analysisResult.value.fileObjectKey,
+      fileContentType: analysisResult.value.fileContentType ?? selectedAnalysisFile.value?.type ?? null,
+      fileSize: analysisResult.value.fileSize ?? selectedAnalysisFile.value?.size ?? null,
+      extractedText: analysisResult.value.extractedText ?? '',
+      status: analysisResult.value.status,
+      law: analysisResult.value.law,
+      violationText: analysisResult.value.violationText,
+      reason: analysisResult.value.reason,
+      suggestion: analysisResult.value.suggestion,
+      requestMemo: reviewRequestMemo.value.trim() || null,
+    })
+
+    replaceReviewRequest(result)
+    resetAnalysisForm()
+    isAnalysisOpen.value = false
+  } catch (error) {
+    requestSubmitError.value = error?.message ?? '검수 요청 생성에 실패했습니다.'
+  } finally {
+    isSubmittingReviewRequest.value = false
+  }
+}
+
+async function approveReviewRequest(request) {
+  if (!canFinalReview.value || !request?.idx || submittingDecisionId.value) return
+
+  const memo = window.prompt('검수통과 메모를 입력하세요. 비워두어도 됩니다.', '') ?? ''
+  submittingDecisionId.value = request.idx
+  reviewDecisionError.value = ''
+  try {
+    const result = await ApproveAdReviewRequest(props.campaignId, request.idx, { memo })
+    replaceReviewRequest(result)
+  } catch (error) {
+    reviewDecisionError.value = error?.message ?? '검수통과 처리에 실패했습니다.'
+  } finally {
+    submittingDecisionId.value = null
+  }
+}
+
+async function rejectReviewRequest(request) {
+  if (!canFinalReview.value || !request?.idx || submittingDecisionId.value) return
+
+  const reason = window.prompt('반려 사유를 입력하세요.', '')
+  if (!reason || !reason.trim()) return
+
+  submittingDecisionId.value = request.idx
+  reviewDecisionError.value = ''
+  try {
+    const result = await RejectAdReviewRequest(props.campaignId, request.idx, { reason: reason.trim() })
+    replaceReviewRequest(result)
+  } catch (error) {
+    reviewDecisionError.value = error?.message ?? '반려 처리에 실패했습니다.'
+  } finally {
+    submittingDecisionId.value = null
+  }
+}
+
+function replaceReviewRequest(request) {
+  const index = reviewRequests.value.findIndex((item) => item.idx === request.idx)
+  if (index >= 0) {
+    reviewRequests.value.splice(index, 1, request)
+    return
+  }
+  reviewRequests.value.unshift(request)
+}
+
 function openAnalysisRequest() {
+  if (!canRequestReview.value) return
   isAnalysisOpen.value = true
 }
 
@@ -186,13 +284,62 @@ function closeAnalysisRequest() {
   isAnalysisOpen.value = false
 }
 
-async function handleAnalysisFileChange(event) {
-  const [file] = event.target.files ?? []
-  selectedAnalysisFile.value = file ?? null
+function resetAnalysisForm() {
+  selectedAnalysisFile.value = null
   analysisResult.value = null
   analysisError.value = ''
+  requestSubmitError.value = ''
+  reviewRequestMemo.value = ''
+  isUploadDragOver.value = false
+  uploadDragDepth.value = 0
+  if (analysisFileInput.value) {
+    analysisFileInput.value.value = ''
+  }
+}
+
+async function handleAnalysisFileChange(event) {
+  const [file] = event.target.files ?? []
+  await processAnalysisFile(file)
+}
+
+function handleUploadDragEnter() {
+  if (isAnalyzing.value) return
+  uploadDragDepth.value += 1
+  isUploadDragOver.value = true
+}
+
+function handleUploadDragLeave() {
+  uploadDragDepth.value = Math.max(0, uploadDragDepth.value - 1)
+  if (uploadDragDepth.value === 0) {
+    isUploadDragOver.value = false
+  }
+}
+
+function handleUploadDragOver(event) {
+  if (isAnalyzing.value) return
+  event.dataTransfer.dropEffect = 'copy'
+  isUploadDragOver.value = true
+}
+
+async function handleUploadDrop(event) {
+  uploadDragDepth.value = 0
+  isUploadDragOver.value = false
+  if (isAnalyzing.value) return
+
+  const [file] = event.dataTransfer?.files ?? []
+  await processAnalysisFile(file)
+}
+
+async function processAnalysisFile(file) {
+  resetAnalysisForm()
   if (!file) return
 
+  if (!isSupportedAnalysisFile(file)) {
+    analysisError.value = 'TXT, PDF, 이미지 파일만 업로드할 수 있습니다.'
+    return
+  }
+
+  selectedAnalysisFile.value = file
   isAnalyzing.value = true
   try {
     const result = await CheckAdFile(file)
@@ -200,73 +347,80 @@ async function handleAnalysisFileChange(event) {
     if (!normalizeAnalysisStatus(result?.status)) {
       analysisError.value = 'AI 검수 결과 형식이 올바르지 않습니다. 서버 응답을 확인해주세요.'
     }
-  } catch (e) {
-    console.error('AI 검수 오류:', e)
-    analysisError.value = e?.message ?? 'AI 검수 요청에 실패했습니다.'
+  } catch (error) {
+    analysisError.value = error?.message ?? 'AI 검수 요청에 실패했습니다.'
   } finally {
     isAnalyzing.value = false
   }
 }
+
+function isSupportedAnalysisFile(file) {
+  const name = String(file?.name ?? '').toLowerCase()
+  const type = String(file?.type ?? '').toLowerCase()
+  return (
+    type.startsWith('image/')
+    || type === 'application/pdf'
+    || type === 'text/plain'
+    || name.endsWith('.txt')
+    || name.endsWith('.pdf')
+  )
+}
+
+async function loadPageData() {
+  await Promise.all([
+    loadMemberContext(),
+    loadReviewRequests(),
+  ])
+}
+
+onMounted(loadPageData)
+
+watch(
+  () => props.campaignId,
+  () => {
+    resetAnalysisForm()
+    isAnalysisOpen.value = false
+    reviewRequests.value = []
+    loadPageData()
+  },
+)
 </script>
 
 <template>
-  <section class="approval-page">
-    <header class="approval-hero">
-      <div>
-        <p>Review & Approval</p>
-        <h2>검수/승인</h2>
-        <span>{{ campaign.title }} · {{ campaign.period }}</span>
-      </div>
-      <div class="approval-hero__owner">
-        <span>담당 조직</span>
-        <strong>{{ campaign.owner }}</strong>
-        <small>오픈 전 검수 현황</small>
-      </div>
-    </header>
-
-    <section class="approval-stats" aria-label="검수 승인 현황">
-      <article
-        v-for="stat in reviewStats"
-        :key="stat.label"
-        :class="`approval-stat approval-stat--${stat.tone}`"
-      >
-        <span>{{ stat.label }}</span>
-        <strong>{{ stat.value }}</strong>
-        <p>{{ stat.detail }}</p>
-      </article>
-    </section>
-
-    <section v-if="isAnalysisOpen" class="analysis-workspace">
-      <div class="analysis-head">
+  <section class="review-page">
+    <section v-if="isAnalysisOpen" class="review-panel">
+      <header class="review-panel__head">
         <div>
           <p>AI Risk Review</p>
-          <h3>AI 위험 분석 요청</h3>
-          <span>파일을 올리면 캠페인 자료실의 기준과 비교해 위험 요소를 먼저 표시합니다.</span>
+          <h3>검수 요청 생성</h3>
         </div>
         <button type="button" class="ghost-button" @click="closeAnalysisRequest">목록으로</button>
-      </div>
+      </header>
 
       <div class="analysis-layout">
         <section class="analysis-upload">
-          <div class="upload-box">
+          <label
+            for="analysisFile"
+            class="upload-box"
+            :class="{ 'upload-box--dragover': isUploadDragOver }"
+            @dragenter.prevent="handleUploadDragEnter"
+            @dragover.prevent="handleUploadDragOver"
+            @dragleave.prevent="handleUploadDragLeave"
+            @drop.prevent="handleUploadDrop"
+          >
             <input
               id="analysisFile"
-              class="upload-box__input"
+              ref="analysisFileInput"
               type="file"
               accept=".txt,.pdf,image/*"
               :disabled="isAnalyzing"
               @change="handleAnalysisFileChange"
             />
-            <label for="analysisFile" class="upload-box__label">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5-5 5 5M12 5v12" />
-              </svg>
-              <strong>광고 카피 파일 업로드</strong>
-              <span>TXT · PDF · 이미지 파일을 올리면 AI가 광고법 위반 여부를 분석합니다.</span>
-            </label>
-          </div>
+            <strong>검수할 파일 업로드</strong>
+            <span>클릭하거나 TXT, PDF, 이미지 파일을 끌어다 놓으면 AI 1차 검수를 진행합니다.</span>
+          </label>
 
-          <div class="analysis-file-card">
+          <article class="file-summary">
             <template v-if="analysisFileInfo">
               <span>업로드 파일</span>
               <strong>{{ analysisFileInfo.name }}</strong>
@@ -274,34 +428,28 @@ async function handleAnalysisFileChange(event) {
             </template>
             <template v-else>
               <span>대기 중</span>
-              <strong>선택된 파일이 없습니다</strong>
-              <p>파일 선택 후 AI 위험 분석 결과가 표시됩니다.</p>
+              <strong>선택된 파일이 없습니다.</strong>
+              <p>파일을 선택하면 AI 검수 결과가 표시됩니다.</p>
             </template>
-          </div>
+          </article>
 
-          <div class="analysis-request-form">
-            <label>
-              <span>요청 유형</span>
-              <select>
-                <option>외부 공개 전 최종 검수</option>
-                <option>파트너 전달 자료 검수</option>
-                <option>브랜드/로고 사용 검수</option>
-              </select>
-            </label>
-            <label>
-              <span>검수 메모</span>
-              <textarea rows="4" placeholder="예: 메인 배너의 혜택 문구와 파트너 로고 사용 가능 여부를 확인해주세요." />
-            </label>
-          </div>
+          <label class="memo-field">
+            <span>요청 메모</span>
+            <textarea
+              v-model="reviewRequestMemo"
+              rows="4"
+              placeholder="PM에게 전달할 검수 요청 내용을 입력하세요."
+            />
+          </label>
         </section>
 
         <aside class="analysis-result">
-          <div
+          <article
             class="analysis-verdict"
             :class="{
               'analysis-verdict--empty': !analysisFileInfo || isAnalyzing,
-              'analysis-verdict--error': analysisError,
-              'analysis-verdict--clear': analysisFileInfo && !isAnalyzing && !analysisError && normalizedAnalysisStatus === 'pass',
+              'analysis-verdict--error': analysisError || analysisIssues.length,
+              'analysis-verdict--clear': analysisFileInfo && !isAnalyzing && normalizedAnalysisStatus === 'pass',
             }"
           >
             <span>AI 1차 판단</span>
@@ -310,401 +458,210 @@ async function handleAnalysisFileChange(event) {
                 !analysisFileInfo
                   ? '파일 업로드 대기'
                   : isAnalyzing
-                    ? 'AI 분석 중...'
+                    ? 'AI 분석 중'
                     : analysisError
                       ? '검수 실패'
-                      : analysisHasIssues
-                        ? '확인 필요한 항목 발견'
-                        : normalizedAnalysisStatus === 'pass'
-                          ? '이상 없음'
-                          : '결과 확인 필요'
+                      : analysisStatusLabel(normalizedAnalysisStatus)
               }}
             </strong>
-            <p>
-              {{
-                !analysisFileInfo
-                  ? '광고 카피 텍스트 파일을 올리면 AI가 광고법 위반 여부를 분석합니다.'
-                  : isAnalyzing
-                    ? 'AI가 광고 카피를 분석하고 있습니다. 잠시 기다려 주세요.'
-                    : analysisError
-                      ? analysisError
-                      : analysisHasIssues
-                        ? '법적 고지 기준에 걸리는 부분을 확인해주세요.'
-                        : normalizedAnalysisStatus === 'pass'
-                          ? '광고법 위반 또는 주의가 필요한 항목이 발견되지 않았습니다.'
-                          : 'AI 응답 형식을 확인해야 합니다.'
-              }}
-            </p>
-          </div>
+            <p v-if="analysisError">{{ analysisError }}</p>
+            <p v-else-if="normalizedAnalysisStatus === 'pass'">AI 1차 검수에서 문제 항목이 발견되지 않았습니다.</p>
+            <p v-else-if="analysisIssues.length">아래 항목을 확인한 뒤 수정 후 다시 요청해주세요.</p>
+            <p v-else>파일을 업로드하면 검수 결과가 표시됩니다.</p>
+          </article>
 
-          <div class="analysis-check-grid">
-            <article
-              v-for="check in analysisChecks"
-              :key="check.label"
-              :class="`analysis-check analysis-check--${check.tone}`"
-            >
-              <span>{{ check.label }}</span>
-              <strong>{{ isAnalyzing ? '분석 중' : analysisFileInfo ? check.status : '대기' }}</strong>
+          <div v-if="analysisIssues.length" class="issue-list">
+            <article v-for="issue in analysisIssues" :key="issue.title" class="issue-card">
+              <span>{{ issue.source }}</span>
+              <strong>{{ issue.title }}</strong>
+              <blockquote v-if="issue.target">{{ issue.target }}</blockquote>
+              <div v-if="issue.reason" class="issue-section">
+                <span>위반 사유</span>
+                <p>{{ issue.reason }}</p>
+              </div>
+              <div v-if="issue.suggestion" class="issue-section issue-section--suggestion">
+                <span>수정 제안</span>
+                <ul v-if="issue.suggestionItems.length > 1">
+                  <li v-for="item in issue.suggestionItems" :key="item">{{ item }}</li>
+                </ul>
+                <p v-else>{{ issue.suggestion }}</p>
+              </div>
             </article>
           </div>
 
-          <div class="analysis-issues">
-            <h4>확인 필요한 부분</h4>
-            <article v-if="analysisError" class="analysis-clear analysis-clear--error">
-              <strong>검수 실패</strong>
-              <p>{{ analysisError }}</p>
-            </article>
-            <article v-else-if="analysisFileInfo && isAnalyzing" class="analysis-clear analysis-clear--empty">
-              <strong>분석 중</strong>
-              <p>OCR 추출과 AI 검수가 진행 중입니다. 결과가 도착하면 자동으로 이 영역이 갱신됩니다.</p>
-            </article>
-            <template v-else-if="analysisFileInfo && analysisHasIssues">
-              <article v-for="issue in analysisIssues" :key="issue.title" class="analysis-issue">
-                <span>{{ issue.category }}</span>
-                <strong>{{ issue.title }}</strong>
-                <small>{{ issue.source }}</small>
-                <blockquote>{{ issue.target }}</blockquote>
-                <p>{{ issue.detail }}</p>
-              </article>
-            </template>
-            <article v-else-if="analysisFileInfo && normalizedAnalysisStatus === 'pass'" class="analysis-clear">
-              <strong>이상 없음</strong>
-              <p>등록된 가이드라인, 캠페인 요구사항, 법적 고지 기준에 어긋나는 부분이 발견되지 않았습니다.</p>
-            </article>
-            <article v-else-if="analysisFileInfo" class="analysis-clear analysis-clear--empty">
-              <strong>결과 확인 필요</strong>
-              <p>AI 검수 응답을 아직 받지 못했거나 결과 형식이 올바르지 않습니다.</p>
-            </article>
-            <article v-else class="analysis-clear analysis-clear--empty">
-              <strong>분석 대기</strong>
-              <p>파일 업로드 후 AI가 확인이 필요한 부분만 추려서 표시합니다.</p>
-            </article>
-          </div>
+          <article v-if="requestSubmitError" class="form-error">
+            {{ requestSubmitError }}
+          </article>
 
-          <button type="button" class="approval-button analysis-submit" :disabled="!analysisFileInfo || isAnalyzing">
-            검수 요청 생성
+          <button
+            type="button"
+            class="primary-button"
+            :disabled="!canCreateReviewRequest"
+            @click="createReviewRequest"
+          >
+            {{ isSubmittingReviewRequest ? '생성 중...' : '검수 요청 생성' }}
           </button>
         </aside>
       </div>
     </section>
 
-    <section v-else class="approval-layout">
-      <main class="approval-layout__main">
-        <section class="approval-panel">
-          <div class="approval-panel__head">
-            <div>
-              <p>Review Queue</p>
-              <h3>검수 대기열</h3>
-            </div>
-            <button type="button" class="approval-button" @click="openAnalysisRequest">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              요청 등록
+    <section v-else class="review-panel">
+      <header class="review-panel__head">
+        <div>
+          <p>Review Requests</p>
+          <h3>검수 요청</h3>
+        </div>
+        <button v-if="canRequestReview" type="button" class="primary-button" @click="openAnalysisRequest">
+          검수 요청
+        </button>
+      </header>
+
+      <p v-if="memberContextError" class="form-error">{{ memberContextError }}</p>
+      <p v-if="reviewLoadError" class="form-error">{{ reviewLoadError }}</p>
+      <p v-if="reviewDecisionError" class="form-error">{{ reviewDecisionError }}</p>
+
+      <div v-if="reviewRequests.length" class="review-list">
+        <article v-for="request in reviewRequests" :key="request.idx" class="review-card">
+          <div class="review-card__main">
+            <span class="review-card__type">검수</span>
+            <strong>{{ request.fileName ?? '광고 소재 검수 요청' }}</strong>
+            <p>{{ request.requestMemo || 'AI 1차 검수 통과 후 생성된 검수 요청입니다.' }}</p>
+          </div>
+
+          <div class="review-card__meta">
+            <span>{{ request.requesterName ?? request.requesterLoginId ?? '요청자' }}</span>
+            <strong>{{ formatDate(request.createdAt) }}</strong>
+          </div>
+
+          <div class="review-card__actions">
+            <a
+              v-if="request.fileUrl"
+              :href="request.fileUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              파일 확인
+            </a>
+            <button
+              v-if="canFinalReview && request.requestStatus === 'REQUESTED'"
+              type="button"
+              :disabled="submittingDecisionId === request.idx"
+              @click="approveReviewRequest(request)"
+            >
+              검수통과
+            </button>
+            <button
+              v-if="canFinalReview && request.requestStatus === 'REQUESTED'"
+              type="button"
+              :disabled="submittingDecisionId === request.idx"
+              @click="rejectReviewRequest(request)"
+            >
+              반려
             </button>
           </div>
 
-          <div class="queue-list">
-            <article v-for="item in reviewQueue" :key="item.title" class="queue-item">
-              <div class="queue-item__main">
-                <span>{{ item.type }}</span>
-                <strong>{{ item.title }}</strong>
-                <p>{{ item.request }}</p>
-              </div>
-              <div class="queue-item__issue">
-                <small>확인 필요</small>
-                <span>{{ item.issue }}</span>
-              </div>
-              <div class="queue-item__meta">
-                <span>{{ item.owner }}</span>
-                <strong>{{ item.due }}</strong>
-              </div>
-              <em :class="`status-chip status-chip--${item.tone}`">{{ item.status }}</em>
-            </article>
-          </div>
-        </section>
+          <em :class="`status-chip status-chip--${reviewStatusTone(request.requestStatus)}`">
+            {{ reviewStatusLabel(request.requestStatus) }}
+          </em>
 
-        <section class="approval-panel">
-          <div class="approval-panel__head">
-            <div>
-              <p>Approval Matrix</p>
-              <h3>승인 기준</h3>
-            </div>
-          </div>
+          <details v-if="request.extractedText" class="review-card__text">
+            <summary>OCR 텍스트</summary>
+            <pre>{{ request.extractedText }}</pre>
+          </details>
 
-          <div class="approval-table">
-            <div class="approval-table__row approval-table__row--head">
-              <span>항목</span>
-              <span>검수 기준</span>
-              <span>승인자</span>
-              <span>상태</span>
-            </div>
-            <div v-for="rule in approvalMatrix" :key="rule.area" class="approval-table__row">
-              <strong>{{ rule.area }}</strong>
-              <p>{{ rule.rule }}</p>
-              <span>{{ rule.approver }}</span>
-              <em>{{ rule.status }}</em>
-            </div>
-          </div>
-        </section>
-      </main>
+          <p v-if="request.rejectReason" class="review-card__reason">
+            반려 사유: {{ request.rejectReason }}
+          </p>
+        </article>
+      </div>
 
-      <aside class="approval-layout__side">
-        <section class="approval-panel">
-          <div class="approval-panel__head">
-            <div>
-              <p>Workflow</p>
-              <h3>처리 흐름</h3>
-            </div>
-          </div>
-          <div class="approval-flow">
-            <article v-for="step in approvalSteps" :key="step.step">
-              <span>{{ step.step }}</span>
-              <strong>{{ step.title }}</strong>
-              <p>{{ step.desc }}</p>
-            </article>
-          </div>
-        </section>
-      </aside>
+      <article v-else class="empty-state">
+        <strong>등록된 검수 요청이 없습니다.</strong>
+        <p>협력사가 AI 1차 검수를 통과한 파일을 요청하면 이곳에 표시됩니다.</p>
+      </article>
     </section>
   </section>
 </template>
 
 <style scoped>
-.approval-page {
-  display: flex;
+.review-page {
+  display: grid;
   width: 100%;
-  max-width: 1280px;
-  flex-direction: column;
+  max-width: 1180px;
   gap: 16px;
   margin: 0 auto;
 }
 
-.approval-hero {
-  display: flex;
-  min-height: 132px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 24px;
+.review-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--panel-color);
   box-shadow: var(--shadow-sm);
 }
 
-.approval-hero p,
-.approval-panel__head p {
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.approval-hero h2 {
-  margin-top: 5px;
-  color: var(--text-primary);
-  font-size: 28px;
-  font-weight: 950;
-}
-
-.approval-hero span {
-  display: block;
-  margin-top: 8px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.approval-hero__owner {
-  display: grid;
-  min-width: 220px;
-  gap: 4px;
-  padding: 16px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-}
-
-.approval-hero__owner span,
-.approval-hero__owner small {
-  margin: 0;
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.approval-hero__owner strong {
-  color: var(--text-primary);
-  font-size: 16px;
-  font-weight: 950;
-}
-
-.approval-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.review-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
-.approval-stat,
-.approval-panel {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-color);
-  box-shadow: var(--shadow-sm);
-}
-
-.approval-stat {
-  display: grid;
-  gap: 6px;
-  padding: 16px;
-}
-
-.approval-stat span {
+.review-panel__head p,
+.file-summary span,
+.memo-field span,
+.analysis-verdict span,
+.issue-card span,
+.review-card__meta span {
   color: var(--muted-text);
   font-size: 12px;
   font-weight: 850;
 }
 
-.approval-stat strong {
-  color: var(--text-primary);
-  font-size: 30px;
-  font-weight: 950;
-  line-height: 1;
-}
-
-.approval-stat p,
-.queue-item p,
-.approval-table p,
-.approval-flow p {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.approval-stat--danger {
-  background: var(--danger-surface);
-  border-color: color-mix(in srgb, var(--color-danger) 32%, var(--border-color));
-}
-
-.approval-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 16px;
-}
-
-.approval-layout__main,
-.approval-layout__side {
-  display: grid;
-  min-width: 0;
-  align-content: start;
-  gap: 16px;
-}
-
-.approval-panel {
-  display: grid;
-  gap: 13px;
-  padding: 16px;
-}
-
-.approval-panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.approval-panel__head h3 {
-  margin-top: 3px;
-  color: var(--text-primary);
-  font-size: 18px;
-  font-weight: 950;
-}
-
-.approval-button {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 13px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  background: var(--color-primary-500);
-  color: #ffffff;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.approval-button svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
-}
-
-.approval-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.ghost-button {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 13px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-color);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.analysis-workspace {
-  display: grid;
-  gap: 16px;
-}
-
-.analysis-head,
-.analysis-upload,
-.analysis-result {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-color);
-  box-shadow: var(--shadow-sm);
-}
-
-.analysis-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px;
-}
-
-.analysis-head p {
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.analysis-head h3 {
+.review-panel__head h3 {
   margin-top: 3px;
   color: var(--text-primary);
   font-size: 20px;
   font-weight: 950;
 }
 
-.analysis-head span {
-  display: block;
-  margin-top: 6px;
-  color: var(--text-secondary);
+.primary-button,
+.ghost-button,
+.review-card__actions a,
+.review-card__actions button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
   font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.primary-button {
+  background: var(--color-primary-500);
+  color: #fff;
+}
+
+.ghost-button,
+.review-card__actions a,
+.review-card__actions button {
+  border-color: var(--border-color);
+  background: var(--panel-color);
+  color: var(--text-primary);
+}
+
+.primary-button:disabled,
+.review-card__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .analysis-layout {
@@ -717,20 +674,10 @@ async function handleAnalysisFileChange(event) {
 .analysis-result {
   display: grid;
   align-content: start;
-  gap: 14px;
-  padding: 16px;
+  gap: 12px;
 }
 
-.upload-box__input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-.upload-box__label {
+.upload-box {
   display: grid;
   min-height: 220px;
   place-items: center;
@@ -743,98 +690,82 @@ async function handleAnalysisFileChange(event) {
   color: var(--text-secondary);
   cursor: pointer;
   text-align: center;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
-.upload-box__label svg {
-  width: 34px;
-  height: 34px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
+.upload-box--dragover {
+  border-color: var(--color-primary-500);
+  background: color-mix(in srgb, var(--color-primary-100) 58%, var(--panel-color));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary-500) 30%, transparent);
+  color: var(--color-primary-700);
 }
 
-.upload-box__label strong,
-.analysis-file-card strong,
-.analysis-issues h4,
-.analysis-issue strong {
+.upload-box input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.upload-box strong,
+.file-summary strong,
+.analysis-verdict strong,
+.issue-card strong,
+.review-card__main strong,
+.empty-state strong {
   color: var(--text-primary);
-  font-size: 15px;
   font-weight: 950;
 }
 
-.upload-box__label span,
-.analysis-file-card p,
-.analysis-issue p {
+.upload-box span,
+.file-summary p,
+.analysis-verdict p,
+.issue-card p,
+.review-card__main p,
+.empty-state p,
+.review-card__reason {
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.5;
 }
 
-.analysis-file-card {
-  display: grid;
-  gap: 5px;
-  padding: 14px;
+.file-summary,
+.analysis-verdict,
+.issue-card,
+.review-card,
+.empty-state {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--panel-muted);
 }
 
-.analysis-file-card span,
-.analysis-request-form span,
-.analysis-verdict span,
-.analysis-check span,
-.analysis-issue span {
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.analysis-request-form {
+.file-summary,
+.analysis-verdict,
+.issue-card,
+.empty-state {
   display: grid;
-  gap: 12px;
+  gap: 6px;
+  padding: 14px;
 }
 
-.analysis-request-form label {
+.memo-field {
   display: grid;
   gap: 7px;
 }
 
-.analysis-request-form select,
-.analysis-request-form textarea {
+.memo-field textarea {
   width: 100%;
+  resize: vertical;
+  padding: 11px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--panel-color);
   color: var(--text-primary);
   font-size: 13px;
-  outline: none;
-}
-
-.analysis-request-form select {
-  min-height: 38px;
-  padding: 0 11px;
-}
-
-.analysis-request-form textarea {
-  resize: vertical;
-  padding: 11px;
   line-height: 1.55;
-}
-
-.analysis-verdict {
-  display: grid;
-  gap: 8px;
-  padding: 18px;
-  border: 1px solid color-mix(in srgb, var(--color-danger) 22%, var(--border-color));
-  border-radius: var(--radius-md);
-  background: var(--danger-surface);
-}
-
-.analysis-verdict--empty {
-  border-color: var(--border-color);
-  background: var(--panel-muted);
+  outline: none;
 }
 
 .analysis-verdict--clear {
@@ -843,89 +774,20 @@ async function handleAnalysisFileChange(event) {
 }
 
 .analysis-verdict--error {
-  border-color: color-mix(in srgb, var(--color-danger) 44%, var(--border-color));
+  border-color: color-mix(in srgb, var(--color-danger) 34%, var(--border-color));
   background: var(--danger-surface);
 }
 
-.analysis-verdict strong {
-  color: var(--danger-text-strong);
-  font-size: 22px;
-  font-weight: 950;
+.analysis-verdict--empty {
+  border-color: var(--border-color);
 }
 
-.analysis-verdict--empty strong {
-  color: var(--muted-text);
-}
-
-.analysis-verdict--clear strong {
-  color: var(--color-success);
-}
-
-.analysis-verdict p {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.analysis-check-grid {
+.issue-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.analysis-check {
-  display: grid;
-  gap: 4px;
-  min-height: 74px;
-  padding: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-}
-
-.analysis-check strong {
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 950;
-}
-
-.analysis-check--ready {
-  border-color: color-mix(in srgb, var(--color-success) 28%, var(--border-color));
-}
-
-.analysis-check--approval {
-  border-color: color-mix(in srgb, var(--color-primary-300) 48%, var(--border-color));
-}
-
-.analysis-check--warning {
-  border-color: color-mix(in srgb, var(--color-warning) 36%, var(--border-color));
-}
-
-.analysis-check--danger {
-  border-color: color-mix(in srgb, var(--color-danger) 30%, var(--border-color));
-}
-
-.analysis-issues {
-  display: grid;
-  gap: 9px;
-}
-
-.analysis-issue {
-  display: grid;
-  gap: 7px;
-  padding: 13px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-}
-
-.analysis-issue small {
-  color: var(--muted-text);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.analysis-issue blockquote {
+.issue-card blockquote {
   margin: 0;
   padding: 8px 10px;
   border-left: 3px solid var(--border-strong);
@@ -936,101 +798,68 @@ async function handleAnalysisFileChange(event) {
   font-weight: 900;
 }
 
-.analysis-clear {
+.issue-section {
   display: grid;
   gap: 6px;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--color-success) 34%, var(--border-color));
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-success) 12%, var(--panel-color));
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
 }
 
-.analysis-clear--empty {
-  border-color: var(--border-color);
-  background: var(--panel-muted);
-}
-
-.analysis-clear--error {
-  border-color: color-mix(in srgb, var(--color-danger) 34%, var(--border-color));
-  background: var(--danger-surface);
-}
-
-.analysis-clear strong {
-  color: var(--color-success);
-  font-size: 15px;
+.issue-section > span {
+  color: var(--text-primary);
+  font-size: 12px;
   font-weight: 950;
 }
 
-.analysis-clear--error strong {
-  color: var(--danger-text-strong);
+.issue-section p,
+.issue-section ul {
+  margin: 0;
 }
 
-.analysis-clear--empty strong {
-  color: var(--text-primary);
-}
-
-.analysis-clear p {
+.issue-section ul {
+  display: grid;
+  gap: 6px;
+  padding-left: 18px;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.5;
 }
 
-.analysis-submit {
-  width: 100%;
+.issue-section--suggestion {
+  border-color: color-mix(in srgb, var(--color-primary-500) 28%, var(--border-color));
+  background: color-mix(in srgb, var(--color-primary-100) 48%, var(--panel-color));
 }
 
-.analysis-ocr {
-  display: grid;
-  gap: 7px;
-  padding: 13px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-}
-
-.analysis-ocr span {
-  color: var(--muted-text);
-  font-size: 12px;
+.form-error {
+  margin: 0;
+  color: var(--color-danger-dark);
+  font-size: 13px;
   font-weight: 850;
 }
 
-.analysis-ocr pre {
-  max-height: 180px;
-  overflow: auto;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.queue-list {
+.review-list {
   display: grid;
   gap: 8px;
 }
 
-.queue-item {
+.review-card {
   display: grid;
-  grid-template-columns: minmax(190px, 1.2fr) minmax(180px, 1fr) minmax(110px, 0.58fr) auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.32fr) auto auto;
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
 }
 
-.queue-item__main,
-.queue-item__issue,
-.queue-item__meta {
+.review-card__main,
+.review-card__meta {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  gap: 4px;
 }
 
-.queue-item__main > span {
+.review-card__type {
   width: fit-content;
   padding: 3px 8px;
   border-radius: var(--radius-full);
@@ -1040,30 +869,16 @@ async function handleAnalysisFileChange(event) {
   font-weight: 950;
 }
 
-.queue-item strong {
+.review-card__main strong,
+.review-card__meta strong {
   overflow: hidden;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 950;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.queue-item__issue small,
-.queue-item__meta span {
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.queue-item__issue span,
-.queue-item__meta strong {
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.review-card__actions {
+  display: inline-flex;
+  gap: 6px;
 }
 
 .status-chip {
@@ -1089,111 +904,62 @@ async function handleAnalysisFileChange(event) {
   color: var(--color-primary-700);
 }
 
-.status-chip--warning {
-  background: var(--color-warning-light);
-  color: var(--color-warning-dark);
-}
-
 .status-chip--danger {
   background: var(--color-danger-light);
   color: var(--color-danger-dark);
 }
 
-.approval-table {
-  display: grid;
-  overflow-x: auto;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+.review-card__text,
+.review-card__reason {
+  grid-column: 1 / -1;
 }
 
-.approval-table__row {
-  display: grid;
-  grid-template-columns: 110px minmax(260px, 1fr) 88px 96px;
-  gap: 12px;
-  min-width: 680px;
-  align-items: center;
-  padding: 12px;
-  border-top: 1px solid var(--border-color);
-}
-
-.approval-table__row:first-child {
-  border-top: 0;
-}
-
-.approval-table__row--head {
-  background: var(--panel-muted);
+.review-card__text summary {
+  cursor: pointer;
   color: var(--muted-text);
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 850;
 }
 
-.approval-table strong,
-.approval-table span,
-.approval-table em {
+.review-card__text pre {
+  max-height: 180px;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
   color: var(--text-primary);
-  font-size: 13px;
-  font-style: normal;
-  font-weight: 900;
-}
-
-.approval-flow {
-  display: grid;
-  gap: 9px;
-}
-
-.approval-flow article {
-  display: grid;
-  gap: 5px;
-  padding: 13px;
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-}
-
-.approval-flow span {
-  color: var(--color-primary-600);
+  font-family: inherit;
   font-size: 12px;
-  font-weight: 950;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.approval-flow strong {
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 950;
+.empty-state {
+  padding: 28px;
+  text-align: center;
 }
 
 @media (max-width: 1180px) {
-  .approval-layout,
-  .analysis-layout {
+  .analysis-layout,
+  .review-card {
     grid-template-columns: 1fr;
-  }
-
-  .approval-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .queue-item {
-    grid-template-columns: minmax(0, 1fr) minmax(180px, 0.9fr);
   }
 }
 
-@media (max-width: 860px) {
-  .approval-hero,
-  .approval-panel__head,
-  .analysis-head {
-    align-items: flex-start;
+@media (max-width: 720px) {
+  .review-panel__head,
+  .review-card__actions {
+    align-items: stretch;
     flex-direction: column;
   }
 
-  .approval-hero__owner,
-  .approval-button,
-  .ghost-button {
+  .primary-button,
+  .ghost-button,
+  .review-card__actions a,
+  .review-card__actions button {
     width: 100%;
-  }
-
-  .approval-stats,
-  .queue-item,
-  .analysis-check-grid {
-    grid-template-columns: 1fr;
   }
 }
 </style>

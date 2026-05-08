@@ -65,15 +65,15 @@ public class KpiFrameworkCatalog {
         "esg_partnership", new CampaignKpiDto.FrameworkRes(
             "esg_partnership", "ESG 동반성장", "E(환경)·S(사회)·G(거버넌스) 균형 기반 제휴 ESG KPI 세트",
             List.of(
-                new CampaignKpiDto.FrameworkItem("디지털 광고 비중 (E)",            KpiCategory.ESG, new BigDecimal("70"),  "%"),
-                new CampaignKpiDto.FrameworkItem("친환경 인증 매체 비중 (E)",        KpiCategory.ESG, new BigDecimal("30"),  "%"),
-                new CampaignKpiDto.FrameworkItem("그린워싱 리스크 점수 (E)",         KpiCategory.ESG, new BigDecimal("90"),  "점"),
-                new CampaignKpiDto.FrameworkItem("중소·여성기업 협력사 비율 (S)",    KpiCategory.ESG, new BigDecimal("30"),  "%"),
-                new CampaignKpiDto.FrameworkItem("공정 정산 준수율 60일 (S)",        KpiCategory.ESG, new BigDecimal("100"), "%"),
-                new CampaignKpiDto.FrameworkItem("협력사 만족도 NPS (S)",            KpiCategory.ESG, new BigDecimal("30"),  "점"),
-                new CampaignKpiDto.FrameworkItem("표준계약서 사용률 (G)",            KpiCategory.ESG, new BigDecimal("100"), "%"),
-                new CampaignKpiDto.FrameworkItem("협력사 행동규범 서약률 (G)",        KpiCategory.ESG, new BigDecimal("100"), "%"),
-                new CampaignKpiDto.FrameworkItem("광고법 준수율 #광고 표기 (G)",     KpiCategory.ESG, new BigDecimal("100"), "%")
+                new CampaignKpiDto.FrameworkItem("디지털 광고 비중 (E)",            KpiCategory.OTHER, new BigDecimal("70"),  "%"),
+                new CampaignKpiDto.FrameworkItem("친환경 인증 매체 비중 (E)",        KpiCategory.OTHER, new BigDecimal("30"),  "%"),
+                new CampaignKpiDto.FrameworkItem("그린워싱 리스크 점수 (E)",         KpiCategory.OTHER, new BigDecimal("90"),  "점"),
+                new CampaignKpiDto.FrameworkItem("중소·여성기업 협력사 비율 (S)",    KpiCategory.OTHER, new BigDecimal("30"),  "%"),
+                new CampaignKpiDto.FrameworkItem("공정 정산 준수율 60일 (S)",        KpiCategory.OTHER, new BigDecimal("100"), "%"),
+                new CampaignKpiDto.FrameworkItem("협력사 만족도 NPS (S)",            KpiCategory.OTHER, new BigDecimal("30"),  "점"),
+                new CampaignKpiDto.FrameworkItem("표준계약서 사용률 (G)",            KpiCategory.OTHER, new BigDecimal("100"), "%"),
+                new CampaignKpiDto.FrameworkItem("협력사 행동규범 서약률 (G)",        KpiCategory.OTHER, new BigDecimal("100"), "%"),
+                new CampaignKpiDto.FrameworkItem("광고법 준수율 #광고 표기 (G)",     KpiCategory.OTHER, new BigDecimal("100"), "%")
             )
         )
     );

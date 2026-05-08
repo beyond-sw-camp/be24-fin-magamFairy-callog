@@ -40,21 +40,29 @@ curl.exe -F "file=@sample.png" http://localhost:8000/ocr
 
 The response includes the merged `text`, per-line OCR results, and the processed page count.
 
-## Receipt/image tuning
+## Image OCR tuning
 
-The service preprocesses images before OCR by default:
+The service runs multiple local OCR candidates and chooses the best readable result:
 
 - EXIF rotation correction
-- upscale small images to a 2400px long edge
-- grayscale, autocontrast, contrast boost, and sharpening
+- original RGB with upscale when the image is small
+- soft grayscale/autocontrast fallback
+- stronger high-contrast fallback
+- bounding-box based line grouping and paragraph spacing
+
+Angle classification is off by default because it can damage normal horizontal Korean text.
 
 You can tune it before running the server:
 
 ```powershell
 $env:OCR_TARGET_LONG_EDGE = "3000"
+$env:OCR_DET_LIMIT_SIDE_LEN = "3000"
 $env:OCR_CONTRAST = "2.0"
 $env:OCR_SHARPNESS = "1.8"
+$env:OCR_MIN_SCORE = "0.42"
+$env:OCR_TEMP_ROOT = "C:\temp\callog-ocr"
 .\run-local.ps1
 ```
 
 Set `$env:OCR_PREPROCESS = "false"` to compare against the raw OCR result.
+Set `$env:OCR_USE_ANGLE_CLS = "true"` only when rotated text is a stronger concern than Korean recognition quality.

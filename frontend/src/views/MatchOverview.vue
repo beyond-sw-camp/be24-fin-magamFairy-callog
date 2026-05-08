@@ -1,10 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
+import { startEvaluation } from '@/api/evaluation'
 
-import CampaignMatching from '@/components/matchengine/CampaignMatching.vue'
+import BenefitProposalInbox from '@/components/matchengine/BenefitProposalInbox.vue'
 import MatchDashboard from '@/components/matchengine/MatchDashboard.vue'
-import MatchSettings from '@/components/matchengine/MatchSettings.vue'
 import PartnerEvaluation from '@/components/matchengine/PartnerEvaluation.vue'
 
 const props = defineProps({
@@ -15,14 +15,9 @@ const props = defineProps({
 const store = usePlannerStore()
 
 const isDark = computed(() => store.theme === 'dark')
-const isScopedToCampaign = computed(() => props.campaignId != null && props.campaignId !== '')
 const currentTab = ref('dashboard')
-const goalCount = ref(2)
-const assetBenefitCount = ref(0)
-const partnerProposalCount = 3
 const matchingCriteria = ref(null)
 const evaluationCandidate = ref(null)
-const settingCount = computed(() => goalCount.value + assetBenefitCount.value)
 
 const tabs = computed(() => [
   {
@@ -34,26 +29,18 @@ const tabs = computed(() => [
     icon: 'M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-3H4v3Z',
   },
   {
-    id: 'settings',
-    name: '매칭 설정',
-    caption: '입력값',
-    count: settingCount.value,
-    component: MatchSettings,
-    icon: 'M12 3v18M3 12h18',
-  },
-  {
-    id: 'matching',
-    name: '추천 조합',
-    caption: '3건',
-    count: 3,
-    component: CampaignMatching,
-    icon: 'M10 13a5 5 0 0 1 0-7l1.5-1.5a5 5 0 0 1 7 7L17 13M14 11a5 5 0 0 1 0 7l-1.5 1.5a5 5 0 0 1-7-7L7 11',
+    id: 'benefits',
+    name: '혜택 평가',
+    caption: '검토',
+    count: 4,
+    component: BenefitProposalInbox,
+    icon: 'M20 12v8H4v-8M22 7H2v5h20V7ZM12 22V7M12 7H7.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7Zm0 0h4.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7Z',
   },
   {
     id: 'evaluation',
     name: '파트너 평가',
-    caption: '2건',
-    count: 2,
+    caption: '3건',
+    count: 3,
     component: PartnerEvaluation,
     icon: 'M12 3l2.7 5.47 6.03.88-4.36 4.25 1.03 6-5.4-2.84L6.1 19.6l1.03-6L2.77 9.35l6.03-.88L12 3Z',
   },
@@ -67,22 +54,36 @@ function resolveTabCount(tab) {
   return typeof tab.count === 'object' ? tab.count.value : tab.count
 }
 
-function updateAssetBenefitCount(assetCount) {
-  assetBenefitCount.value = Number(assetCount ?? 0) + partnerProposalCount
-}
-
-function updateGoalCount(count) {
-  goalCount.value = Number(count ?? 0)
-}
-
 function moveToMatchingTab(criteria) {
-  matchingCriteria.value = criteria ?? null
-  currentTab.value = 'matching'
+  matchingCriteria.value = criteria ?? {
+    goalType: 'PURCHASE_BOOKING',
+    campaignMethods: [],
+    benefitIds: [],
+    sortType: 'HIGH_SCORE',
+  }
+  currentTab.value = 'evaluation'
 }
 
-function moveToEvaluationTab(candidate) {
+function requestEvaluation(candidate) {
   evaluationCandidate.value = candidate ?? null
+  console.log(candidate)
+  console.log("ㅎㅇ")
+  startEvaluation(evaluationCandidate.value);
   currentTab.value = 'evaluation'
+}
+
+function handleDashboardNavigation(target) {
+  if (target?.tab === 'benefits' || target?.tab === 'evaluation') {
+    currentTab.value = target.tab
+  }
+}
+
+function handleDashboardAction(action) {
+  handleDashboardNavigation(action?.target)
+}
+
+function handleMatchingComplete(target) {
+  handleDashboardNavigation(target)
 }
 
 </script>
@@ -100,7 +101,9 @@ function moveToEvaluationTab(candidate) {
         @click="currentTab = tab.id"
       >
         <strong>{{ tab.name }}</strong>
-        <span class="match-tabs__count">{{ resolveTabCount(tab) }}</span>
+        <span v-if="resolveTabCount(tab) != null" class="match-tabs__count">
+          {{ resolveTabCount(tab) }}
+        </span>
       </button>
     </nav>
 
@@ -110,10 +113,11 @@ function moveToEvaluationTab(candidate) {
         :isDark="isDark"
         :recommendationCriteria="matchingCriteria"
         :evaluationCandidate="evaluationCandidate"
-        @asset-count-change="updateAssetBenefitCount"
-        @goal-count-change="updateGoalCount"
         @request-matching="moveToMatchingTab"
-        @request-evaluation="moveToEvaluationTab"
+        @request-evaluation="requestEvaluation"
+        @navigate="handleDashboardNavigation"
+        @action="handleDashboardAction"
+        @matching-complete="handleMatchingComplete"
       />
     </main>
   </section>
@@ -203,8 +207,10 @@ function moveToEvaluationTab(candidate) {
 .match-view__body {
   display: grid;
   gap: 0;
+  height: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 1200px) {

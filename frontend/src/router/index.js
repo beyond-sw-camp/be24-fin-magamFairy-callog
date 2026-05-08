@@ -165,6 +165,15 @@ const routes = [
           section: '매치 엔진',
         },
       },
+      {
+        path: 'organization-kpis',
+        name: 'organization-kpis',
+        component: () => import('@/views/OrganizationKpiView.vue'),
+        meta: {
+          title: '분기 목표',
+          section: '본사·계열사 KPI cascade 관리',
+        },
+      },
     ],
   },
   {
