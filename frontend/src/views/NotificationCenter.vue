@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useNotificationsStore } from '@/stores/notifications'
 import { formatRelativeTime } from '@/utils/datechange.js'
+import NotificationSettingsPanel from '@/components/notifications/NotificationSettingsPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,6 +14,7 @@ const notificationStore = useNotificationsStore()
 const activeFilter = ref('all')
 const activeDetailTab = ref('content')
 const selectedNotificationId = ref('')
+const isSettingsModalOpen = ref(false)
 
 const filterOptions = [
   { key: 'all', label: '전체' },
@@ -145,6 +147,14 @@ async function markAllAsRead() {
   await notificationStore.markAllAsRead()
 }
 
+function openNotificationSettings() {
+  isSettingsModalOpen.value = true
+}
+
+function closeNotificationSettings() {
+  isSettingsModalOpen.value = false
+}
+
 function openTarget(notification) {
   if (!notification?.targetUrl) {
     return
@@ -202,10 +212,14 @@ onMounted(() => {
         <p>업무, QA, 캠페인, 일정 알림을 한 곳에서 확인하고 읽음 상태를 관리합니다.</p>
       </div>
       <div class="notification-hero__actions">
-        <span class="notification-live" :class="{ 'is-connected': notificationStore.isSseConnected }">
-          <span />
-          {{ notificationStore.isSseConnected ? '실시간 연결됨' : '목록 기준 표시' }}
-        </span>
+        <button
+          type="button"
+          class="notification-button notification-button--secondary"
+          @click="openNotificationSettings"
+        >
+          <span class="material-symbols-outlined">tune</span>
+          알림 설정
+        </button>
         <button
           type="button"
           class="notification-button notification-button--primary"
@@ -394,6 +408,44 @@ onMounted(() => {
       </aside>
     </div>
   </section>
+
+  <Teleport to="body">
+    <Transition name="notification-settings-modal">
+      <div
+        v-if="isSettingsModalOpen"
+        class="notification-settings-modal"
+        role="presentation"
+        @click.self="closeNotificationSettings"
+      >
+        <section
+          class="notification-settings-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="notification-settings-title"
+        >
+          <header class="notification-settings-dialog__header">
+            <div>
+              <p class="notification-eyebrow">NOTIFICATION SETTINGS</p>
+              <h3 id="notification-settings-title">알림 설정</h3>
+              <span>알림 방법, 중요도, 수신 조건을 바로 조정합니다.</span>
+            </div>
+            <button
+              type="button"
+              class="notification-settings-dialog__close"
+              aria-label="닫기"
+              @click="closeNotificationSettings"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </header>
+
+          <div class="notification-settings-dialog__body">
+            <NotificationSettingsPanel compact />
+          </div>
+        </section>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -486,6 +538,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 7px;
   min-height: 36px;
   border-radius: var(--radius-sm);
   padding: 0 14px;
@@ -499,11 +552,21 @@ onMounted(() => {
     color var(--transition-fast);
 }
 
+.notification-button .material-symbols-outlined {
+  font-size: 18px;
+}
+
 .notification-button--primary,
 .notification-link-button {
   border: 1px solid var(--accent-strong);
   background: var(--accent-strong);
   color: #ffffff;
+}
+
+.notification-button--secondary {
+  border: 1px solid var(--line-soft);
+  background: var(--surface-control);
+  color: var(--text-body);
 }
 
 .notification-button:disabled {
@@ -909,6 +972,97 @@ onMounted(() => {
   transform: translateY(8px);
 }
 
+.notification-settings-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2600;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.58);
+  padding: 24px;
+}
+
+.notification-settings-dialog {
+  width: min(940px, 100%);
+  max-height: min(860px, calc(100vh - 48px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg, 16px);
+  background: var(--surface-page);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.32);
+}
+
+.notification-settings-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-card);
+  padding: 20px 22px;
+}
+
+.notification-settings-dialog__header h3 {
+  margin: 4px 0 0;
+  color: var(--text-heading);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.notification-settings-dialog__header span {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.notification-settings-dialog__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-control);
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+.notification-settings-dialog__close .material-symbols-outlined {
+  font-size: 19px;
+}
+
+.notification-settings-dialog__body {
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.notification-settings-modal-enter-active,
+.notification-settings-modal-leave-active {
+  transition: opacity var(--transition-fast);
+}
+
+.notification-settings-modal-enter-active .notification-settings-dialog,
+.notification-settings-modal-leave-active .notification-settings-dialog {
+  transition: transform var(--transition-fast);
+}
+
+.notification-settings-modal-enter-from,
+.notification-settings-modal-leave-to {
+  opacity: 0;
+}
+
+.notification-settings-modal-enter-from .notification-settings-dialog,
+.notification-settings-modal-leave-to .notification-settings-dialog {
+  transform: translateY(10px);
+}
+
 @media (max-width: 1100px) {
   .notification-center {
     grid-template-columns: 1fr;
@@ -950,6 +1104,22 @@ onMounted(() => {
 
   .notification-detail-tabs {
     grid-template-columns: 1fr;
+  }
+
+  .notification-settings-modal {
+    padding: 12px;
+  }
+
+  .notification-settings-dialog {
+    max-height: calc(100vh - 24px);
+  }
+
+  .notification-settings-dialog__header {
+    padding: 16px;
+  }
+
+  .notification-settings-dialog__body {
+    padding: 14px;
   }
 }
 </style>
