@@ -3,29 +3,159 @@ package org.example.backend.matching.model.evaluation;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.*;
+import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignDto;
 import org.example.backend.matching.model.*;
+import org.example.backend.organization.model.Organization;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 public class EvaluationDto {
 
     @Getter
     @Builder
+    public static class EvaluationRes {
+        private String goal;
+        private String title;
+        private String partner;
+        private String assetDescription;
+        private String offer;
+        private String target;
+        private LocalDate startDate;
+        private LocalDate endDate;
+        private CustomerEvalDto customerEval;
+        private RevenueEvalDto revenueEval;
+        private BrandEvalDto brandEval;
+        private OperationEvalDto operationEval;
+        private CostEvalDto costEval;
+        public static EvaluationRes toDto(Campaign campaign, PartnerBenefits benefits, Evaluation evaluation, String affiliate) {
+            return EvaluationRes.builder()
+                    .goal(campaign.getPrimaryGoal())
+                    .title(benefits.getName())
+                    .partner(affiliate)
+                    .offer(benefits.getDescription())
+                    .target(benefits.getTargetAudience())
+                    .startDate(campaign.getStartDate())
+                    .endDate(campaign.getEndDate())
+                    .customerEval(CustomerEvalDto.from(evaluation.getCustomer()))
+                    .revenueEval(RevenueEvalDto.from(evaluation.getRevenue()))
+                    .brandEval(BrandEvalDto.from(evaluation.getBrand()))
+                    .operationEval(OperationEvalDto.from(evaluation.getOperation()))
+                    .costEval(CostEvalDto.from(evaluation.getCost()))
+                    .build();
+
+        }
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class CustomerEvalDto {
+        private Long idx;
+        private List<String> improvementDirections;
+        private Integer overallScore;
+        private String customerAgeGroup;
+        private String customerSpendingPatterns;
+        private String membershipTier;
+        private String usageChannel;
+        private String benefitCategory;
+
+        public static CustomerEvalDto from(CustomerEval entity) {
+            if (entity == null) return null;
+
+            return CustomerEvalDto.builder()
+                    .idx(entity.getIdx())
+                    .improvementDirections(entity.getImprovementDirections() != null ?
+                            new ArrayList<>(entity.getImprovementDirections()) : null)
+                    .overallScore(entity.getOverallScore())
+                    .customerAgeGroup(entity.getCustomerAgeGroup())
+                    .customerSpendingPatterns(entity.getCustomerSpendingPatterns())
+                    .membershipTier(entity.getMembershipTier())
+                    .usageChannel(entity.getUsageChannel())
+                    .benefitCategory(entity.getBenefitCategory())
+                    .build();
+        }
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class RevenueEvalDto {
+        private Long idx;
+        private List<String> improvementDirections;
+        private Integer overallScore;
+        private String purchaseConversionProbability;
+        private String roomReservationIncreaseProbability;
+        private String appRegistrationIncreaseProbability;
+        private String membershipRegistrationRevisitProbability;
+        private String alignmentwithCampaignGoalsandKPIs;
+
+        public static RevenueEvalDto from(RevenueEval entity) {
+            if (entity == null) return null;
+
+            return RevenueEvalDto.builder()
+                    .idx(entity.getIdx())
+                    .improvementDirections(entity.getImprovementDirections() != null ?
+                            new ArrayList<>(entity.getImprovementDirections()) : null)
+                    .overallScore(entity.getOverallScore())
+                    .purchaseConversionProbability(entity.getPurchaseConversionProbability())
+                    .roomReservationIncreaseProbability(entity.getRoomReservationIncreaseProbability())
+                    .appRegistrationIncreaseProbability(entity.getAppRegistrationIncreaseProbability())
+                    .membershipRegistrationRevisitProbability(entity.getMembershipRegistrationRevisitProbability())
+                    .alignmentwithCampaignGoalsandKPIs(entity.getAlignmentwithCampaignGoalsandKPIs())
+                    .build();
+        }
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class OperationEvalDto {
+        private Long idx;
+        private List<String> improvementDirections;
+        private Integer overallScore;
+        private String approvalStepsCount;
+        private String legalReviewRequired;
+        private String brandReviewRequired;
+        private String deliverablesCount;
+        private String participatingDeptsAndPartners;
+        private String scheduleUrgency;
+        private String offlineOrOnsiteStaffRequired;
+
+        public static OperationEvalDto from(OperationEval entity) {
+            if (entity == null) return null;
+            return OperationEvalDto.builder()
+                    .idx(entity.getIdx())
+                    .improvementDirections(entity.getImprovementDirections() != null ?
+                            new ArrayList<>(entity.getImprovementDirections()) : null)
+                    .overallScore(entity.getOverallScore())
+                    .approvalStepsCount(entity.getApprovalStepsCount())
+                    .legalReviewRequired(entity.getLegalReviewRequired())
+                    .brandReviewRequired(entity.getBrandReviewRequired())
+                    .deliverablesCount(entity.getDeliverablesCount())
+                    .participatingDeptsAndPartners(entity.getParticipatingDeptsAndPartners())
+                    .scheduleUrgency(entity.getScheduleUrgency())
+                    .offlineOrOnsiteStaffRequired(entity.getOfflineOrOnsiteStaffRequired())
+                    .build();
+        }
+    }
+
+    @Getter
+    @Builder
     public static class StartEvaluationReq {
-//        private Double dependency;
         private Long benefitIdx;
     }
 
     @Getter
     @Builder
     public static class StartEvaluation {
-//        private Double dependency; // 0.5와 같은 소수점을 처리하기 위해 Double 사용
         private CampaignDto.Res campaign;
-//        private MatchingDto.AssetRes asset;
         private MatchingDto.BenefitRes benefit;
-//        private CampaignGoalRes goal;
 
         @Getter
         @Builder
@@ -64,6 +194,69 @@ public class EvaluationDto {
         }
     }
 
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class BrandEvalDto {
+        private Long idx;
+        private List<String> improvementDirections;
+        private Integer overallScore;
+        private String brandTone;
+        private String priceRange;
+        private String customerExperience;
+        private String brandTrust;
+        private String reputationRisk;
+        private String hanwhaImageConsistency;
+
+        public static BrandEvalDto from(BrandEval entity) {
+            if (entity == null) return null;
+
+            return BrandEvalDto.builder()
+                    .idx(entity.getIdx())
+                    .improvementDirections(entity.getImprovementDirections() != null ?
+                            new ArrayList<>(entity.getImprovementDirections()) : null)
+                    .overallScore(entity.getOverallScore())
+                    .brandTone(entity.getBrandTone())
+                    .priceRange(entity.getPriceRange())
+                    .customerExperience(entity.getCustomerExperience())
+                    .brandTrust(entity.getBrandTrust())
+                    .reputationRisk(entity.getReputationRisk())
+                    .hanwhaImageConsistency(entity.getHanwhaImageConsistency())
+                    .build();
+        }
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class CostEvalDto {
+        private Long idx;
+        private List<String> improvementDirections;
+        private Integer overallScore;
+        private String partnerSampleScale;
+        private String partnerDiscountCostBurden;
+        private String coProductionCostSharing;
+        private String hanwhaDirectCostBurden;
+        private String existingHanwhaChannelUtilization;
+        public static CostEvalDto from(CostEval entity) {
+            if (entity == null) return null;
+
+            return CostEvalDto.builder()
+                    .idx(entity.getIdx())
+                    .improvementDirections(entity.getImprovementDirections() != null ?
+                            new ArrayList<>(entity.getImprovementDirections()) : null)
+                    .overallScore(entity.getOverallScore())
+                    .partnerSampleScale(entity.getPartnerSampleScale())
+                    .partnerDiscountCostBurden(entity.getPartnerDiscountCostBurden())
+                    .coProductionCostSharing(entity.getCoProductionCostSharing())
+                    .hanwhaDirectCostBurden(entity.getHanwhaDirectCostBurden())
+                    .existingHanwhaChannelUtilization(entity.getExistingHanwhaChannelUtilization())
+                    .build();
+        }
+    }
+
     @JsonTypeInfo(
             use = JsonTypeInfo.Id.NAME,
             include = JsonTypeInfo.As.EXISTING_PROPERTY, // 이미 존재하는 category 필드를 사용
@@ -84,6 +277,7 @@ public class EvaluationDto {
         private List<String> improvementDirections;
         private String uuid;
         private Long campaignIdx;
+        private Long benefitIdx;
 
         @Getter
         @Builder

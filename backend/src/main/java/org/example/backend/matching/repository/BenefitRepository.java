@@ -15,4 +15,5 @@ public interface BenefitRepository extends JpaRepository<PartnerBenefits,Long> {
     @Query("SELECT DISTINCT b.campaign.idx FROM PartnerBenefits b " +
             "WHERE b.organization.idx = :orgIdx AND b.campaign IS NOT NULL")
     List<Long> findCampaignIdxByOrganizationIdx(@Param("orgIdx") Long orgIdx);
+    List<PartnerBenefits> findAllByCampaignIdx(Long campaignIdx);
 }

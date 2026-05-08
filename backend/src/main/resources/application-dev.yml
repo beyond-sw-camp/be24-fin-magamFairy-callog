@@ -79,3 +79,9 @@ custom:
     ad-check-url: ${N8N_AD_CHECK_URL}
   ocr:
     url: ${OCR_SERVICE_URL:http://localhost:8000/ocr}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
