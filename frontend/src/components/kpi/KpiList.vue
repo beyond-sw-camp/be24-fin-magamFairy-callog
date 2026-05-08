@@ -8,7 +8,7 @@ const props = defineProps({
   emptyText: { type: String, default: '등록된 KPI가 없습니다.' },
 })
 
-const emit = defineEmits(['edit', 'archive', 'activate'])
+const emit = defineEmits(['edit', 'archive', 'activate', 'restore-draft'])
 
 const sortedItems = computed(() => {
   const order = { ACTIVE: 0, DRAFT: 1, ARCHIVED: 2 }
@@ -40,6 +40,7 @@ const sortedItems = computed(() => {
         @edit="emit('edit', $event)"
         @archive="emit('archive', $event)"
         @activate="emit('activate', $event)"
+        @restore-draft="emit('restore-draft', $event)"
       />
     </div>
   </div>

@@ -27,6 +27,10 @@ export const startEvaluation = async (payload) => {
   return unwrapResponse(await api.post('/matching/evaluation/start', payload))
 }
 
+export const getEvaluationResult = async (campaignIdx) => {
+  return unwrapResponse(await api.get(`/matching/evaluation/result?campaignIdx=${campaignIdx}`))
+}
+
 // export const UpdateCampaign = async (campaignId, payload) => {
 //   return unwrapResponse(await api.put(`/campaigns/${campaignId}`, payload))
 // }
@@ -35,18 +39,7 @@ export const startEvaluation = async (payload) => {
 //   return unwrapResponse(await api.patch(`/campaigns/${campaignId}/status`, { status }))
 // }
 
-// export const GetCampaignIntro = async (campaignId) => {
-//   return unwrapResponse(await api.get(`/campaigns/${campaignId}/intro`))
-// }
-
-// export const UpdateCampaignIntro = async (campaignId, payload) => {
-//   return unwrapResponse(await api.patch(`/campaigns/${campaignId}/intro`, payload))
-// }
-
-// export const SubmitCampaignProposal = async (campaignId, payload) => {
-//   return unwrapResponse(await api.post(`/campaigns/${campaignId}/proposals`, payload))
-// }
-
 export default {
-    startEvaluation
+    startEvaluation,
+    getEvaluationResult
 }
