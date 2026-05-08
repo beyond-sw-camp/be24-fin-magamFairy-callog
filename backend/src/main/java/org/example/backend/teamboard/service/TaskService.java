@@ -62,7 +62,7 @@ public class TaskService {
     }
 
     @Transactional
-    public TaskDto.ResTask create(String campaignIdx, TaskDto.ReqTask req, AuthUserDetails authUser) {
+    public TaskDto.ResTask create(Long campaignIdx, TaskDto.ReqTask req, AuthUserDetails authUser) {
         TaskParts taskPart = req.taskPartId() != null ? getTaskPartOrThrow(req.taskPartId()) : null;
         if (taskPart != null && !taskPart.getCampaign().getIdx().equals(campaignIdx)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "캠페인과 업무 파트가 일치하지 않습니다.");

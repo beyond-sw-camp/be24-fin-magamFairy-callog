@@ -61,7 +61,7 @@ public class TaskController {
     ) {
         RoleGuard.requireManager(user);
         return ResponseEntity.ok(BaseResponse.success(
-                taskService.create(campaignId, req, user)
+                taskService.create(toIdx(campaignId), req, user)
         ));
     }
 
