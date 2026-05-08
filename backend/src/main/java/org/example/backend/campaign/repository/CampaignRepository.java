@@ -10,4 +10,6 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long> {
     List<Campaign> findAllByOwnerLoginIdOrderByIdxDesc(String ownerLoginId);
 
     Optional<Campaign> findByIdxAndOwnerLoginId(Long idx, String ownerLoginId);
+
+    Optional<Campaign> findByPublicId(String publicId);
 }

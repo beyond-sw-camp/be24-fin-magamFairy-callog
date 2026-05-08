@@ -192,9 +192,17 @@ const isValid = computed(() => Object.keys(validation.value).length === 0)
 async function applyTemplate(template) {
   if (!template) return
   form.templateId = template.idx
-  if (template.defaultUnit && !form.unit) form.unit = template.defaultUnit
-  if (template.defaultCategory && !form.category) form.category = template.defaultCategory
   if (template.name && !form.name) form.name = template.name
+  if (template.defaultUnit && !form.unit) form.unit = template.defaultUnit
+  // category는 default 'OTHER'라 사용자가 안 바꿨으면 템플릿 값으로 override
+  if (template.defaultCategory && (!form.category || form.category === 'OTHER')) {
+    form.category = template.defaultCategory
+  }
+  if (template.defaultKind) form.kind = template.defaultKind
+  if (template.defaultEsgCategory) {
+    form.esgEnabled = true
+    form.esgCategory = template.defaultEsgCategory
+  }
   showTemplate.value = false
 }
 

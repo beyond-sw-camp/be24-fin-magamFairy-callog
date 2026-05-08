@@ -17,6 +17,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.example.backend.user.model.User;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
 
 @NoArgsConstructor
 @AllArgsConstructor
@@ -52,4 +55,9 @@ public class Organization {
     @Builder.Default
     @Column(nullable = false)
     private Boolean canCreateCampaign = false;
+
+    /** 가입(생성) 시각. "신규 협력사 30일 내" 카운트에 사용. */
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    private LocalDateTime createdAt;
 }

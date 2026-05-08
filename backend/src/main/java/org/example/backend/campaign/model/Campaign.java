@@ -19,6 +19,7 @@ import org.example.backend.common.model.BaseEntity;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -31,6 +32,16 @@ public class Campaign extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idx;
+
+    @Column(name = "public_id", unique = true, length = 36)
+    private String publicId;
+
+    @jakarta.persistence.PrePersist
+    protected void onPrePersist() {
+        if (this.publicId == null) {
+            this.publicId = UUID.randomUUID().toString();
+        }
+    }
 
     @Column(nullable = false, length = 100)
     private String ownerLoginId;
@@ -116,6 +127,29 @@ public class Campaign extends BaseEntity {
 
     @Column(nullable = false, length = 20)
     private String color;
+
+    /**
+     * 캠페인 썸네일 S3 object key. null이면 디렉토리 카드는 단색+이니셜 fallback.
+     * Phase 4에서 AI 자동 생성으로 채울 수도 있음.
+     */
+    @Column(name = "thumbnail_object_key", length = 500)
+    private String thumbnailObjectKey;
+
+    public void updateThumbnailObjectKey(String objectKey) {
+        this.thumbnailObjectKey = objectKey;
+    }
+
+    /**
+     * 캠페인 소개 페이지 공개 범위.
+     * PRIVATE / HQ_ONLY / HQ_AND_AFFILIATE / AFFILIATE_ONLY / EXTERNAL_ONLY / ALL
+     */
+    @Builder.Default
+    @Column(name = "visibility", nullable = false, length = 30)
+    private String visibility = "PRIVATE";
+
+    public void updateVisibility(String visibility) {
+        this.visibility = visibility == null ? "PRIVATE" : visibility;
+    }
 
     public void updateDetails(
             String name,

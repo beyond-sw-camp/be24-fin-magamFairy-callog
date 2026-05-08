@@ -30,7 +30,11 @@ import java.util.concurrent.ThreadLocalRandom;
 public class CampaignService {
     private static final String DEFAULT_COLOR = "#8B5CF6";
     private static final String DEFAULT_ICON = "🎯";
-    private static final List<String> ALLOWED_STATUSES = List.of("draft", "review", "live", "paused", "completed");
+    private static final List<String> ALLOWED_STATUSES = List.of(
+            "draft", "in_progress", "recruiting", "review", "completed", "closed",
+            // 하위 호환 — 기존 데이터에 저장된 구 값 허용
+            "live", "paused", "at_risk", "planned", "active"
+    );
 
     /**
      * 캠페인 생성 시 색상이 비어있을 때 무작위로 부여하는 팔레트 (20색).
@@ -64,9 +68,48 @@ public class CampaignService {
     private final CampaignParticipantRepository participantRepository;
     private final CampaignMemberRepository memberRepository;
     private final CampaignKpiContributionService contributionService;
-
+    private final CampaignImageStorageService thumbnailStorage;
+    private final CampaignThumbnailGenerator thumbnailGenerator;
     public List<CampaignDto.Res> listCampaigns(Long userIdx) {
         return listCampaigns(userIdx, "mine");
+    }
+
+    // ── 썸네일 업로드 (Phase 3) ─────────────────────────────
+
+    /** 사용자가 직접 업로드 — presigned PUT URL 발급. */
+    public CampaignImageStorageService.UploadUrlResult createThumbnailUploadUrl(
+            String ownerLoginId, Long campaignId, String contentType, Long fileSize) {
+        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
+        return thumbnailStorage.createUploadUrl(campaign.getIdx(), contentType, fileSize);
+    }
+
+    /** 업로드 완료 확인 → Campaign.thumbnailObjectKey 저장 (이전 키 있으면 삭제). */
+    @Transactional
+    public void confirmThumbnail(String ownerLoginId, Long campaignId, String objectKey) {
+        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
+        if (objectKey == null || objectKey.isBlank()
+                || !thumbnailStorage.isCampaignThumbKey(campaign.getIdx(), objectKey)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid thumbnail object key.");
+        }
+        thumbnailStorage.validateUploadedObject(objectKey);
+
+        String previous = campaign.getThumbnailObjectKey();
+        campaign.updateThumbnailObjectKey(objectKey);
+        // 이전 썸네일 정리 (best-effort)
+        if (previous != null && !previous.equals(objectKey)) {
+            try { thumbnailStorage.deleteObject(previous); } catch (Exception ignored) { }
+        }
+    }
+
+    /** 썸네일 삭제. */
+    @Transactional
+    public void clearThumbnail(String ownerLoginId, Long campaignId) {
+        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
+        String previous = campaign.getThumbnailObjectKey();
+        campaign.updateThumbnailObjectKey(null);
+        if (previous != null) {
+            try { thumbnailStorage.deleteObject(previous); } catch (Exception ignored) { }
+        }
     }
 
     /**
@@ -148,7 +191,23 @@ public class CampaignService {
             contributionService.bulkCreate(saved, dto.contributions());
         }
 
+        // 썸네일 자동 생성 (Phase 4) — 비동기, 응답 안 막음. 키 없으면 조용히 skip.
+        thumbnailGenerator.generateAsyncIfMissing(saved.getIdx());
+
         return buildResponseFor(saved, owner);
+    }
+
+    /** 명시적 AI 생성 — 사용자가 직접 트리거 (Phase 4). */
+    @Transactional
+    public void regenerateThumbnail(String ownerLoginId, Long campaignId) {
+        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
+        // 기존 썸네일 키 비워서 generator가 생성하도록
+        String previous = campaign.getThumbnailObjectKey();
+        campaign.updateThumbnailObjectKey(null);
+        if (previous != null) {
+            try { thumbnailStorage.deleteObject(previous); } catch (Exception ignored) { }
+        }
+        thumbnailGenerator.generateAsyncIfMissing(campaign.getIdx());
     }
 
     @Transactional
@@ -159,21 +218,21 @@ public class CampaignService {
 
         campaign.updateDetails(
                 name,
-                normalizeText(dto.purpose()),
-                normalizeList(dto.tags()),
-                dto.startDate(),
-                dto.endDate(),
-                normalizeList(dto.partners()),
-                normalizeText(dto.goals()),
-                normalizeText(dto.mainMessage()),
-                normalizeText(dto.assetName()),
-                normalizeText(dto.assetDescription()),
-                normalizeText(dto.primaryGoal()),
-                normalizeList(dto.campaignMethods()),
-                normalizeText(dto.maxCost()),
-                normalizeText(dto.minRevenue()),
-                normalizeText(dto.ownerName()),
-                normalizeText(dto.ownerEmail()),
+                normalizeTextOrCurrent(dto.purpose(), campaign.getPurpose()),
+                normalizeListOrCurrent(dto.tags(), campaign.getTags()),
+                dto.startDate() == null ? campaign.getStartDate() : dto.startDate(),
+                dto.endDate() == null ? campaign.getEndDate() : dto.endDate(),
+                normalizeListOrCurrent(dto.partners(), campaign.getPartners()),
+                normalizeTextOrCurrent(dto.goals(), campaign.getGoals()),
+                normalizeTextOrCurrent(dto.mainMessage(), campaign.getMainMessage()),
+                normalizeTextOrCurrent(dto.assetName(), campaign.getAssetName()),
+                normalizeTextOrCurrent(dto.assetDescription(), campaign.getAssetDescription()),
+                normalizeTextOrCurrent(dto.primaryGoal(), campaign.getPrimaryGoal()),
+                normalizeListOrCurrent(dto.campaignMethods(), campaign.getCampaignMethods()),
+                normalizeTextOrCurrent(dto.maxCost(), campaign.getMaxCost()),
+                normalizeTextOrCurrent(dto.minRevenue(), campaign.getMinRevenue()),
+                normalizeTextOrCurrent(dto.ownerName(), campaign.getOwnerName()),
+                normalizeTextOrCurrent(dto.ownerEmail(), campaign.getOwnerEmail()),
                 createInitials(name),
                 normalizeIcon(dto.icon()),
                 normalizeColor(dto.color())
@@ -277,6 +336,14 @@ public class CampaignService {
                 .map(String::trim)
                 .distinct()
                 .toList());
+    }
+
+    private static String normalizeTextOrCurrent(String value, String current) {
+        return value == null ? normalizeText(current) : normalizeText(value);
+    }
+
+    private static List<String> normalizeListOrCurrent(List<String> values, List<String> current) {
+        return values == null ? normalizeList(current) : normalizeList(values);
     }
 
     /**

@@ -18,6 +18,7 @@ import {
 import editorApi from '@/api/editor/editorApi'
 import { ListCampaign } from '@/api/campaigns'
 import { readStoredToken } from '@/authStorage'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 const themeStorageKey = 'callog-theme'
 const legacyThemeStorageKey = 'kellog-theme'
@@ -88,16 +89,7 @@ function createDefaultTask(dateKey, nextIndex) {
   }
 }
 
-function safeParseTasks(value) {
-  try {
-    const parsed = JSON.parse(value)
-    return Array.isArray(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-function safeParseCampaigns(value) {
+function safeParseArray(value) {
   try {
     const parsed = JSON.parse(value)
     return Array.isArray(parsed) ? parsed : null
@@ -131,6 +123,27 @@ function createCampaignInitials(name) {
   return initials.toUpperCase()
 }
 
+function asText(value, fallback = '') {
+  return value?.trim?.() || fallback || ''
+}
+
+function asList(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback
+}
+
+function normalizeCampaignExtraFields(source = {}, fallback = {}) {
+  return {
+    assetName: asText(source.assetName, fallback.assetName),
+    assetDescription: asText(source.assetDescription, fallback.assetDescription),
+    primaryGoal: asText(source.primaryGoal, fallback.primaryGoal),
+    campaignMethods: asList(source.campaignMethods, fallback.campaignMethods || []),
+    maxCost: asText(source.maxCost, fallback.maxCost),
+    minRevenue: asText(source.minRevenue, fallback.minRevenue),
+    ownerName: asText(source.ownerName, fallback.ownerName),
+    ownerEmail: asText(source.ownerEmail, fallback.ownerEmail),
+  }
+}
+
 function normalizeCampaignRecord(source, fallback = {}) {
   const merged = {
     ...fallback,
@@ -153,6 +166,7 @@ function normalizeCampaignRecord(source, fallback = {}) {
     partners: Array.isArray(merged.partners) ? merged.partners : [],
     goals: merged.goals?.trim?.() || '',
     mainMessage: merged.mainMessage?.trim?.() || '',
+    ...normalizeCampaignExtraFields(merged),
     status: merged.status || fallback.status || 'draft',
     initials: merged.initials || createCampaignInitials(name),
     icon: merged.icon || fallback.icon || '',
@@ -165,10 +179,19 @@ function normalizeCampaignRecord(source, fallback = {}) {
 }
 
 export const usePlannerStore = defineStore('planner', () => {
+  // 로그인한 사용자의 id를 LocalStorage namespace 키로 사용 (없으면 'guest')
+  // 이전엔 mock 시드의 'jaewon' 상수를 그대로 박아놔서 모든 사용자가 같은 키를 공유했음.
+  const authStore = useAuthStore()
+  const resolveOwnerKey = () => {
+    const u = authStore.user
+    const id = u?.id ?? u?.email ?? u?.idx
+    return id ? String(id) : 'guest'
+  }
+
   const sidebarCollapsed = ref(true)
   const campaigns = ref(cloneValue(defaultCampaigns))
   const activeCampaignId = ref(defaultCampaigns[0])
-  const campaignUiOwnerKey = ref(currentUserId)
+  const campaignUiOwnerKey = ref(resolveOwnerKey())
   const campaignOrder = ref(defaultCampaigns.map((campaign) => campaign.id))
   const campaignFolderIds = ref([])
   const campaignServerHydrated = ref(false)
@@ -282,10 +305,10 @@ export const usePlannerStore = defineStore('planner', () => {
       return
     }
 
-    const storedOrder = safeParseCampaigns(
+    const storedOrder = safeParseArray(
       window.localStorage.getItem(getCampaignUiStorageKey(campaignOrderStorageKey)),
     )
-    const storedFolderIds = safeParseCampaigns(
+    const storedFolderIds = safeParseArray(
       window.localStorage.getItem(getCampaignUiStorageKey(campaignFolderStorageKey)),
     )
 
@@ -324,7 +347,7 @@ export const usePlannerStore = defineStore('planner', () => {
         campaigns.value = nextCampaigns
 
         const nextIds = nextCampaigns.map((c) => c.id)
-        const savedOrder = safeParseCampaigns(
+        const savedOrder = safeParseArray(
           typeof window !== 'undefined'
             ? window.localStorage.getItem(getCampaignUiStorageKey(campaignOrderStorageKey))
             : null,
@@ -378,14 +401,14 @@ export const usePlannerStore = defineStore('planner', () => {
     }
 
     if (storedTasks) {
-      const parsedTasks = safeParseTasks(storedTasks)
+      const parsedTasks = safeParseArray(storedTasks)
       if (parsedTasks) {
         tasks.value = parsedTasks
       }
     }
 
     if (storedCampaigns) {
-      const parsedCampaigns = safeParseCampaigns(storedCampaigns)
+      const parsedCampaigns = safeParseArray(storedCampaigns)
       if (parsedCampaigns?.length) {
         campaigns.value = parsedCampaigns
       }
@@ -436,6 +459,19 @@ export const usePlannerStore = defineStore('planner', () => {
       window.localStorage.setItem(activeCampaignIdStorageKey, nextCampaignId)
     }
   })
+
+  // 로그인 사용자 변경 → LocalStorage owner key 갱신 + 그 사용자 데이터로 재하이드레이트
+  watch(
+    () => authStore.user,
+    () => {
+      const next = resolveOwnerKey()
+      if (campaignUiOwnerKey.value !== next) {
+        campaignUiOwnerKey.value = next
+        hydrateCampaignUiState()
+      }
+    },
+    { deep: true },
+  )
 
   const members = computed(() => teamMembers)
 
@@ -610,6 +646,8 @@ export const usePlannerStore = defineStore('planner', () => {
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
       mainMessage: payload.mainMessage?.trim() || '',
+      contributions: Array.isArray(payload.contributions) ? [...payload.contributions] : [],
+      ...normalizeCampaignExtraFields(payload),
       status: payload.status || 'draft',
       initials: payload.initials || createCampaignInitials(name),
       icon: payload.icon || '',
@@ -651,6 +689,10 @@ export const usePlannerStore = defineStore('planner', () => {
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
       mainMessage: payload.mainMessage?.trim() || '',
+      contributions: Array.isArray(payload.contributions)
+        ? [...payload.contributions]
+        : (Array.isArray(currentCampaign.contributions) ? currentCampaign.contributions : []),
+      ...normalizeCampaignExtraFields(payload, currentCampaign),
       status: payload.status || currentCampaign.status,
       initials: payload.initials || createCampaignInitials(name),
       icon: payload.icon || currentCampaign.icon || '',
