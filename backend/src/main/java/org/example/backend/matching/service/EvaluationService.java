@@ -2,6 +2,7 @@ package org.example.backend.matching.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignDto;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
@@ -17,6 +18,7 @@ import org.example.backend.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.GsonBuilderUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
@@ -31,10 +33,11 @@ public class EvaluationService {
     private final CampaignRepository campaignRepository;
     private final RestClient restClient;
 
-    @Value("${custom.n8n.webhook-url}/evaluation")
+    @Value("${custom.n8n.webhook-url}${custom.n8n.evaluation-endpoint}")
     String n8nWebhookUrl;
 
     public void startEvaluation(EvaluationDto.StartEvaluationReq dto) {
+
         PartnerBenefits requiredBenefit = benefitRepository.findById(dto.getBenefitIdx())
                 .orElseThrow(() -> new EntityNotFoundException("해당 Benefit을 찾을 수 없습니다. Benefit ID: " + dto.getBenefitIdx()));
         Long campaignIdx = requiredBenefit.getCampaign().getIdx();
