@@ -68,7 +68,34 @@ public class CampaignMemberController {
             @PathVariable String campaignId,
             @AuthenticationPrincipal AuthUserDetails user,
             @RequestBody CampaignMemberDto.InvitePartnerReq dto) {
-        CampaignMemberDto.Res result = memberService.invitePartnerGm(toIdx(campaignId), user.getId(), dto.userIdx());
+        CampaignMemberDto.InvitationRes result = memberService.invitePartnerGm(toIdx(campaignId), user.getId(), dto.userIdx());
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
+    @PostMapping("/invitations")
+    public ResponseEntity<?> createInvitation(
+            @PathVariable String campaignId,
+            @AuthenticationPrincipal AuthUserDetails user,
+            @RequestBody CampaignMemberDto.InvitePartnerReq dto) {
+        CampaignMemberDto.InvitationRes result = memberService.invitePartnerGm(toIdx(campaignId), user.getId(), dto.userIdx());
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
+    @PatchMapping("/invitations/{invitationId}/accept")
+    public ResponseEntity<?> acceptInvitation(
+            @PathVariable String campaignId,
+            @PathVariable Long invitationId,
+            @AuthenticationPrincipal AuthUserDetails user) {
+        CampaignMemberDto.InvitationRes result = memberService.acceptInvitation(toIdx(campaignId), invitationId, user.getId());
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
+    @PatchMapping("/invitations/{invitationId}/reject")
+    public ResponseEntity<?> rejectInvitation(
+            @PathVariable String campaignId,
+            @PathVariable Long invitationId,
+            @AuthenticationPrincipal AuthUserDetails user) {
+        CampaignMemberDto.InvitationRes result = memberService.rejectInvitation(toIdx(campaignId), invitationId, user.getId());
         return ResponseEntity.ok(BaseResponse.success(result));
     }
 

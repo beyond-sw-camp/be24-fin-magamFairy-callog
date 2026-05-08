@@ -24,7 +24,10 @@ public class NotificationDto {
             Boolean isRead,
             String source,
             String targetLabel,
-            String targetUrl
+            String targetUrl,
+            String referenceType,
+            Long referenceId,
+            String referenceStatus
     ) {
         public static Res from(Notification notification) {
             User sender = notification.getSender();
@@ -42,7 +45,10 @@ public class NotificationDto {
                     Boolean.TRUE.equals(notification.getIsRead()),
                     sender != null ? sender.getName() : "System",
                     notification.getTargetLabel(),
-                    notification.getTargetUrl()
+                    notification.getTargetUrl(),
+                    notification.getReferenceType(),
+                    notification.getReferenceId(),
+                    notification.getReferenceStatus()
             );
         }
     }
@@ -58,11 +64,84 @@ public class NotificationDto {
             String targetUrl
     ) {}
 
+    public record NotificationMethods(
+            Boolean inApp,
+            Boolean email,
+            Boolean browser
+    ) {}
+
+    public record NotificationConditions(
+            Boolean taskAssigned,
+            Boolean taskStatusChanged,
+            Boolean qaReview,
+            Boolean deadline,
+            Boolean campaign,
+            Boolean schedule
+    ) {}
+
+    public record SettingReq(
+            Boolean enabled,
+            NotificationLevel level,
+            NotificationMethods methods,
+            NotificationConditions conditions
+    ) {}
+
+    public record SettingRes(
+            Boolean enabled,
+            NotificationLevel level,
+            NotificationMethods methods,
+            NotificationConditions conditions
+    ) {
+        public static SettingRes from(NotificationSetting setting) {
+            return new SettingRes(
+                    setting.getEnabled(),
+                    setting.getLevel(),
+                    new NotificationMethods(
+                            setting.getInAppEnabled(),
+                            setting.getEmailEnabled(),
+                            setting.getBrowserEnabled()
+                    ),
+                    new NotificationConditions(
+                            setting.getTaskAssignedEnabled(),
+                            setting.getTaskStatusChangedEnabled(),
+                            setting.getQaReviewEnabled(),
+                            setting.getDeadlineEnabled(),
+                            setting.getCampaignEnabled(),
+                            setting.getScheduleEnabled()
+                    )
+            );
+        }
+    }
+
+    public record AdminPolicyItem(
+            Long idx,
+            Long organizationIdx,
+            String roleName,
+            NotificationType notificationType,
+            Boolean enabled
+    ) {
+        public static AdminPolicyItem from(NotificationAdminPolicy policy) {
+            return new AdminPolicyItem(
+                    policy.getIdx(),
+                    policy.getOrganization().getIdx(),
+                    policy.getRoleName(),
+                    policy.getNotificationType(),
+                    policy.getEnabled()
+            );
+        }
+    }
+
+    public record AdminPolicyReq(List<AdminPolicyItem> policies) {}
+
+    public record AdminPolicyRes(List<AdminPolicyItem> policies) {}
+
     private static String categoryOf(NotificationType type) {
         return switch (type) {
-            case TASK_ASSIGNED, TASK_STATUS_CHANGED -> "task";
+            case TASK_ASSIGNED, TASK_STATUS_CHANGED, TASK_UPDATED -> "task";
             case REVIEW_REQUESTED, REVIEW_APPROVED, REVIEW_REJECTED -> "qa";
-            case CAMPAIGN_INVITED, CAMPAIGN_MEMBER_ADDED -> "campaign";
+            case DEADLINE_24H, DEADLINE_1H, DEADLINE_OVERDUE -> "schedule";
+            case CAMPAIGN_INVITED, CAMPAIGN_INVITATION_ACCEPTED, CAMPAIGN_INVITATION_REJECTED,
+                    CAMPAIGN_MEMBER_ADDED -> "campaign";
             case SYSTEM -> "system";
         };
     }

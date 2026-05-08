@@ -86,6 +86,9 @@ function normalizeNotification(item, index = 0) {
     source: item.source ?? item.sender ?? 'System',
     targetLabel: item.targetLabel ?? item.linkLabel ?? '연결 정보 없음',
     targetUrl: item.targetUrl ?? item.url ?? item.link ?? '',
+    referenceType: item.referenceType ?? '',
+    referenceId: item.referenceId ?? null,
+    referenceStatus: item.referenceStatus ?? '',
   }
 }
 

@@ -16,5 +16,11 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     Optional<Notification> findByIdxAndRecipient_Idx(Long idx, Long recipientIdx);
 
+    Optional<Notification> findByDedupeKey(String dedupeKey);
+
+    boolean existsByDedupeKey(String dedupeKey);
+
+    List<Notification> findAllByReferenceTypeAndReferenceId(String referenceType, Long referenceId);
+
     long countByRecipient_IdxAndIsReadFalse(Long recipientIdx);
 }

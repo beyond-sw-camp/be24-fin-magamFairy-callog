@@ -21,11 +21,23 @@ export const confirm = (idx) =>
 
 export const confirmAll = () => api.patch('/notifications/confirm-all')
 
+export const getNotificationSettings = () => api.get('/notifications/settings')
+
+export const updateNotificationSettings = (body) => api.patch('/notifications/settings', body)
+
+export const getNotificationAdminPolicies = () => api.get('/notifications/admin-policies')
+
+export const updateNotificationAdminPolicies = (body) => api.patch('/notifications/admin-policies', body)
+
 export const sendNoti = (body) => api.post('/notifications', body)
 
 export default {
   getNoti,
   confirm,
   confirmAll,
+  getNotificationSettings,
+  updateNotificationSettings,
+  getNotificationAdminPolicies,
+  updateNotificationAdminPolicies,
   sendNoti,
 }
