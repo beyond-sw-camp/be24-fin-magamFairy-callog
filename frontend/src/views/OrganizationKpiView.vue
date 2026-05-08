@@ -13,8 +13,8 @@ const orgType = computed(() => {
   if (fromOrg) return String(fromOrg).toUpperCase()
   const fromClaim = authStore.user?.orgType
   if (fromClaim) return String(fromClaim).toUpperCase()
-  // dev/mock 환경 fallback — 등록 버튼이 항상 노출되도록 HQ로 default
-  return 'HQ'
+  // 미인증 또는 로그인 응답에 orgType 미포함 시 null — 모든 편집권 비활성
+  return null
 })
 const orgId = computed(() =>
   authStore.user?.organization?.idx
@@ -24,7 +24,26 @@ const orgId = computed(() =>
 )
 
 const isHqAdmin = computed(() => orgType.value === 'HQ')
-const isAffiliateAdmin = computed(() => ['AFFILIATE', 'EXTERNAL_PARTNER'].includes(orgType.value))
+const isAffiliateAdmin = computed(() => orgType.value === 'AFFILIATE')
+const isExternalPartner = computed(() => orgType.value === 'EXTERNAL_PARTNER')
+
+// HQ KPI 편집 가능: HQ 소속 + GM/MANAGER/ADMIN
+const canEditHqKpi = computed(() =>
+  isHqAdmin.value &&
+  (authStore.isGeneralManager || authStore.isManager || authStore.isAdmin)
+)
+
+// 계열사 KPI 편집 가능: 계열사 소속 + GM/MANAGER/ADMIN
+const canEditAffiliateKpi = computed(() =>
+  isAffiliateAdmin.value &&
+  (authStore.isGeneralManager || authStore.isManager || authStore.isAdmin)
+)
+
+// 자사 KPI 편집 가능: 외부파트너 소속 + GM/MANAGER/ADMIN
+const canEditPartnerKpi = computed(() =>
+  isExternalPartner.value &&
+  (authStore.isGeneralManager || authStore.isManager || authStore.isAdmin)
+)
 
 /* ───── Status 탭 (활성 default) ───── */
 const STATUS_TABS = [
@@ -214,6 +233,13 @@ async function handleActivate(kpi) {
     window.alert('활성화 실패: ' + (err?.response?.data?.message || err?.message || err))
   }
 }
+async function handleRestoreDraft(kpi) {
+  try {
+    await store.updateStatus(kpi.idx, 'DRAFT')
+  } catch (err) {
+    window.alert('초안 복원 실패: ' + (err?.response?.data?.message || err?.message || err))
+  }
+}
 
 const periodLabel = computed(() => {
   if (activePeriodChip.value === 'CUSTOM') return customPeriodCode.value || '직접 지정'
@@ -236,7 +262,7 @@ const periodLabel = computed(() => {
 
       <div class="page-bar__actions">
         <button
-          v-if="isHqAdmin"
+          v-if="canEditHqKpi"
           type="button"
           class="btn btn--primary"
           @click="openCreate('HQ')"
@@ -248,7 +274,7 @@ const periodLabel = computed(() => {
           <span>새 본사 KPI</span>
         </button>
         <button
-          v-if="isHqAdmin || isAffiliateAdmin"
+          v-if="isHqAdmin || canEditAffiliateKpi"
           type="button"
           class="btn btn--secondary"
           @click="openCreate('AFFILIATE')"
@@ -258,6 +284,18 @@ const periodLabel = computed(() => {
             <path d="M12 5v14M5 12h14" />
           </svg>
           <span>{{ isHqAdmin ? '계열사 KPI' : '우리 조직 KPI' }}</span>
+        </button>
+        <button
+          v-if="canEditPartnerKpi"
+          type="button"
+          class="btn btn--secondary"
+          @click="openCreate('EXTERNAL_PARTNER')"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <span>자사 KPI 추가</span>
         </button>
       </div>
     </header>
@@ -317,36 +355,61 @@ const periodLabel = computed(() => {
     </div>
 
     <!-- ─── KPI 섹션 (status·period 필터 적용된 items 표시) ─── -->
-    <section class="kpi-section">
-      <div class="kpi-section__head">
-        <div>
-          <span class="kpi-section__pill kpi-section__pill--strategic">Strategic</span>
-          <h2 class="kpi-section__title">본사 KPI</h2>
-        </div>
-        <span class="kpi-section__count">{{ visibleHqItems.length }}개</span>
-      </div>
-      <KpiList
-        :items="visibleHqItems"
-        :editable="isHqAdmin"
-        empty-text="이 조건에 해당하는 본사 KPI가 없습니다."
-        @edit="openEdit"
-        @archive="handleArchive"
-        @activate="handleActivate"
-      />
-    </section>
 
-    <section class="kpi-section">
+    <!-- 본사·계열사 섹션: 외부파트너에게는 숨김 -->
+    <template v-if="!isExternalPartner">
+      <section class="kpi-section">
+        <div class="kpi-section__head">
+          <div>
+            <span class="kpi-section__pill kpi-section__pill--strategic">Strategic</span>
+            <h2 class="kpi-section__title">본사 KPI</h2>
+          </div>
+          <span class="kpi-section__count">{{ visibleHqItems.length }}개</span>
+        </div>
+        <KpiList
+          :items="visibleHqItems"
+          :editable="canEditHqKpi"
+          empty-text="이 조건에 해당하는 본사 KPI가 없습니다."
+          @edit="openEdit"
+          @archive="handleArchive"
+          @activate="handleActivate"
+          @restore-draft="handleRestoreDraft"
+        />
+      </section>
+
+      <section class="kpi-section">
+        <div class="kpi-section__head">
+          <div>
+            <span class="kpi-section__pill kpi-section__pill--tactical">Tactical</span>
+            <h2 class="kpi-section__title">{{ isHqAdmin ? '계열사 KPI' : '우리 조직 KPI' }}</h2>
+          </div>
+          <span class="kpi-section__count">{{ visibleOrgItems.length }}개</span>
+        </div>
+        <KpiList
+          :items="visibleOrgItems"
+          :editable="canEditAffiliateKpi"
+          :empty-text="isHqAdmin ? '이 조건에 해당하는 계열사 KPI가 없습니다.' : '이 조건에 해당하는 우리 조직 KPI가 없습니다.'"
+          @edit="openEdit"
+          @archive="handleArchive"
+          @activate="handleActivate"
+          @restore-draft="handleRestoreDraft"
+        />
+      </section>
+    </template>
+
+    <!-- 자사 KPI 섹션: 외부파트너 전용 -->
+    <section v-if="isExternalPartner" class="kpi-section">
       <div class="kpi-section__head">
         <div>
-          <span class="kpi-section__pill kpi-section__pill--tactical">Tactical</span>
-          <h2 class="kpi-section__title">{{ isHqAdmin ? '계열사 KPI' : '우리 조직 KPI' }}</h2>
+          <span class="kpi-section__pill kpi-section__pill--tactical">Own</span>
+          <h2 class="kpi-section__title">자사 KPI</h2>
         </div>
         <span class="kpi-section__count">{{ visibleOrgItems.length }}개</span>
       </div>
       <KpiList
         :items="visibleOrgItems"
-        :editable="isAffiliateAdmin"
-        :empty-text="isHqAdmin ? '이 조건에 해당하는 계열사 KPI가 없습니다.' : '이 조건에 해당하는 우리 조직 KPI가 없습니다.'"
+        :editable="canEditPartnerKpi"
+        empty-text="이 조건에 해당하는 자사 KPI가 없습니다."
         @edit="openEdit"
         @archive="handleArchive"
         @activate="handleActivate"

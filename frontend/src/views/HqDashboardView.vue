@@ -429,34 +429,29 @@ const compareLineDots = computed(() => {
 
 /* ═══════════ Row 3-2 — 자산 카테고리 도넛 (store 우선, mock fallback) ═══════════ */
 const ASSET_CAT_LABELS = {
-  EVENT: '이벤트/프로모션',
-  PRODUCT: '제품 협찬',
-  DIGITAL: '디지털 콘텐츠',
-  OFFLINE: '매장/오프라인',
-  MEDIA: '미디어 노출',
-  UNKNOWN: '기타',
+  customer: '고객 자산',
+  channel:  '채널 자산',
+  space:    '공간 자산',
+  voucher:  '상품/이용권 자산',
+  content:  '콘텐츠/IP 자산',
 }
-const ASSET_COLORS = ['#9D85FF', '#FF8A5C', '#5DAFD8', '#6FBF87', '#FFC36B', '#FF7A6B']
+const ASSET_COLORS = ['#9D85FF', '#FF8A5C', '#5DAFD8', '#6FBF87', '#FFC36B']
 const ASSET_CATS = computed(() => {
   const map = dashboardStore.assetCategories ?? {}
-  const keys = Object.keys(map)
-  if (keys.length === 0) return []
-  return keys
-    .map((k) => ({
-      type: ASSET_CAT_LABELS[k] ?? k,
-      count: Number(map[k]) || 0,
-      color: '',
-    }))
-    .filter((c) => c.count > 0)
-    .sort((a, b) => b.count - a.count)
-    .map((c, i) => ({ ...c, color: ASSET_COLORS[i % ASSET_COLORS.length] }))
+  return Object.entries(ASSET_CAT_LABELS).map(([k, label], i) => ({
+    key: k,
+    type: label,
+    count: Number(map[k]) || 0,
+    color: ASSET_COLORS[i % ASSET_COLORS.length],
+  }))
 })
 const assetTotal = computed(() => ASSET_CATS.value.reduce((s, c) => s + c.count, 0))
 const assetSegments = computed(() => {
   const C = 2 * Math.PI * 50  // r=50
-  const total = assetTotal.value || 1
+  const nonZero = ASSET_CATS.value.filter((c) => c.count > 0)
+  const total = nonZero.reduce((s, c) => s + c.count, 0) || 1
   let acc = 0
-  return ASSET_CATS.value.map((c) => {
+  return nonZero.map((c) => {
     const len = (c.count / total) * C
     const seg = { ...c, length: len, gap: C - len, offset: -acc, pct: Math.round((c.count / total) * 100) }
     acc += len
@@ -898,11 +893,11 @@ function sparkPath(arr, w = 60, h = 22) {
           </div>
         </div>
         <ul class="asset-legend fade-in">
-          <li v-for="s in assetSegments" :key="s.type">
+          <li v-for="s in ASSET_CATS" :key="s.key">
             <span class="asset-legend__dot" :style="{ background: s.color }"></span>
             <span class="asset-legend__label">{{ s.type }}</span>
             <span class="asset-legend__count">{{ s.count }}</span>
-            <span class="asset-legend__pct">{{ s.pct }}%</span>
+            <span class="asset-legend__pct">{{ assetTotal > 0 ? Math.round((s.count / assetTotal) * 100) : 0 }}%</span>
           </li>
         </ul>
         </template>

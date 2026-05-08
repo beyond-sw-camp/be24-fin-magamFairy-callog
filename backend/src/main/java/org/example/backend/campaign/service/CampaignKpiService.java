@@ -6,6 +6,9 @@ import org.example.backend.campaign.repository.CampaignKpiRepository;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.common.security.CampaignMemberGuard;
+import org.example.backend.kpi.model.CampaignKpiContribution;
+import org.example.backend.kpi.repository.CampaignKpiContributionRepository;
+import org.example.backend.kpi.repository.OrganizationKpiRepository;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -28,6 +31,8 @@ public class CampaignKpiService {
     private final CampaignRepository campaignRepository;
     private final UserRepository userRepository;
     private final KpiFrameworkCatalog catalog;
+    private final CampaignKpiContributionRepository contributionRepository;
+    private final OrganizationKpiRepository orgKpiRepository;
 
     // ── 조회 ────────────────────────────────────────────────
 
@@ -94,8 +99,28 @@ public class CampaignKpiService {
                 .unit(req.unit())
                 .ownerLabel(req.ownerLabel())
                 .ownerUser(ownerUser)
+                .parentOrgKpiId(req.parentOrgKpiId())
                 .build();
-        return CampaignKpiDto.Res.from(kpiRepository.save(kpi));
+        CampaignKpi saved = kpiRepository.save(kpi);
+
+        // 상위 KPI import 시 CampaignKpiContribution 자동 생성 (unique constraint 고려)
+        if (req.parentOrgKpiId() != null) {
+            orgKpiRepository.findById(req.parentOrgKpiId()).ifPresent(orgKpi -> {
+                boolean exists = contributionRepository
+                        .findByCampaign_IdxAndTargetOrgKpi_Idx(campaign.getIdx(), orgKpi.getIdx())
+                        .isPresent();
+                if (!exists) {
+                    contributionRepository.save(CampaignKpiContribution.builder()
+                            .campaign(campaign)
+                            .targetOrgKpi(orgKpi)
+                            .committedValue(req.targetValue())
+                            .actualValue(BigDecimal.ZERO)
+                            .build());
+                }
+            });
+        }
+
+        return CampaignKpiDto.Res.from(saved);
     }
 
     // ── 메타 수정 ────────────────────────────────────────────
@@ -138,6 +163,14 @@ public class CampaignKpiService {
         kpi.setMemo(req.memo());
         kpi.setNextAction(req.nextAction());
         kpi.setMeasuredAt(LocalDateTime.now());
+
+        // parentOrgKpiId가 있으면 연결된 contribution의 actualValue도 동기화
+        if (kpi.getParentOrgKpiId() != null && req.actualValue() != null) {
+            contributionRepository
+                    .findByCampaign_IdxAndTargetOrgKpi_Idx(campaignId, kpi.getParentOrgKpiId())
+                    .ifPresent(c -> c.setActualValue(req.actualValue()));
+        }
+
         return CampaignKpiDto.Res.from(kpi);
     }
 

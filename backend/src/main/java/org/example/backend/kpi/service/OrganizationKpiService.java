@@ -41,9 +41,27 @@ public class OrganizationKpiService {
 
     // ── 조회 ────────────────────────────────────────────────
 
+    private static final java.util.regex.Pattern FY_PATTERN =
+            java.util.regex.Pattern.compile("^(\\d{4})(?:-FY)?$");
+
     public List<OrganizationKpiDto> list(Long callerIdx, String periodCode, Long ownerOrgId, GoalStatus status) {
         User caller = callerIdx == null ? null : userRepository.findById(callerIdx).orElse(null);
-        return kpiRepository.findByFilters(ownerOrgId, normalize(periodCode), status).stream()
+        String normalizedPeriod = normalize(periodCode);
+
+        List<OrganizationKpi> kpis;
+        if (normalizedPeriod != null) {
+            java.util.regex.Matcher m = FY_PATTERN.matcher(normalizedPeriod);
+            if (m.matches()) {
+                // "2026-FY" 또는 "2026" → 해당 연도 전체 분기 조회
+                kpis = kpiRepository.findByFiltersForYear(ownerOrgId, m.group(1), status);
+            } else {
+                kpis = kpiRepository.findByFilters(ownerOrgId, normalizedPeriod, status);
+            }
+        } else {
+            kpis = kpiRepository.findByFilters(ownerOrgId, null, status);
+        }
+
+        return kpis.stream()
                 .filter(kpi -> isVisibleTo(kpi, caller))
                 .map(OrganizationKpiDto::from)
                 .toList();
@@ -263,9 +281,6 @@ public class OrganizationKpiService {
     private void requireOwnOrganization(User caller, Long targetOrgIdx, OrganizationKpi parentKpi) {
         if (caller.getOrganization() == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "조직 정보가 없는 계정입니다.");
-        }
-        if (caller.getOrganization().getType() == OrganizationType.EXTERNAL_PARTNER) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "외부 파트너는 OrganizationKpi를 관리할 수 없습니다.");
         }
         // ROLE_USER 차단 — KPI 관리는 GM/MANAGER/ADMIN만
         String role = caller.getRole();

@@ -63,10 +63,10 @@ function tone(pct) {
           </div>
           <div class="cascade-row__numbers">
             <span class="cascade-row__commit">
-              약속 <strong>{{ c.committedValue ?? 0 }}{{ c.unit ? ` ${c.unit}` : '' }}</strong>
+              약속 <strong>{{ c.committedValue ?? 0 }}{{ c.targetOrgKpiUnit ? ` ${c.targetOrgKpiUnit}` : '' }}</strong>
             </span>
             <span class="cascade-row__actual" :class="`tone--${tone(progressPct(c))}`">
-              실적 <strong>{{ c.actualValue ?? 0 }}{{ c.unit ? ` ${c.unit}` : '' }}</strong>
+              실적 <strong>{{ c.actualValue ?? 0 }}{{ c.targetOrgKpiUnit ? ` ${c.targetOrgKpiUnit}` : '' }}</strong>
             </span>
           </div>
         </div>
@@ -79,7 +79,7 @@ function tone(pct) {
         </div>
         <div class="cascade-row__sub">
           <span>달성률 {{ progressPct(c) }}%</span>
-          <span v-if="c.targetValue">상위 KPI 목표 {{ c.targetValue }}{{ c.unit ? ` ${c.unit}` : '' }}</span>
+          <span v-if="c.targetOrgKpiTargetValue">상위 KPI 목표 {{ c.targetOrgKpiTargetValue }}{{ c.targetOrgKpiUnit ? ` ${c.targetOrgKpiUnit}` : '' }}</span>
         </div>
       </li>
     </ul>
