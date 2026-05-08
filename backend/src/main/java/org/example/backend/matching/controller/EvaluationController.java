@@ -14,6 +14,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/matching")
 @RequiredArgsConstructor
@@ -22,9 +24,9 @@ public class EvaluationController {
 
     @GetMapping("/evaluation/result")
     public ResponseEntity<BaseResponse> getEvaluation(@AuthenticationPrincipal AuthUserDetails user,
-                                                      @RequestParam Long evaluationId) {
+                                                      @RequestParam Long campaignIdx) {
         try {
-            EvaluationDto.EvaluationRes dto = evaluationService.result(evaluationId, user);
+            List<EvaluationDto.EvaluationRes> dto = evaluationService.result(campaignIdx, user);
             return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESS, dto));
         }
         catch (Exception e){

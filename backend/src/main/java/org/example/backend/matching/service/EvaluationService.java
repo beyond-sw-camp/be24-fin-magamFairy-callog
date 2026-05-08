@@ -24,6 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 
 @Service
 @RequiredArgsConstructor
@@ -105,16 +108,35 @@ public class EvaluationService {
         evaluation.updateEval(evalEntity, category);
     }
 
-    public EvaluationDto.EvaluationRes result(Long evaluationId, AuthUserDetails user) {
-        Evaluation evaluation = evaluationRepository.findById(evaluationId)
-                .orElseThrow(() -> new EntityNotFoundException("해당 평가를 찾을 수 없습니다. Evaluation ID: " + evaluationId));
-        PartnerBenefits benefits = benefitRepository.findById(evaluation.getBenefits().getIdx())
-                .orElseThrow();
-        Campaign campaign = campaignRepository.findById(evaluation.getCampaign().getIdx())
-                .orElseThrow();
+    public List<EvaluationDto.EvaluationRes> result(Long campaignIdx, AuthUserDetails user) {
+       List<Evaluation> evaluations = evaluationRepository.findAllByCampaignIdx(campaignIdx);
 
-        return EvaluationDto.EvaluationRes.toDto(campaign, benefits, evaluation, user.getCompanyName());
+       if (evaluations.isEmpty()) {
+           throw new EntityNotFoundException(("해당 캠페인에 대한 평가 정보가 없습니다. CampaignID: " + campaignIdx));
+       }
 
+       return evaluations.stream()
+               .map(evaluation -> {
+                   PartnerBenefits benefits = evaluation.getBenefits();
+                   Campaign campaign = benefits.getCampaign();
+
+                   return EvaluationDto.EvaluationRes.toDto(
+                           campaign,
+                           benefits,
+                           evaluation,
+                           user.getCompanyName()
+                   );
+               })
+               .collect(Collectors.toList());
+
+//        Evaluation evaluation = evaluationRepository.findByCampaignIdx(evaluationId)
+//                .orElseThrow(() -> new EntityNotFoundException("해당 평가를 찾을 수 없습니다. Evaluation ID: " + evaluationId));
+//        PartnerBenefits benefits = benefitRepository.findById(evaluation.getBenefits().getIdx())
+//                .orElseThrow();
+//        Campaign campaign = campaignRepository.findById(evaluation.getCampaign().getIdx())
+//                .orElseThrow();
+//
+//        return EvaluationDto.EvaluationRes.toDto(campaign, benefits, evaluation, user.getCompanyName());
     }
 }
 
