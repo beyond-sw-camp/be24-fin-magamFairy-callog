@@ -35,7 +35,7 @@ const defaultNotifications = {
     qaReview: true,
     deadline: true,
     campaign: true,
-    aiAnalysis: false,
+    schedule: true,
   },
 }
 

@@ -13,6 +13,7 @@ import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.common.security.CampaignMemberGuard;
 import org.example.backend.common.security.RoleGuard;
+import org.example.backend.notification.service.NotificationService;
 import org.example.backend.organization.model.Organization;
 import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.model.User;
@@ -37,6 +38,7 @@ public class AdReviewRequestService {
     private final CampaignMemberRepository campaignMemberRepository;
     private final CampaignParticipantRepository campaignParticipantRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     public List<AdCheckDto.ReviewRequestRes> list(Long campaignId, AuthUserDetails authUser) {
         User caller = findUser(authUser);
@@ -114,6 +116,7 @@ public class AdReviewRequestService {
                 .requesterOrganizationIdx(organization != null ? organization.getIdx() : null)
                 .requesterOrganizationName(organization != null ? organization.getName() : null)
                 .build());
+        notificationService.notifyReviewRequested(saved, requester, findFinalReviewers(campaignId));
 
         return toResponse(saved);
     }
@@ -134,6 +137,7 @@ public class AdReviewRequestService {
                 reviewer.getName(),
                 normalize(req != null ? req.memo() : null)
         );
+        notificationService.notifyReviewDecision(request, reviewer, findRequester(request), true);
         return toResponse(request);
     }
 
@@ -157,6 +161,7 @@ public class AdReviewRequestService {
         }
 
         request.reject(reviewer.getId(), reviewer.getName(), reason);
+        notificationService.notifyReviewDecision(request, reviewer, findRequester(request), false);
         return toResponse(request);
     }
 
@@ -247,6 +252,30 @@ public class AdReviewRequestService {
         RoleGuard.requireAuthenticated(authUser);
         return userRepository.findById(authUser.getIdx())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "user not found."));
+    }
+
+    private List<User> findFinalReviewers(Long campaignId) {
+        return campaignMemberRepository.findAllByCampaignIdx(campaignId)
+                .stream()
+                .filter(member -> member.getCampaignRole() == CampaignMemberRole.MANAGER
+                        || member.getCampaignRole() == CampaignMemberRole.GENERAL_MANAGER)
+                .map(CampaignMember::getUser)
+                .filter(user -> user != null && user.getOrganization() != null)
+                .filter(user -> campaignParticipantRepository.existsByCampaignIdxAndOrganizationIdxAndCampaignRole(
+                        campaignId,
+                        user.getOrganization().getIdx(),
+                        CampaignRole.PM
+                ))
+                .toList();
+    }
+
+    private User findRequester(AdReviewRequest request) {
+        String requesterLoginId = normalize(request.getRequesterLoginId());
+        if (requesterLoginId == null) {
+            return null;
+        }
+
+        return userRepository.findUserById(requesterLoginId).orElse(null);
     }
 
     private String normalize(String value) {

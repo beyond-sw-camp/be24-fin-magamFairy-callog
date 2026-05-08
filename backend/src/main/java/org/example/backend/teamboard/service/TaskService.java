@@ -4,13 +4,16 @@ import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.CampaignParticipant;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
+import org.example.backend.notification.service.NotificationService;
 import org.example.backend.teamboard.model.MileStones;
 import org.example.backend.teamboard.model.Task;
 import org.example.backend.teamboard.model.TaskDto;
 import org.example.backend.teamboard.model.TaskParts;
+import org.example.backend.teamboard.model.TaskStatus;
 import org.example.backend.teamboard.repository.MileStonesRepository;
 import org.example.backend.teamboard.repository.TaskPartsRepository;
 import org.example.backend.teamboard.repository.TaskRepository;
+import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -31,6 +34,7 @@ public class TaskService {
     private final UserRepository userRepository;
     private final CampaignParticipantRepository participantRepository;
     private final CampaignMemberRepository campaignMemberRepository;
+    private final NotificationService notificationService;
 
     /** 메인 팀 보드 - 내가 참여한 캠페인의 Task */
     public List<TaskDto.ResList> listAll(Long userIdx) {
@@ -58,7 +62,7 @@ public class TaskService {
     }
 
     @Transactional
-    public TaskDto.ResTask create(Long campaignIdx, TaskDto.ReqTask req) {
+    public TaskDto.ResTask create(String campaignIdx, TaskDto.ReqTask req, AuthUserDetails authUser) {
         TaskParts taskPart = req.taskPartId() != null ? getTaskPartOrThrow(req.taskPartId()) : null;
         if (taskPart != null && !taskPart.getCampaign().getIdx().equals(campaignIdx)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "캠페인과 업무 파트가 일치하지 않습니다.");
@@ -70,31 +74,40 @@ public class TaskService {
                 ? getParticipantOrThrow(req.participantId()) : null;
 
         Task saved = taskRepository.save(req.toEntity(participant, taskPart, milestone, assignee));
+        notificationService.notifyTaskAssigned(saved, findActor(authUser));
         return TaskDto.ResTask.from(saved);
     }
 
     @Transactional
-    public TaskDto.ResTask update(Long taskIdx, TaskDto.ReqTask req) {
+    public TaskDto.ResTask update(Long taskIdx, TaskDto.ReqTask req, AuthUserDetails authUser) {
         Task task = getTaskOrThrow(taskIdx);
+        User previousAssignee = task.getAssignee();
+        TaskStatus previousStatus = task.getStatus();
 
         TaskParts taskPart = req.taskPartId() != null ? getTaskPartOrThrow(req.taskPartId()) : task.getTaskPart();
         MileStones milestone = req.milestoneId() != null ? getMilestoneOrThrow(req.milestoneId()) : task.getMilestone();
         User assignee = req.assigneeId() != null ? getUserOrThrow(req.assigneeId()) : task.getAssignee();
         CampaignParticipant participant = req.participantId() != null
                 ? getParticipantOrThrow(req.participantId()) : task.getParticipant();
+        TaskStatus nextStatus = req.status() != null ? req.status() : task.getStatus();
 
         task.update(
                 req.name(),
                 participant,
                 req.dueDate(),
                 req.taskType(),
-                req.status() != null ? req.status() : task.getStatus(),
+                nextStatus,
                 taskPart,
                 milestone,
                 assignee,
                 req.priority() != null ? req.priority() : task.getPriority(),
                 req.memo()
         );
+        User actor = findActor(authUser);
+        if (assignee != null && isDifferentUser(previousAssignee, assignee)) {
+            notificationService.notifyTaskAssigned(task, actor);
+        }
+        notificationService.notifyTaskStatusChanged(task, previousStatus, nextStatus, actor);
         return TaskDto.ResTask.from(task);
     }
 
@@ -129,5 +142,18 @@ public class TaskService {
     private CampaignParticipant getParticipantOrThrow(Long participantIdx) {
         return participantRepository.findById(participantIdx)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "참여사를 찾을 수 없습니다."));
+    }
+    private User findActor(AuthUserDetails authUser) {
+        if (authUser == null || authUser.getIdx() == null) {
+            return null;
+        }
+
+        return userRepository.findById(authUser.getIdx()).orElse(null);
+    }
+
+    private boolean isDifferentUser(User previousAssignee, User nextAssignee) {
+        Long previousIdx = previousAssignee != null ? previousAssignee.getIdx() : null;
+        Long nextIdx = nextAssignee != null ? nextAssignee.getIdx() : null;
+        return previousIdx == null || !previousIdx.equals(nextIdx);
     }
 }
