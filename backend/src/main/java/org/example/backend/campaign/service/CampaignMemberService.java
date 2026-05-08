@@ -2,16 +2,20 @@ package org.example.backend.campaign.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.Campaign;
+import org.example.backend.campaign.model.CampaignInvitation;
+import org.example.backend.campaign.model.CampaignInvitationStatus;
 import org.example.backend.campaign.model.CampaignMember;
 import org.example.backend.campaign.model.CampaignMemberDto;
 import org.example.backend.campaign.model.CampaignMemberRole;
 import org.example.backend.campaign.model.CampaignParticipant;
 import org.example.backend.campaign.model.CampaignRole;
+import org.example.backend.campaign.repository.CampaignInvitationRepository;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.common.security.CampaignMemberGuard;
 import org.example.backend.common.security.Roles;
+import org.example.backend.notification.service.NotificationService;
 import org.example.backend.organization.model.Organization;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
@@ -36,9 +40,9 @@ public class CampaignMemberService {
     private final CampaignMemberRepository memberRepository;
     private final CampaignParticipantRepository participantRepository;
     private final CampaignRepository campaignRepository;
+    private final CampaignInvitationRepository invitationRepository;
     private final UserRepository userRepository;
-
-    // ========== 조회 ==========
+    private final NotificationService notificationService;
 
     public List<CampaignMemberDto.ParticipantRes> listParticipants(Long campaignId) {
         return participantRepository.findAllByCampaignIdx(campaignId).stream()
@@ -54,75 +58,36 @@ public class CampaignMemberService {
         CampaignMemberGuard.requireMember(meMember);
 
         List<CampaignMember> all = memberRepository.findAllByCampaignIdx(campaignId);
-        List<CampaignMember> visible = filterVisibleMembers(all, meMember, caller);
-        List<CampaignMemberDto.Res> resList = visible.stream()
+        List<CampaignMemberDto.Res> resList = filterVisibleMembers(all, meMember, caller).stream()
                 .map(CampaignMemberDto.Res::from)
                 .toList();
-
-        boolean isPm = isPmOrganization(campaignId, caller);
 
         return CampaignMemberDto.ListRes.builder()
                 .members(resList)
                 .me(CampaignMemberDto.Res.from(meMember))
-                .organizationIsPm(isPm)
+                .organizationIsPm(isPmOrganization(campaignId, caller))
                 .build();
     }
 
-    private List<CampaignMember> filterVisibleMembers(
-            List<CampaignMember> all, CampaignMember me, User caller) {
-        switch (me.getCampaignRole()) {
-            case GENERAL_MANAGER:
-                return all;
-            case MANAGER:
-                return all.stream().filter(m -> {
-                    CampaignMemberRole r = m.getCampaignRole();
-                    if (r == CampaignMemberRole.GENERAL_MANAGER || r == CampaignMemberRole.MANAGER) {
-                        return true;
-                    }
-                    return sameCompany(caller, m.getUser());
-                }).toList();
-            case USER:
-            default:
-                return all.stream().filter(m ->
-                        sameCompany(caller, m.getUser())
-                ).toList();
-        }
-    }
-
-    private boolean sameCompany(User a, User b) {
-        String aCompany = normalize(a.getCompanyName());
-        String bCompany = normalize(b.getCompanyName());
-        return !aCompany.isEmpty() && aCompany.equals(bCompany);
-    }
-
-    private boolean isPmOrganization(Long campaignId, User caller) {
-        Organization org = caller.getOrganization();
-        if (org == null) return false;
-        return participantRepository.existsByCampaignIdxAndOrganizationIdxAndCampaignRole(
-                campaignId, org.getIdx(), CampaignRole.PM);
-    }
-
-    // ========== 팀원 추가 + 후보 ==========
-
     @Transactional
     public List<CampaignMemberDto.Res> addTeamMembers(
-            Long campaignId, String callerLoginId, List<Long> userIdxList) {
+            Long campaignId,
+            String callerLoginId,
+            List<Long> userIdxList
+    ) {
         if (userIdxList == null || userIdxList.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userIdxList is required.");
         }
-        User caller = findUser(callerLoginId);
-        CampaignMember me = memberRepository
-                .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
-                .orElse(null);
-        CampaignMemberGuard.requireMember(me);
 
-        Campaign campaign = campaignRepository.findById(campaignId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Campaign not found."));
+        User caller = findUser(callerLoginId);
+        CampaignMember me = memberRepository.findByCampaignIdxAndUserIdx(campaignId, caller.getIdx()).orElse(null);
+        CampaignMemberGuard.requireMember(me);
+        Campaign campaign = findCampaign(campaignId);
 
         List<CampaignMember> created = new ArrayList<>();
-        for (Long uidx : userIdxList) {
-            User target = userRepository.findById(uidx)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Target user not found: " + uidx));
+        for (Long userIdx : userIdxList) {
+            User target = userRepository.findById(userIdx)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "target user not found."));
 
             if (Roles.ADMIN.equals(target.getRole())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ADMIN 사용자는 추가할 수 없습니다.");
@@ -130,7 +95,7 @@ public class CampaignMemberService {
             validateAddCandidate(me, caller, target);
 
             if (memberRepository.existsByCampaignIdxAndUserIdx(campaignId, target.getIdx())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 참여 중인 사용자입니다: " + target.getId());
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 참여 중인 사용자입니다.");
             }
 
             CampaignMember member = CampaignMember.builder()
@@ -142,102 +107,54 @@ public class CampaignMemberService {
             try {
                 created.add(memberRepository.saveAndFlush(member));
             } catch (DataIntegrityViolationException e) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "이미 참여 중인 사용자입니다: " + target.getId(), e);
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 참여 중인 사용자입니다.", e);
             }
         }
+
+        created.forEach(member -> notificationService.notifyCampaignMemberAdded(
+                member.getUser(),
+                caller,
+                campaign.getName(),
+                "/campaigns/" + campaign.getPublicId()
+        ));
+
         return created.stream().map(CampaignMemberDto.Res::from).toList();
-    }
-
-    private void validateAddCandidate(CampaignMember me, User caller, User target) {
-        if (me.getCampaignRole() == CampaignMemberRole.MANAGER) {
-            if (!sameCompany(caller, target)) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                        "MANAGER는 자기 회사의 사용자만 추가할 수 있습니다.");
-            }
-            String role = target.getRole();
-            if (!Roles.USER.equals(role) && !Roles.MANAGER.equals(role)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "USER 또는 MANAGER 사용자만 추가할 수 있습니다.");
-            }
-        } else if (me.getCampaignRole() == CampaignMemberRole.GENERAL_MANAGER) {
-            Organization callerOrg = caller.getOrganization();
-            Organization targetOrg = target.getOrganization();
-            if (callerOrg == null || targetOrg == null
-                    || !Objects.equals(callerOrg.getIdx(), targetOrg.getIdx())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                        "같은 조직의 사용자만 추가할 수 있습니다.");
-            }
-            String role = target.getRole();
-            if (!Roles.USER.equals(role) && !Roles.MANAGER.equals(role)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "USER 또는 MANAGER 사용자만 추가할 수 있습니다.");
-            }
-        }
-    }
-
-    private static CampaignMemberRole globalRoleToCampaignRole(String globalRole) {
-        if (Roles.GENERAL_MANAGER.equals(globalRole)) return CampaignMemberRole.GENERAL_MANAGER;
-        if (Roles.MANAGER.equals(globalRole)) return CampaignMemberRole.MANAGER;
-        return CampaignMemberRole.USER;
     }
 
     public List<CampaignMemberDto.CandidateRes> listTeamCandidates(Long campaignId, String callerLoginId) {
         User caller = findUser(callerLoginId);
-        CampaignMember me = memberRepository
-                .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
-                .orElse(null);
+        CampaignMember me = memberRepository.findByCampaignIdxAndUserIdx(campaignId, caller.getIdx()).orElse(null);
         CampaignMemberGuard.requireMember(me);
 
         List<User> pool = me.getCampaignRole() == CampaignMemberRole.GENERAL_MANAGER
                 ? userRepository.findAllByOrganizationIdx(caller.getOrganization() != null
-                    ? caller.getOrganization().getIdx() : -1L)
+                        ? caller.getOrganization().getIdx()
+                        : -1L)
                 : userRepository.findAllByCompanyName(normalize(caller.getCompanyName()));
-
-        Set<Long> existingUserIdx = memberRepository.findAllByCampaignIdx(campaignId)
-                .stream()
-                .map(m -> m.getUser().getIdx())
+        Set<Long> existingUserIdx = memberRepository.findAllByCampaignIdx(campaignId).stream()
+                .map(member -> member.getUser().getIdx())
                 .collect(Collectors.toSet());
 
         return pool.stream()
-                .filter(u -> !Roles.ADMIN.equals(u.getRole()))
-                .filter(u -> !Roles.GENERAL_MANAGER.equals(u.getRole()))
-                .filter(u -> !existingUserIdx.contains(u.getIdx()))
+                .filter(user -> !Roles.ADMIN.equals(user.getRole()))
+                .filter(user -> !Roles.GENERAL_MANAGER.equals(user.getRole()))
+                .filter(user -> !existingUserIdx.contains(user.getIdx()))
                 .map(this::toCandidate)
                 .toList();
     }
 
-    private CampaignMemberDto.CandidateRes toCandidate(User u) {
-        Organization org = u.getOrganization();
-        return CampaignMemberDto.CandidateRes.builder()
-                .userIdx(u.getIdx())
-                .userId(u.getId())
-                .name(u.getName())
-                .email(u.getEmail())
-                .companyName(u.getCompanyName())
-                .department(u.getDepartment())
-                .globalRole(u.getRole())
-                .organizationIdx(org != null ? org.getIdx() : null)
-                .organizationName(org != null ? org.getName() : null)
-                .build();
-    }
-
-    // ========== 협력사 GM 초대 + 후보 ==========
-
     @Transactional
-    public CampaignMemberDto.Res invitePartnerGm(Long campaignId, String callerLoginId, Long targetUserIdx) {
+    public CampaignMemberDto.InvitationRes invitePartnerGm(Long campaignId, String callerLoginId, Long targetUserIdx) {
         User caller = findUser(callerLoginId);
-        CampaignMember me = memberRepository
-                .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
-                .orElse(null);
+        CampaignMember me = memberRepository.findByCampaignIdxAndUserIdx(campaignId, caller.getIdx()).orElse(null);
         CampaignMemberGuard.requireMember(me);
 
         if (!isPmOrganization(campaignId, caller)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PM사 소속만 협력사를 초대할 수 있습니다.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PM 조직만 협력사 GM을 초대할 수 있습니다.");
         }
 
         User target = userRepository.findById(targetUserIdx)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Target user not found."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "target user not found."));
 
         if (!Roles.GENERAL_MANAGER.equals(target.getRole())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "협력사 초대 대상은 GM만 가능합니다.");
@@ -245,8 +162,7 @@ public class CampaignMemberService {
 
         Organization callerOrg = caller.getOrganization();
         Organization targetOrg = target.getOrganization();
-        if (callerOrg == null || targetOrg == null
-                || Objects.equals(callerOrg.getIdx(), targetOrg.getIdx())) {
+        if (callerOrg == null || targetOrg == null || Objects.equals(callerOrg.getIdx(), targetOrg.getIdx())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "다른 조직의 GM이어야 합니다.");
         }
 
@@ -254,107 +170,89 @@ public class CampaignMemberService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 참여 중인 사용자입니다.");
         }
 
-        Campaign campaign = campaignRepository.findById(campaignId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Campaign not found."));
-
-        if (!participantRepository.existsByCampaignIdxAndOrganizationIdx(campaignId, targetOrg.getIdx())) {
-            CampaignParticipant cp = CampaignParticipant.builder()
-                    .campaign(campaign)
-                    .organization(targetOrg)
-                    .campaignRole(CampaignRole.PARTNER)
-                    .build();
-            participantRepository.save(cp);
+        if (invitationRepository.existsByCampaign_IdxAndInvitee_IdxAndStatus(
+                campaignId,
+                target.getIdx(),
+                CampaignInvitationStatus.PENDING
+        )) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "대기 중인 초대가 이미 있습니다.");
         }
 
-        CampaignMember newMember = CampaignMember.builder()
+        Campaign campaign = findCampaign(campaignId);
+        CampaignInvitation invitation = CampaignInvitation.builder()
                 .campaign(campaign)
-                .user(target)
-                .campaignRole(CampaignMemberRole.GENERAL_MANAGER)
-                .joinedAt(LocalDateTime.now())
+                .inviter(caller)
+                .invitee(target)
+                .inviteeOrganization(targetOrg)
+                .status(CampaignInvitationStatus.PENDING)
                 .build();
-        return CampaignMemberDto.Res.from(memberRepository.save(newMember));
+        CampaignInvitation saved = invitationRepository.save(invitation);
+        notificationService.notifyCampaignInvitation(saved);
+
+        return CampaignMemberDto.InvitationRes.from(saved);
     }
 
     public List<CampaignMemberDto.CandidateRes> listPartnerGmCandidates(Long campaignId, String callerLoginId) {
         User caller = findUser(callerLoginId);
-        CampaignMember me = memberRepository
-                .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
-                .orElse(null);
+        CampaignMember me = memberRepository.findByCampaignIdxAndUserIdx(campaignId, caller.getIdx()).orElse(null);
         CampaignMemberGuard.requireMember(me);
 
         if (!isPmOrganization(campaignId, caller)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PM사 소속만 협력사 후보를 조회할 수 있습니다.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PM 조직만 협력사 후보를 조회할 수 있습니다.");
         }
 
         Long callerOrgIdx = caller.getOrganization() != null ? caller.getOrganization().getIdx() : -1L;
-
-        Set<Long> existingUserIdx = memberRepository.findAllByCampaignIdx(campaignId)
-                .stream()
-                .map(m -> m.getUser().getIdx())
+        Set<Long> existingUserIdx = memberRepository.findAllByCampaignIdx(campaignId).stream()
+                .map(member -> member.getUser().getIdx())
                 .collect(Collectors.toSet());
 
         return userRepository.findAllByRole(Roles.GENERAL_MANAGER).stream()
-                .filter(u -> u.getOrganization() != null
-                        && !u.getOrganization().getIdx().equals(callerOrgIdx))
-                .filter(u -> !existingUserIdx.contains(u.getIdx()))
+                .filter(user -> user.getOrganization() != null && !user.getOrganization().getIdx().equals(callerOrgIdx))
+                .filter(user -> !existingUserIdx.contains(user.getIdx()))
                 .map(this::toCandidate)
                 .toList();
     }
 
-    // ========== 승격/강등 + 추방 ==========
-
     @Transactional
     public CampaignMemberDto.Res updateMemberRole(
-            Long campaignId, String callerLoginId, Long memberId, CampaignMemberRole nextRole) {
+            Long campaignId,
+            String callerLoginId,
+            Long memberId,
+            CampaignMemberRole nextRole
+    ) {
         if (nextRole != CampaignMemberRole.USER && nextRole != CampaignMemberRole.MANAGER) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "campaignRole은 USER 또는 MANAGER만 가능합니다.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "campaignRole은 USER 또는 MANAGER만 가능합니다.");
         }
+
         User caller = findUser(callerLoginId);
-        CampaignMember me = memberRepository
-                .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
-                .orElse(null);
+        CampaignMember me = memberRepository.findByCampaignIdxAndUserIdx(campaignId, caller.getIdx()).orElse(null);
         CampaignMemberGuard.requireMember(me);
-
-        CampaignMember target = memberRepository.findById(memberId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found."));
-
-        if (!Objects.equals(target.getCampaign().getIdx(), campaignId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Member does not belong to this campaign.");
-        }
+        CampaignMember target = findMemberInCampaign(campaignId, memberId);
 
         if (target.getCampaignRole() == CampaignMemberRole.GENERAL_MANAGER) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "GM은 변경 대상이 아닙니다.");
         }
 
         CampaignMemberGuard.requireSameCompany(caller, target.getUser());
-
         target.setCampaignRole(nextRole);
+
         return CampaignMemberDto.Res.from(target);
     }
 
     @Transactional
     public void removeMember(Long campaignId, String callerLoginId, Long memberId) {
         User caller = findUser(callerLoginId);
-        CampaignMember me = memberRepository
-                .findByCampaignIdxAndUserIdx(campaignId, caller.getIdx())
-                .orElse(null);
+        CampaignMember me = memberRepository.findByCampaignIdxAndUserIdx(campaignId, caller.getIdx()).orElse(null);
         CampaignMemberGuard.requireMember(me);
-
-        CampaignMember target = memberRepository.findById(memberId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found."));
-
-        if (!Objects.equals(target.getCampaign().getIdx(), campaignId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Member does not belong to this campaign.");
-        }
+        CampaignMember target = findMemberInCampaign(campaignId, memberId);
 
         if (Objects.equals(target.getUser().getIdx(), caller.getIdx())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "자기 자신은 추방할 수 없습니다.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "자기 자신은 제외할 수 없습니다.");
         }
 
         if (me.getCampaignRole() == CampaignMemberRole.MANAGER) {
             if (target.getCampaignRole() != CampaignMemberRole.USER) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "MANAGER는 USER만 추방할 수 있습니다.");
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "MANAGER는 USER만 제외할 수 있습니다.");
             }
             CampaignMemberGuard.requireSameCompany(caller, target.getUser());
         }
@@ -362,14 +260,179 @@ public class CampaignMemberService {
         memberRepository.delete(target);
     }
 
-    // ========== Helper ==========
+    @Transactional
+    public CampaignMemberDto.InvitationRes acceptInvitation(Long campaignId, Long invitationId, String callerLoginId) {
+        CampaignInvitation invitation = findInvitation(campaignId, invitationId);
+        User caller = findUser(callerLoginId);
+        requireInvitee(invitation, caller);
+        ensurePending(invitation);
+
+        Campaign campaign = invitation.getCampaign();
+        User invitee = invitation.getInvitee();
+        Organization inviteeOrganization = invitation.getInviteeOrganization();
+
+        if (inviteeOrganization != null
+                && !participantRepository.existsByCampaignIdxAndOrganizationIdx(campaignId, inviteeOrganization.getIdx())) {
+            participantRepository.save(CampaignParticipant.builder()
+                    .campaign(campaign)
+                    .organization(inviteeOrganization)
+                    .campaignRole(CampaignRole.PARTNER)
+                    .build());
+        }
+
+        if (!memberRepository.existsByCampaignIdxAndUserIdx(campaignId, invitee.getIdx())) {
+            memberRepository.save(CampaignMember.builder()
+                    .campaign(campaign)
+                    .user(invitee)
+                    .campaignRole(CampaignMemberRole.GENERAL_MANAGER)
+                    .joinedAt(LocalDateTime.now())
+                    .build());
+        }
+
+        invitation.accept();
+        notificationService.notifyCampaignInvitationDecision(invitation);
+
+        return CampaignMemberDto.InvitationRes.from(invitation);
+    }
+
+    @Transactional
+    public CampaignMemberDto.InvitationRes rejectInvitation(Long campaignId, Long invitationId, String callerLoginId) {
+        CampaignInvitation invitation = findInvitation(campaignId, invitationId);
+        User caller = findUser(callerLoginId);
+        requireInvitee(invitation, caller);
+        ensurePending(invitation);
+
+        invitation.reject();
+        notificationService.notifyCampaignInvitationDecision(invitation);
+
+        return CampaignMemberDto.InvitationRes.from(invitation);
+    }
+
+    private List<CampaignMember> filterVisibleMembers(List<CampaignMember> all, CampaignMember me, User caller) {
+        return switch (me.getCampaignRole()) {
+            case GENERAL_MANAGER -> all;
+            case MANAGER -> all.stream()
+                    .filter(member -> {
+                        CampaignMemberRole role = member.getCampaignRole();
+                        return role == CampaignMemberRole.GENERAL_MANAGER
+                                || role == CampaignMemberRole.MANAGER
+                                || sameCompany(caller, member.getUser());
+                    })
+                    .toList();
+            case USER -> all.stream()
+                    .filter(member -> sameCompany(caller, member.getUser()))
+                    .toList();
+        };
+    }
+
+    private void validateAddCandidate(CampaignMember me, User caller, User target) {
+        if (me.getCampaignRole() == CampaignMemberRole.MANAGER) {
+            if (!sameCompany(caller, target)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "MANAGER는 같은 회사 사용자만 추가할 수 있습니다.");
+            }
+            if (!Roles.USER.equals(target.getRole()) && !Roles.MANAGER.equals(target.getRole())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "USER 또는 MANAGER 사용자만 추가할 수 있습니다.");
+            }
+            return;
+        }
+
+        if (me.getCampaignRole() == CampaignMemberRole.GENERAL_MANAGER) {
+            Organization callerOrg = caller.getOrganization();
+            Organization targetOrg = target.getOrganization();
+            if (callerOrg == null || targetOrg == null || !Objects.equals(callerOrg.getIdx(), targetOrg.getIdx())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "같은 조직 사용자만 추가할 수 있습니다.");
+            }
+            if (!Roles.USER.equals(target.getRole()) && !Roles.MANAGER.equals(target.getRole())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "USER 또는 MANAGER 사용자만 추가할 수 있습니다.");
+            }
+        }
+    }
+
+    private boolean sameCompany(User a, User b) {
+        String aCompany = normalize(a.getCompanyName());
+        String bCompany = normalize(b.getCompanyName());
+
+        return !aCompany.isEmpty() && aCompany.equals(bCompany);
+    }
+
+    private boolean isPmOrganization(Long campaignId, User caller) {
+        Organization organization = caller.getOrganization();
+        if (organization == null) {
+            return false;
+        }
+
+        return participantRepository.existsByCampaignIdxAndOrganizationIdxAndCampaignRole(
+                campaignId,
+                organization.getIdx(),
+                CampaignRole.PM
+        );
+    }
+
+    private static CampaignMemberRole globalRoleToCampaignRole(String globalRole) {
+        if (Roles.GENERAL_MANAGER.equals(globalRole)) {
+            return CampaignMemberRole.GENERAL_MANAGER;
+        }
+        if (Roles.MANAGER.equals(globalRole)) {
+            return CampaignMemberRole.MANAGER;
+        }
+        return CampaignMemberRole.USER;
+    }
+
+    private CampaignMemberDto.CandidateRes toCandidate(User user) {
+        Organization organization = user.getOrganization();
+
+        return CampaignMemberDto.CandidateRes.builder()
+                .userIdx(user.getIdx())
+                .userId(user.getId())
+                .name(user.getName())
+                .email(user.getEmail())
+                .companyName(user.getCompanyName())
+                .department(user.getDepartment())
+                .globalRole(user.getRole())
+                .organizationIdx(organization != null ? organization.getIdx() : null)
+                .organizationName(organization != null ? organization.getName() : null)
+                .build();
+    }
+
+    private Campaign findCampaign(Long campaignId) {
+        return campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "campaign not found."));
+    }
+
+    private CampaignMember findMemberInCampaign(Long campaignId, Long memberId) {
+        CampaignMember member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "member not found."));
+
+        if (!Objects.equals(member.getCampaign().getIdx(), campaignId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "member does not belong to this campaign.");
+        }
+
+        return member;
+    }
+
+    private CampaignInvitation findInvitation(Long campaignId, Long invitationId) {
+        return invitationRepository.findByIdxAndCampaign_Idx(invitationId, campaignId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "invitation not found."));
+    }
+
+    private void requireInvitee(CampaignInvitation invitation, User caller) {
+        if (!Objects.equals(invitation.getInvitee().getIdx(), caller.getIdx())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only invited user can respond.");
+        }
+    }
+
+    private void ensurePending(CampaignInvitation invitation) {
+        if (invitation.getStatus() != CampaignInvitationStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invitation is already closed.");
+        }
+    }
 
     private User findUser(String loginId) {
         return userRepository.findUserById(loginId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "user not found."));
     }
 
-    private static String normalize(String s) {
-        return s == null ? "" : s.trim();
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim();
     }
 }
