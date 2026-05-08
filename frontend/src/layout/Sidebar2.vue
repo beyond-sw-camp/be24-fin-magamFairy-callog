@@ -266,7 +266,9 @@ function handleResizeKeydown(event) {
 }
 
 function isServerCampaignId(campaignId) {
-  return /^\d+$/.test(String(campaignId))
+  // 임시 로컬 ID는 normalizeCampaignRecord에서 "campaign-{timestamp}" 형식으로 생성됨
+  // UUID 또는 숫자 ID는 서버에서 발급된 실제 ID
+  return !String(campaignId).startsWith('campaign-')
 }
 
 function closeCampaignMenu() {

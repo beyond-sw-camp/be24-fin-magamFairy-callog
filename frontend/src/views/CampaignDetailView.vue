@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useCampaignKpiStore } from '@/stores/campaignKpi.js'
-import { GetCampaignDetails, UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
+import { UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
 import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
 import MatchOverview from '@/views/MatchOverview.vue'
 import CampaignMembersPanel from '@/components/campaign/CampaignMembersPanel.vue'
@@ -114,16 +114,9 @@ const CAMPAIGN_PALETTE = [
 
 const tabs = ["캠페인 오버뷰", "팀 보드 보기", "검수/승인", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
 
-const handleTabClick = async (tabName) => {
-  activeTab.value = tabName;
-  try {
-    // tabName에 "참여자 설정" 같은 값이 들어와서 호출됨
-    const data = await GetCampaignDetails(tabName);
-    console.log("받아온 데이터:", data);
-  } catch (error) {
-    console.error("에러 발생:", error);
-  }
-};
+const handleTabClick = (tabName) => {
+  activeTab.value = tabName
+}
 
 const campaignId = computed(() => route.params.campaignId)
 
@@ -796,7 +789,7 @@ async function saveMetadata() {
       ...activeCampaign.value,
       ...updated,
       status: nextStatus || activeCampaign.value?.status,
-      id: String(updated.idx ?? updated.id ?? campaignId),
+      id: String(updated.id ?? updated.idx ?? campaignId),
     })
 
     metadataEditing.value = false
