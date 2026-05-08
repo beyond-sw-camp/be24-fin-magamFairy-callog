@@ -27,6 +27,10 @@ public class Evaluation {
     @Column(unique = true, nullable = false, updatable = false)
     private String sessionId; // n8n에서 발급한 UUID를 담을 필드
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "benefit_idx", unique = false)
+    private PartnerBenefits benefits;
+
     @Setter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "campaign_idx", unique = false)

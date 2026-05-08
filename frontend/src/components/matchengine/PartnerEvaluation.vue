@@ -55,6 +55,7 @@ function getDetailMeta(candidate, label, fallback = '미입력') {
   return candidate.detailCards?.find((card) => card.label === label)?.meta ?? fallback
 }
 
+// UI 매핑: 상세 텍스트(detailedMetrics) 연결 추가
 function mapCandidateToProposal(candidate) {
   const score = Number(candidate.score ?? 0)
   const fallback = score || 75
@@ -117,17 +118,170 @@ function mapCandidateToProposal(candidate) {
       { title: '검토 의견 기록', owner: '김캘리', due: 'D-1', priority: '낮음', dependency: '' },
     ],
     comments: [
-      { author: '김캘리', time: '05.06 14:23', text: '브랜드 적합도가 높아 우선 진행 의견입니다.' },
-      { author: '박운영', time: '05.06 15:10', text: '운영 일정만 확인되면 바로 시작 가능합니다.' },
+      { author: '시스템', time: '방금 전', text: '새로운 평가 데이터가 수신되어 반영되었습니다.' }
     ],
+    detailedMetrics: candidate.detailedMetrics || null,
     manualScore: score || null,
+  }
+}
+
+// JSON 데이터를 모델로 변환하는 어댑터 함수
+function adaptServerDataToCandidate(serverData) {
+  const getScore = (evalObj) => evalObj?.overallScore ?? 0;
+  
+  const scores = {
+    customerFit: getScore(serverData.customerEval),
+    revenue: getScore(serverData.revenueEval),
+    cost: getScore(serverData.costEval),
+    operation: getScore(serverData.operationEval),
+    brand: getScore(serverData.brandEval),
+  };
+
+  const finalScore = Math.round(
+    scores.customerFit * 0.25 +
+    scores.revenue * 0.25 +
+    scores.cost * 0.2 +
+    scores.operation * 0.15 +
+    scores.brand * 0.15
+  );
+
+  return {
+    id: 'server-candidate-json',
+    isSample: false,
+    goal: serverData.goal || 'MEMBER_SIGNUP',
+    title: serverData.title || '제목 미입력',
+    partner: serverData.partner || '미상 (공동 프로모션)',
+    offer: serverData.offer || '혜택 미입력',
+    asset: serverData.assetDescription || '자산 정보 미상',
+    target: serverData.target || '타겟 미정',
+    schedule: `${serverData.startDate} ~ ${serverData.endDate}`,
+    risk: serverData.operationEval?.improvementDirections?.[0] || '리스크 정보 없음',
+    score: finalScore,
+    reasons: [
+      serverData.customerEval?.improvementDirections?.[0],
+      serverData.revenueEval?.improvementDirections?.[0],
+      serverData.costEval?.improvementDirections?.[0]
+    ].filter(Boolean),
+    scoreBreakdown: [
+      { label: '고객 적합도', score: scores.customerFit },
+      { label: '수익 기여도', score: scores.revenue },
+      { label: '비용 효율성', score: scores.cost },
+      { label: '운영 용이성', score: scores.operation },
+      { label: '브랜드 적합도', score: scores.brand },
+    ],
+    targetKpis: ['신규 회원 가입 유도', '객단가(AOV) 상승 유도', '프리미엄 혜택 전환'],
+    detailedMetrics: {
+      customerFit: {
+        text: serverData.customerEval?.customerAgeGroup,
+        reasons: serverData.customerEval?.improvementDirections || []
+      },
+      revenue: {
+        text: serverData.revenueEval?.purchaseConversionProbability,
+        reasons: serverData.revenueEval?.improvementDirections || []
+      },
+      cost: {
+        text: serverData.costEval?.partnerDiscountCostBurden,
+        reasons: serverData.costEval?.improvementDirections || []
+      },
+      operation: {
+        text: serverData.operationEval?.approvalStepsCount,
+        reasons: serverData.operationEval?.improvementDirections || []
+      },
+      brand: {
+        text: serverData.brandEval?.brandTone,
+        reasons: serverData.brandEval?.improvementDirections || []
+      }
+    }
+  };
+}
+
+// 주입받은 원본 JSON 데이터
+const incomingJsonData = {
+  goal: "",
+  title: "얄",
+  partner: null,
+  assetDescription: null,
+  offer: "야르",
+  target: "8",
+  startDate: "8878-08-08",
+  endDate: "0078-09-07",
+  customerEval: {
+    idx: 4,
+    improvementDirections: [
+      "단순 할인율 제시를 넘어, 회원 가입 직후에만 제공되는 '웰컴 키트' 또는 '선체험 기회(First Access)'를 쿠폰과 결합하여 가입의 심리적 만족도를 극대화해야 합니다.",
+      "쿠폰 사용 조건을 강화하여, 최소한의 구매 금액을 설정하거나(AOV 증진), 특정 카테고리 상품을 구매하도록 유도하는 '미션형 쿠폰' 구조로 전환하여 매출 기여도를 높여야 합니다.",
+      "공동 프로모션의 파트너 자산(Asset)을 활용하여, 단순히 할인을 받는 것 외에 '파트너사 전용 체험 기회'와 같은 독점적 경험을 묶어 제공함으로써 브랜드 충성도와 가입 동기를 강화해야 합니다."
+    ],
+    overallScore: 84,
+    customerAgeGroup: "신규 고객 유입(회원 가입)이 목표이므로, 연령대에 국한되지 않은 보편적인 가치를 제공하는 것이 중요합니다. 할인 쿠폰은 초기 유인책으로 효과적이나, 타겟 연령층에 맞는 '경험적 가치'를 추가해야 합니다.",
+    customerSpendingPatterns: "직접적인 할인(할인/쿠폰)은 신규 고객의 첫 구매 장벽을 낮추는 데 매우 효과적입니다. 목표가 등록 자체이므로, '구매를 유도하는 시작점'으로서 쿠폰의 역할은 높게 평가됩니다.",
+    membershipTier: "주 목표가 회원 가입이므로, 현 사용자에게는 무의미하고 비가입자에게 가장 직접적인 혜택입니다. 쿠폰을 사용하기 위한 최소한의 절차(예: 정보 입력 및 회원 가입)를 필수화하여 전환율을 높여야 합니다.",
+    usageChannel: "'공동 프로모션' 방식을 채택했기 때문에, 다양한 매체 및 채널에서 일관성 있는 혜택 가이드라인이 필요합니다. 쿠폰 형태는 채널 확산성이 높으나, 채널별 차별화된 미션이 결여되어 있습니다.",
+    benefitCategory: "할인/쿠폰은 회원 가입(Acquisition) 목표를 달성하는 가장 기본적인 인센티브입니다. 기본적인 매커니즘은 적합하나, 단순히 가격 할인에 그치지 않고 '프리미엄 체험권' 등 고유 가치와 결합하여 차별화가 필요합니다."
+  },
+  revenueEval: {
+    idx: 4,
+    improvementDirections: [
+      "쿠폰의 사용 조건을 '최소 구매 금액 달성 시 추가 할인' 또는 '특정 상품군 구매 시 추가 혜택'으로 변경하여 고객의 객단가(AOV) 상승을 유도해야 합니다. 단순 할인보다 조건부 혜택이 구매를 확정짓는 데 더 효과적입니다.",
+      "얄(할인/쿠폰) 혜택을 '신규 회원 전용'로 한정하고, 쿠폰과 함께 사용할 수 있는 '경험형 사은품' 또는 '미사용 시 다음 캠페인 할인권'을 결합하여 고객의 재방문 여정(Next Journey)을 설계해야 합니다.",
+      "할인액 198원 대신, '금액 할인' 대신 '무료 체험 기회 제공' 또는 '상위 등급의 서비스 이용권' 등 무형의 높은 체감 가치를 지닌 혜택으로 변환하여 신규 회원에게 프리미엄 경험을 선사하는 것이 브랜드 가치 제고에 유리합니다."
+    ],
+    overallScore: 71,
+    purchaseConversionProbability: "현재 할인(198원) 자체는 구매 유인책이 되나, 매우 낮은 금액 설정으로 인해 구매 결정에 결정적인 영향을 미치기 어렵습니다. 초기 구매 장벽을 낮추는 용도로는 적합하나, 대규모 전환을 기대하기는 어려워 보입니다.",
+    roomReservationIncreaseProbability: "자산의 성격(Asset)이 불분명하나, 만약 숙박/여행 관련 자산이라면, 198원이라는 금액은 객실 요금에 비해 매우 미미하여 예약 규모를 키우는 데는 한계가 있습니다. 체험권 또는 부가 서비스 할인으로 전환 시 효율성이 높습니다.",
+    appRegistrationIncreaseProbability: "목표 자체가 '회원 가입'이므로, 본 할인 쿠폰(얄)을 '신규 가입자 전용 혜택'으로 명시하고, 가입 완료 단계를 지나가야만 쿠폰을 수령할 수 있도록 필수적으로 결부시켜야 성공적입니다.",
+    membershipRegistrationRevisitProbability: "신규 가입 유도에는 좋으나, 재방문 시 재사용 가능한 '다음 구매 쿠폰' 또는 '등급 상향 혜택'과 연결하지 않으면 혜택의 가치가 소진되어 로열티를 구축하는 데는 부족합니다.",
+    alignmentwithCampaignGoalsandKPIs: "주 목표가 '회원 가입'인 만큼, 이 할인 쿠폰을 오직 가입 시점의 첫 구매에만 사용하도록 제한적 조건(Gate)을 부여하여 목표 달성률을 극대화할 수 있습니다. 연결성은 높으나, 혜택 체감도를 높이는 추가 장치가 필요합니다."
+  },
+  brandEval: {
+    idx: 3,
+    improvementDirections: [
+      "단순 할인 혜택(Discount)을 '체험권/업그레이드권(Experience/Upgrade)'으로 변경하여, 단순 가격 절감이 아닌 독점적인 가치(예: 객실 업그레이드 혜택, 조식 뷔페 무료 이용권)를 부여하여 브랜드의 프리미엄 이미지를 유지하며 신규 회원 가입을 유도해야 합니다.",
+      "목표(회원 가입) 달성 행동을 유도하기 위해, 할인을 적용하는 시점을 '가입 즉시'가 아닌 '특정 등급 회원 전용 패키지 예약 시에만' 적용되도록 조건을 설정하여, 회원 가입에 대한 기대감과 희소성을 극대화해야 합니다.",
+      "쿠폰의 명칭과 메시지를 '할인 쿠폰'이 아닌 '웰컴 패키지' 또는 '신규 고객 감사 초대장' 등으로 재정의하고, 쿠폰 외에 해당 기간 동안만 제공되는 추가적인 디지털 콘텐츠(예: 호텔 시설 이용 가이드, 지역 문화 체험 바우처)를 묶어 제공하여 혜택의 깊이와 가치를 높여야 합니다."
+    ],
+    overallScore: 72,
+    brandTone: "단순 할인 쿠폰 형태는 '가성비'에 초점을 맞춘 기능적이고 거래적인 톤입니다. 고급 숙박/리조트 자산의 경우, 할인 톤보다는 경험의 가치를 강조하는 프리미엄하고 감성적인 톤이 적합하여 브랜드 경험 전달력 측면에서 점수를 낮게 책정했습니다.",
+    priceRange: "인당 66원, 총액 198원의 할인 금액은 낮은 가격 장벽을 만들어 신규 가입을 유도하는 데는 매우 효과적입니다. 즉각적인 혜택을 제공하여 회원 가입 행동을 자극하는 데는 최적화되어 있습니다.",
+    customerExperience: "회원 가입이라는 목표에 도달하기 위해 '할인'이라는 수단을 사용하는 것은 실질적 혜택을 제공하지만, 단순히 돈을 아낀다는 느낌만 줄 수 있습니다. 신규 고객에게는 '독점적인 경험'이나 '업그레이드'와 같은 심리적 만족도를 제공하는 것이 더 높은 LTV를 유도합니다.",
+    brandTrust: "쿠폰 자체가 신뢰도를 급격히 떨어뜨릴 리스크는 없으나, 만약 쿠폰 사용 조건이나 제한 사항이 지나치게 까다롭거나 모호하게 느껴진다면, 초기 신뢰 구축에 오히려 부정적인 영향을 줄 수 있습니다.",
+    reputationRisk: "공동 프로모션 형태를 취하더라도, '할인'이라는 단일한 목적성만으로는 브랜드의 고급 이미지를 저평가시키는 위험을 내포하고 있습니다. 따라서, 혜택을 제공할 때도 퀄리티와 프리미엄 가치를 유지하는 것이 중요합니다.",
+    hanwhaImageConsistency: "한화호텔앤드리조트가 추구하는 품격 높은 '체험 가치' 중심의 이미지와 비교했을 때, 정액 할인 쿠폰은 다소 평이하고 실무적인 느낌이 강해 이미지 일관성 측면에서 개선이 필요합니다."
+  },
+  operationEval: {
+    idx: 3,
+    improvementDirections: [
+      "**혜택 차별화 및 단계 설정 (Value-Laddering):** 단순 '할인 쿠폰' 지급에 그치지 않고, 신규 가입 단계를 1단계(쿠폰 제공) -> 2단계(추가 혜택 공개) -> 3단계(최종 가입 완료 보상)와 같이 단계별 보상을 설계하여, 가입 행동을 연속적으로 유도해야 합니다.",
+      "**미끼 자산의 강화 및 가치 재정의 (Asset Value Proposition):** '할인' 자체가 아닌, '왜 우리 브랜드에 가입해야 하는지'에 대한 명확한 이유(Pain Point 해결, 독점 콘텐츠 접근 등)를 제시해야 합니다. 쿠폰을 이용하는 것 이상의 장기적인 가치를 부각해야 회원 가입의 질을 높일 수 있습니다.",
+      "**타겟 맞춤형 메시지 전개 (Personalized CTA):** 현재 캠페인 목표가 '회원 가입'에만 맞춰져 있어 메시지가 너무 단조롭습니다. 기존 고객 데이터 또는 예상 고객군의 니즈(Needs)를 기반으로, '님만을 위한', 'XX 카테고리 사용자에게 최적화된' 맞춤형 문구와 혜택을 전면에 배치하여 즉각적인 등록 동기를 부여해야 합니다."
+    ],
+    overallScore: 74,
+    approvalStepsCount: "캠페인 구조가 복잡하고 공동 프로모션 방식이므로, 법무, 마케팅, IT 등 최소 3단계 이상의 승인 프로세스가 필요하여 리스크가 높음.",
+    legalReviewRequired: "금전적 할인 혜택(쿠폰)을 제공하므로, 이용약관 및 환불/사용 조건에 대한 법무 검토가 필수적임.",
+    brandReviewRequired: "현재 자산 및 메시지가 미완성 상태로 보이므로, 브랜드의 일관성과 가치를 높이기 위한 상세 시각 및 메시지 검수가 필요함.",
+    deliverablesCount: "쿠폰 디자인, 랜딩 페이지(LP) 제작, 프로모션 배너 등 최소 3개 이상의 결과물이 필요하며, 복합 제작이 요구됨.",
+    participatingDeptsAndPartners: "공동 프로모션이므로 마케팅팀 외에 IT 개발팀, CS팀, 법무팀 등 다수의 내부/외부 파트너 협업이 요구됨.",
+    scheduleUrgency: "프로모션 기획 의도가 명확하더라도, 내부 검토 및 최종 자산 확보 과정이 많아 일정 관리에 신중해야 함.",
+    offlineOrOnsiteStaffRequired: "쿠폰 및 온라인 캠페인이므로 현장 인력 필요성은 낮으나, 체험권/공동 프로모션 성격상 일부 오프라인 연계는 검토 필요함."
+  },
+  costEval: {
+    idx: 3,
+    improvementDirections: [
+      "회원 가입 유도를 극대화하기 위해, 단순 할인 쿠폰(198원) 대신 '회원 가입 즉시 사용 가능한 고가치 체험권' 또는 '첫 구매 고객 전용 프리미엄 사은품' 형태로 혜택을 상향 조정해야 합니다. (가치를 높여 등록 장벽을 낮춰야 합니다.)",
+      "본 캠페인의 목표가 '회원 가입'에만 국한되어 있으므로, 혜택 조건을 '가입 후 7일 이내 첫 활동 완료' 등 행동 기반 조건(Action-based Trigger)을 추가하여 가입만 하고 이탈하는 잠재 고객을 걸러내는 것이 필요합니다.",
+      "현재의 할인 쿠폰 방식(Discount)을 '체험 기회 제공(Experience)' 또는 '멤버십 레벨 업' 형태로 변경하여, 고객이 서비스를 사용해 보게 만든 후 가치를 느끼게 하는 심리적 장벽을 낮추는 방향으로 혜택 카테고리를 전환해야 합니다."
+    ],
+    overallScore: 60,
+    partnerSampleScale: "제공되는 쿠폰의 액면가(총 198원)가 매우 작아 실질적인 유인책으로서의 규모가 미흡합니다. 초기 고객 유입을 목표로 한다면 충분한 매력도가 아닙니다.",
+    partnerDiscountCostBurden: "총액 198원으로 상대적으로 비용 부담 자체는 낮지만, 목표 달성(회원 가입) 대비 효과적인 인센티브가 아니므로 마케팅 투자 대비 효용성이 떨어집니다.",
+    coProductionCostSharing: "데이터 상 공동 제작비 분담 여부를 판단하기 어려우나, 공동 프로모션이라는 전제하에 자산 활용에 대한 기여도를 명확히 해야 재정적 안정성을 확보할 수 있습니다.",
+    hanwhaDirectCostBurden: "쿠폰 형태의 할인만 제공되므로 직접적인 자원 투입 비용은 낮으나, 캠페인 기획, 운영, 성과 추적에 대한 인적 비용이 발생할 수 있습니다.",
+    existingHanwhaChannelUtilization: "'공동 프로모션' 방식은 기존 채널과의 연계가 기본 전제이므로, 충분한 접점을 확보할 수 있는 여지가 있습니다."
   }
 }
 
 const defaultCandidates = [
   {
-    id: 'recommended-hotelnd',
-    isSample: true,
     goal: 'PURCHASE_BOOKING',
     title: '호텔앤드 리조트 액티브 스테이',
     partner: '호텔앤드',
@@ -139,7 +293,7 @@ const defaultCandidates = [
     score: 88,
     reasons: [
       '캠페인 목표와 파트너 고객군이 잘 맞아 예약 전환 가능성이 높습니다.',
-      '패키지 예약과 챌린지를 함께 운영하면 참여 행동을 만들기 좋습니다.',
+      '패키지 예약과 챌린지를 함께 운영 하면 참여 행동을 만들기 좋습니다.',
       '오프라인 일정만 먼저 확정하면 실행 리스크를 줄일 수 있습니다.',
     ],
     scoreBreakdown: [
@@ -177,35 +331,11 @@ const defaultCandidates = [
     ],
     targetKpis: ['VIP 앱 활성 고객 5만 명 도달', '구매 전환율 7% 이상', '쿠폰 사용률 60% 이상'],
   },
-  {
-    id: 'recommended-cgv',
-    isSample: true,
-    goal: 'MEMBER_SIGNUP',
-    title: 'CGV 신규 가입 시네마 베네핏',
-    partner: 'CGV',
-    offer: '프리미엄 상영관 1+1 예매권',
-    asset: '신규 가입 온보딩 화면과 쿠폰함',
-    target: '미가입 기존 구매 고객',
-    schedule: '2026.05.06 ~ 2026.05.20',
-    risk: '예매권 조건 문구 검수 필요',
-    score: 82,
-    reasons: [
-      '미가입 고객에게 가입 이유를 직접 제시할 수 있습니다.',
-      '쿠폰함과 메시지 채널이 전환 경로를 짧게 만듭니다.',
-      '예매권 사용 조건은 법무 검수를 먼저 거치는 편이 안전합니다.',
-    ],
-    scoreBreakdown: [
-      { label: '고객 적합도', score: 84 },
-      { label: '수익 기여도', score: 82 },
-      { label: '비용 효율성', score: 80 },
-      { label: '운영 용이성', score: 90 },
-      { label: '브랜드 적합도', score: 76 },
-    ],
-    targetKpis: ['신규 회원 가입 30,000건', 'D7 유지율 18%', '쿠폰 등록률 45%'],
-  },
 ]
 
-proposalQueue.value = defaultCandidates.map(mapCandidateToProposal)
+// 새 JSON 데이터와 기존 샘플 합치기
+const mergedCandidates = [adaptServerDataToCandidate(incomingJsonData), ...defaultCandidates]
+proposalQueue.value = mergedCandidates.map(mapCandidateToProposal)
 
 const metrics = [
   { key: 'customerFit', label: '고객 적합도', weight: 25 },
@@ -272,11 +402,24 @@ const selectedProposal = computed(
 const selectedScore = computed(() => (selectedProposal.value ? calculateScore(selectedProposal.value) : 0))
 const activeMetric = computed(() => metrics.find((metric) => metric.key === activeMetricKey.value) ?? metrics[0])
 const activeMetricIndex = computed(() => metrics.findIndex((metric) => metric.key === activeMetric.value.key))
+
+// 수정됨: JSON 데이터의 개선방향(Reasons) 텍스트를 우선 반환
+const activeMetricDetails = computed(() => {
+  if (selectedProposal.value?.detailedMetrics?.[activeMetric.value.key]) {
+    return selectedProposal.value.detailedMetrics[activeMetric.value.key]
+  }
+  return metricDetails[activeMetric.value.key] ?? metricDetails.customerFit
+})
+
+// 수정됨: JSON 데이터의 세부 문구(Text)를 우선 반환
 const activeMetricEvidence = computed(() => {
   if (!selectedProposal.value) return ''
+  if (selectedProposal.value.detailedMetrics?.[activeMetric.value.key]?.text) {
+    return selectedProposal.value.detailedMetrics[activeMetric.value.key].text
+  }
   return selectedProposal.value.evidence[activeMetricIndex.value] ?? selectedProposal.value.reason
 })
-const activeMetricDetails = computed(() => metricDetails[activeMetric.value.key] ?? metricDetails.customerFit)
+
 const topMetric = computed(() => {
   if (!selectedProposal.value) return metrics[0]
   return metrics.reduce((top, metric) => {
@@ -2689,7 +2832,6 @@ function grade(score) {
   }
 }
 
-
 .eval-empty-list {
   margin: 0;
   border: 1px dashed var(--border-color);
@@ -2721,5 +2863,4 @@ function grade(score) {
   font-size: 0.76rem;
   font-weight: 750;
 }
-
 </style>

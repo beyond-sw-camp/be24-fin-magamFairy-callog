@@ -4,6 +4,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.common.model.BaseResponse;
 import org.example.backend.common.model.BaseResponseStatus;
+import org.example.backend.matching.model.MatchingDto;
 import org.example.backend.matching.model.evaluation.EvaluationDto;
 import org.example.backend.matching.service.EvaluationService;
 import org.example.backend.user.model.AuthUserDetails;
@@ -18,6 +19,19 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class EvaluationController {
     private final EvaluationService evaluationService;
+
+    @GetMapping("/evaluation/result")
+    public ResponseEntity<BaseResponse> getEvaluation(@AuthenticationPrincipal AuthUserDetails user,
+                                                      @RequestParam Long evaluationId) {
+        try {
+            EvaluationDto.EvaluationRes dto = evaluationService.result(evaluationId, user);
+            return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESS, dto));
+        }
+        catch (Exception e){
+            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
+                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
+        }
+    }
 
     @PostMapping("/evaluation/collect")
     public ResponseEntity collect(@RequestBody EvaluationDto.CollectDto dto){
