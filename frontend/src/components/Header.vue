@@ -4,8 +4,8 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUserSettingsStore } from '@/stores/userSettings'
+import { useNotificationsStore } from '@/stores/notifications'
 import { getMyProfile } from '@/api/userProfiles/index.js'
-import { getNoti } from '@/api/notifications/index.js'
 import { formatRelativeTime } from '@/utils/datechange.js'
 
 const route = useRoute()
@@ -13,8 +13,10 @@ const router = useRouter()
 const store = usePlannerStore()
 const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
+const notificationStore = useNotificationsStore()
 
-const notifications = ref([])
+const notifications = computed(() => notificationStore.recentNotifications)
+const unreadCount = computed(() => notificationStore.unreadCount)
 const notificationsOpen = ref(false)
 const notificationsButton = ref(null)
 const appsMenuOpen = ref(false)
@@ -178,41 +180,6 @@ function handleProfileImageError() {
   userSettingsStore.updateProfile({ imageDataUrl: '' })
 }
 
-const getNotifications = async () => {
-  try {
-    const res = await getNoti(3)
-    notifications.value = res?.data ?? []
-  } catch (e) {
-    console.error(e)
-    notifications.value = [
-      {
-        id: 34897,
-        type: 'qa',
-        created_at: '2026-04-21T10:04:13Z',
-        title: '알림 제목 1',
-        message: '알림 내용 1',
-        isRead: false,
-      },
-      {
-        id: 78354,
-        type: 'ai',
-        created_at: '2026-04-12T12:04:13Z',
-        title: '알림 제목 2',
-        message: '알림 내용 2',
-        isRead: false,
-      },
-      {
-        id: 54876,
-        type: 'task',
-        created_at: '2026-04-05T12:04:13Z',
-        title: '알림 제목 3',
-        message: '알림 내용 3',
-        isRead: false,
-      },
-    ]
-  }
-}
-
 function closeFloatingMenus() {
   notificationsOpen.value = false
   appsMenuOpen.value = false
@@ -352,6 +319,17 @@ function handleProfileDownload() {
   void userSettingsStore.downloadProfileCard()
 }
 
+async function handleNotificationDetail(item) {
+  await notificationStore.markAsRead(item)
+  closeFloatingMenus()
+  router.push({
+    name: 'notifications',
+    query: {
+      notificationId: item.id,
+    },
+  })
+}
+
 function handleDocumentClick(event) {
   const path = typeof event.composedPath === 'function' ? event.composedPath() : []
   const inside = path.some(
@@ -390,17 +368,31 @@ watch(
   { immediate: true, deep: true },
 )
 
+watch(
+  () => [authStore.isAuthenticated, authStore.token],
+  ([isAuthenticated, accessToken]) => {
+    if (isAuthenticated && accessToken) {
+      notificationStore.connect(accessToken)
+      return
+    }
+
+    notificationStore.disconnect()
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
   window.addEventListener('click', handleDocumentClick)
   window.addEventListener('resize', handleViewportChange)
   window.addEventListener('scroll', handleViewportChange, true)
-  getNotifications()
+  void notificationStore.loadNotifications()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('click', handleDocumentClick)
   window.removeEventListener('resize', handleViewportChange)
   window.removeEventListener('scroll', handleViewportChange, true)
+  notificationStore.disconnect()
 })
 </script>
 
@@ -472,7 +464,7 @@ onBeforeUnmount(() => {
               <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
               <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
             </svg>
-            <span class="callog-header__notif-dot" />
+            <span v-if="unreadCount" class="callog-header__notif-dot" />
           </button>
 
           <Transition name="callog-dropdown">
@@ -505,7 +497,12 @@ onBeforeUnmount(() => {
               </div>
               <div class="callog-dropdown__body">
                 <div v-if="notifications.length" class="callog-notif-list">
-                  <div v-for="item in notifications" :key="item.id" class="callog-notif-item">
+                  <div
+                    v-for="item in notifications"
+                    :key="item.id"
+                    class="callog-notif-item"
+                    @click="handleNotificationDetail(item)"
+                  >
                     <div class="callog-notif-item__top">
                       <p class="callog-notif-item__title">{{ item.title }}</p>
                       <button type="button" class="callog-notif-item__btn">자세히 보기</button>
@@ -601,7 +598,12 @@ onBeforeUnmount(() => {
         </div>
         <div class="callog-dropdown__body">
           <div v-if="notifications.length" class="callog-notif-list">
-            <div v-for="item in notifications" :key="item.id" class="callog-notif-item">
+            <div
+              v-for="item in notifications"
+              :key="item.id"
+              class="callog-notif-item"
+              @click="handleNotificationDetail(item)"
+            >
               <div class="callog-notif-item__top">
                 <p class="callog-notif-item__title">{{ item.title }}</p>
                 <button type="button" class="callog-notif-item__btn">자세히 보기</button>

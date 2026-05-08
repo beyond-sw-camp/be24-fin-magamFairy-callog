@@ -47,8 +47,8 @@ public class JwtFilter extends OncePerRequestFilter {
         // 1. 헤더에서 Authorization 키를 찾음
         String authorization = request.getHeader("Authorization");
 
-        // [추가] 헤더에 토큰이 없는데 SSE 연결 요청(/sse/connect)인 경우, 쿼리 파라미터 확인
-        if (authorization == null && request.getRequestURI().contains("/sse/connect")) {
+        // EventSource cannot send Authorization headers, so SSE accepts an access token query parameter.
+        if (authorization == null && isSseRequest(request)) {
             String tokenParam = request.getParameter("token");
             if (tokenParam != null) {
                 authorization = "Bearer " + tokenParam;
@@ -131,6 +131,11 @@ public class JwtFilter extends OncePerRequestFilter {
 
     private UserAccountStatus resolveStatus(User user) {
         return user.getAccountStatus() == null ? UserAccountStatus.ACTIVE : user.getAccountStatus();
+    }
+
+    private boolean isSseRequest(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return uri.contains("/sse/connect") || uri.contains("/notifications/subscribe");
     }
 
     private void writeError(HttpServletResponse response, int status, String message) throws IOException {

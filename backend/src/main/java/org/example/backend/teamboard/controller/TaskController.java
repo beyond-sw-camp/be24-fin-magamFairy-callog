@@ -60,7 +60,7 @@ public class TaskController {
     ) {
         RoleGuard.requireManager(user);
         return ResponseEntity.ok(BaseResponse.success(
-                taskService.create(campaignId, req)
+                taskService.create(campaignId, req, user)
         ));
     }
 
@@ -73,7 +73,7 @@ public class TaskController {
     ) {
         RoleGuard.requireManager(user);
         return ResponseEntity.ok(BaseResponse.success(
-                taskService.update(taskId, req)
+                taskService.update(taskId, req, user)
         ));
     }
 
