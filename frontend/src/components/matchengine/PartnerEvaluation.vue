@@ -1,10 +1,16 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
+import { getEvaluationResult } from '@/api/evaluation'
 
 const props = defineProps({
   isDark: {
     type: Boolean,
     default: false,
+  },
+  // 부모 컴포넌트에서 API 호출 후 배열을 넘겨줄 경우를 대비한 Prop
+  serverCandidatesList: {
+    type: Array,
+    default: () => [],
   },
   evaluationCandidate: {
     type: Object,
@@ -55,6 +61,7 @@ function getDetailMeta(candidate, label, fallback = '미입력') {
   return candidate.detailCards?.find((card) => card.label === label)?.meta ?? fallback
 }
 
+// 1. UI용 데이터 포맷으로 정규화하는 함수
 function mapCandidateToProposal(candidate) {
   const score = Number(candidate.score ?? 0)
   const fallback = score || 75
@@ -117,95 +124,129 @@ function mapCandidateToProposal(candidate) {
       { title: '검토 의견 기록', owner: '김캘리', due: 'D-1', priority: '낮음', dependency: '' },
     ],
     comments: [
-      { author: '김캘리', time: '05.06 14:23', text: '브랜드 적합도가 높아 우선 진행 의견입니다.' },
-      { author: '박운영', time: '05.06 15:10', text: '운영 일정만 확인되면 바로 시작 가능합니다.' },
+      { author: '시스템', time: '방금 전', text: '새로운 평가 데이터가 수신되어 반영되었습니다.' }
     ],
+    detailedMetrics: candidate.detailedMetrics || null,
     manualScore: score || null,
   }
 }
 
-const defaultCandidates = [
-  {
-    id: 'recommended-hotelnd',
-    isSample: true,
-    goal: 'PURCHASE_BOOKING',
-    title: '호텔앤드 리조트 액티브 스테이',
-    partner: '호텔앤드',
-    offer: '객실 패키지, 리조트 이용권',
-    asset: 'VIP 고객층 앱 배너와 예약 유도 채널',
-    target: '2030 액티브 레저 고객',
-    schedule: '2026.05.06 ~ 2026.06.05',
-    risk: '오프라인 클래스 일정 확정 필요',
-    score: 88,
-    reasons: [
-      '캠페인 목표와 파트너 고객군이 잘 맞아 예약 전환 가능성이 높습니다.',
-      '패키지 예약과 챌린지를 함께 운영하면 참여 행동을 만들기 좋습니다.',
-      '오프라인 일정만 먼저 확정하면 실행 리스크를 줄일 수 있습니다.',
-    ],
-    scoreBreakdown: [
-      { label: '고객 적합도', score: 90 },
-      { label: '수익 기여도', score: 86 },
-      { label: '비용 효율성', score: 84 },
-      { label: '운영 용이성', score: 82 },
-      { label: '브랜드 적합도', score: 88 },
-    ],
-    targetKpis: ['패키지 예약 300건', '클래스 참여 1,000명', '예약 전환율 7% 이상'],
-  },
-  {
-    id: 'recommended-galleria',
-    isSample: true,
-    goal: 'UPSELL',
-    title: '갤러리아 VIP 프리미엄 리프레시',
-    partner: '갤러리아',
-    offer: 'VIP 리워드 쿠폰, 프리미엄 굿즈',
-    asset: 'VIP 앱 활성 고객 5만 명',
-    target: '고가 구매 경험이 있는 VIP 고객',
-    schedule: '2026.05.06 ~ 2026.05.29',
-    risk: '쿠폰 소진 속도 제한 필요',
-    score: 94,
-    reasons: [
-      'VIP 고객층과 프리미엄 혜택의 결이 잘 맞습니다.',
-      '자사 앱과 파트너 채널을 동시에 활용할 수 있어 도달 효율이 높습니다.',
-      '쿠폰 발급량만 조절하면 비용 통제가 가능합니다.',
-    ],
-    scoreBreakdown: [
-      { label: '고객 적합도', score: 95 },
-      { label: '수익 기여도', score: 92 },
-      { label: '비용 효율성', score: 90 },
-      { label: '운영 용이성', score: 95 },
-      { label: '브랜드 적합도', score: 96 },
-    ],
-    targetKpis: ['VIP 앱 활성 고객 5만 명 도달', '구매 전환율 7% 이상', '쿠폰 사용률 60% 이상'],
-  },
-  {
-    id: 'recommended-cgv',
-    isSample: true,
-    goal: 'MEMBER_SIGNUP',
-    title: 'CGV 신규 가입 시네마 베네핏',
-    partner: 'CGV',
-    offer: '프리미엄 상영관 1+1 예매권',
-    asset: '신규 가입 온보딩 화면과 쿠폰함',
-    target: '미가입 기존 구매 고객',
-    schedule: '2026.05.06 ~ 2026.05.20',
-    risk: '예매권 조건 문구 검수 필요',
-    score: 82,
-    reasons: [
-      '미가입 고객에게 가입 이유를 직접 제시할 수 있습니다.',
-      '쿠폰함과 메시지 채널이 전환 경로를 짧게 만듭니다.',
-      '예매권 사용 조건은 법무 검수를 먼저 거치는 편이 안전합니다.',
-    ],
-    scoreBreakdown: [
-      { label: '고객 적합도', score: 84 },
-      { label: '수익 기여도', score: 82 },
-      { label: '비용 효율성', score: 80 },
-      { label: '운영 용이성', score: 90 },
-      { label: '브랜드 적합도', score: 76 },
-    ],
-    targetKpis: ['신규 회원 가입 30,000건', 'D7 유지율 18%', '쿠폰 등록률 45%'],
-  },
-]
+// 2. 서버에서 받은 JSON 데이터를 모델 규격으로 변환하는 어댑터 함수
+function adaptServerDataToCandidate(serverData, index = 0) {
+  const getScore = (evalObj) => evalObj?.overallScore ?? 0;
+  
+  const scores = {
+    customerFit: getScore(serverData.customerEval),
+    revenue: getScore(serverData.revenueEval),
+    cost: getScore(serverData.costEval),
+    operation: getScore(serverData.operationEval),
+    brand: getScore(serverData.brandEval),
+  };
 
-proposalQueue.value = defaultCandidates.map(mapCandidateToProposal)
+  const finalScore = Math.round(
+    scores.customerFit * 0.25 +
+    scores.revenue * 0.25 +
+    scores.cost * 0.2 +
+    scores.operation * 0.15 +
+    scores.brand * 0.15
+  );
+
+  return {
+    id: `server-candidate-${index}-${Date.now()}`, // 배열 내 고유 ID 부여
+    isSample: false,
+    goal: serverData.goal || 'MEMBER_SIGNUP',
+    title: serverData.title || '제목 미입력',
+    partner: serverData.partner || '미상 (공동 프로모션)',
+    offer: serverData.offer || '혜택 미입력',
+    asset: serverData.assetDescription || '자산 정보 미상',
+    target: serverData.target || '타겟 미정',
+    schedule: `${serverData.startDate || '미정'} ~ ${serverData.endDate || '미정'}`,
+    risk: serverData.operationEval?.improvementDirections?.[0] || '리스크 정보 없음',
+    score: finalScore,
+    reasons: [
+      serverData.customerEval?.improvementDirections?.[0],
+      serverData.revenueEval?.improvementDirections?.[0],
+      serverData.costEval?.improvementDirections?.[0]
+    ].filter(Boolean),
+    scoreBreakdown: [
+      { label: '고객 적합도', score: scores.customerFit },
+      { label: '수익 기여도', score: scores.revenue },
+      { label: '비용 효율성', score: scores.cost },
+      { label: '운영 용이성', score: scores.operation },
+      { label: '브랜드 적합도', score: scores.brand },
+    ],
+    targetKpis: ['신규 회원 가입 유도', '객단가(AOV) 상승 유도', '프리미엄 혜택 전환'],
+    detailedMetrics: {
+      customerFit: {
+        text: serverData.customerEval?.customerAgeGroup,
+        reasons: serverData.customerEval?.improvementDirections || []
+      },
+      revenue: {
+        text: serverData.revenueEval?.purchaseConversionProbability,
+        reasons: serverData.revenueEval?.improvementDirections || []
+      },
+      cost: {
+        text: serverData.costEval?.partnerDiscountCostBurden,
+        reasons: serverData.costEval?.improvementDirections || []
+      },
+      operation: {
+        text: serverData.operationEval?.approvalStepsCount,
+        reasons: serverData.operationEval?.improvementDirections || []
+      },
+      brand: {
+        text: serverData.brandEval?.brandTone,
+        reasons: serverData.brandEval?.improvementDirections || []
+      }
+    }
+  };
+}
+
+const currentCampaign = localStorage.getItem("callog-active-campaign-id")
+
+const fetchEvaluationData = async () => {
+  try {
+    const serverDataList = await getEvaluationResult(currentCampaign)
+    
+    if (serverDataList && serverDataList.length > 0) {
+      proposalQueue.value = serverDataList
+        .map((data, index) => adaptServerDataToCandidate(data, index))
+        .map(mapCandidateToProposal)
+      
+      // 데이터 세팅 후 첫 번째 항목 자동 선택
+      setActiveStatus('new')
+      selectedId.value = proposalQueue.value[0]?.id ?? null
+    }
+  } catch (error) {
+    console.error('평가 데이터를 불러오는데 실패했습니다:', error)
+  }
+}
+
+onMounted(() => {
+  fetchEvaluationData()
+})
+
+// // 4. 배열 데이터를 순회하며 UI 큐(Queue) 초기화
+// proposalQueue.value = serverDataList
+//   .map((data, index) => adaptServerDataToCandidate(data, index))
+//   .map(mapCandidateToProposal)
+
+/* 
+ * [참고사항] 
+ * 만약 하드코딩 배열(serverDataList) 대신 부모 컴포넌트로부터 
+ * Props(serverCandidatesList)를 통해 배열을 동적으로 넘겨받는다면, 
+ * 아래 Watch를 활성화하여 사용하시면 됩니다.
+ * 
+ * watch(() => props.serverCandidatesList, (newVal) => {
+ *   if (newVal && newVal.length > 0) {
+ *     proposalQueue.value = newVal
+ *       .map((data, index) => adaptServerDataToCandidate(data, index))
+ *       .map(mapCandidateToProposal)
+ *     
+ *     setActiveStatus('new')
+ *     selectedId.value = proposalQueue.value[0]?.id ?? null
+ *   }
+ * }, { immediate: true })
+ */
 
 const metrics = [
   { key: 'customerFit', label: '고객 적합도', weight: 25 },
@@ -258,7 +299,7 @@ const metricDetails = {
   },
 }
 
-const selectedId = ref(null)
+const selectedId = ref(proposalQueue.value[0]?.id || null)
 const activeMetricKey = ref(metrics[0].key)
 const pendingDecision = ref(null)
 const decisionReason = ref('')
@@ -272,11 +313,22 @@ const selectedProposal = computed(
 const selectedScore = computed(() => (selectedProposal.value ? calculateScore(selectedProposal.value) : 0))
 const activeMetric = computed(() => metrics.find((metric) => metric.key === activeMetricKey.value) ?? metrics[0])
 const activeMetricIndex = computed(() => metrics.findIndex((metric) => metric.key === activeMetric.value.key))
+
+const activeMetricDetails = computed(() => {
+  if (selectedProposal.value?.detailedMetrics?.[activeMetric.value.key]) {
+    return selectedProposal.value.detailedMetrics[activeMetric.value.key]
+  }
+  return metricDetails[activeMetric.value.key] ?? metricDetails.customerFit
+})
+
 const activeMetricEvidence = computed(() => {
   if (!selectedProposal.value) return ''
+  if (selectedProposal.value.detailedMetrics?.[activeMetric.value.key]?.text) {
+    return selectedProposal.value.detailedMetrics[activeMetric.value.key].text
+  }
   return selectedProposal.value.evidence[activeMetricIndex.value] ?? selectedProposal.value.reason
 })
-const activeMetricDetails = computed(() => metricDetails[activeMetric.value.key] ?? metricDetails.customerFit)
+
 const topMetric = computed(() => {
   if (!selectedProposal.value) return metrics[0]
   return metrics.reduce((top, metric) => {
@@ -289,40 +341,7 @@ const weakestMetric = computed(() => {
     return selectedProposal.value.scores[metric.key] < selectedProposal.value.scores[weakest.key] ? metric : weakest
   }, metrics[0])
 })
-const overallAssessment = computed(() => {
-  const proposal = selectedProposal.value
-  if (!proposal) return null
 
-  const topLabel = topMetric.value.label
-  const topScore = proposal.scores[topMetric.value.key]
-  const weakLabel = weakestMetric.value.label
-  const weakScore = proposal.scores[weakestMetric.value.key]
-  const riskText = proposal.warnings.length
-    ? `${proposal.warnings[0]} 확인이 선행되어야 합니다`
-    : `${weakLabel} ${weakScore}점 항목만 보완하면 실행 가능성이 높습니다`
-
-  const recommendation =
-    selectedScore.value >= 90
-      ? '진행 추천'
-      : selectedScore.value >= 80
-        ? '조건부 진행'
-        : '보류 권고'
-
-  const description =
-    `${topLabel}가 ${topScore}점으로 가장 강한 후보입니다. ${proposal.reason} ` +
-    `다만 ${riskText}. ${recommendation} 기준으로 검토하되, ${weakLabel} 보완 여부를 확인한 뒤 다음 단계로 넘기는 것을 권장합니다.`
-
-  return { recommendation, description }
-})
-const scoreFormula = computed(() => {
-  if (!selectedProposal.value) return ''
-  return metrics
-    .map((metric) => {
-      const score = selectedProposal.value.scores[metric.key]
-      return `${metric.label} ${score}×${(metric.weight / 100).toFixed(2)}`
-    })
-    .join(' + ')
-})
 const radarLevels = [20, 40, 60, 80, 100]
 const radarCenter = 96
 const radarRadius = 68
@@ -484,7 +503,7 @@ function grade(score) {
   if (score >= 90) return '최우선 추천'
   if (score >= 80) return '우선 검토'
   if (score >= 70) return '조건부 검토'
-  return '보완 필요'
+  return '검토 제외'
 }
 </script>
 
@@ -578,18 +597,9 @@ function grade(score) {
         </div>
       </section>
 
-      <section v-if="overallAssessment" class="pe-callout">
-        <span>종합 평가</span>
-        <p>{{ overallAssessment.description }}</p>
-        <button type="button" @click="isFormulaOpen = !isFormulaOpen">
-          점수 산식 {{ isFormulaOpen ? '접기' : '보기' }}
-        </button>
-        <small v-if="isFormulaOpen">{{ selectedScore }} = {{ scoreFormula }}</small>
-      </section>
-
       <section class="pe-card">
         <header class="pe-section-head">
-          <h4>세부 평가</h4>
+          <h4>평가 결과 상세</h4>
         </header>
 
         <div class="pe-eval-grid">
@@ -2689,7 +2699,6 @@ function grade(score) {
   }
 }
 
-
 .eval-empty-list {
   margin: 0;
   border: 1px dashed var(--border-color);
@@ -2721,5 +2730,4 @@ function grade(score) {
   font-size: 0.76rem;
   font-weight: 750;
 }
-
 </style>

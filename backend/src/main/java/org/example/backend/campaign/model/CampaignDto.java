@@ -76,7 +76,7 @@ public class CampaignDto {
 
         public static Res from(Campaign entity, CampaignMemberRole myCampaignRole, boolean organizationIsPm) {
             return Res.builder()
-                    .id(String.valueOf(entity.getIdx()))
+                    .id(entity.getPublicId() != null ? entity.getPublicId() : String.valueOf(entity.getIdx()))
                     .idx(entity.getIdx())
                     .name(entity.getName())
                     .purpose(entity.getPurpose())

@@ -7,12 +7,15 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 public interface CampaignKpiContributionRepository extends JpaRepository<CampaignKpiContribution, Long> {
 
     List<CampaignKpiContribution> findAllByCampaign_IdxOrderByIdxAsc(Long campaignIdx);
 
     List<CampaignKpiContribution> findAllByTargetOrgKpi_IdxOrderByIdxAsc(Long targetOrgKpiIdx);
+
+    Optional<CampaignKpiContribution> findByCampaign_IdxAndTargetOrgKpi_Idx(Long campaignIdx, Long targetOrgKpiIdx);
 
     boolean existsByTargetOrgKpi_Idx(Long targetOrgKpiIdx);
 

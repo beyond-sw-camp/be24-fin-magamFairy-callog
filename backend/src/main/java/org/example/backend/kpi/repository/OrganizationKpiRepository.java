@@ -30,6 +30,16 @@ public interface OrganizationKpiRepository extends JpaRepository<OrganizationKpi
             @Param("periodCode") String periodCode,
             @Param("status") GoalStatus status);
 
+    @Query("SELECT k FROM OrganizationKpi k " +
+           "WHERE (:ownerOrgIdx IS NULL OR k.owner.idx = :ownerOrgIdx) " +
+           "AND k.periodCode LIKE CONCAT(:year, '-%') " +
+           "AND (:status IS NULL OR k.status = :status) " +
+           "ORDER BY k.idx DESC")
+    List<OrganizationKpi> findByFiltersForYear(
+            @Param("ownerOrgIdx") Long ownerOrgIdx,
+            @Param("year") String year,
+            @Param("status") GoalStatus status);
+
     /**
      * cascade parent 후보 - 상위 조직(또는 본인 조직)이 보유한 ACTIVE KPI 목록.
      * orgId가 null이면 전체 ACTIVE.

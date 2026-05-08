@@ -29,7 +29,9 @@ public class AuthService {
     @Transactional
     public TokenDto.AuthTokenResponse issueTokens(Long userIdx, String id, String email, String name, String role, String companyName, String department) {
         String userId = requireId(id, email);
-        OrganizationType organizationType = userRepository.findById(userIdx).orElseThrow(NoSuchElementException::new).getOrganization().getType();
+        User userEntity = userRepository.findById(userIdx).orElseThrow(NoSuchElementException::new);
+        OrganizationType organizationType = (userEntity.getOrganization() != null) ? userEntity.getOrganization().getType() : null;
+        String orgTypeName = (organizationType != null) ? organizationType.name() : null;
 
         String access = jwtUtil.createToken("access", userIdx, userId, email, name, role, companyName, department, 600000000L, organizationType);
         String refresh = jwtUtil.createToken("refresh", userIdx, userId, email, name, role, companyName, department, 1209600000L, organizationType);
@@ -47,7 +49,7 @@ public class AuthService {
                         )
                 );
 
-        return new TokenDto.AuthTokenResponse(access, refresh);
+        return new TokenDto.AuthTokenResponse(access, refresh, orgTypeName);
     }
 
     @Transactional
@@ -74,7 +76,8 @@ public class AuthService {
             refreshTokenRepository.deleteByUserId(userId);
             throw new IllegalArgumentException("User is not allowed to access.");
         }
-        OrganizationType organizationType = userRepository.findById(userIdx).orElseThrow(NoSuchElementException::new).getOrganization().getType();
+        User reissueUser = userRepository.findById(userIdx).orElseThrow(NoSuchElementException::new);
+        OrganizationType organizationType = (reissueUser.getOrganization() != null) ? reissueUser.getOrganization().getType() : null;
         String newAccess = jwtUtil.createToken(
                 "access",
                 user.getIdx(),
@@ -87,7 +90,7 @@ public class AuthService {
                 60000L,
                 organizationType
         );
-        return new TokenDto.AuthTokenResponse(newAccess, refreshToken);
+        return new TokenDto.AuthTokenResponse(newAccess, refreshToken, (organizationType != null) ? organizationType.name() : null);
     }
 
     private RefreshToken resolveRegisteredRefreshToken(String userId, String refreshToken) {

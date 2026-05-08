@@ -1,88 +1,32 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { confirm, getNoti } from '@/api/notifications/index.js'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { useNotificationsStore } from '@/stores/notifications'
 import { formatRelativeTime } from '@/utils/datechange.js'
+import NotificationSettingsPanel from '@/components/notifications/NotificationSettingsPanel.vue'
+import { acceptCampaignInvitation, rejectCampaignInvitation } from '@/api/campaignMembers'
 
-const fallbackNotifications = [
-  {
-    idx: 34897,
-    type: 'qa',
-    severity: 'high',
-    created_at: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-    title: '검수 요청이 도착했습니다',
-    message: '캠페인 랜딩 페이지 초안에 대한 QA 검수가 요청되었습니다.',
-    detail:
-      '담당 매니저가 캠페인 랜딩 페이지 초안 검수를 요청했습니다. 승인 또는 수정 요청을 남기면 담당자에게 결과 알림이 전달됩니다.',
-    source: '시스템',
-    targetLabel: '검수 상세로 이동',
-    targetUrl: '/team-board',
-    isRead: false,
-  },
-  {
-    idx: 78354,
-    type: 'ai',
-    severity: 'normal',
-    created_at: new Date(Date.now() - 1000 * 60 * 44).toISOString(),
-    title: 'AI 리스크 분석이 완료되었습니다',
-    message: '마감 임박 업무 2건에서 일정 지연 가능성이 감지되었습니다.',
-    detail:
-      'AI 분석 결과, 콘텐츠 제작 일정과 검수 일정 사이의 여유 시간이 부족합니다. 담당자와 검수자를 확인하고 일정 조정 여부를 검토해 주세요.',
-    source: 'AI 분석',
-    targetLabel: '대시보드 확인',
-    targetUrl: '/dashboard',
-    isRead: false,
-  },
-  {
-    idx: 54876,
-    type: 'task',
-    severity: 'normal',
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-    title: '새 업무가 배정되었습니다',
-    message: '브랜드 가이드 초안 작성 업무가 담당자로 배정되었습니다.',
-    detail:
-      '업무 생성자가 브랜드 가이드 초안 작성 업무를 배정했습니다. 세부 요구사항과 마감일을 확인한 뒤 진행 상태를 업데이트해 주세요.',
-    source: 'PM 매니저',
-    targetLabel: '업무 보드로 이동',
-    targetUrl: '/team-board',
-    isRead: true,
-  },
-  {
-    idx: 45453,
-    type: 'campaign',
-    severity: 'low',
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 7).toISOString(),
-    title: '캠페인 구성원이 추가되었습니다',
-    message: 'CALL-LAUNCH 캠페인에 신규 협력사 매니저가 추가되었습니다.',
-    detail:
-      '캠페인 PM 매니저가 신규 협력사 매니저를 캠페인에 추가했습니다. 역할과 담당 범위를 확인해 주세요.',
-    source: '캠페인 PM',
-    targetLabel: '캠페인 보관함',
-    targetUrl: '/campaign-folder',
-    isRead: true,
-  },
-  {
-    idx: 97531,
-    type: 'deadline',
-    severity: 'critical',
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
-    title: '마감 24시간 전 알림',
-    message: 'SNS 소재 검수 업무의 마감이 24시간 이내로 다가왔습니다.',
-    detail:
-      '마감 임박 업무입니다. 담당자와 관리자 모두에게 전달되는 중요 알림이며, 업무 상태와 산출물 업로드 여부를 확인해야 합니다.',
-    source: '시스템',
-    targetLabel: '캘린더 확인',
-    targetUrl: '/calendar',
-    isRead: false,
-  },
-]
+const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
+const notificationStore = useNotificationsStore()
+
+const activeFilter = ref('all')
+const activeDetailTab = ref('content')
+const selectedNotificationId = ref('')
+const isSettingsModalOpen = ref(false)
+const invitationActionError = ref('')
+const invitationActionLoading = ref('')
 
 const filterOptions = [
   { key: 'all', label: '전체' },
   { key: 'unread', label: '미확인' },
   { key: 'task', label: '업무' },
   { key: 'qa', label: 'QA' },
-  { key: 'schedule', label: '캠페인/일정' },
-  { key: 'ai', label: 'AI' },
+  { key: 'campaign', label: '캠페인' },
+  { key: 'schedule', label: '일정' },
+  { key: 'system', label: '시스템' },
 ]
 
 const detailTabs = [
@@ -92,28 +36,22 @@ const detailTabs = [
 ]
 
 const categoryMeta = {
-  ai: { label: 'AI', icon: 'auto_awesome' },
-  qa: { label: 'QA', icon: 'verified' },
-  schedule: { label: '캠페인/일정', icon: 'event_note' },
-  system: { label: '시스템', icon: 'info' },
-  task: { label: '업무', icon: 'assignment' },
+  campaign: { label: '캠페인', icon: 'groups', tone: 'campaign' },
+  qa: { label: 'QA', icon: 'fact_check', tone: 'qa' },
+  schedule: { label: '일정', icon: 'event_note', tone: 'schedule' },
+  system: { label: '시스템', icon: 'info', tone: 'system' },
+  task: { label: '업무', icon: 'assignment', tone: 'task' },
 }
 
 const severityMeta = {
-  critical: { label: '긴급', icon: 'priority_high' },
-  high: { label: '중요', icon: 'error' },
-  low: { label: '낮음', icon: 'low_priority' },
-  normal: { label: '기본', icon: 'notifications' },
+  critical: { label: '긴급' },
+  high: { label: '중요' },
+  low: { label: '낮음' },
+  normal: { label: '기본' },
 }
 
-const notifications = ref([])
-const activeFilter = ref('all')
-const activeDetailTab = ref('content')
-const selectedNotificationId = ref('')
-const isLoading = ref(false)
-const loadError = ref('')
-
-const unreadCount = computed(() => notifications.value.filter((item) => !item.isRead).length)
+const notifications = computed(() => notificationStore.notifications)
+const unreadCount = computed(() => notificationStore.unreadCount)
 const importantCount = computed(
   () => notifications.value.filter((item) => ['critical', 'high'].includes(item.severity)).length,
 )
@@ -125,7 +63,7 @@ const statItems = computed(() => [
   { key: 'total', label: '전체 알림', value: notifications.value.length },
   { key: 'unread', label: '미확인', value: unreadCount.value },
   { key: 'important', label: '중요', value: importantCount.value },
-  { key: 'today', label: '오늘 도착', value: todayCount.value },
+  { key: 'today', label: '오늘', value: todayCount.value },
 ])
 
 const filteredNotifications = computed(() => {
@@ -148,6 +86,14 @@ const selectedNotification = computed(
     null,
 )
 
+function getCategoryMeta(category) {
+  return categoryMeta[category] ?? categoryMeta.system
+}
+
+function getSeverityMeta(severity) {
+  return severityMeta[severity] ?? severityMeta.normal
+}
+
 function getFilterCount(key) {
   if (key === 'all') {
     return notifications.value.length
@@ -160,163 +106,6 @@ function getFilterCount(key) {
   return notifications.value.filter((item) => item.category === key).length
 }
 
-function extractNotificationList(response) {
-  const payload = response?.data ?? response
-  const candidates = [
-    payload?.data,
-    payload?.result,
-    payload?.notifications,
-    payload?.items,
-    payload,
-  ]
-
-  return candidates.find((candidate) => Array.isArray(candidate)) ?? []
-}
-
-function normalizeCategory(type) {
-  const value = String(type || '').toLowerCase()
-
-  if (value.includes('ai')) {
-    return 'ai'
-  }
-
-  if (value.includes('qa') || value.includes('review') || value.includes('검수')) {
-    return 'qa'
-  }
-
-  if (
-    value.includes('campaign') ||
-    value.includes('calendar') ||
-    value.includes('schedule') ||
-    value.includes('deadline') ||
-    value.includes('캠페인') ||
-    value.includes('일정') ||
-    value.includes('마감')
-  ) {
-    return 'schedule'
-  }
-
-  if (value.includes('task') || value.includes('work') || value.includes('업무')) {
-    return 'task'
-  }
-
-  return 'system'
-}
-
-function normalizeSeverity(value, category) {
-  const normalizedValue = String(value || '').toLowerCase()
-
-  if (['critical', 'urgent', '긴급'].includes(normalizedValue)) {
-    return 'critical'
-  }
-
-  if (['high', 'important', 'warning', '중요'].includes(normalizedValue)) {
-    return 'high'
-  }
-
-  if (['low', '낮음'].includes(normalizedValue)) {
-    return 'low'
-  }
-
-  return category === 'schedule' ? 'high' : 'normal'
-}
-
-function normalizeDate(item) {
-  const value = item.createdAt ?? item.created_at ?? item.createDate ?? item.time
-  const date = new Date(value)
-
-  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
-}
-
-function normalizeNotification(item, index) {
-  const category = normalizeCategory(item.type ?? item.category)
-  const severity = normalizeSeverity(item.severity ?? item.priority, category)
-  const id = String(item.id ?? item.idx ?? `${category}-${index}`)
-  const createdAt = normalizeDate(item)
-
-  return {
-    id,
-    idx: item.idx ?? item.id ?? null,
-    type: item.type ?? category,
-    category,
-    severity,
-    title: item.title ?? '알림 제목 없음',
-    message: item.message ?? item.summary ?? item.content ?? '알림 요약 정보가 없습니다.',
-    detail:
-      item.detail ??
-      item.description ??
-      item.content ??
-      item.message ??
-      '아직 상세 정보가 연결되지 않은 알림입니다.',
-    createdAt,
-    isRead: Boolean(item.isRead ?? item.read ?? item.confirmed),
-    source: item.source ?? item.sender ?? '시스템',
-    targetLabel: item.targetLabel ?? item.linkLabel ?? '연결 대상 없음',
-    targetUrl: item.targetUrl ?? item.url ?? item.link ?? '',
-  }
-}
-
-function applyNotifications(rawItems) {
-  notifications.value = rawItems.map((item, index) => normalizeNotification(item, index))
-  selectedNotificationId.value = notifications.value[0]?.id ?? ''
-}
-
-async function loadNotifications() {
-  isLoading.value = true
-  loadError.value = ''
-
-  try {
-    const response = await getNoti()
-    applyNotifications(extractNotificationList(response))
-  } catch (error) {
-    console.warn('Notifications load failed. Fallback data will be used.', error)
-    loadError.value = '알림 API 연결 전까지 예시 알림을 표시합니다.'
-    applyNotifications(fallbackNotifications)
-  } finally {
-    isLoading.value = false
-  }
-}
-
-async function markAsRead(notification) {
-  if (!notification || notification.isRead) {
-    return
-  }
-
-  notification.isRead = true
-
-  if (!notification.idx) {
-    return
-  }
-
-  try {
-    await confirm(notification.idx)
-  } catch (error) {
-    console.warn('Notification confirm failed.', error)
-  }
-}
-
-async function selectNotification(notification) {
-  selectedNotificationId.value = notification.id
-  activeDetailTab.value = 'content'
-  await markAsRead(notification)
-}
-
-async function markAllAsRead() {
-  const unreadItems = notifications.value.filter((item) => !item.isRead)
-
-  unreadItems.forEach((item) => {
-    item.isRead = true
-  })
-
-  await Promise.allSettled(
-    unreadItems
-      .filter((item) => item.idx)
-      .map((item) =>
-        confirm(item.idx).catch((error) => console.warn('Notification confirm failed.', error)),
-      ),
-  )
-}
-
 function isToday(value) {
   const date = new Date(value)
 
@@ -327,13 +116,107 @@ function isToday(value) {
   return date.toDateString() === new Date().toDateString()
 }
 
-function getCategoryMeta(category) {
-  return categoryMeta[category] ?? categoryMeta.system
+function formatDate(value) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return '-'
+  }
+
+  return date.toLocaleString('ko-KR')
 }
 
-function getSeverityMeta(severity) {
-  return severityMeta[severity] ?? severityMeta.normal
+async function selectNotification(notification) {
+  if (!notification) {
+    return
+  }
+
+  selectedNotificationId.value = notification.id
+  activeDetailTab.value = 'content'
+
+  if (route.query.notificationId !== notification.id) {
+    await router.replace({
+      query: {
+        ...route.query,
+        notificationId: notification.id,
+      },
+    })
+  }
+
+  await notificationStore.markAsRead(notification)
 }
+
+async function markAllAsRead() {
+  await notificationStore.markAllAsRead()
+}
+
+function openNotificationSettings() {
+  isSettingsModalOpen.value = true
+}
+
+function closeNotificationSettings() {
+  isSettingsModalOpen.value = false
+}
+
+function openTarget(notification) {
+  if (!notification?.targetUrl) {
+    return
+  }
+
+  router.push(notification.targetUrl)
+}
+
+function isCampaignInvitationActionable(notification) {
+  return (
+    notification?.referenceType === 'CAMPAIGN_INVITATION' &&
+    notification?.referenceId &&
+    notification?.referenceStatus === 'PENDING'
+  )
+}
+
+function getCampaignIdFromTargetUrl(notification) {
+  const [, campaignId = ''] = String(notification?.targetUrl ?? '').match(/^\/campaigns\/([^/?#]+)/) ?? []
+  return campaignId
+}
+
+async function respondCampaignInvitation(notification, action) {
+  if (!isCampaignInvitationActionable(notification)) {
+    return
+  }
+
+  const campaignId = getCampaignIdFromTargetUrl(notification)
+  if (!campaignId) {
+    invitationActionError.value = '캠페인 정보를 찾지 못했습니다.'
+    return
+  }
+
+  invitationActionLoading.value = action
+  invitationActionError.value = ''
+
+  try {
+    if (action === 'accept') {
+      await acceptCampaignInvitation(campaignId, notification.referenceId)
+    } else {
+      await rejectCampaignInvitation(campaignId, notification.referenceId)
+    }
+    await notificationStore.loadNotifications({ count: 100 })
+  } catch (error) {
+    console.warn('Campaign invitation action failed.', error)
+    invitationActionError.value = '캠페인 초대 처리에 실패했습니다.'
+  } finally {
+    invitationActionLoading.value = ''
+  }
+}
+
+watch(
+  () => route.query.notificationId,
+  (notificationId) => {
+    if (typeof notificationId === 'string') {
+      selectedNotificationId.value = notificationId
+    }
+  },
+  { immediate: true },
+)
 
 watch(filteredNotifications, (items) => {
   if (!items.length) {
@@ -346,37 +229,61 @@ watch(filteredNotifications, (items) => {
   }
 })
 
+watch(
+  () => [authStore.isAuthenticated, authStore.token],
+  ([isAuthenticated, accessToken]) => {
+    if (isAuthenticated && accessToken) {
+      notificationStore.connect(accessToken)
+      return
+    }
+
+    notificationStore.disconnect()
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
-  loadNotifications()
+  void notificationStore.loadNotifications({ count: 100 })
 })
+
 </script>
 
 <template>
   <section class="notification-page ui-page">
-    <header class="notification-hero ui-card">
+    <header class="notification-hero">
       <div>
-        <p class="notification-eyebrow">NOTI CENTER</p>
+        <p class="notification-eyebrow">NOTIFICATION CENTER</p>
         <h2>알림 센터</h2>
-        <p>시스템에서 발생한 업무, QA, 캠페인, AI 알림을 한곳에서 확인합니다.</p>
+        <p>업무, QA, 캠페인, 일정 알림을 한 곳에서 확인하고 읽음 상태를 관리합니다.</p>
       </div>
-      <button
-        type="button"
-        class="notification-button notification-button--primary"
-        :disabled="!unreadCount"
-        @click="markAllAsRead"
-      >
-        모두 읽음 처리
-      </button>
+      <div class="notification-hero__actions">
+        <button
+          type="button"
+          class="notification-button notification-button--secondary"
+          @click="openNotificationSettings"
+        >
+          <span class="material-symbols-outlined">tune</span>
+          알림 설정
+        </button>
+        <button
+          type="button"
+          class="notification-button notification-button--primary"
+          :disabled="!unreadCount"
+          @click="markAllAsRead"
+        >
+          모두 읽음 처리
+        </button>
+      </div>
     </header>
 
     <section class="notification-stats" aria-label="알림 현황">
-      <article v-for="item in statItems" :key="item.key" class="notification-stat ui-card">
+      <article v-for="item in statItems" :key="item.key" class="notification-stat">
         <span>{{ item.label }}</span>
         <strong>{{ item.value }}</strong>
       </article>
     </section>
 
-    <section class="notification-toolbar ui-card">
+    <section class="notification-toolbar">
       <div class="notification-filters" role="tablist" aria-label="알림 필터">
         <button
           v-for="filter in filterOptions"
@@ -389,16 +296,20 @@ onMounted(() => {
           <span>{{ getFilterCount(filter.key) }}</span>
         </button>
       </div>
-      <p v-if="loadError" class="notification-load-message">{{ loadError }}</p>
-      <p v-else-if="isLoading" class="notification-load-message">알림을 불러오는 중입니다.</p>
+      <p v-if="notificationStore.loadError" class="notification-load-message">
+        {{ notificationStore.loadError }}
+      </p>
+      <p v-else-if="notificationStore.isLoading" class="notification-load-message">
+        알림을 불러오는 중입니다.
+      </p>
     </section>
 
     <div class="notification-center">
-      <section class="notification-list-panel ui-card" aria-label="알림 목록">
+      <section class="notification-list-panel" aria-label="알림 목록">
         <div class="notification-panel-head">
           <div>
             <strong>알림 요약</strong>
-            <p>{{ filteredNotifications.length }}개의 알림이 표시됩니다.</p>
+            <p>{{ filteredNotifications.length }}개의 알림을 표시합니다.</p>
           </div>
         </div>
 
@@ -450,7 +361,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <aside class="notification-detail ui-card" aria-label="알림 상세 정보">
+      <aside class="notification-detail" aria-label="알림 상세 정보">
         <template v-if="selectedNotification">
           <div class="notification-detail__head">
             <span class="notification-detail__icon" :data-category="selectedNotification.category">
@@ -485,6 +396,30 @@ onMounted(() => {
             <div class="notification-detail__box">
               {{ selectedNotification.detail }}
             </div>
+            <div
+              v-if="isCampaignInvitationActionable(selectedNotification)"
+              class="notification-invitation-actions"
+            >
+              <button
+                type="button"
+                class="notification-button notification-button--primary"
+                :disabled="Boolean(invitationActionLoading)"
+                @click="respondCampaignInvitation(selectedNotification, 'accept')"
+              >
+                {{ invitationActionLoading === 'accept' ? '승인 중' : '승인' }}
+              </button>
+              <button
+                type="button"
+                class="notification-button notification-button--secondary"
+                :disabled="Boolean(invitationActionLoading)"
+                @click="respondCampaignInvitation(selectedNotification, 'reject')"
+              >
+                {{ invitationActionLoading === 'reject' ? '반려 중' : '반려' }}
+              </button>
+            </div>
+            <p v-if="invitationActionError" class="notification-load-message">
+              {{ invitationActionError }}
+            </p>
           </section>
 
           <section v-else-if="activeDetailTab === 'metadata'" class="notification-detail__section">
@@ -511,7 +446,7 @@ onMounted(() => {
               </div>
               <div>
                 <dt>발생 시각</dt>
-                <dd>{{ new Date(selectedNotification.createdAt).toLocaleString('ko-KR') }}</dd>
+                <dd>{{ formatDate(selectedNotification.createdAt) }}</dd>
               </div>
               <div>
                 <dt>발신 주체</dt>
@@ -524,12 +459,12 @@ onMounted(() => {
             <strong>연결 정보</strong>
             <div v-if="selectedNotification.targetUrl" class="notification-detail__box">
               <p>{{ selectedNotification.targetLabel }}</p>
-              <RouterLink :to="selectedNotification.targetUrl" class="notification-link-button">
+              <button type="button" class="notification-link-button" @click="openTarget(selectedNotification)">
                 관련 화면으로 이동
-              </RouterLink>
+              </button>
             </div>
             <div v-else class="notification-detail__box">
-              연결된 업무, 캠페인, 검수 화면이 아직 없습니다.
+              연결된 업무, 캠페인, 검수 화면이 없습니다.
             </div>
           </section>
         </template>
@@ -542,6 +477,44 @@ onMounted(() => {
       </aside>
     </div>
   </section>
+
+  <Teleport to="body">
+    <Transition name="notification-settings-modal">
+      <div
+        v-if="isSettingsModalOpen"
+        class="notification-settings-modal"
+        role="presentation"
+        @click.self="closeNotificationSettings"
+      >
+        <section
+          class="notification-settings-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="notification-settings-title"
+        >
+          <header class="notification-settings-dialog__header">
+            <div>
+              <p class="notification-eyebrow">NOTIFICATION SETTINGS</p>
+              <h3 id="notification-settings-title">알림 설정</h3>
+              <span>알림 방법, 중요도, 수신 조건을 바로 조정합니다.</span>
+            </div>
+            <button
+              type="button"
+              class="notification-settings-dialog__close"
+              aria-label="닫기"
+              @click="closeNotificationSettings"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </header>
+
+          <div class="notification-settings-dialog__body">
+            <NotificationSettingsPanel compact />
+          </div>
+        </section>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -557,6 +530,7 @@ onMounted(() => {
 .notification-detail,
 .notification-stat {
   border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
   background: var(--surface-card);
 }
 
@@ -566,6 +540,12 @@ onMounted(() => {
   justify-content: space-between;
   gap: 16px;
   padding: 22px;
+}
+
+.notification-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .notification-eyebrow {
@@ -597,11 +577,37 @@ onMounted(() => {
   font-size: 13px;
 }
 
+.notification-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-control);
+  padding: 0 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notification-live span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+
+.notification-live.is-connected span {
+  background: var(--success-color, #16a34a);
+}
+
 .notification-button,
 .notification-link-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 7px;
   min-height: 36px;
   border-radius: var(--radius-sm);
   padding: 0 14px;
@@ -615,6 +621,10 @@ onMounted(() => {
     color var(--transition-fast);
 }
 
+.notification-button .material-symbols-outlined {
+  font-size: 18px;
+}
+
 .notification-button--primary,
 .notification-link-button {
   border: 1px solid var(--accent-strong);
@@ -622,9 +632,21 @@ onMounted(() => {
   color: #ffffff;
 }
 
+.notification-button--secondary {
+  border: 1px solid var(--line-soft);
+  background: var(--surface-control);
+  color: var(--text-body);
+}
+
 .notification-button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
+}
+
+.notification-invitation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .notification-stats {
@@ -754,9 +776,9 @@ onMounted(() => {
   opacity: 0.72;
 }
 
-.notification-item[data-category='ai'],
-.notification-detail__icon[data-category='ai'] {
-  --noti-tone: #8b5cf6;
+.notification-item[data-category='campaign'],
+.notification-detail__icon[data-category='campaign'] {
+  --noti-tone: #6366f1;
 }
 
 .notification-item[data-category='qa'],
@@ -924,6 +946,8 @@ onMounted(() => {
 
 .notification-detail-tabs button {
   min-height: 42px;
+  border: 0;
+  background: transparent;
   color: var(--text-muted);
   font-size: 13px;
   font-weight: 900;
@@ -1023,6 +1047,97 @@ onMounted(() => {
   transform: translateY(8px);
 }
 
+.notification-settings-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2600;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.58);
+  padding: 24px;
+}
+
+.notification-settings-dialog {
+  width: min(940px, 100%);
+  max-height: min(860px, calc(100vh - 48px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg, 16px);
+  background: var(--surface-page);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.32);
+}
+
+.notification-settings-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-card);
+  padding: 20px 22px;
+}
+
+.notification-settings-dialog__header h3 {
+  margin: 4px 0 0;
+  color: var(--text-heading);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.notification-settings-dialog__header span {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.notification-settings-dialog__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-control);
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+.notification-settings-dialog__close .material-symbols-outlined {
+  font-size: 19px;
+}
+
+.notification-settings-dialog__body {
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.notification-settings-modal-enter-active,
+.notification-settings-modal-leave-active {
+  transition: opacity var(--transition-fast);
+}
+
+.notification-settings-modal-enter-active .notification-settings-dialog,
+.notification-settings-modal-leave-active .notification-settings-dialog {
+  transition: transform var(--transition-fast);
+}
+
+.notification-settings-modal-enter-from,
+.notification-settings-modal-leave-to {
+  opacity: 0;
+}
+
+.notification-settings-modal-enter-from .notification-settings-dialog,
+.notification-settings-modal-leave-to .notification-settings-dialog {
+  transform: translateY(10px);
+}
+
 @media (max-width: 1100px) {
   .notification-center {
     grid-template-columns: 1fr;
@@ -1035,6 +1150,7 @@ onMounted(() => {
 
 @media (max-width: 760px) {
   .notification-hero,
+  .notification-hero__actions,
   .notification-toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -1063,6 +1179,22 @@ onMounted(() => {
 
   .notification-detail-tabs {
     grid-template-columns: 1fr;
+  }
+
+  .notification-settings-modal {
+    padding: 12px;
+  }
+
+  .notification-settings-dialog {
+    max-height: calc(100vh - 24px);
+  }
+
+  .notification-settings-dialog__header {
+    padding: 16px;
+  }
+
+  .notification-settings-dialog__body {
+    padding: 14px;
   }
 }
 </style>

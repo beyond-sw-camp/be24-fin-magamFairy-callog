@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 
 @RestController
@@ -20,10 +21,10 @@ import java.util.NoSuchElementException;
 public class BenefitController {
     private final BenefitService benefitService;
 
-    @GetMapping("/benefit/{idx}")
-    public ResponseEntity getBenefit(@PathVariable Long idx) {
+    @GetMapping("/benefit/{campaignIdx}")
+    public ResponseEntity getBenefit(@PathVariable Long campaignIdx) {
         try {
-            MatchingDto.BenefitRes dto = benefitService.getBenefit(idx);
+            List<MatchingDto.BenefitRes> dto = benefitService.getBenefit(campaignIdx);
             return ResponseEntity.status(HttpStatus.OK)
                     .body(BaseResponse.success(dto));
         }

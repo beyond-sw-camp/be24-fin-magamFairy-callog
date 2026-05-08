@@ -9,7 +9,11 @@ export const getPartnerGmCandidates = (campaignId) => api.get(`${base(campaignId
 export const addTeamMembers = (campaignId, userIdxList) =>
   api.post(base(campaignId), { userIdxList })
 export const invitePartnerGm = (campaignId, userIdx) =>
-  api.post(`${base(campaignId)}/invite-partner`, { userIdx })
+  api.post(`${base(campaignId)}/invitations`, { userIdx })
+export const acceptCampaignInvitation = (campaignId, invitationId) =>
+  api.patch(`${base(campaignId)}/invitations/${invitationId}/accept`)
+export const rejectCampaignInvitation = (campaignId, invitationId) =>
+  api.patch(`${base(campaignId)}/invitations/${invitationId}/reject`)
 export const updateMemberRole = (campaignId, memberId, campaignRole) =>
   api.patch(`${base(campaignId)}/${memberId}`, { campaignRole })
 export const removeMember = (campaignId, memberId) =>

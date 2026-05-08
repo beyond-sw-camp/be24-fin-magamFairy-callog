@@ -23,16 +23,18 @@ function unwrapResponse(response) {
   return payload.data
 }
 
-export const GetDashboardSummary = async () => {
-  return unwrapResponse(await api.get('/dashboard/summary'))
+export const GetDashboardSummary = async (period) => {
+  const params = period ? { period } : {}
+  return unwrapResponse(await api.get('/dashboard/summary', { params }))
 }
 
 export const GetQuarterGoals = async (period) => {
   return unwrapResponse(await api.get('/dashboard/quarter-goals', { params: { period } }))
 }
 
-export const GetPartnerProgress = async () => {
-  return unwrapResponse(await api.get('/dashboard/partner-progress'))
+export const GetPartnerProgress = async (period) => {
+  const params = period ? { period } : {}
+  return unwrapResponse(await api.get('/dashboard/partner-progress', { params }))
 }
 
 export const GetReviewQueue = async () => {
@@ -43,12 +45,14 @@ export const GetBlockers = async () => {
   return unwrapResponse(await api.get('/dashboard/blockers'))
 }
 
-export const GetAssetCategories = async () => {
-  return unwrapResponse(await api.get('/dashboard/asset-categories'))
+export const GetAssetCategories = async (period) => {
+  const params = period ? { period } : {}
+  return unwrapResponse(await api.get('/dashboard/asset-categories', { params }))
 }
 
-export const GetKpiCategories = async () => {
-  return unwrapResponse(await api.get('/dashboard/kpi-categories'))
+export const GetKpiCategories = async (period) => {
+  const params = period ? { period } : {}
+  return unwrapResponse(await api.get('/dashboard/kpi-categories', { params }))
 }
 
 export default {
