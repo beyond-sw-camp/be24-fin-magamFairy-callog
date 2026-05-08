@@ -14,21 +14,52 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const myCampaigns = ref([])           // [{ idx, name, status, color, ... }]
   const loading = ref(false)
   const errorMessage = ref(null)
-  const usingMock = ref(false)
+  const currentPeriod = ref(null)
+  const comparePeriod = ref(null)
+
+  /* ─── 비교 모드 데이터 (이전 기간 스냅샷) ─── */
+  const compareSummary = ref(null)
+  const compareQuarterGoals = ref([])
+  const comparePartnerProgress = ref([])
+  const compareLoading = ref(false)
+
+  /**
+   * 영역별 로드 상태: 'loading' | 'success' | 'empty' | 'error'
+   * View 레이어에서 각 카드 영역의 skeleton·페이드인·에러 표시 분기에 사용.
+   */
+  const status = ref({
+    summary: 'loading',
+    quarterGoals: 'loading',
+    partnerProgress: 'loading',
+    reviewQueue: 'loading',
+    blockers: 'loading',
+    assetCategories: 'loading',
+    kpiCategories: 'loading',
+    myCampaigns: 'loading',
+  })
+
+  function isEmptyResult(key, value) {
+    if (value == null) return true
+    if (key === 'summary') return false   // summary 는 객체 자체가 의미
+    if (Array.isArray(value)) return value.length === 0
+    if (typeof value === 'object') return Object.keys(value).length === 0
+    return false
+  }
 
   async function loadAll(period) {
     loading.value = true
     errorMessage.value = null
-    usingMock.value = false
+    currentPeriod.value = period ?? null
+    Object.keys(status.value).forEach((k) => { status.value[k] = 'loading' })
 
     const tasks = [
-      ['summary', () => dashApi.GetDashboardSummary()],
+      ['summary', () => dashApi.GetDashboardSummary(period)],
       ['quarterGoals', () => dashApi.GetQuarterGoals(period)],
-      ['partnerProgress', () => dashApi.GetPartnerProgress()],
+      ['partnerProgress', () => dashApi.GetPartnerProgress(period)],
       ['reviewQueue', () => dashApi.GetReviewQueue()],
       ['blockers', () => dashApi.GetBlockers()],
-      ['assetCategories', () => dashApi.GetAssetCategories()],
-      ['kpiCategories', () => dashApi.GetKpiCategories()],
+      ['assetCategories', () => dashApi.GetAssetCategories(period)],
+      ['kpiCategories', () => dashApi.GetKpiCategories(period)],
       ['myCampaigns', () => ListCampaign({ scope: 'mine' })],
     ]
 
@@ -37,33 +68,55 @@ export const useDashboardStore = defineStore('dashboard', () => {
     results.forEach((result, idx) => {
       const [key] = tasks[idx]
       if (result.status === 'fulfilled') {
-        if (key === 'summary') summary.value = result.value
-        if (key === 'quarterGoals') quarterGoals.value = normalizeArray(result.value)
-        if (key === 'partnerProgress') partnerProgress.value = normalizeArray(result.value)
-        if (key === 'reviewQueue') reviewQueue.value = normalizeArray(result.value)
-        if (key === 'blockers') blockers.value = normalizeArray(result.value)
-        if (key === 'assetCategories') assetCategories.value = result.value ?? {}
-        if (key === 'kpiCategories') kpiCategories.value = result.value ?? {}
-        if (key === 'myCampaigns') myCampaigns.value = normalizeArray(result.value)
+        const v = result.value
+        if (key === 'summary') summary.value = v
+        if (key === 'quarterGoals') quarterGoals.value = normalizeArray(v)
+        if (key === 'partnerProgress') partnerProgress.value = normalizeArray(v)
+        if (key === 'reviewQueue') reviewQueue.value = normalizeArray(v)
+        if (key === 'blockers') blockers.value = normalizeArray(v)
+        if (key === 'assetCategories') assetCategories.value = v ?? {}
+        if (key === 'kpiCategories') kpiCategories.value = v ?? {}
+        if (key === 'myCampaigns') myCampaigns.value = normalizeArray(v)
+        status.value[key] = isEmptyResult(key, v) ? 'empty' : 'success'
       } else {
-        usingMock.value = true
-        console.warn(`[mock fallback] dashboard.${key} 실패`, result.reason)
+        status.value[key] = 'error'
+        console.warn(`[dashboard] ${key} 실패`, result.reason)
       }
     })
 
-    if (usingMock.value) {
-      const mock = buildMockDashboard()
-      if (!summary.value) summary.value = mock.summary
-      if (!quarterGoals.value.length) quarterGoals.value = mock.quarterGoals
-      if (!partnerProgress.value.length) partnerProgress.value = mock.partnerProgress
-      if (!reviewQueue.value.length) reviewQueue.value = mock.reviewQueue
-      if (!blockers.value.length) blockers.value = mock.blockers
-      if (Object.keys(assetCategories.value).length === 0) assetCategories.value = mock.assetCategories
-      if (Object.keys(kpiCategories.value).length === 0) kpiCategories.value = mock.kpiCategories
-      if (!myCampaigns.value.length) myCampaigns.value = mock.myCampaigns
-    }
-
     loading.value = false
+  }
+
+  /**
+   * 비교 기간 스냅샷 로드. KPI delta · 차트 overlay · 제휴사 랭킹 변화 계산용.
+   * summary / quarterGoals / partnerProgress 만 필요 (도넛·캠페인은 비교 없음).
+   * 실패 시에도 메인 화면을 깨뜨리지 않도록 조용히 무시 (compare* 값은 null/[]).
+   */
+  async function loadCompare(period) {
+    if (!period) {
+      clearCompare()
+      return
+    }
+    compareLoading.value = true
+    comparePeriod.value = period
+
+    const [summaryRes, goalsRes, partnerRes] = await Promise.allSettled([
+      dashApi.GetDashboardSummary(period),
+      dashApi.GetQuarterGoals(period),
+      dashApi.GetPartnerProgress(period),
+    ])
+    compareSummary.value = summaryRes.status === 'fulfilled' ? summaryRes.value : null
+    compareQuarterGoals.value = goalsRes.status === 'fulfilled' ? normalizeArray(goalsRes.value) : []
+    comparePartnerProgress.value = partnerRes.status === 'fulfilled' ? normalizeArray(partnerRes.value) : []
+    compareLoading.value = false
+  }
+
+  function clearCompare() {
+    compareSummary.value = null
+    compareQuarterGoals.value = []
+    comparePartnerProgress.value = []
+    comparePeriod.value = null
+    compareLoading.value = false
   }
 
   return {
@@ -77,8 +130,16 @@ export const useDashboardStore = defineStore('dashboard', () => {
     myCampaigns,
     loading,
     errorMessage,
-    usingMock,
+    status,
+    currentPeriod,
+    comparePeriod,
+    compareSummary,
+    compareQuarterGoals,
+    comparePartnerProgress,
+    compareLoading,
     loadAll,
+    loadCompare,
+    clearCompare,
   }
 })
 
@@ -86,65 +147,4 @@ function normalizeArray(value) {
   if (Array.isArray(value)) return value
   if (Array.isArray(value?.items)) return value.items
   return []
-}
-
-function buildMockDashboard() {
-  return {
-    summary: {
-      title: '전사 캠페인 진행',
-      subtitle: '24개 캠페인 진행 중 · 이번 주 +6.2%p 향상',
-      progressPct: 73,
-      trend: 6.2,
-      trendSpark: [62, 64, 66, 68, 69, 71, 73],
-      miniStats: [
-        { label: '검수 패스율', value: '87%' },
-        { label: '매칭 평균', value: '76점' },
-        { label: '자산 LIVE', value: '108' },
-      ],
-      activeCampaignCount: 24,
-      myCampaignCount: 12,
-    },
-    quarterGoals: [
-      { label: '신규 협력사', current: 12, target: 20, percent: 60, tone: 'low' },
-      { label: '캠페인 런칭', current: 8, target: 12, percent: 67, tone: 'mid' },
-      { label: 'KPI 달성률', current: 73, target: 85, percent: 86, tone: 'mid' },
-      { label: '매칭 평균', current: 76, target: 80, percent: 95, tone: 'high' },
-    ],
-    partnerProgress: [
-      { name: '한화호텔앤드리조트', progress: 94, sub: '8 캠페인 / 21 자산', initial: '한', cls: 'actor-violet' },
-      { name: '한화생명', progress: 89, sub: '6 캠페인 / 17 자산', initial: '생', cls: 'actor-blue' },
-      { name: '한화이글스', progress: 82, sub: '5 캠페인 / 14 자산', initial: '이', cls: 'actor-rose' },
-      { name: '한화시스템', progress: 76, sub: '4 캠페인 / 11 자산', initial: '시', cls: 'actor-emerald' },
-      { name: '한화토탈에너지스', progress: 71, sub: '3 캠페인 / 9 자산', initial: '토', cls: 'actor-amber' },
-      { name: '한화갤러리아', progress: 64, sub: '4 캠페인 / 14 자산', initial: '갤', cls: 'actor-purple' },
-      { name: '외부 대행사', progress: 58, sub: '2 캠페인 / 4 자산', initial: '외', cls: 'actor-rose' },
-    ],
-    reviewQueue: [
-      { count: 3, slaHours: 14, slaTotalHours: 72 },
-    ],
-    blockers: [
-      { count: 2, kind: 'PARTNER_LOW' },
-    ],
-    assetCategories: {
-      '이벤트/프로모션': 42,
-      '제품 협찬': 28,
-      '디지털 콘텐츠': 18,
-      '매장/오프라인': 12,
-      '미디어 노출': 8,
-    },
-    kpiCategories: {
-      IMPRESSION: 87,
-      ENGAGEMENT: 73,
-      CONVERSION: 64,
-      REVENUE: 81,
-      BRAND: 92,
-    },
-    myCampaigns: [
-      { idx: 1, id: '1', name: '여름 호텔 협업',      status: 'live',   color: '#9D85FF', initials: 'SH' },
-      { idx: 2, id: '2', name: '한화 데이 그룹 통합', status: 'live',   color: '#FF8A5C', initials: 'HD' },
-      { idx: 3, id: '3', name: '청년 보험 디지털',    status: 'review', color: '#5DAFD8', initials: 'YI' },
-      { idx: 4, id: '4', name: 'ESG 친환경',          status: 'draft',  color: '#6FBF87', initials: 'EG' },
-      { idx: 5, id: '5', name: '가을 럭셔리 패키지',  status: 'draft',  color: '#FF7A6B', initials: 'AL' },
-    ],
-  }
 }

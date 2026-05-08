@@ -16,7 +16,12 @@ const orgType = computed(() => {
   // dev/mock 환경 fallback — 등록 버튼이 항상 노출되도록 HQ로 default
   return 'HQ'
 })
-const orgId = computed(() => authStore.user?.organization?.idx ?? authStore.user?.organizationId ?? null)
+const orgId = computed(() =>
+  authStore.user?.organization?.idx
+  ?? authStore.user?.organizationId
+  ?? authStore.user?.orgId
+  ?? null
+)
 
 const isHqAdmin = computed(() => orgType.value === 'HQ')
 const isAffiliateAdmin = computed(() => ['AFFILIATE', 'EXTERNAL_PARTNER'].includes(orgType.value))
@@ -132,14 +137,27 @@ const statusCounts = computed(() => {
 const filteredItems = computed(() =>
   (store.items ?? []).filter((k) => k.status === activeStatus.value),
 )
-const visibleHqItems = computed(() => filteredItems.value.filter((k) => k.ownerOrgType === 'HQ'))
+
+/**
+ * 본사 KPI 판별:
+ * 1) ownerOrgType === 'HQ'  ← backend DTO 정상
+ * 2) DTO 미반영 환경 fallback: caller 본인 조직이 HQ면 ownerOrgId가 자기 조직과 같으면 HQ
+ * 3) 그래도 모르면 kind === 'STRATEGIC' 기준 (HQ default kind는 STRATEGIC)
+ */
+function isHqOwned(k) {
+  if (k.ownerOrgType === 'HQ') return true
+  if (k.ownerOrgType === 'AFFILIATE' || k.ownerOrgType === 'EXTERNAL_PARTNER') return false
+  if (isHqAdmin.value && orgId.value && k.ownerOrgId === orgId.value) return true
+  return k.kind === 'STRATEGIC'
+}
+const visibleHqItems = computed(() => filteredItems.value.filter(isHqOwned))
 /**
  * 계열사 섹션 가시성:
  * - HQ: 모든 계열사 KPI 노출 (전사 monitoring)
  * - AFFILIATE/EXTERNAL: 자기 조직 KPI만
  */
 const visibleOrgItems = computed(() => {
-  const nonHq = filteredItems.value.filter((k) => k.ownerOrgType !== 'HQ')
+  const nonHq = filteredItems.value.filter((k) => !isHqOwned(k))
   if (isHqAdmin.value) return nonHq
   if (!orgId.value) return nonHq   // mock fallback
   return nonHq.filter((k) => k.ownerOrgId === orgId.value)
@@ -160,21 +178,41 @@ function openEdit(kpi) {
   editorOpen.value = true
 }
 
+const submitError = ref('')
+
 async function handleSubmit(payload) {
-  if (editorMode.value === 'edit' && editorTarget.value?.idx) {
-    await store.update(editorTarget.value.idx, payload)
-  } else {
-    await store.create(payload)
+  submitError.value = ''
+  try {
+    if (editorMode.value === 'edit' && editorTarget.value?.idx) {
+      await store.update(editorTarget.value.idx, payload)
+    } else {
+      await store.create(payload)
+      // 새 KPI는 DRAFT로 만들어지므로 사용자가 바로 볼 수 있도록 초안 탭으로 전환
+      activeStatus.value = 'DRAFT'
+    }
+    editorOpen.value = false
+  } catch (err) {
+    const msg = err?.response?.data?.message || err?.message || 'KPI 저장에 실패했습니다.'
+    submitError.value = msg
+    console.error('[OrganizationKpi] save 실패:', err)
+    window.alert(`KPI 저장 실패\n\n${msg}\n\n브라우저 DevTools Network 탭에서 /organization-kpis 응답을 확인하세요.`)
   }
-  editorOpen.value = false
 }
 
 async function handleArchive(kpi) {
   if (!window.confirm(`'${kpi.name}' KPI를 보관하시겠습니까?`)) return
-  await store.updateStatus(kpi.idx, 'ARCHIVED')
+  try {
+    await store.updateStatus(kpi.idx, 'ARCHIVED')
+  } catch (err) {
+    window.alert('상태 변경 실패: ' + (err?.response?.data?.message || err?.message || err))
+  }
 }
 async function handleActivate(kpi) {
-  await store.updateStatus(kpi.idx, 'ACTIVE')
+  try {
+    await store.updateStatus(kpi.idx, 'ACTIVE')
+  } catch (err) {
+    window.alert('활성화 실패: ' + (err?.response?.data?.message || err?.message || err))
+  }
 }
 
 const periodLabel = computed(() => {

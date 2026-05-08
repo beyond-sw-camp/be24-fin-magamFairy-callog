@@ -19,6 +19,8 @@ public record QuarterGoalProgressDto(
         String periodCode,
         Long ownerOrgId,
         String ownerOrgName,
-        List<Integer> monthlyActuals,
+        String category,         // KpiCategory.name() 또는 null
+        String esgCategory,      // EsgCategory.name() 또는 null
+        List<Integer> monthlyActuals,    // null 가능 — snapshot 없는 달은 null
         List<Integer> monthlyTargets
 ) {}

@@ -11,10 +11,10 @@
         <span class="op-breadcrumb__item op-breadcrumb__item--current" aria-current="page">소개 페이지</span>
       </nav>
       <div class="op-topbar__actions">
-        <button v-if="!editMode" class="btn btn--ghost btn--sm" @click="enterEdit">
+        <button v-if="!editMode && canEdit" class="btn btn--ghost btn--sm" @click="enterEdit">
           <i class="ph ph-pencil-simple"></i>편집
         </button>
-        <template v-else>
+        <template v-else-if="editMode && canEdit">
           <button class="btn btn--ghost btn--sm" :disabled="saving" @click="cancelEdit">취소</button>
           <button class="btn btn--primary btn--sm" :disabled="saving" @click="saveEdit">
             {{ saving ? '저장 중...' : '저장' }}
@@ -40,7 +40,10 @@
         </div>
         <h1 class="op-hero__title">{{ campaignName }}</h1>
         <div class="op-hero__meta">
-          <span><i class="ph ph-user-circle"></i>담당: {{ ownerLoginId }}</span>
+          <span>
+            <i class="ph ph-user-circle"></i>담당: {{ ownerDisplay }}
+            <em v-if="ownerEmail" class="op-hero__meta-sub">· {{ ownerEmail }}</em>
+          </span>
           <span><i class="ph ph-eye"></i>공개 범위: 인증 사용자</span>
         </div>
       </div>
@@ -59,15 +62,83 @@
           </div>
           <div v-if="!editMode" class="deadline-box__dday">{{ computeDday(recruitDeadline) }}</div>
         </div>
-        <div v-if="!editMode" class="op-hero__actions">
-          <button class="btn btn--ghost"><i class="ph ph-bookmark-simple"></i>관심 등록</button>
-          <button class="btn btn--ghost"><i class="ph ph-chat-circle-question"></i>질문하기</button>
+        <!-- 제안서 제출 — 해당 캠페인의 PM이 아닌 사용자에게만 노출 -->
+        <div v-if="!editMode && !canEdit" class="op-hero__actions">
           <button class="btn btn--primary" @click="goToProposal">
             <i class="ph ph-paper-plane-tilt"></i>제안서 제출
           </button>
         </div>
       </div>
     </header>
+
+    <!-- 편집 모드 전용 — 썸네일 (왼쪽) + 공개 범위 (오른쪽) 2열 그리드 (compact) -->
+    <section v-if="canEdit && editMode" class="op-edit-grid">
+      <!-- 왼쪽: 썸네일 -->
+      <div class="edit-card">
+        <div class="edit-card__head">
+          <i class="ph ph-image-square"></i>
+          <span class="edit-card__title">썸네일</span>
+        </div>
+        <input
+          ref="thumbInputRef"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          hidden
+          @change="onThumbFileChange"
+        />
+        <div class="edit-card__actions">
+          <button type="button" class="icon-btn" :disabled="thumbBusy" @click="thumbInputRef?.click()" title="이미지 업로드">
+            <i class="ph ph-upload-simple"></i><span>업로드</span>
+          </button>
+          <button type="button" class="icon-btn" :disabled="thumbBusy" @click="onThumbAiGenerate" title="AI 자동 생성">
+            <i class="ph ph-sparkle"></i><span>AI 생성</span>
+          </button>
+          <button type="button" class="icon-btn icon-btn--danger" :disabled="thumbBusy" @click="onThumbClear" title="썸네일 제거">
+            <i class="ph ph-trash"></i><span>제거</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 오른쪽: 공개 범위 -->
+      <div class="edit-card">
+        <div class="edit-card__head">
+          <i class="ph ph-eye"></i>
+          <span class="edit-card__title">공개 범위</span>
+        </div>
+        <div class="visibility-row">
+          <!-- 비공개/공개 토글 -->
+          <div class="visibility-toggle" role="tablist" aria-label="공개 여부">
+            <button
+              type="button" role="tab"
+              class="visibility-toggle__btn"
+              :class="{ 'is-active': isVisibilityPrivate }"
+              :aria-selected="isVisibilityPrivate"
+              @click="setVisibility('PRIVATE')"
+            ><i class="ph ph-lock"></i>비공개</button>
+            <button
+              type="button" role="tab"
+              class="visibility-toggle__btn"
+              :class="{ 'is-active': !isVisibilityPrivate }"
+              :aria-selected="!isVisibilityPrivate"
+              @click="setVisibility(editDraft.visibility === 'PRIVATE' ? 'HQ_ONLY' : editDraft.visibility)"
+            ><i class="ph ph-globe-hemisphere-west"></i>공개</button>
+          </div>
+          <!-- 공개일 때 — chip pill 가로 wrap -->
+          <div v-if="!isVisibilityPrivate" class="visibility-chips">
+            <button
+              v-for="opt in VISIBILITY_OPTIONS"
+              :key="opt.value"
+              type="button"
+              class="visibility-chip"
+              :class="{ 'is-active': editDraft.visibility === opt.value }"
+              :title="opt.desc"
+              @click="setVisibility(opt.value)"
+            >{{ opt.label }}</button>
+          </div>
+          <p v-else class="visibility-hint-inline">PM 조직만 이 캠페인 소개에 접근합니다.</p>
+        </div>
+      </div>
+    </section>
 
     <!-- Tab Nav -->
     <nav class="op-tabs" aria-label="페이지 섹션">
@@ -259,21 +330,17 @@
       <!-- Sidebar -->
       <aside class="op-sidebar">
 
-        <!-- CTA -->
-        <div class="card card--cta">
+        <!-- CTA — PM이 아닌 사용자(=파트너 후보)에게만 제휴 제안 노출 -->
+        <div v-if="!canEdit" class="card card--cta">
           <h3 class="cta-title">제휴 제안하기</h3>
           <p class="cta-desc">상세 요건을 확인하셨다면 기한 내에 제안서를 제출해 주세요.</p>
           <button class="btn btn--primary btn--block" @click="goToProposal">
             <i class="ph ph-paper-plane-right"></i>공식 제안서 제출
           </button>
-          <div class="cta-sub">
-            <button class="btn btn--ghost btn--sm"><i class="ph ph-star"></i>북마크</button>
-            <button class="btn btn--ghost btn--sm"><i class="ph ph-share-network"></i>공유</button>
-          </div>
         </div>
 
-        <!-- 첨부 자료실 -->
-        <div class="card">
+        <!-- 첨부 자료실 — 항목이 있을 때만 노출 -->
+        <div v-if="attachedFiles && attachedFiles.length > 0" class="card">
           <h3 class="card__title-sm"><i class="ph ph-folder"></i>첨부 자료실</h3>
           <div class="file-list">
             <div
@@ -294,9 +361,12 @@
           </div>
         </div>
 
-        <!-- 심사 평가 기준 (매칭 5축 가중치) -->
-        <div class="card">
-          <h3 class="card__title-sm"><i class="ph ph-scales"></i>심사 평가 기준 (매칭 가중치)</h3>
+        <!-- 심사 평가 기준 (매칭 5축 가중치) — 내부 사용자(HQ/AFFILIATE)와 편집 권한자만 노출 (P1) -->
+        <div v-if="isInternalViewer || canEdit" class="card">
+          <h3 class="card__title-sm">
+            <i class="ph ph-scales"></i>심사 평가 기준 (매칭 가중치)
+            <span class="op-internal-tag" aria-label="내부 전용">내부</span>
+          </h3>
           <!-- 보기 모드 -->
           <div v-if="!editMode && hasAnyWeight" class="criteria-list">
             <div v-for="c in matchWeights" :key="c.label" class="criteria-item">
@@ -379,9 +449,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { GetCampaignIntro, UpdateCampaignIntro } from '@/api/campaigns'
+import { GetCampaignIntro, UpdateCampaignIntro, uploadCampaignThumbnail, RegenerateThumbnail, ClearThumbnail } from '@/api/campaigns'
 
 const route = useRoute()
 const router = useRouter()
@@ -395,6 +465,65 @@ const errorMsg = ref('')
 const editMode = ref(false)
 const editDraft = ref(null)
 const saving = ref(false)
+
+// 권한 (P0) — backend가 응답에 canEdit / isInternalViewer 채워줌. 미응답 시 false (안전 default)
+const canEdit = computed(() => Boolean(introData.value?.canEdit))
+const isInternalViewer = computed(() => Boolean(introData.value?.isInternalViewer))
+
+// 공개 범위 (visibility) — 5개 옵션 (PRIVATE 제외)
+const VISIBILITY_OPTIONS = [
+  { value: 'HQ_ONLY',           label: '한화 본사만',     desc: '본사 사용자에게만 노출' },
+  { value: 'HQ_AND_AFFILIATE',  label: '계열사 이상',     desc: '본사 + 계열사 (외부 파트너 제외)' },
+  { value: 'AFFILIATE_ONLY',    label: '계열사끼리만',    desc: '계열사 사용자만 (본사·외부 제외)' },
+  { value: 'EXTERNAL_ONLY',     label: '외부 파트너만',   desc: '외부 파트너에게만 노출 (내부 제외)' },
+  { value: 'ALL',               label: '전체 공개',       desc: '본사 + 계열사 + 외부 파트너 모두' },
+]
+const isVisibilityPrivate = computed(() => (editDraft.value?.visibility ?? 'PRIVATE') === 'PRIVATE')
+function setVisibility(next) {
+  if (!editDraft.value) return
+  editDraft.value.visibility = next
+}
+
+// 썸네일 업로드 (P2)
+const thumbInputRef = ref(null)
+const thumbBusy = ref(false)
+async function onThumbFileChange(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  thumbBusy.value = true
+  try {
+    await uploadCampaignThumbnail(route.params.campaignId, file)
+    window.alert('썸네일이 저장되었습니다. "캠페인 둘러보기"에서 확인하세요.')
+  } catch (err) {
+    window.alert(err?.response?.data?.message ?? err?.message ?? '썸네일 업로드에 실패했습니다.')
+  } finally {
+    thumbBusy.value = false
+    if (e.target) e.target.value = ''
+  }
+}
+async function onThumbAiGenerate() {
+  thumbBusy.value = true
+  try {
+    await RegenerateThumbnail(route.params.campaignId)
+    window.alert('AI 썸네일 생성을 시작했습니다. 잠시 후 "캠페인 둘러보기"에서 확인하세요.')
+  } catch (err) {
+    window.alert(err?.response?.data?.message ?? err?.message ?? 'AI 생성에 실패했습니다.')
+  } finally {
+    thumbBusy.value = false
+  }
+}
+async function onThumbClear() {
+  if (!window.confirm('썸네일을 제거하시겠습니까?')) return
+  thumbBusy.value = true
+  try {
+    await ClearThumbnail(route.params.campaignId)
+    window.alert('썸네일이 제거되었습니다.')
+  } catch (err) {
+    window.alert(err?.response?.data?.message ?? err?.message ?? '제거에 실패했습니다.')
+  } finally {
+    thumbBusy.value = false
+  }
+}
 
 const tabs = [
   { id: 'detail', label: '상세 정보' },
@@ -449,6 +578,18 @@ const campaignSummary = computed(() =>
 )
 const campaignStatus = computed(() => introData.value?.campaignStatus ?? '준비중')
 const ownerLoginId = computed(() => introData.value?.ownerLoginId ?? '미지정')
+const ownerName = computed(() => introData.value?.ownerName ?? null)
+const ownerEmail = computed(() => introData.value?.ownerEmail ?? null)
+const ownerDepartment = computed(() => introData.value?.ownerDepartment ?? null)
+// 표시용 — 이름이 있으면 "이름 (부서)" 또는 "이름", 없으면 loginId fallback
+const ownerDisplay = computed(() => {
+  if (ownerName.value) {
+    return ownerDepartment.value
+      ? `${ownerName.value} (${ownerDepartment.value})`
+      : ownerName.value
+  }
+  return ownerLoginId.value
+})
 const rfpCode = computed(() => introData.value?.rfpCode ?? '')
 const recruitDeadline = computed(() => introData.value?.recruitDeadline ?? null)
 
@@ -465,7 +606,16 @@ const partnerValues = computed(() => pickList(introData.value?.partnerValues, FA
 const timelineEvents = computed(() => pickList(introData.value?.timelineEvents, FALLBACK.timelineEvents))
 const submissionDocs = computed(() => pickList(introData.value?.submissionDocs, FALLBACK.submissionDocs))
 const attachedFiles = computed(() => pickList(introData.value?.attachedFiles, FALLBACK.attachedFiles))
-const contactInfo = computed(() => introData.value?.contactInfo ?? FALLBACK.contactInfo)
+// 담당자 문의 칸 — 사용자가 입력한 contactInfo 우선, 비어있는 필드는 캠페인 생성자(owner) 정보로 자동 fallback
+const contactInfo = computed(() => {
+  const raw = introData.value?.contactInfo ?? {}
+  return {
+    name:  raw.name  || ownerName.value  || ownerLoginId.value || FALLBACK.contactInfo.name,
+    team:  raw.team  || ownerDepartment.value || FALLBACK.contactInfo.team,
+    email: raw.email || ownerEmail.value || FALLBACK.contactInfo.email,
+    phone: raw.phone || FALLBACK.contactInfo.phone,
+  }
+})
 
 // 캠페인 개요 그리드 — Campaign 기본 필드 기반
 const overviewItems = computed(() => [
@@ -516,6 +666,10 @@ function goToProposal() {
 
 // 인라인 편집 함수
 function enterEdit() {
+  if (!canEdit.value) {
+    window.alert('편집 권한이 없습니다. (PM 조직의 매니저/총괄 매니저만 가능)')
+    return
+  }
   editDraft.value = {
     rfpCode: introData.value?.rfpCode ?? '',
     recruitDeadline: toDatetimeLocalValue(introData.value?.recruitDeadline),
@@ -530,6 +684,7 @@ function enterEdit() {
     weightCost: introData.value?.weightCost ?? 0,
     weightOperation: introData.value?.weightOperation ?? 0,
     weightBrand: introData.value?.weightBrand ?? 0,
+    visibility: introData.value?.visibility ?? 'PRIVATE',
   }
   editMode.value = true
 }
@@ -541,6 +696,10 @@ function cancelEdit() {
 
 async function saveEdit() {
   if (!editDraft.value) return
+  if (!canEdit.value) {
+    errorMsg.value = '편집 권한이 없습니다.'
+    return
+  }
   saving.value = true
   errorMsg.value = ''
   try {
@@ -555,13 +714,14 @@ async function saveEdit() {
       weightCost: Number(editDraft.value.weightCost) || null,
       weightOperation: Number(editDraft.value.weightOperation) || null,
       weightBrand: Number(editDraft.value.weightBrand) || null,
+      visibility: editDraft.value.visibility || 'PRIVATE',
     }
     await UpdateCampaignIntro(route.params.campaignId, payload)
     introData.value = await GetCampaignIntro(route.params.campaignId)
     editMode.value = false
     editDraft.value = null
   } catch (e) {
-    errorMsg.value = e?.message ?? '저장에 실패했습니다.'
+    errorMsg.value = e?.response?.data?.message ?? e?.message ?? '저장에 실패했습니다.'
   } finally {
     saving.value = false
   }
@@ -576,14 +736,28 @@ function toDatetimeLocalValue(dt) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-onMounted(async () => {
+async function loadIntro(campaignId) {
+  if (!campaignId) return
+  loading.value = true
+  errorMsg.value = ''
+  // 캠페인 ID가 바뀌면 이전 편집 상태 carry-over 방지
+  editMode.value = false
+  editDraft.value = null
   try {
-    introData.value = await GetCampaignIntro(route.params.campaignId)
+    introData.value = await GetCampaignIntro(campaignId)
   } catch (e) {
     errorMsg.value = e?.message ?? '소개 페이지를 불러오지 못했습니다.'
+    introData.value = null
   } finally {
     loading.value = false
   }
+}
+
+onMounted(() => loadIntro(route.params.campaignId))
+
+// 라우트 param 변경 시 자동 재요청 (component reuse 케이스)
+watch(() => route.params.campaignId, (next) => {
+  if (next) loadIntro(next)
 })
 </script>
 
@@ -696,6 +870,12 @@ onMounted(async () => {
   gap: 5px;
 }
 .op-hero__meta i { font-size: 15px; color: var(--text-4); }
+.op-hero__meta-sub {
+  margin-left: 4px;
+  font-size: 11px; font-weight: 600;
+  color: var(--text-3);
+  font-style: normal;
+}
 
 .op-hero__right {
   display: flex;
@@ -774,6 +954,152 @@ onMounted(async () => {
   font-size: 13px;
   padding: 8px 0;
   text-align: center;
+}
+
+/* 편집 모드 — 썸네일 + 공개 범위 2열 그리드 (compact) */
+.op-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: -4px 0 10px;
+}
+@media (max-width: 720px) {
+  .op-edit-grid { grid-template-columns: 1fr; }
+}
+.edit-card {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface-2, var(--panel-color));
+  border: 1px dashed var(--border-color);
+  display: flex; align-items: center; gap: 10px;
+  min-height: 44px;
+}
+.edit-card__head {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700;
+  color: var(--text-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.edit-card__head i { font-size: 14px; color: var(--text-3); }
+.edit-card__title { letter-spacing: -0.01em; }
+.edit-card__actions {
+  display: inline-flex; gap: 4px;
+  margin-left: auto;
+}
+.icon-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: var(--panel-color);
+  color: var(--text-2);
+  font-size: 11px; font-weight: 600; font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.icon-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary-500) 30%, var(--border-color));
+  color: var(--color-primary-700);
+}
+.icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.icon-btn i { font-size: 12px; }
+.icon-btn--danger:hover:not(:disabled) {
+  border-color: rgba(220, 38, 38, 0.4);
+  color: #DC2626;
+}
+
+/* 공개 범위 — 한 줄에 토글 + chip wrap */
+.visibility-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  flex: 1; min-width: 0;
+  margin-left: auto;
+}
+.visibility-toggle {
+  display: inline-flex;
+  background: var(--panel-color);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.visibility-toggle__btn {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  font-size: 11px; font-weight: 700;
+  color: var(--text-2);
+  cursor: pointer; font-family: inherit;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.visibility-toggle__btn i { font-size: 11px; }
+.visibility-toggle__btn:hover { color: var(--text-primary); }
+.visibility-toggle__btn.is-active {
+  background: var(--color-primary-500);
+  color: #fff;
+}
+
+.visibility-chips {
+  display: inline-flex; flex-wrap: wrap; gap: 4px;
+  align-items: center;
+}
+.visibility-chip {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--panel-color);
+  color: var(--text-2);
+  font-size: 11px; font-weight: 600; font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.visibility-chip:hover {
+  border-color: color-mix(in srgb, var(--color-primary-500) 32%, var(--border-color));
+  color: var(--color-primary-700);
+}
+.visibility-chip.is-active {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-500);
+  color: #fff;
+}
+.visibility-hint-inline {
+  margin: 0; font-size: 11px;
+  color: var(--muted-text);
+}
+.thumb-uploader__head {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 700;
+  color: var(--text-primary);
+}
+.thumb-uploader__title { letter-spacing: -0.01em; }
+.thumb-uploader__hint {
+  margin: 0; font-size: 11px;
+  color: var(--muted-text);
+}
+.thumb-uploader__actions {
+  display: inline-flex; flex-wrap: wrap; gap: 6px;
+}
+
+/* P1 — 내부 전용 영역 표시 칩 (심사 가중치 등) */
+.op-internal-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  font-size: 10px; font-weight: 800;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, 0.10);
+  color: #B42C2C;
+  border: 1px solid rgba(220, 38, 38, 0.28);
+  vertical-align: middle;
+}
+:root[data-theme='dark'] .op-internal-tag {
+  background: rgba(248, 113, 113, 0.16);
+  color: #FCA5A5;
+  border-color: rgba(248, 113, 113, 0.32);
 }
 
 /* ─── Topbar (Breadcrumb + Edit toggle) ──────────────────────── */
@@ -920,10 +1246,7 @@ onMounted(async () => {
   gap: 0;
   border-bottom: 1px solid var(--border);
   margin-bottom: 32px;
-  position: sticky;
-  top: 0;
   background: var(--bg);
-  z-index: 10;
   padding-top: 4px;
 }
 .op-tab {

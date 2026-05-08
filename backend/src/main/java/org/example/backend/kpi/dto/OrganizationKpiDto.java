@@ -15,6 +15,7 @@ public record OrganizationKpiDto(
         Long idx,
         Long ownerOrgId,
         String ownerOrgName,
+        String ownerOrgType,
         Long parentKpiId,
         String parentKpiName,
         BigDecimal contributionToParent,
@@ -45,6 +46,8 @@ public record OrganizationKpiDto(
                 k.getIdx(),
                 k.getOwner() != null ? k.getOwner().getIdx() : null,
                 k.getOwner() != null ? k.getOwner().getName() : null,
+                k.getOwner() != null && k.getOwner().getType() != null
+                        ? k.getOwner().getType().name() : null,
                 k.getParentKpi() != null ? k.getParentKpi().getIdx() : null,
                 k.getParentKpi() != null ? k.getParentKpi().getName() : null,
                 k.getContributionToParent(),

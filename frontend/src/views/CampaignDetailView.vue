@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useCampaignKpiStore } from '@/stores/campaignKpi.js'
-import { GetCampaignDetails, UpdateCampaign } from '@/api/campaigns'
+import { GetCampaignDetails, UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
 import CampaignResourcesView from '@/views/CampaignResourcesView.vue'
 import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
 import MatchOverview from '@/views/MatchOverview.vue'
@@ -185,36 +185,41 @@ const partnerNames = computed(() => {
   return ['디자인 스튜디오 A', '미디어 랩 B', 'PR 에이전시 C']
 })
 
-const scheduleItems = ref([
-  {
-    id: 'schedule-kickoff',
-    title: '캠페인 킥오프 미팅',
-    owner: '본사',
-    date: '2024.05.15',
-    status: '확정',
-  },
-  {
-    id: 'schedule-draft',
-    title: '에셋 초안 제출 마감',
-    owner: '디자인협력사',
-    date: '2024.05.25',
-    status: '진행 중',
-  },
-  {
-    id: 'schedule-teaser',
-    title: '1차 티저 영상 오픈',
-    owner: '본사',
-    date: '2024.06.01',
-    status: '예정',
-  },
-  {
-    id: 'schedule-live',
-    title: '메인 프로모션 라이브',
-    owner: '운영대행사',
-    date: '2024.07.15',
-    status: '예정',
-  },
-])
+/* ───── 캠페인 상태(status) 관리 ───── */
+const STATUS_OPTIONS = [
+  { value: 'draft',     label: '초안',     desc: '아직 운영 시작 전. 비공개 작업 단계.', tone: 'gray' },
+  { value: 'review',    label: '검수 중',  desc: '본사·계열사 승인을 기다리는 단계.', tone: 'amber' },
+  { value: 'live',      label: '진행 중',  desc: '캠페인이 활성화되어 운영되는 상태.', tone: 'emerald' },
+  { value: 'paused',    label: '일시정지', desc: '운영을 잠시 중단. 재개 가능.',       tone: 'slate' },
+  { value: 'completed', label: '완료',     desc: '캠페인 운영이 끝나 보관함으로 이동.', tone: 'indigo' },
+]
+const statusBusy = ref(false)
+const currentStatus = computed(() =>
+  String(activeCampaign.value?.status ?? 'draft').toLowerCase(),
+)
+async function changeStatus(nextStatus) {
+  if (!activeCampaign.value || statusBusy.value) return
+  if (currentStatus.value === nextStatus) return
+  if (!canEditMetadata.value) {
+    window.alert('캠페인 상태 변경 권한이 없습니다.')
+    return
+  }
+  const meta = STATUS_OPTIONS.find((s) => s.value === nextStatus)
+  if (!window.confirm(`캠페인 상태를 "${meta?.label ?? nextStatus}"(으)로 변경하시겠습니까?`)) return
+  statusBusy.value = true
+  try {
+    const updated = await UpdateCampaignStatus(activeCampaign.value.idx ?? activeCampaign.value.id, nextStatus)
+    // store에도 즉시 반영
+    if (typeof store.updateCampaign === 'function') {
+      store.updateCampaign(activeCampaign.value.id, updated ?? { ...activeCampaign.value, status: nextStatus })
+    }
+  } catch (err) {
+    window.alert(err?.response?.data?.message ?? err?.message ?? '상태 변경에 실패했습니다.')
+  } finally {
+    statusBusy.value = false
+  }
+}
+
 
 const statusColumns = [
   { id: 'backlog', label: '백로그', sub: 'Backlog' },
@@ -823,23 +828,6 @@ async function saveMetadata() {
   }
 }
 
-function addScheduleItem() {
-  scheduleItems.value = [
-    ...scheduleItems.value,
-    {
-      id: `schedule-${Date.now()}`,
-      title: '새 캠페인 일정',
-      owner: '본사',
-      date: '2024.06.01',
-      status: '예정',
-    },
-  ]
-}
-
-function removeScheduleItem(scheduleId) {
-  scheduleItems.value = scheduleItems.value.filter((item) => item.id !== scheduleId)
-}
-
 watch(
   () => route.params.campaignId,
   (campaignId) => {
@@ -1081,28 +1069,36 @@ watch(
           <article class="panel">
             <div class="panel__header">
               <div>
-                <span class="requirement-badge">일정 추가/삭제/수정</span>
-                <h2>주요 일정 관리</h2>
+                <span class="requirement-badge">상태 전이</span>
+                <h2>캠페인 상태</h2>
               </div>
-              <button type="button" class="btn btn--ghost" @click="addScheduleItem">일정 추가</button>
+              <span class="status-pill" :class="`status-pill--${(STATUS_OPTIONS.find(s => s.value === currentStatus) || STATUS_OPTIONS[0]).tone}`">
+                현재 · {{ (STATUS_OPTIONS.find(s => s.value === currentStatus) || STATUS_OPTIONS[0]).label }}
+              </span>
             </div>
 
-            <div class="data-table data-table--schedule">
-              <div class="data-table__head">
-                <span>마일스톤</span>
-                <span>날짜</span>
-                <span>담당</span>
-                <span>상태</span>
-                <span></span>
-              </div>
-              <div v-for="item in scheduleItems" :key="item.id" class="data-table__row">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.date }}</span>
-                <span class="type-badge">{{ item.owner }}</span>
-                <span class="status-pill status-pill--info">{{ item.status }}</span>
-                <button type="button" class="table-action" @click="removeScheduleItem(item.id)">삭제</button>
-              </div>
+            <div class="status-grid">
+              <button
+                v-for="opt in STATUS_OPTIONS"
+                :key="opt.value"
+                type="button"
+                class="status-card"
+                :class="[
+                  `status-card--${opt.tone}`,
+                  { 'is-active': currentStatus === opt.value, 'is-disabled': statusBusy || !canEditMetadata }
+                ]"
+                :disabled="statusBusy || !canEditMetadata || currentStatus === opt.value"
+                :aria-pressed="currentStatus === opt.value"
+                @click="changeStatus(opt.value)"
+              >
+                <div class="status-card__head">
+                  <span class="status-card__label">{{ opt.label }}</span>
+                  <span v-if="currentStatus === opt.value" class="status-card__check" aria-hidden="true">✓</span>
+                </div>
+                <p class="status-card__desc">{{ opt.desc }}</p>
+              </button>
             </div>
+            <p v-if="!canEditMetadata" class="status-grid__note">상태를 변경하려면 PM 조직의 매니저/총괄 매니저 권한이 필요합니다.</p>
           </article>
         </div>
 
@@ -2149,6 +2145,73 @@ watch(
   background: var(--campaign-primary-surface);
   color: var(--campaign-primary-text);
 }
+
+/* ─── 캠페인 상태 변경 그리드 ─── */
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.status-grid__note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--muted-text);
+  font-weight: 600;
+}
+.status-card {
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--panel-color);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.status-card:hover:not(.is-disabled):not(.is-active) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--color-primary-500) 32%, var(--border-color));
+  background: var(--panel-muted);
+}
+.status-card.is-active {
+  cursor: default;
+  border-width: 2px;
+  padding: 11px 13px;
+}
+.status-card.is-disabled { cursor: not-allowed; opacity: 0.6; }
+.status-card__head {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.status-card__label { font-size: 13px; font-weight: 800; }
+.status-card__check {
+  font-size: 14px; font-weight: 900;
+  color: var(--color-primary-700);
+}
+.status-card__desc {
+  margin: 0; font-size: 11px; line-height: 1.45;
+  color: var(--muted-text);
+}
+
+/* tone별 색상 */
+.status-card--gray.is-active     { border-color: #94A3B8; background: rgba(148,163,184,0.08); }
+.status-card--amber.is-active    { border-color: #F59E0B; background: rgba(245,158,11,0.08); }
+.status-card--emerald.is-active  { border-color: #10B981; background: rgba(16,185,129,0.10); }
+.status-card--slate.is-active    { border-color: #64748B; background: rgba(100,116,139,0.08); }
+.status-card--indigo.is-active   { border-color: #6366F1; background: rgba(99,102,241,0.10); }
+
+/* status-pill tone variants — 패널 헤더 우측 표시 */
+.status-pill--gray    { background: rgba(148,163,184,0.16); color: #475569; }
+.status-pill--amber   { background: rgba(245,158,11,0.16);  color: #B45309; }
+.status-pill--emerald { background: rgba(16,185,129,0.16);  color: #047857; }
+.status-pill--slate   { background: rgba(100,116,139,0.16); color: #334155; }
+.status-pill--indigo  { background: rgba(99,102,241,0.16);  color: #4338CA; }
+:root[data-theme='dark'] .status-pill--gray    { background: rgba(148,163,184,0.22); color: #CBD5E1; }
+:root[data-theme='dark'] .status-pill--amber   { background: rgba(245,158,11,0.22);  color: #FCD34D; }
+:root[data-theme='dark'] .status-pill--emerald { background: rgba(16,185,129,0.22);  color: #6EE7B7; }
+:root[data-theme='dark'] .status-pill--slate   { background: rgba(148,163,184,0.22); color: #CBD5E1; }
+:root[data-theme='dark'] .status-pill--indigo  { background: rgba(99,102,241,0.22);  color: #A5B4FC; }
 
 .status-pill--success {
   background: var(--campaign-success-surface);

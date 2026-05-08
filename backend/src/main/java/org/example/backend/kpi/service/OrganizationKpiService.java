@@ -89,16 +89,20 @@ public class OrganizationKpiService {
     public OrganizationKpiDto create(Long callerIdx, CreateOrganizationKpiRequest req) {
         User caller = findUser(callerIdx);
 
-        if (req.ownerOrgId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ownerOrgId는 필수입니다.");
+        // ownerOrgId 미지정 시 caller 조직을 default로 사용
+        // — frontend가 user.organization 정보 없이 요청해도 정상 동작
+        Long resolvedOwnerOrgId = req.ownerOrgId();
+        if (resolvedOwnerOrgId == null) {
+            if (caller.getOrganization() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "ownerOrgId가 없고 caller 조직 정보도 없습니다.");
+            }
+            resolvedOwnerOrgId = caller.getOrganization().getIdx();
         }
-        Organization owner = organizationRepository.findById(req.ownerOrgId())
+        Organization owner = organizationRepository.findById(resolvedOwnerOrgId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organization을 찾을 수 없습니다."));
 
-        // 권한 검증: 자기 조직의 KPI만 생성 가능 (HQ는 자기 조직(=HQ) 것만 만들 수 있음)
-        requireOwnOrganization(caller, owner.getIdx());
-
-        // parent KPI 검증
+        // parent KPI 검증 (권한 검증보다 먼저 — AFFILIATE GM cascade-to-EXTERNAL 분기에 사용)
         OrganizationKpi parent = null;
         if (req.parentKpiId() != null) {
             parent = kpiRepository.findById(req.parentKpiId())
@@ -107,6 +111,9 @@ public class OrganizationKpiService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "보관된(ARCHIVED) KPI는 parent로 사용할 수 없습니다.");
             }
         }
+
+        // 권한 검증: 자기 조직 KPI만 생성 가능. AFFILIATE GM이 parent 있는 경우 EXTERNAL_PARTNER cascade 허용.
+        requireOwnOrganization(caller, owner.getIdx(), parent);
 
         // ─── 필수 검증 (4개 필수: name / targetValue / unit / periodCode) ───
         String name = normalizeRequired(req.name(), "KPI 이름은 필수입니다.");
@@ -247,8 +254,13 @@ public class OrganizationKpiService {
      * - HQ Admin은 본인 조직(HQ) 것만.
      * - PA Admin은 본인 조직(AFFILIATE) 것만.
      * - HQ ROLE_ADMIN은 모든 조직 KPI를 관리할 수 있도록 예외.
+     * - AFFILIATE GM이 EXTERNAL_PARTNER에 child KPI(cascade)를 만드는 경우 허용 ─ {@link #allowAffiliateCascadeToExternal}.
      */
     private void requireOwnOrganization(User caller, Long targetOrgIdx) {
+        requireOwnOrganization(caller, targetOrgIdx, null);
+    }
+
+    private void requireOwnOrganization(User caller, Long targetOrgIdx, OrganizationKpi parentKpi) {
         if (caller.getOrganization() == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "조직 정보가 없는 계정입니다.");
         }
@@ -266,9 +278,29 @@ public class OrganizationKpiService {
                 && "ROLE_ADMIN".equals(role)) {
             return;
         }
-        if (!Objects.equals(caller.getOrganization().getIdx(), targetOrgIdx)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인 조직의 KPI만 관리할 수 있습니다.");
+        if (Objects.equals(caller.getOrganization().getIdx(), targetOrgIdx)) {
+            return;
         }
+        // AFFILIATE GM이 자기 조직 KPI를 parent로 EXTERNAL_PARTNER에 child를 cascade 하는 경우 허용
+        if (allowAffiliateCascadeToExternal(caller, targetOrgIdx, parentKpi)) {
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인 조직의 KPI만 관리할 수 있습니다.");
+    }
+
+    private boolean allowAffiliateCascadeToExternal(User caller, Long targetOrgIdx, OrganizationKpi parentKpi) {
+        if (parentKpi == null) return false;
+        if (caller.getOrganization().getType() != OrganizationType.AFFILIATE) return false;
+        String role = caller.getRole();
+        if (!"ROLE_GENERAL_MANAGER".equals(role) && !"ROLE_ADMIN".equals(role)) return false;
+        // parent는 caller 자기 조직의 KPI여야 함
+        if (parentKpi.getOwner() == null
+                || !Objects.equals(parentKpi.getOwner().getIdx(), caller.getOrganization().getIdx())) {
+            return false;
+        }
+        // target 조직은 EXTERNAL_PARTNER 여야 함
+        Organization targetOrg = organizationRepository.findById(targetOrgIdx).orElse(null);
+        return targetOrg != null && targetOrg.getType() == OrganizationType.EXTERNAL_PARTNER;
     }
 
     /**

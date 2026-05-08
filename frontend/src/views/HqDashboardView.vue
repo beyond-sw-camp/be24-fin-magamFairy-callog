@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -8,16 +8,72 @@ const router = useRouter()
 const authStore = useAuthStore()
 const dashboardStore = useDashboardStore()
 
-/* 현재 분기 코드 (예: 2026-Q2) */
-const currentPeriod = computed(() => {
+/* ═══════════ 분기 헬퍼 ═══════════ */
+function currentQuarterCode() {
   const d = new Date()
   const q = Math.ceil((d.getMonth() + 1) / 3)
   return `${d.getFullYear()}-Q${q}`
+}
+function previousQuarter(periodCode) {
+  const m = String(periodCode || '').match(/^(\d{4})-Q([1-4])$/)
+  if (!m) return periodCode
+  let y = Number(m[1]); let q = Number(m[2])
+  q -= 1
+  if (q < 1) { q = 4; y -= 1 }
+  return `${y}-Q${q}`
+}
+function yoyQuarter(periodCode) {
+  const m = String(periodCode || '').match(/^(\d{4})-Q([1-4])$/)
+  if (!m) return periodCode
+  return `${Number(m[1]) - 1}-Q${m[2]}`
+}
+
+/* ═══════════ 필터 상태 ═══════════ */
+/** 'current' | 'prev' | 'yoy' */
+const quarterKey = ref('current')
+const compareMode = ref(false)
+/** 캠페인 진행 영역 클라이언트 필터: 'all' | 'live' | 'done' | 'cancelled' */
+const campaignStatusFilter = ref('all')
+
+const currentPeriod = computed(() => {
+  const today = currentQuarterCode()
+  if (quarterKey.value === 'prev') return previousQuarter(today)
+  if (quarterKey.value === 'yoy')  return yoyQuarter(today)
+  return today
 })
+const comparePeriod = computed(() => previousQuarter(currentPeriod.value))
+
+const PERIOD_TABS = [
+  { key: 'current', label: '이번 분기' },
+  { key: 'prev',    label: '전 분기' },
+  { key: 'yoy',     label: '전년 동기' },
+]
 
 onMounted(async () => {
   await dashboardStore.loadAll(currentPeriod.value)
+  if (compareMode.value) await dashboardStore.loadCompare(comparePeriod.value)
 })
+
+/* 분기 키 변경 시 → 메인 + (옵션) 비교 데이터 재로드 */
+watch(currentPeriod, async (period) => {
+  await dashboardStore.loadAll(period)
+  if (compareMode.value) await dashboardStore.loadCompare(comparePeriod.value)
+})
+
+/* 비교 토글 변경 시 → 비교 스냅샷만 로드/클리어 */
+watch(compareMode, async (on) => {
+  if (on) await dashboardStore.loadCompare(comparePeriod.value)
+  else dashboardStore.clearCompare()
+})
+
+async function retryDashboard() {
+  await dashboardStore.loadAll(currentPeriod.value)
+  if (compareMode.value) await dashboardStore.loadCompare(comparePeriod.value)
+}
+
+const hasError = computed(() =>
+  Object.values(dashboardStore.status ?? {}).some((s) => s === 'error'),
+)
 
 function parseNumeric(v, fallback = 0) {
   if (typeof v === 'number') return v
@@ -25,6 +81,12 @@ function parseNumeric(v, fallback = 0) {
   const cleaned = v.replace(/[^0-9.\-]/g, '')
   const n = Number(cleaned)
   return Number.isNaN(n) ? fallback : n
+}
+function formatKpiValue(v) {
+  if (v === null || v === undefined || v === '') return '0'
+  const n = Number(v)
+  if (Number.isNaN(n)) return String(v)
+  return n.toLocaleString()
 }
 
 /* ───── 사용자·권한 ───── */
@@ -40,112 +102,190 @@ const role = computed(() => {
 })
 const roleLabel = computed(() => ({ GM: '총괄 매니저', MGR: '매니저', USR: '실무자' }[role.value]))
 
-/* ═══════════ Row 1 — KPI 6-up ═══════════ */
+/* 조직 스코프 — 백엔드 summary.scope: HQ | AFFILIATE | EXTERNAL_PARTNER | STAFF */
+const orgScope = computed(() => {
+  const fromApi = dashboardStore.summary?.scope
+  if (fromApi) return fromApi
+  // mock fallback — 사용자 organization.type 기반
+  const t = String(authStore.user?.organization?.type ?? '').toUpperCase()
+  if (t === 'HQ' || t === 'AFFILIATE' || t === 'EXTERNAL_PARTNER') return t
+  return 'HQ'
+})
+const orgScopeLabel = computed(() => ({
+  HQ: '본사 · 전사',
+  AFFILIATE: '계열사 · 자기 조직',
+  EXTERNAL_PARTNER: '외부 파트너 · 참여 캠페인',
+  STAFF: '실무자 · 본인 캠페인',
+}[orgScope.value] ?? '본사 · 전사'))
+
+/* ═══════════ Row 1 — KPI 6-up (모든 value 0 default — 데이터 없으면 0 표시) ═══════════ */
 const TODAY_KPIS = [
-  { key: 'progress', label: '전사 진행률', value: 73, unit: '%',
-    delta: '+6.2%p 지난주', deltaPositive: true,
-    icon: '📈', bg: '#E7E1FF', iconBg: '#9D85FF' },
-  { key: 'pass', label: '검수 패스율', value: 87, unit: '%',
-    delta: '+3%p 어제', deltaPositive: true,
-    icon: '✅', bg: '#FFE8DD', iconBg: '#FF8A5C' },
-  { key: 'match', label: '매칭 평균 (5축)', value: 76, unit: '점',
-    delta: '-1.4% 어제', deltaPositive: false,
-    icon: '🤝', bg: '#DCEEFA', iconBg: '#5DAFD8' },
-  { key: 'asset', label: '자산 LIVE', value: 108, unit: '개',
-    delta: '+4 신규', deltaPositive: true,
-    icon: '🛍', bg: '#D7EFDD', iconBg: '#6FBF87' },
-  { key: 'partner', label: '신규 협력사', value: 47, unit: '곳',
-    delta: '+6 30일내', deltaPositive: true,
-    icon: '🏢', bg: '#FFE2DD', iconBg: '#FF7A6B' },
-  { key: 'rfp', label: 'RFP 응모', value: 28, unit: '건',
-    delta: '+8 이번주', deltaPositive: true,
-    icon: '📜', bg: '#FFF1D6', iconBg: '#FFC36B' },
+  { key: 'progress', label: '전사 진행률',   value: 0, unit: '%',  delta: '', deltaPositive: true,  icon: '📈', bg: '#E7E1FF', iconBg: '#9D85FF' },
+  { key: 'pass',     label: '검수 패스율',   value: 0, unit: '%',  delta: '', deltaPositive: true,  icon: '✅', bg: '#FFE8DD', iconBg: '#FF8A5C' },
+  { key: 'match',    label: '매칭 평균 (5축)', value: 0, unit: '점', delta: '', deltaPositive: true,  icon: '🤝', bg: '#DCEEFA', iconBg: '#5DAFD8' },
+  { key: 'asset',    label: '자산 LIVE',     value: 0, unit: '개',  delta: '', deltaPositive: true,  icon: '🛍', bg: '#D7EFDD', iconBg: '#6FBF87' },
+  { key: 'partner',  label: '신규 협력사',   value: 0, unit: '곳',  delta: '', deltaPositive: true,  icon: '🏢', bg: '#FFE2DD', iconBg: '#FF7A6B' },
+  { key: 'rfp',      label: 'RFP 응모',      value: 0, unit: '건',  delta: '', deltaPositive: true,  icon: '📜', bg: '#FFF1D6', iconBg: '#FFC36B' },
 ]
 
 const ROLE_KPI = computed(() => {
   const s = dashboardStore.summary
-  if (role.value === 'GM') return {
-    key: 'gm', label: '분기 달성률',
-    value: s?.progressPct ?? 73, unit: '%',
-    delta: `+${s?.trend ?? 4.2}%p 지난주`,
-    deltaPositive: (s?.trend ?? 4.2) >= 0,
-    icon: '🎯', bg: '#E7E1FF', iconBg: '#9D85FF' }
-  if (role.value === 'MGR') return {
-    key: 'mgr', label: '진행 중 캠페인',
-    value: s?.activeCampaigns ?? 18, unit: '건',
-    delta: '권한 범위 내', deltaPositive: true,
-    icon: '👥', bg: '#DCEEFA', iconBg: '#5DAFD8' }
+  const cs = dashboardStore.compareSummary
+  const useCompare = compareMode.value && cs
+
+  if (role.value === 'GM') {
+    const curr = s?.progressPct ?? 0
+    let delta = ''
+    let deltaPositive = true
+    if (useCompare) {
+      const d = pctDelta(curr, cs?.progressPct ?? 0)
+      delta = `${d >= 0 ? '+' : ''}${d}%`
+      deltaPositive = d >= 0
+    } else if (
+      (orgScope.value === 'AFFILIATE' || orgScope.value === 'EXTERNAL_PARTNER')
+      && s?.companyAveragePct != null
+    ) {
+      // AFFILIATE/EXTERNAL GM: 전사 평균 대비 위치 표시
+      const diff = curr - s.companyAveragePct
+      delta = `전사 평균 ${s.companyAveragePct}% (${diff >= 0 ? '+' : ''}${diff}%p)`
+      deltaPositive = diff >= 0
+    } else if (s?.trend != null) {
+      delta = `${s.trend >= 0 ? '+' : ''}${s.trend}%p 지난주`
+      deltaPositive = (s?.trend ?? 0) >= 0
+    }
+    return {
+      key: 'gm', label: '분기 달성률',
+      value: curr, unit: '%',
+      delta, deltaPositive,
+      icon: '🎯', bg: '#E7E1FF', iconBg: '#9D85FF',
+    }
+  }
+  if (role.value === 'MGR') {
+    const curr = s?.activeCampaigns ?? 0
+    let delta = ''
+    let deltaPositive = true
+    if (useCompare) {
+      const d = pctDelta(curr, cs?.activeCampaigns ?? 0)
+      delta = `${d >= 0 ? '+' : ''}${d}%`
+      deltaPositive = d >= 0
+    }
+    return {
+      key: 'mgr', label: '진행 중 캠페인',
+      value: curr, unit: '건',
+      delta, deltaPositive,
+      icon: '👥', bg: '#DCEEFA', iconBg: '#5DAFD8',
+    }
+  }
+  const curr = s?.pendingReviews ?? 0
+  let delta = ''
+  let deltaPositive = true
+  if (useCompare) {
+    const d = pctDelta(curr, cs?.pendingReviews ?? 0)
+    delta = `${d >= 0 ? '+' : ''}${d}%`
+    deltaPositive = d >= 0
+  }
   return {
     key: 'usr', label: '내 검수 대기',
-    value: s?.pendingReviews ?? 5, unit: '건',
-    delta: '본인 할당분', deltaPositive: true,
-    icon: '✅', bg: '#D7EFDD', iconBg: '#6FBF87' }
-})
-
-/* KPI 6-up — dashboardStore.summary 우선, mock fallback */
-const KPI_LIST = computed(() => {
-  const s = dashboardStore.summary
-  const mapped = TODAY_KPIS.map((k) => ({ ...k }))
-  if (s?.progressPct != null) mapped[0].value = s.progressPct
-  // miniStats: [검수 패스율, 매칭 평균, 자산 LIVE]
-  if (s?.miniStats?.[0]) mapped[1].value = parseNumeric(s.miniStats[0].value, mapped[1].value)
-  if (s?.miniStats?.[1]) mapped[2].value = parseNumeric(s.miniStats[1].value, mapped[2].value)
-  if (s?.miniStats?.[2]) mapped[3].value = parseNumeric(s.miniStats[2].value, mapped[3].value)
-  // 신규 협력사 / RFP 응모
-  if (s?.newPartnerCount != null) mapped[4].value = s.newPartnerCount
-  if (s?.rfpCount != null) mapped[5].value = s.rfpCount
-  // 1번은 권한별 ROLE_KPI로 교체
-  return [ROLE_KPI.value, ...mapped.slice(1)]
-})
-
-/* ═══════════ Row 2-1 — 캠페인 트래픽 12개월 멀티라인 ═══════════ */
-const TRAFFIC = {
-  months: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
-  exposure:    [220, 240, 260, 280, 300, 320, 340, 360, 350, 380, 410, 430],
-  engagement:  [120, 150, 180, 200, 240, 280, 260, 290, 310, 330, 360, 400],
-  conversion:  [ 80,  90, 110, 130, 140, 150, 160, 170, 180, 190, 210, 240],
-}
-const trafficMax = computed(() =>
-  Math.max(...TRAFFIC.exposure, ...TRAFFIC.engagement, ...TRAFFIC.conversion),
-)
-const trafficStats = computed(() => {
-  const sumE = TRAFFIC.exposure.reduce((s, v) => s + v, 0)
-  const sumP = TRAFFIC.engagement.reduce((s, v) => s + v, 0)
-  const sumC = TRAFFIC.conversion.reduce((s, v) => s + v, 0)
-  return {
-    totalExp: sumE,
-    avgExp: Math.round(sumE / TRAFFIC.exposure.length),
-    peakExp: Math.max(...TRAFFIC.exposure),
-    peakMonth: TRAFFIC.months[TRAFFIC.exposure.indexOf(Math.max(...TRAFFIC.exposure))],
-    convRate: Math.round((sumC / sumE) * 100),
+    value: curr, unit: '건',
+    delta, deltaPositive,
+    icon: '✅', bg: '#D7EFDD', iconBg: '#6FBF87',
   }
 })
 
-/* ═══════════ Row 2-2 — 권한별 stat 카드 ═══════════ */
+/* scope별 4·5번 카드 라벨 — KPI 6-up 컨텍스트화 */
+const KPI_SCOPE_OVERRIDES = {
+  HQ:               { partner: { label: '신규 협력사', unit: '곳' }, rfp: { label: 'RFP 응모',  unit: '건' } },
+  AFFILIATE:        { partner: { label: '참여 협력사', unit: '곳' }, rfp: { label: '우리 RFP',  unit: '건' } },
+  EXTERNAL_PARTNER: { partner: { label: '활성 캠페인', unit: '건' }, rfp: { label: '내 RFP 응모', unit: '건' } },
+  STAFF:            { partner: { label: '내 협력 캠페인', unit: '건' }, rfp: { label: '내 RFP 응모', unit: '건' } },
+}
+
+/* KPI 6-up — dashboardStore.summary 우선. 응답에 필드 없으면 0 표시. */
+function summaryToKpiValues(s) {
+  return [
+    s?.progressPct ?? 0,
+    s?.miniStats?.[0] ? parseNumeric(s.miniStats[0].value, 0) : 0,
+    s?.miniStats?.[1] ? parseNumeric(s.miniStats[1].value, 0) : 0,
+    s?.miniStats?.[2] ? parseNumeric(s.miniStats[2].value, 0) : 0,
+    s?.newPartnerCount ?? 0,
+    s?.rfpCount ?? 0,
+  ]
+}
+function pctDelta(curr, prev) {
+  const p = Number(prev) || 0
+  const c = Number(curr) || 0
+  if (p === 0) return c === 0 ? 0 : 100
+  return Math.round(((c - p) / Math.abs(p)) * 100)
+}
+
+const KPI_LIST = computed(() => {
+  const s = dashboardStore.summary
+  const cs = dashboardStore.compareSummary
+  const currVals = summaryToKpiValues(s)
+  const prevVals = summaryToKpiValues(cs)
+
+  const mapped = TODAY_KPIS.map((k, i) => {
+    const v = currVals[i]
+    const next = { ...k, value: v }
+    if (compareMode.value && cs) {
+      const d = pctDelta(v, prevVals[i])
+      next.delta = `${d >= 0 ? '+' : ''}${d}%`
+      next.deltaPositive = d >= 0
+    } else {
+      next.delta = ''
+      next.deltaPositive = true
+    }
+    return next
+  })
+  const ov = KPI_SCOPE_OVERRIDES[orgScope.value] ?? KPI_SCOPE_OVERRIDES.HQ
+  mapped[4].label = ov.partner.label; mapped[4].unit = ov.partner.unit
+  mapped[5].label = ov.rfp.label;     mapped[5].unit = ov.rfp.unit
+  return [ROLE_KPI.value, ...mapped.slice(1)]
+})
+
+/* ═══════════ Row 2-2 — 권한별 stat 카드 (mock 제거. backend 데이터만 사용) ═══════════ */
+/**
+ * GM 분기 KPI 달성률 — /organization-kpis 6개 표준 카테고리로 그루핑한 평균.
+ * (노출 / 참여 / 전환 / 매출 / 브랜드 / ESG)
+ */
+const KPI_CATEGORY_BUCKETS = [
+  { key: 'IMPRESSION', label: '노출',    short: '노', color: '#9D85FF' },
+  { key: 'ENGAGEMENT', label: '참여',    short: '참', color: '#5DAFD8' },
+  { key: 'CONVERSION', label: '전환',    short: '전', color: '#FF8A5C' },
+  { key: 'REVENUE',    label: '매출',    short: '매', color: '#FFC36B' },
+  { key: 'BRAND',      label: '브랜드',  short: '브', color: '#6FBF87' },
+  { key: 'ESG',        label: 'ESG',     short: 'E',  color: '#FF7A6B' },
+]
 const ROLE_CARD = computed(() => {
+  const s = dashboardStore.summary
   if (role.value === 'GM') {
-    const goalColors = ['#9D85FF', '#FF8A5C', '#6FBF87', '#FFC36B']
-    const fallbackStats = [
-      { label: '노출',  short: '노', value: 87, delta:  3, unit: '%', color: '#9D85FF' },
-      { label: '전환',  short: '전', value: 64, delta:  5, unit: '%', color: '#FF8A5C' },
-      { label: 'ESG',   short: 'E',  value: 58, delta: -1, unit: '%', color: '#6FBF87' },
-      { label: '매출',  short: '매', value: 81, delta:  2, unit: '%', color: '#FFC36B' },
-    ]
     const goals = dashboardStore.quarterGoals ?? []
-    const stats = goals.length > 0
-      ? goals.slice(0, 4).map((g, i) => ({
-          label: g.label,
-          short: (g.label || '').charAt(0),
-          value: g.percent ?? 0,
-          delta: 0,
-          unit: '%',
-          color: goalColors[i % goalColors.length],
-        }))
-      : fallbackStats
+    // 카테고리별 평균: ESG는 esgCategory != null 인 것 모두 / 나머지는 category 일치
+    const stats = KPI_CATEGORY_BUCKETS.map((b) => {
+      const matched = goals.filter((g) => {
+        if (b.key === 'ESG') return g.esgCategory != null
+        return g.category === b.key
+      })
+      const pcts = matched
+        .map((g) => g.achievementPercent ?? g.percent)
+        .filter((v) => typeof v === 'number')
+      const avg = pcts.length === 0 ? 0
+        : Math.round(pcts.reduce((sum, v) => sum + v, 0) / pcts.length)
+      return {
+        label: b.label, short: b.short, color: b.color,
+        value: avg, delta: 0, unit: '%',
+      }
+    })
+    const subtitleByScope = {
+      HQ:               `${currentPeriod.value} · 전사 OrgKpi 평균`,
+      AFFILIATE:        `${currentPeriod.value} · 우리 조직 OrgKpi 평균`,
+      EXTERNAL_PARTNER: `${currentPeriod.value} · 참여 캠페인 KPI 평균`,
+      STAFF:            `${currentPeriod.value} · 내 캠페인 KPI 평균`,
+    }
     return {
       title: '분기 KPI 달성률',
-      subtitle: `${currentPeriod.value} · 자기 조직 OrgKpi 평균`,
-      mainPct: dashboardStore.summary?.progressPct ?? 73,
+      subtitle: subtitleByScope[orgScope.value] ?? subtitleByScope.HQ,
+      mainPct: s?.progressPct ?? 0,
       stats,
       cta: '분기 KPI 보기', ctaTo: '/organization-kpis',
     }
@@ -153,40 +293,138 @@ const ROLE_CARD = computed(() => {
   if (role.value === 'MGR') return {
     title: '우리 팀',
     stats: [
-      { label: '팀원',      value:  8, delta:  0, unit: '명', color: '#5DAFD8' },
-      { label: '진행 중',   value: 18, delta:  3, unit: '건', color: '#9D85FF' },
-      { label: '검수 대기', value:  4, delta:  1, unit: '건', color: '#FF8A5C' },
-      { label: '지연',      value:  2, delta: -1, unit: '건', color: '#FF7A6B' },
+      { label: '진행 중',   value: s?.activeCampaigns ?? 0, delta: 0, unit: '건', color: '#9D85FF' },
+      { label: '검수 대기', value: s?.pendingReviews ?? 0,  delta: 0, unit: '건', color: '#FF8A5C' },
     ],
     cta: '팀 보드', ctaTo: '/team-board',
   }
   return {
     title: '내 할 일',
     stats: [
-      { label: '오늘',     value:  3, delta:  1, unit: '건', color: '#9D85FF' },
-      { label: '이번 주',  value:  5, delta:  2, unit: '건', color: '#5DAFD8' },
-      { label: '지연',     value:  1, delta: -1, unit: '건', color: '#FF7A6B' },
-      { label: '완료',     value: 12, delta:  4, unit: '건', color: '#6FBF87' },
+      { label: '검수 대기', value: s?.pendingReviews ?? 0, delta: 0, unit: '건', color: '#9D85FF' },
     ],
     cta: '캘린더', ctaTo: '/calendar',
   }
 })
 
-/* ═══════════ Row 3-1 — 목표 vs 실적 그룹막대 (6개월) ═══════════ */
-const TARGET_REALITY = [
-  { month: '1월', actual:  85, target: 100 },
-  { month: '2월', actual: 120, target: 110 },
-  { month: '3월', actual:  95, target: 130 },
-  { month: '4월', actual: 140, target: 125 },
-  { month: '5월', actual: 130, target: 145 },
-  { month: '6월', actual: 165, target: 150 },
-]
+/* ═══════════ Row 3-1 — 목표 vs 실적 그룹막대 (3 슬롯, 우측 정렬) ═══════════ */
+function quarterMonthLabels(periodCode) {
+  const m = String(periodCode || '').match(/^(\d{4})-Q([1-4])$/)
+  if (!m) {
+    const d = new Date()
+    const q = Math.ceil((d.getMonth() + 1) / 3)
+    const first = (q - 1) * 3 + 1
+    return [`${first}월`, `${first + 1}월`, `${first + 2}월`]
+  }
+  const q = Number(m[2])
+  const first = (q - 1) * 3 + 1
+  return [`${first}월`, `${first + 1}월`, `${first + 2}월`]
+}
+/**
+ * 3 슬롯 array 반환. 데이터 없는 슬롯(과거 미수집 달)은 null.
+ * 우측 정렬 — 가장 최근 달이 항상 마지막 슬롯.
+ *   예) 5월만 데이터 → [null, null, {5월}]
+ *       5월·6월 데이터 → [null, {5월}, {6월}]
+ *       4·5·6월 모두 → [{4월}, {5월}, {6월}]
+ */
+const TARGET_REALITY = computed(() => {
+  const goals = dashboardStore.quarterGoals ?? []
+  const labels = quarterMonthLabels(goals[0]?.periodCode || currentPeriod.value)
+  if (goals.length === 0) return [null, null, null]
+  // 슬롯 i: actual/target 합계 (null 슬롯은 어떤 KPI도 데이터 없음)
+  const slots = [null, null, null]
+  for (let i = 0; i < 3; i++) {
+    let hasAny = false
+    let sumA = 0
+    let sumT = 0
+    goals.forEach((g) => {
+      const a = g.monthlyActuals?.[i]
+      const t = g.monthlyTargets?.[i]
+      if (a != null) { sumA += Number(a) || 0; hasAny = true }
+      if (t != null) { sumT += Number(t) || 0; hasAny = true }
+    })
+    if (hasAny) slots[i] = { month: labels[i], actual: sumA, target: sumT }
+  }
+  // 우측 정렬: 데이터 있는 슬롯들을 추출해 마지막부터 채움
+  const filled = slots.filter((s) => s != null)
+  const out = [null, null, null]
+  for (let i = 0; i < filled.length; i++) {
+    out[3 - filled.length + i] = filled[i]
+  }
+  return out
+})
 const targetStats = computed(() => {
-  const totalA = TARGET_REALITY.reduce((s, m) => s + m.actual, 0)
-  const totalT = TARGET_REALITY.reduce((s, m) => s + m.target, 0)
-  const achieveRate = Math.round((totalA / totalT) * 100)
-  const overMonths = TARGET_REALITY.filter((m) => m.actual >= m.target).length
-  return { totalA, totalT, achieveRate, overMonths }
+  const data = TARGET_REALITY.value.filter((m) => m != null)
+  const totalA = data.reduce((s, m) => s + m.actual, 0)
+  const totalT = data.reduce((s, m) => s + m.target, 0)
+  const achieveRate = totalT > 0 ? Math.round((totalA / totalT) * 100) : 0
+  const overMonths = data.filter((m) => m.actual >= m.target).length
+  return { totalA, totalT, achieveRate, overMonths, monthCount: data.length }
+})
+
+/* 비교 기간의 월별 actual 합 (overlay 라인용) */
+const COMPARE_REALITY = computed(() => {
+  if (!compareMode.value) return [null, null, null]
+  const goals = dashboardStore.compareQuarterGoals ?? []
+  if (goals.length === 0) return [null, null, null]
+  const slots = [null, null, null]
+  for (let i = 0; i < 3; i++) {
+    let hasAny = false
+    let sumA = 0
+    goals.forEach((g) => {
+      const a = g.monthlyActuals?.[i]
+      if (a != null) { sumA += Number(a) || 0; hasAny = true }
+    })
+    if (hasAny) slots[i] = sumA
+  }
+  // 우측 정렬 (현재 차트와 동일한 정렬 규칙)
+  const filled = slots.filter((s) => s != null)
+  const out = [null, null, null]
+  for (let i = 0; i < filled.length; i++) {
+    out[3 - filled.length + i] = filled[i]
+  }
+  return out
+})
+
+/* 차트 dynamic scale (3 슬롯 중 데이터 있는 것만 기준 — 비교 overlay 포함) */
+const targetMax = computed(() => {
+  const data = TARGET_REALITY.value.filter((m) => m != null)
+  const compareVals = COMPARE_REALITY.value.filter((v) => v != null)
+  const peak = Math.max(
+    0,
+    ...data.flatMap((m) => [m.actual, m.target]),
+    ...compareVals,
+  )
+  return peak > 0 ? Math.ceil(peak * 1.15) : 200
+})
+function targetBarY(v) { return 260 - (v / targetMax.value) * 240 }
+function targetBarH(v) { return Math.max(0, (v / targetMax.value) * 240) }
+function fmtYAxis(v) {
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M'
+  if (v >= 1000) return Math.round(v / 100) / 10 + 'k'
+  return Math.round(v).toString()
+}
+
+/* 비교 라인 path: 그룹 중심(105, 265, 425)에 점 찍어 polyline */
+const compareLinePoints = computed(() => {
+  const arr = COMPARE_REALITY.value
+  const xs = [105, 265, 425] // 그룹 중심 (각 그룹 폭 160 / 시작 50+50/2)
+  const pts = []
+  for (let i = 0; i < 3; i++) {
+    const v = arr[i]
+    if (v != null) pts.push(`${xs[i]},${targetBarY(v)}`)
+  }
+  return pts.join(' ')
+})
+const compareLineDots = computed(() => {
+  const arr = COMPARE_REALITY.value
+  const xs = [105, 265, 425]
+  const dots = []
+  for (let i = 0; i < 3; i++) {
+    const v = arr[i]
+    if (v != null) dots.push({ x: xs[i], y: targetBarY(v), value: v })
+  }
+  return dots
 })
 
 /* ═══════════ Row 3-2 — 자산 카테고리 도넛 (store 우선, mock fallback) ═══════════ */
@@ -199,17 +437,10 @@ const ASSET_CAT_LABELS = {
   UNKNOWN: '기타',
 }
 const ASSET_COLORS = ['#9D85FF', '#FF8A5C', '#5DAFD8', '#6FBF87', '#FFC36B', '#FF7A6B']
-const ASSET_CATS_FALLBACK = [
-  { type: '이벤트/프로모션', count: 42, color: '#9D85FF' },
-  { type: '제품 협찬',       count: 28, color: '#FF8A5C' },
-  { type: '디지털 콘텐츠',   count: 18, color: '#5DAFD8' },
-  { type: '매장/오프라인',   count: 12, color: '#6FBF87' },
-  { type: '미디어 노출',     count:  8, color: '#FFC36B' },
-]
 const ASSET_CATS = computed(() => {
   const map = dashboardStore.assetCategories ?? {}
   const keys = Object.keys(map)
-  if (keys.length === 0) return ASSET_CATS_FALLBACK
+  if (keys.length === 0) return []
   return keys
     .map((k) => ({
       type: ASSET_CAT_LABELS[k] ?? k,
@@ -269,10 +500,28 @@ function deriveProgress(c) {
 }
 function statusOf(s) { return STATUS_MAP[s] ?? STATUS_MAP.draft }
 function fmtDDay(d) { return d == null ? '·' : (d >= 0 ? `D-${d}` : `D+${-d}`) }
+/** 캠페인 status 필터 키 → 매칭 status 집합 */
+const CAMPAIGN_FILTER_MAP = {
+  all:       null,
+  live:      new Set(['live', 'running', 'active', 'review', 'in_review']),
+  done:      new Set(['completed', 'archived']),
+  cancelled: new Set(['cancelled', 'canceled', 'draft']),
+}
+const CAMPAIGN_FILTER_TABS = [
+  { key: 'all',       label: '전체' },
+  { key: 'live',      label: '진행중' },
+  { key: 'done',      label: '완료' },
+  { key: 'cancelled', label: '취소' },
+]
+
 const MY_CAMPAIGNS = computed(() => {
   const list = dashboardStore.myCampaigns ?? []
   if (list.length === 0) return []
-  return list.slice(0, 6).map((c, i) => ({
+  const set = CAMPAIGN_FILTER_MAP[campaignStatusFilter.value]
+  const filtered = set == null
+    ? list
+    : list.filter((c) => set.has((c.status ?? 'draft').toLowerCase()))
+  return filtered.slice(0, 6).map((c, i) => ({
     id: c.idx ?? c.id ?? i,
     name: c.name ?? '제목 없음',
     owner: deriveOwnerInitials(c),
@@ -284,30 +533,46 @@ const MY_CAMPAIGNS = computed(() => {
 })
 
 /* ═══════════ Row 4-2 — 제휴사 ranking + sparkline ═══════════ */
-const PARTNER_RANK_FALLBACK = [
-  { rank: 1, name: '한화호텔',   score: 94, prevRank: 1, delta:  2.1, spark: [88, 89, 91, 92, 92, 93, 94], color: '#9D85FF' },
-  { rank: 2, name: '한화생명',   score: 89, prevRank: 3, delta:  4.0, spark: [82, 83, 85, 86, 87, 88, 89], color: '#FF8A5C' },
-  { rank: 3, name: '한화이글스', score: 82, prevRank: 2, delta: -1.5, spark: [85, 84, 84, 83, 83, 82, 82], color: '#5DAFD8' },
-  { rank: 4, name: '한화시스템', score: 76, prevRank: 4, delta:  0.8, spark: [74, 74, 75, 75, 75, 76, 76], color: '#6FBF87' },
-  { rank: 5, name: '한화토탈',   score: 71, prevRank: 6, delta:  3.2, spark: [65, 66, 68, 69, 69, 70, 71], color: '#FFC36B' },
-]
+function partnerKey(p) {
+  return p.organizationId ?? p.partnerId ?? p.id ?? p.organizationName ?? p.name
+}
+/** 비교 기간의 partner → rank 인덱스 맵. 비교 모드 OFF 또는 데이터 없을 때 빈 맵. */
+const COMPARE_PARTNER_RANK = computed(() => {
+  if (!compareMode.value) return new Map()
+  const arr = dashboardStore.comparePartnerProgress ?? []
+  const map = new Map()
+  arr.forEach((p, i) => {
+    const k = partnerKey(p)
+    if (k != null) map.set(k, i + 1)
+  })
+  return map
+})
+
 const PARTNER_RANK = computed(() => {
   const fromStore = dashboardStore.partnerProgress ?? []
-  if (fromStore.length === 0) return PARTNER_RANK_FALLBACK
+  if (fromStore.length === 0) return []
   const colors = ['#9D85FF', '#FF8A5C', '#5DAFD8', '#6FBF87', '#FFC36B']
+  const prevRanks = COMPARE_PARTNER_RANK.value
   return fromStore.slice(0, 5).map((p, i) => {
-    const score = p.averageKpiAchievementPercent ?? p.progress ?? p.score ?? 0
-    const spark = (p.recent7d && p.recent7d.length > 0)
-      ? p.recent7d
-      : (p.spark ?? PARTNER_RANK_FALLBACK[i]?.spark ?? [])
+    const currRank = i + 1
+    const k = partnerKey(p)
+    const prevRank = prevRanks.has(k) ? prevRanks.get(k) : null
+    let rankBadge = null
+    if (compareMode.value) {
+      if (prevRank == null) rankBadge = { type: 'new', label: 'NEW' }
+      else if (prevRank === currRank) rankBadge = { type: 'same', label: '—' }
+      else if (prevRank > currRank) rankBadge = { type: 'up', label: `▲${prevRank - currRank}` }
+      else rankBadge = { type: 'down', label: `▼${currRank - prevRank}` }
+    }
     return {
-      rank: i + 1,
+      rank: currRank,
       name: p.organizationName ?? p.name ?? '제휴사',
-      score,
-      prevRank: i + 1,
+      score: p.averageKpiAchievementPercent ?? p.progress ?? p.score ?? 0,
+      prevRank,
       delta: p.delta ?? 0,
-      spark,
+      spark: (p.recent7d && p.recent7d.length > 0) ? p.recent7d : [],
       color: colors[i],
+      rankBadge,
     }
   })
 })
@@ -369,28 +634,85 @@ function sparkPath(arr, w = 60, h = 22) {
 
 <template>
   <div class="dash-d">
+    <!-- ─── 필터 바 (좌측 상단) ─── -->
+    <div class="filter-bar">
+      <div class="filter-group" role="tablist" aria-label="기간 선택">
+        <button
+          v-for="t in PERIOD_TABS"
+          :key="t.key"
+          type="button"
+          role="tab"
+          :aria-selected="quarterKey === t.key"
+          class="filter-pill"
+          :class="{ 'filter-pill--active': quarterKey === t.key }"
+          @click="quarterKey = t.key"
+        >{{ t.label }}</button>
+      </div>
+      <button
+        type="button"
+        class="filter-compare"
+        :class="{ 'filter-compare--on': compareMode }"
+        :aria-pressed="compareMode"
+        @click="compareMode = !compareMode"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 7H3M3 7l4-4M3 7l4 4M3 17h18M21 17l-4 4M21 17l-4-4"/>
+        </svg>
+        비교 {{ compareMode ? 'ON' : 'OFF' }}
+      </button>
+      <span class="filter-meta">{{ currentPeriod }}<template v-if="compareMode"> vs {{ comparePeriod }}</template></span>
+    </div>
+
     <!-- ─── Greet (한 줄, callog-header 보강) ─── -->
     <header class="greet">
       <p class="greet__hello">안녕하세요, <strong>{{ userName }}</strong> · {{ orgName }}</p>
       <span class="greet__role">{{ roleLabel }}</span>
-      <span v-if="dashboardStore.usingMock" class="greet__mock">[mock 모드]</span>
+      <span class="greet__scope" :data-scope="orgScope">{{ orgScopeLabel }}</span>
+      <button
+        v-if="hasError"
+        type="button"
+        class="greet__retry"
+        :disabled="dashboardStore.loading"
+        @click="retryDashboard"
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/>
+        </svg>
+        다시 시도
+      </button>
     </header>
 
     <!-- ═══════════ Row 1 — KPI 6-up ═══════════ -->
     <section class="grid row-1">
-      <article v-for="k in KPI_LIST" :key="k.key" class="kpi">
-        <div class="kpi__top">
-          <div class="kpi__icon" :style="{ background: k.iconBg }">{{ k.icon }}</div>
-          <span class="kpi__pill" :style="{ color: k.iconBg, background: k.bg }">Today</span>
-        </div>
-        <div class="kpi__value">{{ k.value.toLocaleString() }}<small>{{ k.unit }}</small></div>
-        <div class="kpi__label">{{ k.label }}</div>
-        <div class="kpi__delta" :class="k.deltaPositive ? 'kpi__delta--pos' : 'kpi__delta--neg'">
-          <svg v-if="k.deltaPositive" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8 L6 4 L10 8"/></svg>
-          <svg v-else width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4 L6 8 L10 4"/></svg>
-          {{ k.delta }}
-        </div>
-      </article>
+      <template v-if="dashboardStore.status.summary === 'loading'">
+        <article v-for="i in 6" :key="`sk-${i}`" class="kpi kpi--skeleton">
+          <div class="sk-shimmer sk-icon"></div>
+          <div class="sk-shimmer sk-value"></div>
+          <div class="sk-shimmer sk-label"></div>
+        </article>
+      </template>
+      <template v-else-if="dashboardStore.status.summary === 'error'">
+        <article class="kpi kpi--error" style="grid-column: 1 / -1">
+          <p class="state-err">데이터를 불러오지 못했습니다. 다시 시도해주세요.</p>
+        </article>
+      </template>
+      <template v-else>
+        <article v-for="k in KPI_LIST" :key="k.key" class="kpi fade-in">
+          <div class="kpi__top">
+            <div class="kpi__icon" :style="{ background: k.iconBg }">{{ k.icon }}</div>
+            <span class="kpi__pill" :style="{ color: k.iconBg, background: k.bg }">Today</span>
+          </div>
+          <div class="kpi__value">{{ formatKpiValue(k.value) }}<small>{{ k.unit }}</small></div>
+          <div class="kpi__label">{{ k.label }}</div>
+          <div class="kpi__delta" :class="k.deltaPositive ? 'kpi__delta--pos' : 'kpi__delta--neg'">
+            <svg v-if="k.deltaPositive" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8 L6 4 L10 8"/></svg>
+            <svg v-else width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4 L6 8 L10 4"/></svg>
+            {{ k.delta }}
+          </div>
+        </article>
+      </template>
     </section>
 
     <!-- ═══════════ Row 2 — 권한 + 목표 vs 실적 + 자산 도넛 (3-col) ═══════════ -->
@@ -404,44 +726,55 @@ function sparkPath(arr, w = 60, h = 22) {
           </div>
         </header>
 
-        <!-- GM: 캠페인 카드 형태 (chip + label + 컬러 bar + pct + delta) -->
-        <template v-if="role === 'GM'">
-          <div class="kpi-main">
-            <span class="kpi-main__val">{{ ROLE_CARD.mainPct }}<small>%</small></span>
-            <span class="kpi-main__sub">분기 평균</span>
-          </div>
-          <div class="kpi-bars">
-            <div v-for="s in ROLE_CARD.stats" :key="s.label" class="kpi-bar">
-              <span class="kpi-bar__chip" :style="{ background: s.color }">{{ s.short }}</span>
-              <div class="kpi-bar__body">
-                <span class="kpi-bar__label">{{ s.label }}</span>
-                <div class="kpi-bar__track">
-                  <div class="kpi-bar__fill" :style="{ width: s.value + '%', background: s.color }"></div>
+        <div v-if="dashboardStore.status.quarterGoals === 'loading'" class="card-skeleton">
+          <div class="sk-shimmer sk-line sk-line--lg"></div>
+          <div class="sk-shimmer sk-line"></div>
+          <div class="sk-shimmer sk-line"></div>
+          <div class="sk-shimmer sk-line"></div>
+        </div>
+        <p v-else-if="dashboardStore.status.quarterGoals === 'error'" class="state-err">
+          데이터를 불러오지 못했습니다. 다시 시도해주세요.
+        </p>
+        <template v-else>
+          <!-- GM: 캠페인 카드 형태 (chip + label + 컬러 bar + pct + delta) -->
+          <template v-if="role === 'GM'">
+            <div class="kpi-main fade-in">
+              <span class="kpi-main__val">{{ ROLE_CARD.mainPct ?? 0 }}<small>%</small></span>
+              <span class="kpi-main__sub">분기 평균</span>
+            </div>
+            <div class="kpi-bars fade-in">
+              <div v-for="s in ROLE_CARD.stats" :key="s.label" class="kpi-bar">
+                <span class="kpi-bar__chip" :style="{ background: s.color }">{{ s.short }}</span>
+                <div class="kpi-bar__body">
+                  <span class="kpi-bar__label">{{ s.label }}</span>
+                  <div class="kpi-bar__track">
+                    <div class="kpi-bar__fill" :style="{ width: s.value + '%', background: s.color }"></div>
+                  </div>
+                </div>
+                <div class="kpi-bar__right">
+                  <span class="kpi-bar__pct">{{ s.value }}%</span>
+                  <span class="kpi-bar__delta" :class="s.delta >= 0 ? 'pos' : 'neg'">
+                    {{ s.delta >= 0 ? '+' : '' }}{{ s.delta }}
+                  </span>
                 </div>
               </div>
-              <div class="kpi-bar__right">
-                <span class="kpi-bar__pct">{{ s.value }}%</span>
-                <span class="kpi-bar__delta" :class="s.delta >= 0 ? 'pos' : 'neg'">
-                  {{ s.delta >= 0 ? '+' : '' }}{{ s.delta }}
-                </span>
+            </div>
+          </template>
+
+          <!-- MGR/USR: 기존 stat list -->
+          <div v-else class="role-stats fade-in">
+            <div v-for="s in ROLE_CARD.stats" :key="s.label" class="role-stat">
+              <span class="role-stat__bar" :style="{ background: s.color }"></span>
+              <div class="role-stat__body">
+                <p class="role-stat__label">{{ s.label }}</p>
+                <p class="role-stat__val">{{ s.value }}<small>{{ s.unit }}</small></p>
               </div>
+              <span class="role-stat__delta" :class="s.delta >= 0 ? 'pos' : 'neg'">
+                {{ s.delta >= 0 ? '+' : '' }}{{ s.delta }}
+              </span>
             </div>
           </div>
         </template>
-
-        <!-- MGR/USR: 기존 stat list -->
-        <div v-else class="role-stats">
-          <div v-for="s in ROLE_CARD.stats" :key="s.label" class="role-stat">
-            <span class="role-stat__bar" :style="{ background: s.color }"></span>
-            <div class="role-stat__body">
-              <p class="role-stat__label">{{ s.label }}</p>
-              <p class="role-stat__val">{{ s.value }}<small>{{ s.unit }}</small></p>
-            </div>
-            <span class="role-stat__delta" :class="s.delta >= 0 ? 'pos' : 'neg'">
-              {{ s.delta >= 0 ? '+' : '' }}{{ s.delta }}
-            </span>
-          </div>
-        </div>
 
         <button type="button" class="role-cta" @click="goTo(ROLE_CARD.ctaTo)">
           {{ ROLE_CARD.cta }} →
@@ -456,48 +789,76 @@ function sparkPath(arr, w = 60, h = 22) {
           <div class="legend">
             <span class="legend__item"><i class="legend__dot" style="background:#9D85FF"></i>실적</span>
             <span class="legend__item"><i class="legend__dot" style="background:#FFC36B"></i>목표</span>
+            <span v-if="compareMode" class="legend__item legend__item--compare"><i class="legend__dot legend__dot--compare"></i>비교 ({{ comparePeriod }})</span>
           </div>
         </header>
-        <div class="stat-strip">
-          <div class="stat-mini"><span class="stat-mini__val">{{ targetStats.totalA }}</span><span class="stat-mini__lbl">실적 합계</span></div>
-          <div class="stat-mini"><span class="stat-mini__val">{{ targetStats.totalT }}</span><span class="stat-mini__lbl">목표 합계</span></div>
-          <div class="stat-mini stat-mini--accent"><span class="stat-mini__val">{{ targetStats.achieveRate }}<small>%</small></span><span class="stat-mini__lbl">달성률</span></div>
-          <div class="stat-mini"><span class="stat-mini__val">{{ targetStats.overMonths }}<small>/6</small></span><span class="stat-mini__lbl">초과 월</span></div>
+        <div v-if="dashboardStore.status.quarterGoals === 'loading'" class="card-skeleton card-skeleton--chart">
+          <div class="sk-shimmer sk-line"></div>
+          <div class="sk-shimmer sk-block"></div>
         </div>
-        <svg viewBox="0 0 540 320" class="chart chart--target" aria-hidden="true">
+        <p v-else-if="dashboardStore.status.quarterGoals === 'error'" class="state-err">
+          데이터를 불러오지 못했습니다. 다시 시도해주세요.
+        </p>
+        <template v-else>
+        <div class="stat-strip fade-in">
+          <div class="stat-mini"><span class="stat-mini__val">{{ formatKpiValue(targetStats.totalA) }}</span><span class="stat-mini__lbl">실적 합계</span></div>
+          <div class="stat-mini"><span class="stat-mini__val">{{ formatKpiValue(targetStats.totalT) }}</span><span class="stat-mini__lbl">목표 합계</span></div>
+          <div class="stat-mini stat-mini--accent"><span class="stat-mini__val">{{ targetStats.achieveRate }}<small>%</small></span><span class="stat-mini__lbl">달성률</span></div>
+          <div class="stat-mini"><span class="stat-mini__val">{{ targetStats.overMonths }}<small>/{{ targetStats.monthCount }}</small></span><span class="stat-mini__lbl">초과 월</span></div>
+        </div>
+        <svg viewBox="0 0 540 320" class="chart chart--target fade-in" aria-hidden="true">
           <g class="grid-lines">
             <line v-for="(y, i) in [20, 80, 140, 200, 260]" :key="i" :x1="40" :x2="528" :y1="y" :y2="y" />
           </g>
           <g class="axis-text axis-text--lg">
-            <text x="6" y="24">200</text>
-            <text x="6" y="84">150</text>
-            <text x="6" y="144">100</text>
-            <text x="6" y="204">50</text>
+            <text x="6" y="24">{{ fmtYAxis(targetMax) }}</text>
+            <text x="6" y="84">{{ fmtYAxis(targetMax * 0.75) }}</text>
+            <text x="6" y="144">{{ fmtYAxis(targetMax * 0.5) }}</text>
+            <text x="6" y="204">{{ fmtYAxis(targetMax * 0.25) }}</text>
             <text x="6" y="264">0</text>
           </g>
-          <g v-for="(m, i) in TARGET_REALITY" :key="m.month">
-            <!-- actual 막대 (보라) -->
-            <rect :x="64 + i * 78" :y="260 - m.actual * 1.2" width="28" :height="m.actual * 1.2" rx="6" fill="#9D85FF" />
-            <!-- target 막대 (노랑) -->
-            <rect :x="96 + i * 78" :y="260 - m.target * 1.2" width="28" :height="m.target * 1.2" rx="6" fill="#FFC36B" />
-            <!-- actual 값 (보라막대 위 중앙) -->
-            <text
-              :x="78 + i * 78"
-              :y="260 - m.actual * 1.2 - 8"
-              text-anchor="middle"
-              class="axis-x--val axis-x--val-actual"
-            >{{ m.actual }}</text>
-            <!-- target 값 (노랑막대 위 중앙) -->
-            <text
-              :x="110 + i * 78"
-              :y="260 - m.target * 1.2 - 8"
-              text-anchor="middle"
-              class="axis-x--val axis-x--val-target"
-            >{{ m.target }}</text>
-            <!-- 월 라벨 (그룹 중심) -->
-            <text :x="94 + i * 78" y="296" text-anchor="middle" class="axis-x axis-x--lg">{{ m.month }}</text>
+          <template v-for="(m, i) in TARGET_REALITY" :key="i">
+            <g v-if="m">
+              <!-- actual 막대 (보라) -->
+              <rect :x="50 + i * 160" :y="targetBarY(m.actual)" width="50" :height="targetBarH(m.actual)" rx="6" fill="#9D85FF" />
+              <!-- target 막대 (노랑) -->
+              <rect :x="110 + i * 160" :y="targetBarY(m.target)" width="50" :height="targetBarH(m.target)" rx="6" fill="#FFC36B" />
+              <!-- actual 값 (보라막대 위 중앙) -->
+              <text
+                :x="75 + i * 160"
+                :y="targetBarY(m.actual) - 8"
+                text-anchor="middle"
+                class="axis-x--val axis-x--val-actual"
+              >{{ fmtYAxis(m.actual) }}</text>
+              <!-- target 값 (노랑막대 위 중앙) -->
+              <text
+                :x="135 + i * 160"
+                :y="targetBarY(m.target) - 8"
+                text-anchor="middle"
+                class="axis-x--val axis-x--val-target"
+              >{{ fmtYAxis(m.target) }}</text>
+              <!-- 월 라벨 (그룹 중심) -->
+              <text :x="105 + i * 160" y="296" text-anchor="middle" class="axis-x axis-x--lg">{{ m.month }}</text>
+            </g>
+          </template>
+          <!-- 비교 기간 actual overlay (희미한 회색 라인 + 점) -->
+          <g v-if="compareMode && compareLineDots.length > 0" class="chart-compare-overlay">
+            <polyline
+              v-if="compareLineDots.length >= 2"
+              :points="compareLinePoints"
+              fill="none"
+              stroke-width="2"
+              stroke-dasharray="4 4"
+              stroke-linejoin="round"
+              stroke-linecap="round"
+            />
+            <g v-for="d in compareLineDots" :key="`cmp-${d.x}`">
+              <circle :cx="d.x" :cy="d.y" r="4" />
+              <text :x="d.x" :y="d.y - 9" text-anchor="middle" class="chart-compare-overlay__val">{{ fmtYAxis(d.value) }}</text>
+            </g>
           </g>
         </svg>
+        </template>
       </article>
 
       <!-- 자산 카테고리 도넛 (4/12) — 단순 분포 -->
@@ -508,7 +869,16 @@ function sparkPath(arr, w = 60, h = 22) {
             <p class="card__sub">총 {{ assetTotal }}개 · 5개 분류</p>
           </div>
         </header>
-        <div class="donut-wrap">
+        <div v-if="dashboardStore.status.assetCategories === 'loading'" class="card-skeleton card-skeleton--donut">
+          <div class="sk-shimmer sk-circle"></div>
+          <div class="sk-shimmer sk-line"></div>
+          <div class="sk-shimmer sk-line"></div>
+        </div>
+        <p v-else-if="dashboardStore.status.assetCategories === 'error'" class="state-err">
+          데이터를 불러오지 못했습니다. 다시 시도해주세요.
+        </p>
+        <template v-else>
+        <div class="donut-wrap fade-in">
           <svg viewBox="0 0 140 140" class="donut" aria-hidden="true">
             <circle cx="70" cy="70" r="50" fill="none" stroke="#F1F2F6" stroke-width="20" />
             <circle
@@ -527,7 +897,7 @@ function sparkPath(arr, w = 60, h = 22) {
             <span class="donut__label">자산</span>
           </div>
         </div>
-        <ul class="asset-legend">
+        <ul class="asset-legend fade-in">
           <li v-for="s in assetSegments" :key="s.type">
             <span class="asset-legend__dot" :style="{ background: s.color }"></span>
             <span class="asset-legend__label">{{ s.type }}</span>
@@ -535,6 +905,7 @@ function sparkPath(arr, w = 60, h = 22) {
             <span class="asset-legend__pct">{{ s.pct }}%</span>
           </li>
         </ul>
+        </template>
       </article>
     </section>
 
@@ -548,7 +919,26 @@ function sparkPath(arr, w = 60, h = 22) {
           </div>
           <button type="button" class="card__link" @click="goTo('/calendar')">전체</button>
         </header>
-        <table class="ctab">
+        <div class="campaign-filter" role="tablist" aria-label="캠페인 상태 필터">
+          <button
+            v-for="t in CAMPAIGN_FILTER_TABS"
+            :key="t.key"
+            type="button"
+            role="tab"
+            :aria-selected="campaignStatusFilter === t.key"
+            class="filter-chip"
+            :class="{ 'filter-chip--active': campaignStatusFilter === t.key }"
+            @click="campaignStatusFilter = t.key"
+          >{{ t.label }}</button>
+        </div>
+        <div v-if="dashboardStore.status.myCampaigns === 'loading'" class="card-skeleton">
+          <div v-for="i in 4" :key="i" class="sk-shimmer sk-row"></div>
+        </div>
+        <p v-else-if="dashboardStore.status.myCampaigns === 'error'" class="state-err">
+          데이터를 불러오지 못했습니다. 다시 시도해주세요.
+        </p>
+        <p v-else-if="MY_CAMPAIGNS.length === 0" class="state-empty">참여 중인 캠페인이 0건입니다.</p>
+        <table v-else class="ctab fade-in">
           <thead>
             <tr>
               <th>캠페인</th>
@@ -582,7 +972,7 @@ function sparkPath(arr, w = 60, h = 22) {
         </table>
       </article>
 
-      <article class="card">
+      <article v-if="orgScope === 'HQ' || orgScope === 'AFFILIATE'" class="card">
         <header class="card__head">
           <div class="card__title-wrap">
             <h2 class="card__title">제휴사 TOP 5</h2>
@@ -590,7 +980,14 @@ function sparkPath(arr, w = 60, h = 22) {
           </div>
           <button type="button" class="card__link" @click="goTo('/operations')">전체</button>
         </header>
-        <table class="ptab">
+        <div v-if="dashboardStore.status.partnerProgress === 'loading'" class="card-skeleton">
+          <div v-for="i in 5" :key="i" class="sk-shimmer sk-row"></div>
+        </div>
+        <p v-else-if="dashboardStore.status.partnerProgress === 'error'" class="state-err">
+          데이터를 불러오지 못했습니다. 다시 시도해주세요.
+        </p>
+        <p v-else-if="PARTNER_RANK.length === 0" class="state-empty">제휴사 데이터가 0건입니다.</p>
+        <table v-else class="ptab fade-in">
           <thead>
             <tr>
               <th>#</th>
@@ -618,7 +1015,13 @@ function sparkPath(arr, w = 60, h = 22) {
                 </svg>
               </td>
               <td>
-                <span class="ptab__delta" :class="p.delta >= 0 ? 'pos' : 'neg'">
+                <span
+                  v-if="p.rankBadge"
+                  class="ptab__rank-badge"
+                  :class="`ptab__rank-badge--${p.rankBadge.type}`"
+                  :title="`이전 분기 대비 순위 변화`"
+                >{{ p.rankBadge.label }}</span>
+                <span v-else class="ptab__delta" :class="p.delta >= 0 ? 'pos' : 'neg'">
                   <svg v-if="p.delta >= 0" width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8 L6 4 L9 8"/></svg>
                   <svg v-else width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4 L6 8 L9 4"/></svg>
                   {{ Math.abs(p.delta).toFixed(1) }}
@@ -701,8 +1104,181 @@ function sparkPath(arr, w = 60, h = 22) {
 :root[data-theme='dark'] .dash-d .ctab__dday.urgent { background: rgba(248, 113, 113, 0.22); color: #F87171; }
 :root[data-theme='dark'] .dash-d .ctab__dday { background: rgba(255, 255, 255, 0.1); color: rgba(213, 220, 232, 0.72); }
 
+/* ─── Filter bar (좌측 상단) ─── */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+.filter-group {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+}
+.filter-pill {
+  border: 0;
+  background: transparent;
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.filter-pill:hover { color: var(--text-primary); }
+.filter-pill--active {
+  background: linear-gradient(180deg, #c084fc 0%, #a855f7 100%);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(168, 85, 247, 0.28);
+}
+.filter-pill--active:hover { color: #fff; }
+
+.filter-compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 800;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.filter-compare:hover { color: var(--text-primary); border-color: rgba(157, 133, 255, 0.5); }
+.filter-compare--on {
+  background: rgba(157, 133, 255, 0.16);
+  border-color: rgba(157, 133, 255, 0.5);
+  color: #6D28D9;
+}
+.filter-meta {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted-text);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Campaign status chip filter (Row 3-1 카드 내부) ─── */
+.campaign-filter {
+  display: inline-flex;
+  gap: 4px;
+  margin: -2px 0 6px;
+  flex-wrap: wrap;
+}
+.filter-chip {
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: transparent;
+  color: var(--muted-text);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.filter-chip:hover { color: var(--text-primary); border-color: rgba(157, 133, 255, 0.4); }
+.filter-chip--active {
+  background: rgba(157, 133, 255, 0.16);
+  border-color: rgba(157, 133, 255, 0.5);
+  color: #6D28D9;
+}
+
+/* ─── 비교 라인 overlay (목표 vs 실적 차트) ─── */
+.chart-compare-overlay polyline { stroke: rgba(15, 23, 42, 0.3); }
+.chart-compare-overlay circle { fill: rgba(15, 23, 42, 0.3); }
+.chart-compare-overlay__val {
+  font-size: 9px;
+  font-weight: 800;
+  fill: rgba(15, 23, 42, 0.55);
+  font-variant-numeric: tabular-nums;
+}
+.legend__item--compare { color: rgba(15, 23, 42, 0.55); }
+.legend__dot--compare {
+  background: transparent;
+  border: 1.5px dashed rgba(15, 23, 42, 0.45);
+}
+
+/* ─── 제휴사 rank-change badge ─── */
+.ptab__rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.ptab__rank-badge--up {
+  background: rgba(111, 191, 135, 0.18);
+  color: #047857;
+}
+.ptab__rank-badge--down {
+  background: rgba(255, 122, 107, 0.18);
+  color: #C04438;
+}
+.ptab__rank-badge--new {
+  background: rgba(157, 133, 255, 0.18);
+  color: #6D28D9;
+}
+.ptab__rank-badge--same {
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--muted-text);
+}
+
 /* Greet */
-.greet { display: flex; align-items: center; gap: 8px; }
+.greet { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.greet__retry {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 26px; padding: 0 11px;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.32);
+  color: #DC2626;
+  font-size: 11px; font-weight: 800;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.greet__retry:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.16);
+  border-color: rgba(220, 38, 38, 0.5);
+}
+.greet__retry:disabled { opacity: 0.55; cursor: not-allowed; }
+:root[data-theme='dark'] .greet__retry {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.36);
+  color: #FCA5A5;
+}
+:root[data-theme='dark'] .greet__retry:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.24);
+}
 .greet__hello { font-size: 12px; color: var(--muted-text); margin: 0; line-height: 1.2; }
 .greet__hello strong { color: var(--text-primary); font-weight: 800; }
 .greet__role {
@@ -716,6 +1292,180 @@ function sparkPath(arr, w = 60, h = 22) {
   padding: 2px 7px; border-radius: 999px;
   background: #FEF3C7; color: #B45309;
   letter-spacing: 0.04em;
+}
+.greet__scope {
+  font-size: 9px; font-weight: 800;
+  padding: 2px 7px; border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+.greet__scope[data-scope="HQ"]               { background: rgba(157, 133, 255, 0.14); color: #6D28D9; }
+.greet__scope[data-scope="AFFILIATE"]        { background: rgba(93, 175, 216, 0.16);  color: #1E6FA0; }
+.greet__scope[data-scope="EXTERNAL_PARTNER"] { background: rgba(255, 138, 92, 0.16);  color: #B0431D; }
+.greet__scope[data-scope="STAFF"]            { background: rgba(111, 191, 135, 0.16); color: #2F7A48; }
+.dark .greet__scope[data-scope="HQ"]               { background: rgba(157, 133, 255, 0.22); color: #C4B0FF; }
+.dark .greet__scope[data-scope="AFFILIATE"]        { background: rgba(93, 175, 216, 0.22);  color: #9CD0EE; }
+.dark .greet__scope[data-scope="EXTERNAL_PARTNER"] { background: rgba(255, 138, 92, 0.22);  color: #FFB48A; }
+.dark .greet__scope[data-scope="STAFF"]            { background: rgba(111, 191, 135, 0.22); color: #A6DEB7; }
+
+/* ───── 로딩 / 에러 / 빈 상태 ───── */
+@keyframes dash-shimmer {
+  0%   { background-position: -200px 0; }
+  100% { background-position: 200px 0; }
+}
+@keyframes dash-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0);  }
+}
+.fade-in { animation: dash-fade-in 0.32s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+
+.sk-shimmer {
+  background: linear-gradient(90deg,
+    var(--panel-muted) 0%,
+    color-mix(in srgb, var(--panel-muted) 60%, transparent) 50%,
+    var(--panel-muted) 100%);
+  background-size: 400px 100%;
+  animation: dash-shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+.sk-icon  { width: 32px; height: 32px; border-radius: 10px; margin-bottom: 10px; }
+.sk-value { width: 60%; height: 22px; margin-bottom: 8px; }
+.sk-label { width: 80%; height: 12px; }
+.sk-line  { width: 100%; height: 14px; margin: 6px 0; }
+.sk-line--lg { height: 22px; width: 50%; }
+.sk-block { width: 100%; height: 200px; border-radius: 12px; margin-top: 8px; }
+.sk-row   { width: 100%; height: 28px; margin: 6px 0; }
+.sk-circle{ width: 110px; height: 110px; border-radius: 50%; margin: 6px auto 14px; }
+
+.kpi--skeleton {
+  display: flex; flex-direction: column;
+  padding: 12px 14px;
+}
+.kpi--error {
+  display: flex; align-items: center; justify-content: center;
+  padding: 18px 12px;
+}
+.card-skeleton {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 4px 0 8px;
+}
+.card-skeleton--chart { padding: 8px 4px 12px; }
+.card-skeleton--donut { align-items: center; }
+
+.state-err {
+  margin: 14px 4px;
+  font-size: 12px; font-weight: 700;
+  color: #DC2626;
+  text-align: center;
+}
+.dark .state-err { color: #FCA5A5; }
+
+.state-empty {
+  margin: 14px 4px;
+  font-size: 12px; font-weight: 600;
+  color: var(--muted-text);
+  text-align: center;
+}
+
+/* ─── 반응형 ─── */
+@media (max-width: 1280px) {
+  .row-1 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 960px) {
+  .row-2 { grid-template-columns: minmax(0, 1fr); }
+  .row-3 { grid-template-columns: minmax(0, 1fr); max-width: 100%; }
+  .dash-d { padding: 14px 16px 28px; }
+}
+@media (max-width: 640px) {
+  .row-1 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .greet { gap: 6px; }
+  .greet__retry { margin-left: 0; }
+  .dash-d { padding: 12px 12px 24px; gap: 8px; }
+  .kpi__value { font-size: 22px; }
+  .stat-mini__val { font-size: 18px; }
+  .filter-bar { gap: 6px; }
+  .filter-meta { margin-left: 0; flex-basis: 100%; }
+  .filter-pill { font-size: 10px; padding: 4px 9px; }
+}
+@media (max-width: 420px) {
+  .row-1 { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ─── 다크모드 — 필터/배지 보강 ─── */
+:root[data-theme='dark'] .dash-d .filter-group,
+:root[data-theme='dark'] .dash-d .filter-compare {
+  background: rgba(28, 35, 48, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme='dark'] .dash-d .filter-pill { color: rgba(213, 220, 232, 0.7); }
+:root[data-theme='dark'] .dash-d .filter-pill:hover { color: #f7f9fc; }
+:root[data-theme='dark'] .dash-d .filter-pill--active {
+  background: linear-gradient(180deg, #a855f7 0%, #7c3aed 100%);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(168, 85, 247, 0.4);
+}
+:root[data-theme='dark'] .dash-d .filter-compare { color: rgba(213, 220, 232, 0.72); }
+:root[data-theme='dark'] .dash-d .filter-compare:hover {
+  color: #f7f9fc;
+  border-color: rgba(168, 85, 247, 0.45);
+}
+:root[data-theme='dark'] .dash-d .filter-compare--on {
+  background: rgba(168, 85, 247, 0.18);
+  border-color: rgba(168, 85, 247, 0.5);
+  color: #C4B5FD;
+}
+:root[data-theme='dark'] .dash-d .filter-meta { color: rgba(213, 220, 232, 0.62); }
+:root[data-theme='dark'] .dash-d .filter-chip {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(213, 220, 232, 0.7);
+}
+:root[data-theme='dark'] .dash-d .filter-chip:hover {
+  color: #f7f9fc;
+  border-color: rgba(168, 85, 247, 0.45);
+}
+:root[data-theme='dark'] .dash-d .filter-chip--active {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: rgba(168, 85, 247, 0.55);
+  color: #C4B5FD;
+}
+:root[data-theme='dark'] .dash-d .chart-compare-overlay polyline { stroke: rgba(213, 220, 232, 0.45); }
+:root[data-theme='dark'] .dash-d .chart-compare-overlay circle { fill: rgba(213, 220, 232, 0.45); }
+:root[data-theme='dark'] .dash-d .chart-compare-overlay__val { fill: rgba(213, 220, 232, 0.78); }
+:root[data-theme='dark'] .dash-d .legend__item--compare { color: rgba(213, 220, 232, 0.72); }
+:root[data-theme='dark'] .dash-d .legend__dot--compare { border-color: rgba(213, 220, 232, 0.55); }
+:root[data-theme='dark'] .dash-d .ptab__rank-badge--up {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34D399;
+}
+:root[data-theme='dark'] .dash-d .ptab__rank-badge--down {
+  background: rgba(248, 113, 113, 0.2);
+  color: #F87171;
+}
+:root[data-theme='dark'] .dash-d .ptab__rank-badge--new {
+  background: rgba(168, 85, 247, 0.22);
+  color: #C4B5FD;
+}
+:root[data-theme='dark'] .dash-d .ptab__rank-badge--same {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(213, 220, 232, 0.7);
+}
+
+/* ─── 다크모드 차트 일관성 보강 ─── */
+:root[data-theme='dark'] .dash-d .chart .grid-lines line { stroke: rgba(255, 255, 255, 0.08); }
+:root[data-theme='dark'] .dash-d .chart .axis-text text,
+:root[data-theme='dark'] .dash-d .chart .axis-x { fill: rgba(213, 220, 232, 0.72); }
+:root[data-theme='dark'] .dash-d .axis-x--val-actual { fill: #C4B0FF; }
+:root[data-theme='dark'] .dash-d .axis-x--val-target { fill: #FFD480; }
+:root[data-theme='dark'] .dash-d .donut > circle:first-child { stroke: rgba(255, 255, 255, 0.06); }
+:root[data-theme='dark'] .dash-d .ctab__bar,
+:root[data-theme='dark'] .dash-d .kpi-bar__track { background: rgba(255, 255, 255, 0.08); }
+:root[data-theme='dark'] .dash-d .ctab__avatar,
+:root[data-theme='dark'] .dash-d .ptab__avatar { color: #fff; }
+:root[data-theme='dark'] .dash-d .sk-shimmer {
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 100%);
+  background-size: 400px 100%;
 }
 
 .grid { display: grid; gap: 10px; align-items: stretch; }

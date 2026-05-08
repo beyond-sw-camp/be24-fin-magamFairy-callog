@@ -18,6 +18,7 @@ import {
 import editorApi from '@/api/editor/editorApi'
 import { ListCampaign } from '@/api/campaigns'
 import { readStoredToken } from '@/authStorage'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 const themeStorageKey = 'callog-theme'
 const legacyThemeStorageKey = 'kellog-theme'
@@ -165,10 +166,19 @@ function normalizeCampaignRecord(source, fallback = {}) {
 }
 
 export const usePlannerStore = defineStore('planner', () => {
+  // 로그인한 사용자의 id를 LocalStorage namespace 키로 사용 (없으면 'guest')
+  // 이전엔 mock 시드의 'jaewon' 상수를 그대로 박아놔서 모든 사용자가 같은 키를 공유했음.
+  const authStore = useAuthStore()
+  const resolveOwnerKey = () => {
+    const u = authStore.user
+    const id = u?.id ?? u?.email ?? u?.idx
+    return id ? String(id) : 'guest'
+  }
+
   const sidebarCollapsed = ref(true)
   const campaigns = ref(cloneValue(defaultCampaigns))
   const activeCampaignId = ref(defaultCampaigns[0])
-  const campaignUiOwnerKey = ref(currentUserId)
+  const campaignUiOwnerKey = ref(resolveOwnerKey())
   const campaignOrder = ref(defaultCampaigns.map((campaign) => campaign.id))
   const campaignFolderIds = ref([])
   const campaignServerHydrated = ref(false)
@@ -437,6 +447,19 @@ export const usePlannerStore = defineStore('planner', () => {
     }
   })
 
+  // 로그인 사용자 변경 → LocalStorage owner key 갱신 + 그 사용자 데이터로 재하이드레이트
+  watch(
+    () => authStore.user,
+    () => {
+      const next = resolveOwnerKey()
+      if (campaignUiOwnerKey.value !== next) {
+        campaignUiOwnerKey.value = next
+        hydrateCampaignUiState()
+      }
+    },
+    { deep: true },
+  )
+
   const members = computed(() => teamMembers)
 
   const memberMap = computed(() =>
@@ -610,6 +633,16 @@ export const usePlannerStore = defineStore('planner', () => {
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
       mainMessage: payload.mainMessage?.trim() || '',
+      // 캠페인 생성 wizard step 1·3 필드 — 수정 모달에서 다시 채워주려면 store 보존 필요
+      assetName: payload.assetName ?? '',
+      assetDescription: payload.assetDescription ?? '',
+      primaryGoal: payload.primaryGoal ?? '',
+      campaignMethods: Array.isArray(payload.campaignMethods) ? [...payload.campaignMethods] : [],
+      maxCost: payload.maxCost ?? '',
+      minRevenue: payload.minRevenue ?? '',
+      ownerName: payload.ownerName ?? '',
+      ownerEmail: payload.ownerEmail ?? '',
+      contributions: Array.isArray(payload.contributions) ? [...payload.contributions] : [],
       status: payload.status || 'draft',
       initials: payload.initials || createCampaignInitials(name),
       icon: payload.icon || '',
@@ -651,6 +684,20 @@ export const usePlannerStore = defineStore('planner', () => {
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
       mainMessage: payload.mainMessage?.trim() || '',
+      // 수정 모달 재진입 시 form 채우기에 필요 — 응답에 있으면 갱신, 없으면 기존 값 보존
+      assetName: payload.assetName ?? currentCampaign.assetName ?? '',
+      assetDescription: payload.assetDescription ?? currentCampaign.assetDescription ?? '',
+      primaryGoal: payload.primaryGoal ?? currentCampaign.primaryGoal ?? '',
+      campaignMethods: Array.isArray(payload.campaignMethods)
+        ? [...payload.campaignMethods]
+        : (Array.isArray(currentCampaign.campaignMethods) ? currentCampaign.campaignMethods : []),
+      maxCost: payload.maxCost ?? currentCampaign.maxCost ?? '',
+      minRevenue: payload.minRevenue ?? currentCampaign.minRevenue ?? '',
+      ownerName: payload.ownerName ?? currentCampaign.ownerName ?? '',
+      ownerEmail: payload.ownerEmail ?? currentCampaign.ownerEmail ?? '',
+      contributions: Array.isArray(payload.contributions)
+        ? [...payload.contributions]
+        : (Array.isArray(currentCampaign.contributions) ? currentCampaign.contributions : []),
       status: payload.status || currentCampaign.status,
       initials: payload.initials || createCampaignInitials(name),
       icon: payload.icon || currentCampaign.icon || '',

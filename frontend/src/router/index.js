@@ -31,6 +31,15 @@ const routes = [
         },
       },
       {
+        path: 'campaigns/browse',
+        name: 'campaign-directory',
+        component: () => import('@/views/CampaignDirectoryView.vue'),
+        meta: {
+          title: '캠페인 둘러보기',
+          section: '한화 그룹 캠페인 디렉토리',
+        },
+      },
+      {
         path: 'campaigns/:campaignId',
         name: 'campaign-detail',
         component: () => import('@/views/CampaignDetailView.vue'),
@@ -172,6 +181,7 @@ const routes = [
         meta: {
           title: '분기 목표',
           section: '본사·계열사 KPI cascade 관리',
+          blockExternalPartnerUser: true,
         },
       },
     ],
@@ -243,6 +253,16 @@ router.beforeEach(async (to) => {
 
   if (requiresAccountCreator && !authStore.canCreateUsers) {
     return { name: 'dashboard' }
+  }
+
+  // EXTERNAL_PARTNER + ROLE_USER: KPI 관리 페이지 접근 차단
+  const blockExternalPartnerUser = to.matched.some((record) => record.meta.blockExternalPartnerUser)
+  if (blockExternalPartnerUser) {
+    const orgType = String(authStore.user?.organization?.type ?? authStore.user?.orgType ?? '').toUpperCase()
+    const role = String(authStore.user?.role ?? '').toUpperCase()
+    if (orgType === 'EXTERNAL_PARTNER' && role === 'ROLE_USER') {
+      return { name: 'dashboard' }
+    }
   }
 
   if (guestOnly && authStore.hasFreshAccessToken()) {
