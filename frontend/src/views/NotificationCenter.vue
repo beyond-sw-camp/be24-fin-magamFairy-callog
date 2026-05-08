@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { useNotificationsStore } from '@/stores/notifications'
 import { formatRelativeTime } from '@/utils/datechange.js'
 import NotificationSettingsPanel from '@/components/notifications/NotificationSettingsPanel.vue'
+import { acceptCampaignInvitation, rejectCampaignInvitation } from '@/api/campaignMembers'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,6 +16,8 @@ const activeFilter = ref('all')
 const activeDetailTab = ref('content')
 const selectedNotificationId = ref('')
 const isSettingsModalOpen = ref(false)
+const invitationActionError = ref('')
+const invitationActionLoading = ref('')
 
 const filterOptions = [
   { key: 'all', label: '전체' },
@@ -161,6 +164,48 @@ function openTarget(notification) {
   }
 
   router.push(notification.targetUrl)
+}
+
+function isCampaignInvitationActionable(notification) {
+  return (
+    notification?.referenceType === 'CAMPAIGN_INVITATION' &&
+    notification?.referenceId &&
+    notification?.referenceStatus === 'PENDING'
+  )
+}
+
+function getCampaignIdFromTargetUrl(notification) {
+  const [, campaignId = ''] = String(notification?.targetUrl ?? '').match(/^\/campaigns\/([^/?#]+)/) ?? []
+  return campaignId
+}
+
+async function respondCampaignInvitation(notification, action) {
+  if (!isCampaignInvitationActionable(notification)) {
+    return
+  }
+
+  const campaignId = getCampaignIdFromTargetUrl(notification)
+  if (!campaignId) {
+    invitationActionError.value = '캠페인 정보를 찾지 못했습니다.'
+    return
+  }
+
+  invitationActionLoading.value = action
+  invitationActionError.value = ''
+
+  try {
+    if (action === 'accept') {
+      await acceptCampaignInvitation(campaignId, notification.referenceId)
+    } else {
+      await rejectCampaignInvitation(campaignId, notification.referenceId)
+    }
+    await notificationStore.loadNotifications({ count: 100 })
+  } catch (error) {
+    console.warn('Campaign invitation action failed.', error)
+    invitationActionError.value = '캠페인 초대 처리에 실패했습니다.'
+  } finally {
+    invitationActionLoading.value = ''
+  }
 }
 
 watch(
@@ -351,6 +396,30 @@ onMounted(() => {
             <div class="notification-detail__box">
               {{ selectedNotification.detail }}
             </div>
+            <div
+              v-if="isCampaignInvitationActionable(selectedNotification)"
+              class="notification-invitation-actions"
+            >
+              <button
+                type="button"
+                class="notification-button notification-button--primary"
+                :disabled="Boolean(invitationActionLoading)"
+                @click="respondCampaignInvitation(selectedNotification, 'accept')"
+              >
+                {{ invitationActionLoading === 'accept' ? '승인 중' : '승인' }}
+              </button>
+              <button
+                type="button"
+                class="notification-button notification-button--secondary"
+                :disabled="Boolean(invitationActionLoading)"
+                @click="respondCampaignInvitation(selectedNotification, 'reject')"
+              >
+                {{ invitationActionLoading === 'reject' ? '반려 중' : '반려' }}
+              </button>
+            </div>
+            <p v-if="invitationActionError" class="notification-load-message">
+              {{ invitationActionError }}
+            </p>
           </section>
 
           <section v-else-if="activeDetailTab === 'metadata'" class="notification-detail__section">
@@ -572,6 +641,12 @@ onMounted(() => {
 .notification-button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
+}
+
+.notification-invitation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .notification-stats {

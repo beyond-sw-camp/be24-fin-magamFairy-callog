@@ -106,6 +106,39 @@
       </div>
     </section>
 
+    <section v-if="isPolicyManager" class="notification-settings-block">
+      <div class="notification-settings-heading">
+        <div>
+          <strong>조직 알림 정책</strong>
+          <p>조직 구성원에게 허용할 알림 유형을 관리합니다.</p>
+        </div>
+        <span>{{ isLoadingPolicies ? '불러오는 중' : `${adminPolicies.length}개 설정됨` }}</span>
+      </div>
+      <div class="notification-condition-list" aria-label="조직 알림 정책">
+        <div v-for="option in adminPolicyOptions" :key="option.type" class="notification-condition-row">
+          <div>
+            <strong>{{ option.label }}</strong>
+            <p>{{ option.description }}</p>
+          </div>
+          <button
+            type="button"
+            class="ui-toggle"
+            :class="{ 'is-active': isPolicyEnabled(option.type) }"
+            :aria-pressed="isPolicyEnabled(option.type)"
+            :aria-label="`${option.label} 조직 알림 정책 설정`"
+            :disabled="isSavingPolicies"
+            @click="toggleAdminPolicy(option.type)"
+          >
+            <span class="ui-toggle-thumb" />
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <p v-if="notificationServerMessage" class="notification-settings-note">
+      {{ notificationServerMessage }}
+    </p>
+
     <footer class="notification-settings-footer">
       <button type="button" class="notification-settings-reset" @click="resetNotifications">
         기본값으로 초기화
@@ -118,8 +151,15 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useUserSettingsStore } from '@/stores/userSettings'
+import { useAuthStore } from '@/stores/useAuthStore'
+import {
+  getNotificationAdminPolicies,
+  getNotificationSettings,
+  updateNotificationAdminPolicies,
+  updateNotificationSettings,
+} from '@/api/notifications'
 
 defineProps({
   compact: {
@@ -133,7 +173,56 @@ defineProps({
 })
 
 const userSettingsStore = useUserSettingsStore()
+const authStore = useAuthStore()
 const browserPermissionMessage = ref('')
+const notificationServerMessage = ref('')
+const adminPolicies = ref([])
+const isLoadingPolicies = ref(false)
+const isSavingPolicies = ref(false)
+const isSavingNotifications = ref(false)
+
+const isPolicyManager = computed(() => authStore.isAdmin || authStore.isGeneralManager)
+
+const adminPolicyOptions = [
+  {
+    type: 'TASK_ASSIGNED',
+    label: '업무 배정',
+    description: '새 업무 생성 또는 담당자 배정 알림을 허용합니다.',
+  },
+  {
+    type: 'TASK_STATUS_CHANGED',
+    label: '업무 상태 변경',
+    description: '진행 상태 변경과 업무 수정 알림을 허용합니다.',
+  },
+  {
+    type: 'REVIEW_REQUESTED',
+    label: 'QA 검수',
+    description: '검수 요청, 승인, 반려 알림을 허용합니다.',
+  },
+  {
+    type: 'DEADLINE_24H',
+    label: '마감 임박',
+    description: '마감 24시간/1시간 전과 지연 알림을 허용합니다.',
+  },
+  {
+    type: 'CAMPAIGN_INVITED',
+    label: '캠페인',
+    description: '캠페인 초대, 승인/반려, 구성원 추가 알림을 허용합니다.',
+  },
+]
+
+const adminPolicyTypeGroups = {
+  TASK_ASSIGNED: ['TASK_ASSIGNED'],
+  TASK_STATUS_CHANGED: ['TASK_STATUS_CHANGED', 'TASK_UPDATED'],
+  REVIEW_REQUESTED: ['REVIEW_REQUESTED', 'REVIEW_APPROVED', 'REVIEW_REJECTED'],
+  DEADLINE_24H: ['DEADLINE_24H', 'DEADLINE_1H', 'DEADLINE_OVERDUE'],
+  CAMPAIGN_INVITED: [
+    'CAMPAIGN_INVITED',
+    'CAMPAIGN_INVITATION_ACCEPTED',
+    'CAMPAIGN_INVITATION_REJECTED',
+    'CAMPAIGN_MEMBER_ADDED',
+  ],
+}
 
 const notificationMethodOptions = [
   {
@@ -219,10 +308,120 @@ const notificationConditionCount = computed(
     ).length,
 )
 
+function resolvePayload(response) {
+  return response?.data?.data ?? response?.data ?? response ?? {}
+}
+
+function toClientSettings(payload) {
+  return {
+    enabled: Boolean(payload.enabled ?? true),
+    level: String(payload.level ?? 'NORMAL').toLowerCase(),
+    methods: {
+      inApp: Boolean(payload.methods?.inApp ?? true),
+      email: Boolean(payload.methods?.email ?? false),
+      browser: Boolean(payload.methods?.browser ?? false),
+    },
+    conditions: {
+      taskAssigned: Boolean(payload.conditions?.taskAssigned ?? true),
+      taskStatusChanged: Boolean(payload.conditions?.taskStatusChanged ?? true),
+      qaReview: Boolean(payload.conditions?.qaReview ?? true),
+      deadline: Boolean(payload.conditions?.deadline ?? true),
+      campaign: Boolean(payload.conditions?.campaign ?? true),
+      schedule: Boolean(payload.conditions?.schedule ?? true),
+    },
+  }
+}
+
+function toServerSettings() {
+  return {
+    enabled: userSettingsStore.notifications.enabled,
+    level: String(userSettingsStore.notifications.level || 'normal').toUpperCase(),
+    methods: {
+      ...userSettingsStore.notifications.methods,
+    },
+    conditions: {
+      ...userSettingsStore.notifications.conditions,
+    },
+  }
+}
+
+async function loadRemoteNotificationSettings() {
+  try {
+    const response = await getNotificationSettings()
+    userSettingsStore.updateNotifications(toClientSettings(resolvePayload(response)))
+  } catch (error) {
+    console.warn('Notification settings request failed.', error)
+    notificationServerMessage.value = '알림 설정을 서버에서 불러오지 못해 로컬 설정을 표시합니다.'
+  }
+}
+
+async function saveNotificationSettings() {
+  isSavingNotifications.value = true
+  notificationServerMessage.value = ''
+
+  try {
+    const response = await updateNotificationSettings(toServerSettings())
+    userSettingsStore.updateNotifications(toClientSettings(resolvePayload(response)))
+  } catch (error) {
+    console.warn('Notification settings save failed.', error)
+    notificationServerMessage.value = '알림 설정 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    isSavingNotifications.value = false
+  }
+}
+
+async function loadAdminPolicies() {
+  if (!isPolicyManager.value) {
+    return
+  }
+
+  isLoadingPolicies.value = true
+  try {
+    const response = await getNotificationAdminPolicies()
+    adminPolicies.value = resolvePayload(response).policies ?? []
+  } catch (error) {
+    console.warn('Notification policy request failed.', error)
+  } finally {
+    isLoadingPolicies.value = false
+  }
+}
+
+function findPolicy(type) {
+  return adminPolicies.value.find((policy) => policy.notificationType === type && policy.roleName === 'ALL')
+}
+
+function isPolicyEnabled(type) {
+  const types = adminPolicyTypeGroups[type] ?? [type]
+  return types.every((item) => findPolicy(item)?.enabled ?? true)
+}
+
+async function toggleAdminPolicy(type) {
+  isSavingPolicies.value = true
+  const nextEnabled = !isPolicyEnabled(type)
+  const types = adminPolicyTypeGroups[type] ?? [type]
+
+  try {
+    const response = await updateNotificationAdminPolicies({
+      policies: types.map((item) => ({
+          roleName: 'ALL',
+          notificationType: item,
+          enabled: nextEnabled,
+        })),
+    })
+    adminPolicies.value = resolvePayload(response).policies ?? []
+  } catch (error) {
+    console.warn('Notification policy save failed.', error)
+    notificationServerMessage.value = '조직 알림 정책 저장에 실패했습니다.'
+  } finally {
+    isSavingPolicies.value = false
+  }
+}
+
 function toggleNotificationEnabled() {
   userSettingsStore.updateNotifications({
     enabled: !userSettingsStore.notifications.enabled,
   })
+  void saveNotificationSettings()
 }
 
 async function toggleNotificationMethod(key) {
@@ -247,10 +446,12 @@ async function toggleNotificationMethod(key) {
   }
 
   userSettingsStore.updateNotificationMethod(key, nextValue)
+  void saveNotificationSettings()
 }
 
 function setNotificationLevel(value) {
   userSettingsStore.updateNotifications({ level: value })
+  void saveNotificationSettings()
 }
 
 function toggleNotificationCondition(key) {
@@ -258,12 +459,19 @@ function toggleNotificationCondition(key) {
     key,
     !userSettingsStore.notifications.conditions[key],
   )
+  void saveNotificationSettings()
 }
 
 function resetNotifications() {
   browserPermissionMessage.value = ''
   userSettingsStore.resetNotifications()
+  void saveNotificationSettings()
 }
+
+onMounted(() => {
+  void loadRemoteNotificationSettings()
+  void loadAdminPolicies()
+})
 </script>
 
 <style scoped>
