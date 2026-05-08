@@ -1,11 +1,10 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useCampaignKpiStore } from '@/stores/campaignKpi.js'
 import { GetCampaignDetails, UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
-import CampaignResourcesView from '@/views/CampaignResourcesView.vue'
 import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
 import MatchOverview from '@/views/MatchOverview.vue'
 import CampaignMembersPanel from '@/components/campaign/CampaignMembersPanel.vue'
@@ -72,6 +71,7 @@ function formatTeamboardDate(iso) {
 }
 
 const route = useRoute()
+const router = useRouter()
 const store = usePlannerStore()
 
 const activeTab = ref('캠페인 오버뷰')
@@ -101,6 +101,7 @@ const metadataDraft = ref({
   summary: '',
   partnersText: '',
   color: '',
+  status: 'draft',
 })
 
 // 백엔드 CampaignService.CAMPAIGN_PALETTE와 동일한 20색
@@ -111,7 +112,7 @@ const CAMPAIGN_PALETTE = [
   '#22C55E', '#0EA5E9', '#FB7185', '#4F46E5', '#059669',
 ]
 
-const tabs = ["캠페인 오버뷰", "팀 보드 보기", "레퍼런스 탭", "자료실", "검수/승인", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
+const tabs = ["캠페인 오버뷰", "팀 보드 보기", "검수/승인", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
 
 const handleTabClick = async (tabName) => {
   activeTab.value = tabName;
@@ -187,38 +188,16 @@ const partnerNames = computed(() => {
 
 /* ───── 캠페인 상태(status) 관리 ───── */
 const STATUS_OPTIONS = [
-  { value: 'draft',     label: '초안',     desc: '아직 운영 시작 전. 비공개 작업 단계.', tone: 'gray' },
-  { value: 'review',    label: '검수 중',  desc: '본사·계열사 승인을 기다리는 단계.', tone: 'amber' },
-  { value: 'live',      label: '진행 중',  desc: '캠페인이 활성화되어 운영되는 상태.', tone: 'emerald' },
-  { value: 'paused',    label: '일시정지', desc: '운영을 잠시 중단. 재개 가능.',       tone: 'slate' },
-  { value: 'completed', label: '완료',     desc: '캠페인 운영이 끝나 보관함으로 이동.', tone: 'indigo' },
+  { value: 'draft',       label: '초안',   desc: '아직 운영 시작 전. 비공개 작업 단계.',      tone: 'gray' },
+  { value: 'in_progress', label: '진행중', desc: '캠페인이 활성화되어 운영되는 상태.',         tone: 'emerald' },
+  { value: 'recruiting',  label: '모집중', desc: '파트너 모집을 진행 중. 소개 페이지 공개.',   tone: 'blue' },
+  { value: 'review',      label: '검토중', desc: '본사·계열사 승인을 기다리는 단계.',          tone: 'amber' },
+  { value: 'completed',   label: '완료',   desc: '캠페인 운영이 끝나 보관함으로 이동.',        tone: 'indigo' },
+  { value: 'closed',      label: '종료',   desc: '캠페인이 최종 종료되었습니다.',              tone: 'slate' },
 ]
-const statusBusy = ref(false)
 const currentStatus = computed(() =>
   String(activeCampaign.value?.status ?? 'draft').toLowerCase(),
 )
-async function changeStatus(nextStatus) {
-  if (!activeCampaign.value || statusBusy.value) return
-  if (currentStatus.value === nextStatus) return
-  if (!canEditMetadata.value) {
-    window.alert('캠페인 상태 변경 권한이 없습니다.')
-    return
-  }
-  const meta = STATUS_OPTIONS.find((s) => s.value === nextStatus)
-  if (!window.confirm(`캠페인 상태를 "${meta?.label ?? nextStatus}"(으)로 변경하시겠습니까?`)) return
-  statusBusy.value = true
-  try {
-    const updated = await UpdateCampaignStatus(activeCampaign.value.idx ?? activeCampaign.value.id, nextStatus)
-    // store에도 즉시 반영
-    if (typeof store.updateCampaign === 'function') {
-      store.updateCampaign(activeCampaign.value.id, updated ?? { ...activeCampaign.value, status: nextStatus })
-    }
-  } catch (err) {
-    window.alert(err?.response?.data?.message ?? err?.message ?? '상태 변경에 실패했습니다.')
-  } finally {
-    statusBusy.value = false
-  }
-}
 
 
 const statusColumns = [
@@ -767,6 +746,7 @@ function syncMetadataDraft() {
       '여름 시즌을 맞이하여 북미 및 아시아 시장을 타겟으로 한 대규모 할인 프로모션 및 신제품 런칭 캠페인.',
     partnersText: partnerNames.value.join(', '),
     color: activeCampaign.value?.color ?? '',
+    status: activeCampaign.value?.status ?? 'draft',
   }
 }
 
@@ -807,21 +787,27 @@ async function saveMetadata() {
   try {
     const updated = await UpdateCampaign(campaignId, payload)
 
-    // 서버 응답을 단일 진실 원천으로 store 갱신
+    const nextStatus = metadataDraft.value.status
+    if (nextStatus && nextStatus !== currentStatus.value) {
+      await UpdateCampaignStatus(campaignId, nextStatus)
+    }
+
     store.updateCampaign(campaignId, {
       ...activeCampaign.value,
       ...updated,
+      status: nextStatus || activeCampaign.value?.status,
       id: String(updated.idx ?? updated.id ?? campaignId),
     })
 
     metadataEditing.value = false
   } catch (error) {
     console.error('캠페인 메타데이터 저장 실패', error)
-    const status = error?.response?.status
-    if (status === 403) {
+    const httpStatus = error?.response?.status
+    const serverMsg = error?.response?.data?.message ?? error?.message
+    if (httpStatus === 403) {
       alert('캠페인을 편집할 권한이 없습니다.')
-    } else if (status === 400) {
-      alert('입력값을 확인해 주세요. (이름은 필수, 날짜 형식 YYYY-MM-DD)')
+    } else if (httpStatus === 400) {
+      alert(serverMsg || '입력값을 확인해 주세요. (이름은 필수, 날짜 형식 YYYY-MM-DD)')
     } else {
       alert('캠페인 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
     }
@@ -934,6 +920,9 @@ watch(
     <header class="campaign-hero" aria-label="캠페인 메인 페이지 헤더">
       <div class="campaign-hero__copy">
         <div class="campaign-hero__title">
+          <button type="button" class="btn-back" @click="metadataEditing ? (metadataEditing = false, activeTab = '캠페인 오버뷰') : router.back()" aria-label="뒤로 가기">
+            ←
+          </button>
           <h1>{{ activeCampaign?.name ?? '2024 글로벌 썸머 프로모션 캠페인' }}</h1>
           <span class="status-chip status-chip--primary">
             <i aria-hidden="true"></i>
@@ -1072,8 +1061,8 @@ watch(
                 <span class="requirement-badge">상태 전이</span>
                 <h2>캠페인 상태</h2>
               </div>
-              <span class="status-pill" :class="`status-pill--${(STATUS_OPTIONS.find(s => s.value === currentStatus) || STATUS_OPTIONS[0]).tone}`">
-                현재 · {{ (STATUS_OPTIONS.find(s => s.value === currentStatus) || STATUS_OPTIONS[0]).label }}
+              <span class="status-pill" :class="`status-pill--${(STATUS_OPTIONS.find(s => s.value === (metadataEditing ? metadataDraft.status : currentStatus)) || STATUS_OPTIONS[0]).tone}`">
+                현재 · {{ (STATUS_OPTIONS.find(s => s.value === (metadataEditing ? metadataDraft.status : currentStatus)) || STATUS_OPTIONS[0]).label }}
               </span>
             </div>
 
@@ -1085,11 +1074,11 @@ watch(
                 class="status-card"
                 :class="[
                   `status-card--${opt.tone}`,
-                  { 'is-active': currentStatus === opt.value, 'is-disabled': statusBusy || !canEditMetadata }
+                  { 'is-active': (metadataEditing ? metadataDraft.status : currentStatus) === opt.value, 'is-disabled': !canEditMetadata || !metadataEditing }
                 ]"
-                :disabled="statusBusy || !canEditMetadata || currentStatus === opt.value"
-                :aria-pressed="currentStatus === opt.value"
-                @click="changeStatus(opt.value)"
+                :disabled="!canEditMetadata || !metadataEditing"
+                :aria-pressed="(metadataEditing ? metadataDraft.status : currentStatus) === opt.value"
+                @click="metadataDraft.status = opt.value"
               >
                 <div class="status-card__head">
                   <span class="status-card__label">{{ opt.label }}</span>
@@ -1376,42 +1365,6 @@ watch(
           </div>
         </div>
       </div>
-    </section>
-
-    <section v-else-if="activeTab === '레퍼런스 탭'" class="tab-surface">
-      <div class="reference-toolbar">
-        <div class="segmented-control segmented-control--icon">
-          <button type="button" class="active">그리드</button>
-          <button type="button">목록</button>
-        </div>
-        <div>
-          <button type="button" class="btn btn--secondary">AI 생성</button>
-          <button type="button" class="btn btn--secondary">URL 크롤링</button>
-          <button type="button" class="btn btn--primary">파일 업로드</button>
-        </div>
-      </div>
-
-      <div class="reference-grid">
-        <article v-for="reference in references" :key="reference.id" class="reference-card">
-          <div class="reference-card__thumb" :class="`tone-${reference.tone}`">
-            <strong>{{ reference.icon }}</strong>
-          </div>
-          <div class="reference-card__body">
-            <div>
-              <span class="status-pill status-pill--info">{{ reference.source }}</span>
-              <small>{{ reference.date }}</small>
-            </div>
-            <h3>{{ reference.title }}</h3>
-            <div class="tag-row">
-              <span v-for="tag in reference.tags" :key="tag">#{{ tag }}</span>
-            </div>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <section v-else-if="activeTab === '자료실'" class="tab-surface">
-      <CampaignResourcesView />
     </section>
 
     <section v-else-if="activeTab === '검수/승인'" class="tab-surface">
@@ -1903,6 +1856,29 @@ watch(
   gap: 10px;
 }
 
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-color);
+  background: var(--surface-1, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-back:hover {
+  background: var(--panel-muted);
+  color: var(--text-primary);
+}
+
+.edit-back-bar {
+  margin-bottom: 16px;
+}
+
 .campaign-hero h1 {
   color: var(--text-primary);
   font-size: 26px;
@@ -2200,6 +2176,7 @@ watch(
 .status-card--emerald.is-active  { border-color: #10B981; background: rgba(16,185,129,0.10); }
 .status-card--slate.is-active    { border-color: #64748B; background: rgba(100,116,139,0.08); }
 .status-card--indigo.is-active   { border-color: #6366F1; background: rgba(99,102,241,0.10); }
+.status-card--blue.is-active     { border-color: #3B82F6; background: rgba(59,130,246,0.10); }
 
 /* status-pill tone variants — 패널 헤더 우측 표시 */
 .status-pill--gray    { background: rgba(148,163,184,0.16); color: #475569; }
@@ -2207,11 +2184,13 @@ watch(
 .status-pill--emerald { background: rgba(16,185,129,0.16);  color: #047857; }
 .status-pill--slate   { background: rgba(100,116,139,0.16); color: #334155; }
 .status-pill--indigo  { background: rgba(99,102,241,0.16);  color: #4338CA; }
+.status-pill--blue    { background: rgba(59,130,246,0.16);  color: #1D4ED8; }
 :root[data-theme='dark'] .status-pill--gray    { background: rgba(148,163,184,0.22); color: #CBD5E1; }
 :root[data-theme='dark'] .status-pill--amber   { background: rgba(245,158,11,0.22);  color: #FCD34D; }
 :root[data-theme='dark'] .status-pill--emerald { background: rgba(16,185,129,0.22);  color: #6EE7B7; }
 :root[data-theme='dark'] .status-pill--slate   { background: rgba(148,163,184,0.22); color: #CBD5E1; }
 :root[data-theme='dark'] .status-pill--indigo  { background: rgba(99,102,241,0.22);  color: #A5B4FC; }
+:root[data-theme='dark'] .status-pill--blue    { background: rgba(59,130,246,0.22);  color: #93C5FD; }
 
 .status-pill--success {
   background: var(--campaign-success-surface);

@@ -1,8 +1,10 @@
 package org.example.backend.campaign.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignRole;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
+import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.campaign.service.CampaignExportService;
 import org.example.backend.campaign.service.CampaignPdfReportService;
 import org.example.backend.common.security.RoleGuard;
@@ -34,21 +36,23 @@ public class CampaignExportController {
     private final CampaignPdfReportService pdfReportService;
     private final CampaignParticipantRepository campaignParticipantRepository;
     private final UserRepository userRepository;
+    private final CampaignRepository campaignRepository;
 
     private static final Set<String> DEFAULT_SECTIONS =
             Set.of("campaign", "members", "tasks", "kpi", "esg");
 
     @GetMapping("/{campaignId}/export.csv")
     public ResponseEntity<byte[]> exportCsv(
-            @PathVariable Long campaignId,
+            @PathVariable String campaignId,
             @RequestParam(value = "sections", required = false) String sectionsParam,
             @AuthenticationPrincipal AuthUserDetails user
     ) {
-        requireExportPermission(campaignId, user);
+        Long campaignIdx = toIdx(campaignId);
+        requireExportPermission(campaignIdx, user);
 
         Set<String> sections = parseSections(sectionsParam);
-        byte[] body = exportService.exportCsv(campaignId, sections);
-        String fileName = exportService.resolveFileName(campaignId);
+        byte[] body = exportService.exportCsv(campaignIdx, sections);
+        String fileName = exportService.resolveFileName(campaignIdx);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(new MediaType("text", "csv", StandardCharsets.UTF_8));
@@ -61,17 +65,17 @@ public class CampaignExportController {
         return ResponseEntity.ok().headers(headers).body(body);
     }
 
-    /** PDF 보고서 다운로드. type=summary(1쪽) | full(다중 페이지) */
     @GetMapping("/{campaignId}/export.pdf")
     public ResponseEntity<byte[]> exportPdf(
-            @PathVariable Long campaignId,
+            @PathVariable String campaignId,
             @RequestParam(value = "type", defaultValue = "summary") String type,
             @AuthenticationPrincipal AuthUserDetails user
     ) {
-        requireExportPermission(campaignId, user);
+        Long campaignIdx = toIdx(campaignId);
+        requireExportPermission(campaignIdx, user);
 
-        byte[] body = pdfReportService.generate(campaignId, type);
-        String fileName = pdfReportService.resolveFileName(campaignId, type);
+        byte[] body = pdfReportService.generate(campaignIdx, type);
+        String fileName = pdfReportService.resolveFileName(campaignIdx, type);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
@@ -84,8 +88,7 @@ public class CampaignExportController {
         return ResponseEntity.ok().headers(headers).body(body);
     }
 
-    /** 내보내기 권한: 글로벌 ROLE_MANAGER/ROLE_GENERAL_MANAGER 이면서, 본인 소속 조직이 해당 캠페인의 PM 인 경우만 허용. */
-    private void requireExportPermission(Long campaignId, AuthUserDetails user) {
+    private void requireExportPermission(Long campaignIdx, AuthUserDetails user) {
         AuthUserDetails authenticated = RoleGuard.requireManager(user);
         User caller = userRepository.findById(authenticated.getIdx())
                 .orElseThrow(() -> new ResponseStatusException(
@@ -96,7 +99,7 @@ public class CampaignExportController {
         }
         boolean isPmOrg = campaignParticipantRepository
                 .existsByCampaignIdxAndOrganizationIdxAndCampaignRole(
-                        campaignId, caller.getOrganization().getIdx(), CampaignRole.PM);
+                        campaignIdx, caller.getOrganization().getIdx(), CampaignRole.PM);
         if (!isPmOrg) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN, "캠페인의 PM 조직 소속만 내보낼 수 있습니다.");
@@ -111,5 +114,11 @@ public class CampaignExportController {
             if (DEFAULT_SECTIONS.contains(trimmed)) result.add(trimmed);
         }
         return result.isEmpty() ? DEFAULT_SECTIONS : result;
+    }
+
+    private Long toIdx(String publicId) {
+        return campaignRepository.findByPublicId(publicId)
+                .map(Campaign::getIdx)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "캠페인을 찾을 수 없습니다."));
     }
 }

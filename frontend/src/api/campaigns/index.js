@@ -28,21 +28,6 @@ export const ListCampaign = async (params = {}) => {
   return unwrapResponse(await api.get('/campaigns', { params }))
 }
 
-/**
- * 캠페인 디렉토리 — 검색·필터·태그·정렬 지원.
- * params: { q, orgType, status, tags(array), sort }
- *   - orgType: 'HQ' | 'AFFILIATE' | 'EXTERNAL_PARTNER' (or 'ALL')
- *   - status: 캠페인 status string
- *   - tags: 배열 — axios가 multi-value query param 으로 전송 (paramsSerializer 필요 시 별도 처리)
- *   - sort: 'latest' | 'deadline'
- */
-export const ListCampaignDirectory = async (params = {}) => {
-  return unwrapResponse(await api.get('/campaigns/directory', {
-    params,
-    paramsSerializer: { indexes: null },   // tags=[a,b] → tags=a&tags=b
-  }))
-}
-
 /* ───── 썸네일 (Phase 3) ───── */
 
 /** 1단계 — presigned PUT URL 발급. payload: { contentType, fileSize } */

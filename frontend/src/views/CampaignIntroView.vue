@@ -4,11 +4,20 @@
     <!-- Breadcrumb + Edit toggle -->
     <div class="op-topbar">
       <nav class="op-breadcrumb" aria-label="breadcrumb">
-        <span class="op-breadcrumb__item">제휴 모집</span>
+        <router-link
+          :to="{ name: 'campaign-detail', params: { campaignId: route.params.campaignId } }"
+          class="op-breadcrumb__item op-breadcrumb__item--link"
+        >{{ campaignName }}</router-link>
         <span class="op-breadcrumb__sep">›</span>
-        <span class="op-breadcrumb__item">진행중인 캠페인</span>
-        <span class="op-breadcrumb__sep">›</span>
-        <span class="op-breadcrumb__item op-breadcrumb__item--current" aria-current="page">소개 페이지</span>
+        <span
+          class="op-breadcrumb__item"
+          :class="{ 'op-breadcrumb__item--current': !editMode }"
+          :aria-current="!editMode ? 'page' : undefined"
+        >캠페인 소개</span>
+        <template v-if="editMode">
+          <span class="op-breadcrumb__sep">›</span>
+          <span class="op-breadcrumb__item op-breadcrumb__item--current" aria-current="page">편집</span>
+        </template>
       </nav>
       <div class="op-topbar__actions">
         <button v-if="!editMode && canEdit" class="btn btn--ghost btn--sm" @click="enterEdit">
@@ -28,8 +37,7 @@
     <!-- Hero -->
     <header class="op-hero">
       <div class="op-hero__left">
-        <div class="op-hero__badges">
-          <span class="badge" :class="`badge--${statusToTone(campaignStatus)}`">{{ campaignStatus }}</span>
+        <div v-if="(!editMode && rfpCode) || editMode" class="op-hero__badges">
           <code v-if="!editMode && rfpCode" class="op-rfp">{{ rfpCode }}</code>
           <input
             v-if="editMode"
@@ -38,7 +46,16 @@
             placeholder="RFP 코드 (예: RFP-2026-045)"
           />
         </div>
-        <h1 class="op-hero__title">{{ campaignName }}</h1>
+        <div class="op-hero__title-row">
+          <button
+            type="button"
+            class="btn-back"
+            @click="editMode ? cancelEdit() : router.push({ name: 'campaign-detail', params: { campaignId: route.params.campaignId } })"
+            aria-label="뒤로 가기"
+          >←</button>
+          <h1 class="op-hero__title">{{ campaignName }}</h1>
+          <span class="badge" :class="`badge--${statusToTone(campaignStatus)}`">{{ statusToLabel(campaignStatus) }}</span>
+        </div>
         <div class="op-hero__meta">
           <span>
             <i class="ph ph-user-circle"></i>담당: {{ ownerDisplay }}
@@ -70,75 +87,6 @@
         </div>
       </div>
     </header>
-
-    <!-- 편집 모드 전용 — 썸네일 (왼쪽) + 공개 범위 (오른쪽) 2열 그리드 (compact) -->
-    <section v-if="canEdit && editMode" class="op-edit-grid">
-      <!-- 왼쪽: 썸네일 -->
-      <div class="edit-card">
-        <div class="edit-card__head">
-          <i class="ph ph-image-square"></i>
-          <span class="edit-card__title">썸네일</span>
-        </div>
-        <input
-          ref="thumbInputRef"
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          hidden
-          @change="onThumbFileChange"
-        />
-        <div class="edit-card__actions">
-          <button type="button" class="icon-btn" :disabled="thumbBusy" @click="thumbInputRef?.click()" title="이미지 업로드">
-            <i class="ph ph-upload-simple"></i><span>업로드</span>
-          </button>
-          <button type="button" class="icon-btn" :disabled="thumbBusy" @click="onThumbAiGenerate" title="AI 자동 생성">
-            <i class="ph ph-sparkle"></i><span>AI 생성</span>
-          </button>
-          <button type="button" class="icon-btn icon-btn--danger" :disabled="thumbBusy" @click="onThumbClear" title="썸네일 제거">
-            <i class="ph ph-trash"></i><span>제거</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 오른쪽: 공개 범위 -->
-      <div class="edit-card">
-        <div class="edit-card__head">
-          <i class="ph ph-eye"></i>
-          <span class="edit-card__title">공개 범위</span>
-        </div>
-        <div class="visibility-row">
-          <!-- 비공개/공개 토글 -->
-          <div class="visibility-toggle" role="tablist" aria-label="공개 여부">
-            <button
-              type="button" role="tab"
-              class="visibility-toggle__btn"
-              :class="{ 'is-active': isVisibilityPrivate }"
-              :aria-selected="isVisibilityPrivate"
-              @click="setVisibility('PRIVATE')"
-            ><i class="ph ph-lock"></i>비공개</button>
-            <button
-              type="button" role="tab"
-              class="visibility-toggle__btn"
-              :class="{ 'is-active': !isVisibilityPrivate }"
-              :aria-selected="!isVisibilityPrivate"
-              @click="setVisibility(editDraft.visibility === 'PRIVATE' ? 'HQ_ONLY' : editDraft.visibility)"
-            ><i class="ph ph-globe-hemisphere-west"></i>공개</button>
-          </div>
-          <!-- 공개일 때 — chip pill 가로 wrap -->
-          <div v-if="!isVisibilityPrivate" class="visibility-chips">
-            <button
-              v-for="opt in VISIBILITY_OPTIONS"
-              :key="opt.value"
-              type="button"
-              class="visibility-chip"
-              :class="{ 'is-active': editDraft.visibility === opt.value }"
-              :title="opt.desc"
-              @click="setVisibility(opt.value)"
-            >{{ opt.label }}</button>
-          </div>
-          <p v-else class="visibility-hint-inline">PM 조직만 이 캠페인 소개에 접근합니다.</p>
-        </div>
-      </div>
-    </section>
 
     <!-- Tab Nav -->
     <nav class="op-tabs" aria-label="페이지 섹션">
@@ -451,7 +399,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { GetCampaignIntro, UpdateCampaignIntro, uploadCampaignThumbnail, RegenerateThumbnail, ClearThumbnail } from '@/api/campaigns'
+import { GetCampaignIntro, UpdateCampaignIntro } from '@/api/campaigns'
 
 const route = useRoute()
 const router = useRouter()
@@ -470,60 +418,6 @@ const saving = ref(false)
 const canEdit = computed(() => Boolean(introData.value?.canEdit))
 const isInternalViewer = computed(() => Boolean(introData.value?.isInternalViewer))
 
-// 공개 범위 (visibility) — 5개 옵션 (PRIVATE 제외)
-const VISIBILITY_OPTIONS = [
-  { value: 'HQ_ONLY',           label: '한화 본사만',     desc: '본사 사용자에게만 노출' },
-  { value: 'HQ_AND_AFFILIATE',  label: '계열사 이상',     desc: '본사 + 계열사 (외부 파트너 제외)' },
-  { value: 'AFFILIATE_ONLY',    label: '계열사끼리만',    desc: '계열사 사용자만 (본사·외부 제외)' },
-  { value: 'EXTERNAL_ONLY',     label: '외부 파트너만',   desc: '외부 파트너에게만 노출 (내부 제외)' },
-  { value: 'ALL',               label: '전체 공개',       desc: '본사 + 계열사 + 외부 파트너 모두' },
-]
-const isVisibilityPrivate = computed(() => (editDraft.value?.visibility ?? 'PRIVATE') === 'PRIVATE')
-function setVisibility(next) {
-  if (!editDraft.value) return
-  editDraft.value.visibility = next
-}
-
-// 썸네일 업로드 (P2)
-const thumbInputRef = ref(null)
-const thumbBusy = ref(false)
-async function onThumbFileChange(e) {
-  const file = e.target.files?.[0]
-  if (!file) return
-  thumbBusy.value = true
-  try {
-    await uploadCampaignThumbnail(route.params.campaignId, file)
-    window.alert('썸네일이 저장되었습니다. "캠페인 둘러보기"에서 확인하세요.')
-  } catch (err) {
-    window.alert(err?.response?.data?.message ?? err?.message ?? '썸네일 업로드에 실패했습니다.')
-  } finally {
-    thumbBusy.value = false
-    if (e.target) e.target.value = ''
-  }
-}
-async function onThumbAiGenerate() {
-  thumbBusy.value = true
-  try {
-    await RegenerateThumbnail(route.params.campaignId)
-    window.alert('AI 썸네일 생성을 시작했습니다. 잠시 후 "캠페인 둘러보기"에서 확인하세요.')
-  } catch (err) {
-    window.alert(err?.response?.data?.message ?? err?.message ?? 'AI 생성에 실패했습니다.')
-  } finally {
-    thumbBusy.value = false
-  }
-}
-async function onThumbClear() {
-  if (!window.confirm('썸네일을 제거하시겠습니까?')) return
-  thumbBusy.value = true
-  try {
-    await ClearThumbnail(route.params.campaignId)
-    window.alert('썸네일이 제거되었습니다.')
-  } catch (err) {
-    window.alert(err?.response?.data?.message ?? err?.message ?? '제거에 실패했습니다.')
-  } finally {
-    thumbBusy.value = false
-  }
-}
 
 const tabs = [
   { id: 'detail', label: '상세 정보' },
@@ -640,9 +534,24 @@ const hasAnyWeight = computed(() =>
 // 헬퍼
 function statusToTone(status) {
   if (!status) return 'info'
-  if (['recruiting', '모집중', 'active'].includes(status)) return 'success'
-  if (['closed', '종료'].includes(status)) return 'muted'
+  if (['recruiting', '모집중', 'active', 'in_progress'].includes(status)) return 'success'
+  if (['closed', '종료', 'completed'].includes(status)) return 'muted'
   return 'info'
+}
+
+function statusToLabel(status) {
+  const map = {
+    draft: '초안',
+    in_progress: '진행중',
+    recruiting: '모집중',
+    active: '진행중',
+    closed: '종료',
+    completed: '완료',
+    planned: '예정',
+    at_risk: '위험',
+    review: '검토중',
+  }
+  return map[status] || status || '준비중'
 }
 function formatDate(dt) {
   if (!dt) return '미정'
@@ -684,7 +593,6 @@ function enterEdit() {
     weightCost: introData.value?.weightCost ?? 0,
     weightOperation: introData.value?.weightOperation ?? 0,
     weightBrand: introData.value?.weightBrand ?? 0,
-    visibility: introData.value?.visibility ?? 'PRIVATE',
   }
   editMode.value = true
 }
@@ -714,7 +622,6 @@ async function saveEdit() {
       weightCost: Number(editDraft.value.weightCost) || null,
       weightOperation: Number(editDraft.value.weightOperation) || null,
       weightBrand: Number(editDraft.value.weightBrand) || null,
-      visibility: editDraft.value.visibility || 'PRIVATE',
     }
     await UpdateCampaignIntro(route.params.campaignId, payload)
     introData.value = await GetCampaignIntro(route.params.campaignId)
@@ -740,11 +647,16 @@ async function loadIntro(campaignId) {
   if (!campaignId) return
   loading.value = true
   errorMsg.value = ''
-  // 캠페인 ID가 바뀌면 이전 편집 상태 carry-over 방지
   editMode.value = false
   editDraft.value = null
   try {
     introData.value = await GetCampaignIntro(campaignId)
+    const status = introData.value?.campaignStatus ?? ''
+    const isRecruiting = ['recruiting', '모집중'].includes(status)
+    if (!isRecruiting && !introData.value?.canEdit) {
+      router.replace({ name: 'campaign-detail', params: { campaignId } })
+      return
+    }
   } catch (e) {
     errorMsg.value = e?.message ?? '소개 페이지를 불러오지 못했습니다.'
     introData.value = null
@@ -831,6 +743,45 @@ watch(() => route.params.campaignId, (next) => {
   color: var(--text-1);
   font-weight: 600;
   cursor: default;
+}
+.op-breadcrumb__item--link {
+  text-decoration: none;
+  color: var(--text-3);
+}
+.op-breadcrumb__item--link:hover { color: var(--text-1); }
+
+.op-hero__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.op-hero__title-row .op-hero__title {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-color);
+  background: var(--surface-1, transparent);
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-back:hover {
+  background: var(--panel-muted);
+  color: var(--text-primary);
 }
 .op-breadcrumb__sep { color: var(--text-4); font-size: 11px; }
 
@@ -956,132 +907,6 @@ watch(() => route.params.campaignId, (next) => {
   text-align: center;
 }
 
-/* 편집 모드 — 썸네일 + 공개 범위 2열 그리드 (compact) */
-.op-edit-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: -4px 0 10px;
-}
-@media (max-width: 720px) {
-  .op-edit-grid { grid-template-columns: 1fr; }
-}
-.edit-card {
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: var(--surface-2, var(--panel-color));
-  border: 1px dashed var(--border-color);
-  display: flex; align-items: center; gap: 10px;
-  min-height: 44px;
-}
-.edit-card__head {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 11px; font-weight: 700;
-  color: var(--text-2);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.edit-card__head i { font-size: 14px; color: var(--text-3); }
-.edit-card__title { letter-spacing: -0.01em; }
-.edit-card__actions {
-  display: inline-flex; gap: 4px;
-  margin-left: auto;
-}
-.icon-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 5px 9px;
-  border-radius: 7px;
-  border: 1px solid var(--border-color);
-  background: var(--panel-color);
-  color: var(--text-2);
-  font-size: 11px; font-weight: 600; font-family: inherit;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
-}
-.icon-btn:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--color-primary-500) 30%, var(--border-color));
-  color: var(--color-primary-700);
-}
-.icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.icon-btn i { font-size: 12px; }
-.icon-btn--danger:hover:not(:disabled) {
-  border-color: rgba(220, 38, 38, 0.4);
-  color: #DC2626;
-}
-
-/* 공개 범위 — 한 줄에 토글 + chip wrap */
-.visibility-row {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  flex: 1; min-width: 0;
-  margin-left: auto;
-}
-.visibility-toggle {
-  display: inline-flex;
-  background: var(--panel-color);
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  padding: 2px;
-  gap: 2px;
-  flex-shrink: 0;
-}
-.visibility-toggle__btn {
-  display: inline-flex; align-items: center; gap: 3px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 0;
-  background: transparent;
-  font-size: 11px; font-weight: 700;
-  color: var(--text-2);
-  cursor: pointer; font-family: inherit;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.visibility-toggle__btn i { font-size: 11px; }
-.visibility-toggle__btn:hover { color: var(--text-primary); }
-.visibility-toggle__btn.is-active {
-  background: var(--color-primary-500);
-  color: #fff;
-}
-
-.visibility-chips {
-  display: inline-flex; flex-wrap: wrap; gap: 4px;
-  align-items: center;
-}
-.visibility-chip {
-  padding: 4px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: var(--panel-color);
-  color: var(--text-2);
-  font-size: 11px; font-weight: 600; font-family: inherit;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.visibility-chip:hover {
-  border-color: color-mix(in srgb, var(--color-primary-500) 32%, var(--border-color));
-  color: var(--color-primary-700);
-}
-.visibility-chip.is-active {
-  background: var(--color-primary-500);
-  border-color: var(--color-primary-500);
-  color: #fff;
-}
-.visibility-hint-inline {
-  margin: 0; font-size: 11px;
-  color: var(--muted-text);
-}
-.thumb-uploader__head {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 13px; font-weight: 700;
-  color: var(--text-primary);
-}
-.thumb-uploader__title { letter-spacing: -0.01em; }
-.thumb-uploader__hint {
-  margin: 0; font-size: 11px;
-  color: var(--muted-text);
-}
-.thumb-uploader__actions {
-  display: inline-flex; flex-wrap: wrap; gap: 6px;
-}
 
 /* P1 — 내부 전용 영역 표시 칩 (심사 가중치 등) */
 .op-internal-tag {

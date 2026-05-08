@@ -31,15 +31,6 @@ const routes = [
         },
       },
       {
-        path: 'campaigns/browse',
-        name: 'campaign-directory',
-        component: () => import('@/views/CampaignDirectoryView.vue'),
-        meta: {
-          title: '캠페인 둘러보기',
-          section: '한화 그룹 캠페인 디렉토리',
-        },
-      },
-      {
         path: 'campaigns/:campaignId',
         name: 'campaign-detail',
         component: () => import('@/views/CampaignDetailView.vue'),

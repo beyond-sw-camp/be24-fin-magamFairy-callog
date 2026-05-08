@@ -2,7 +2,9 @@ package org.example.backend.campaign.controller;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignIntroDto;
+import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.campaign.service.CampaignIntroService;
 import org.example.backend.common.model.BaseResponse;
 import org.example.backend.common.model.BaseResponseStatus;
@@ -24,16 +26,20 @@ import org.springframework.web.server.ResponseStatusException;
 public class CampaignIntroController {
 
     private final CampaignIntroService introService;
+    private final CampaignRepository campaignRepository;
 
     @GetMapping("/{campaignId}/intro")
     public ResponseEntity getIntro(
-            @PathVariable Long campaignId,
+            @PathVariable String campaignId,
             @AuthenticationPrincipal AuthUserDetails user
     ) {
         try {
+            Long campaignIdx = toIdx(campaignId);
             Long callerIdx = user == null ? null : user.getIdx();
-            CampaignIntroDto.GetRes dto = introService.getIntro(campaignId, callerIdx);
+            CampaignIntroDto.GetRes dto = introService.getIntro(campaignIdx, callerIdx);
             return ResponseEntity.ok(BaseResponse.success(dto));
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
@@ -45,7 +51,7 @@ public class CampaignIntroController {
 
     @PatchMapping("/{campaignId}/intro")
     public ResponseEntity updateIntro(
-            @PathVariable Long campaignId,
+            @PathVariable String campaignId,
             @RequestBody CampaignIntroDto.UpdateReq dto,
             @AuthenticationPrincipal AuthUserDetails user
     ) {
@@ -53,10 +59,10 @@ public class CampaignIntroController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
         }
         try {
-            introService.updateIntro(campaignId, dto, user.getIdx());
+            Long campaignIdx = toIdx(campaignId);
+            introService.updateIntro(campaignIdx, dto, user.getIdx());
             return ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.SUCCESS));
         } catch (ResponseStatusException e) {
-            // 권한 거부(403) 등은 그대로 위로 전파
             throw e;
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -65,5 +71,11 @@ public class CampaignIntroController {
             return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
                     .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
         }
+    }
+
+    private Long toIdx(String publicId) {
+        return campaignRepository.findByPublicId(publicId)
+                .map(Campaign::getIdx)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "캠페인을 찾을 수 없습니다."));
     }
 }

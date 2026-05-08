@@ -30,7 +30,11 @@ import java.util.concurrent.ThreadLocalRandom;
 public class CampaignService {
     private static final String DEFAULT_COLOR = "#8B5CF6";
     private static final String DEFAULT_ICON = "🎯";
-    private static final List<String> ALLOWED_STATUSES = List.of("draft", "review", "live", "paused", "completed");
+    private static final List<String> ALLOWED_STATUSES = List.of(
+            "draft", "in_progress", "recruiting", "review", "completed", "closed",
+            // 하위 호환 — 기존 데이터에 저장된 구 값 허용
+            "live", "paused", "at_risk", "planned", "active"
+    );
 
     /**
      * 캠페인 생성 시 색상이 비어있을 때 무작위로 부여하는 팔레트 (20색).
@@ -66,94 +70,8 @@ public class CampaignService {
     private final CampaignKpiContributionService contributionService;
     private final CampaignImageStorageService thumbnailStorage;
     private final CampaignThumbnailGenerator thumbnailGenerator;
-    private final org.example.backend.matching.repository.BenefitRepository benefitRepository;
-
     public List<CampaignDto.Res> listCampaigns(Long userIdx) {
         return listCampaigns(userIdx, "mine");
-    }
-
-    /**
-     * 캠페인 디렉토리 — `/campaigns/browse` 페이지용 검색·필터·태그 응답.
-     *
-     * Visibility:
-     *  - HQ: 전체 캠페인
-     *  - AFFILIATE: 본사 PM 또는 자기 조직 PM 또는 자기 조직 참여 캠페인
-     *  - EXTERNAL_PARTNER: 자기 조직 참여 캠페인
-     *  - 비로그인: 401 (controller에서 차단)
-     */
-    public List<org.example.backend.campaign.dto.CampaignDirectoryDto> directory(
-            Long userIdx, String search, String orgType, String status, java.util.List<String> tags, String sort, String scope) {
-        User caller = userRepository.findById(userIdx).orElse(null);
-
-        java.util.List<Campaign> visible = collectVisibleForDirectory(caller);
-
-        // scope = "mine" | "applied" | (default: 전체 visible)
-        if ("mine".equalsIgnoreCase(scope) && caller != null) {
-            String callerLoginId = caller.getId();
-            visible = visible.stream()
-                    .filter(c -> callerLoginId != null && callerLoginId.equals(c.getOwnerLoginId()))
-                    .toList();
-        } else if ("applied".equalsIgnoreCase(scope) && caller != null && caller.getOrganization() != null) {
-            Long callerOrgIdx = caller.getOrganization().getIdx();
-            // 자기 조직이 PartnerBenefits(=제안서 제출)을 등록한 캠페인 — 본사 승인 여부와 무관
-            java.util.Set<Long> appliedIds = new java.util.HashSet<>(
-                    benefitRepository.findCampaignIdxByOrganizationIdx(callerOrgIdx));
-            visible = visible.stream()
-                    .filter(c -> appliedIds.contains(c.getIdx()))
-                    .toList();
-        }
-
-        // PM 조직 매핑 — 캠페인별 한 번만 lookup
-        java.util.Map<Long, org.example.backend.organization.model.Organization> pmByCampaign = new java.util.HashMap<>();
-        for (Campaign c : visible) {
-            participantRepository.findAllByCampaignIdx(c.getIdx()).stream()
-                    .filter(p -> p.getCampaignRole() == CampaignRole.PM && p.getOrganization() != null)
-                    .findFirst()
-                    .ifPresent(p -> pmByCampaign.put(c.getIdx(), p.getOrganization()));
-        }
-
-        String q = search == null ? "" : search.trim().toLowerCase();
-        String statusLower = status == null ? "" : status.trim().toLowerCase();
-
-        return visible.stream()
-                .filter(c -> {
-                    if (!q.isEmpty()) {
-                        String hay = ((c.getName() == null ? "" : c.getName()) + " "
-                                + (c.getPurpose() == null ? "" : c.getPurpose()) + " "
-                                + (c.getMainMessage() == null ? "" : c.getMainMessage())).toLowerCase();
-                        if (!hay.contains(q)) return false;
-                    }
-                    if (!statusLower.isEmpty() && !statusLower.equalsIgnoreCase(c.getStatus())) return false;
-                    if (orgType != null && !orgType.isBlank() && !"ALL".equalsIgnoreCase(orgType)) {
-                        var pm = pmByCampaign.get(c.getIdx());
-                        if (pm == null || pm.getType() == null) return false;
-                        if (!pm.getType().name().equalsIgnoreCase(orgType)) return false;
-                    }
-                    if (tags != null && !tags.isEmpty()) {
-                        java.util.Set<String> cTags = c.getTags() == null ? java.util.Set.of()
-                                : new java.util.HashSet<>(c.getTags());
-                        if (tags.stream().noneMatch(cTags::contains)) return false;
-                    }
-                    return true;
-                })
-                .sorted((a, b) -> {
-                    if ("deadline".equalsIgnoreCase(sort)) {
-                        java.time.LocalDate ad = a.getEndDate(), bd = b.getEndDate();
-                        if (ad == null && bd == null) return 0;
-                        if (ad == null) return 1;
-                        if (bd == null) return -1;
-                        return ad.compareTo(bd);
-                    }
-                    // latest — createdAt desc
-                    java.util.Date at = a.getCreatedAt() == null ? new java.util.Date(0) : a.getCreatedAt();
-                    java.util.Date bt = b.getCreatedAt() == null ? new java.util.Date(0) : b.getCreatedAt();
-                    return bt.compareTo(at);
-                })
-                .map(c -> org.example.backend.campaign.dto.CampaignDirectoryDto.from(
-                        c,
-                        pmByCampaign.get(c.getIdx()),
-                        thumbnailStorage.createViewUrl(c.getThumbnailObjectKey())))
-                .toList();
     }
 
     // ── 썸네일 업로드 (Phase 3) ─────────────────────────────
@@ -192,41 +110,6 @@ public class CampaignService {
         if (previous != null) {
             try { thumbnailStorage.deleteObject(previous); } catch (Exception ignored) { }
         }
-    }
-
-    private java.util.List<Campaign> collectVisibleForDirectory(User caller) {
-        if (caller == null || caller.getOrganization() == null) {
-            return java.util.List.of();
-        }
-        OrganizationType type = caller.getOrganization().getType();
-        Long callerOrgIdx = caller.getOrganization().getIdx();
-        if (type == OrganizationType.HQ) {
-            return campaignRepository.findAll();
-        }
-        // AFFILIATE / EXTERNAL_PARTNER — 자기 조직 참여 캠페인 + 자기 조직 제안서 제출 캠페인
-        // (AFFILIATE는 본사 PM 캠페인 추가 노출)
-        java.util.Set<Long> ids = new java.util.HashSet<>();
-        java.util.List<Campaign> visible = new java.util.ArrayList<>();
-        participantRepository.findCampaignsByOrganizationIdx(callerOrgIdx).forEach(c -> {
-            if (ids.add(c.getIdx())) visible.add(c);
-        });
-        // 제안서 제출 이력만 있는 캠페인도 노출 (applied 탭에서 확인 가능)
-        java.util.List<Long> appliedIds = benefitRepository.findCampaignIdxByOrganizationIdx(callerOrgIdx);
-        if (!appliedIds.isEmpty()) {
-            campaignRepository.findAllById(appliedIds).forEach(c -> {
-                if (ids.add(c.getIdx())) visible.add(c);
-            });
-        }
-        if (type == OrganizationType.AFFILIATE) {
-            campaignRepository.findAll().forEach(c -> {
-                boolean hqPm = participantRepository.findAllByCampaignIdx(c.getIdx()).stream()
-                        .anyMatch(p -> p.getCampaignRole() == CampaignRole.PM
-                                && p.getOrganization() != null
-                                && p.getOrganization().getType() == OrganizationType.HQ);
-                if (hqPm && ids.add(c.getIdx())) visible.add(c);
-            });
-        }
-        return visible;
     }
 
     /**

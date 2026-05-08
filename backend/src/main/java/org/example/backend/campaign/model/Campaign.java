@@ -19,6 +19,7 @@ import org.example.backend.common.model.BaseEntity;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -31,6 +32,16 @@ public class Campaign extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idx;
+
+    @Column(name = "public_id", unique = true, length = 36)
+    private String publicId;
+
+    @jakarta.persistence.PrePersist
+    protected void onPrePersist() {
+        if (this.publicId == null) {
+            this.publicId = UUID.randomUUID().toString();
+        }
+    }
 
     @Column(nullable = false, length = 100)
     private String ownerLoginId;

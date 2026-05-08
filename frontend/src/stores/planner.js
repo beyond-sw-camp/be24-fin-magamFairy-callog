@@ -89,16 +89,7 @@ function createDefaultTask(dateKey, nextIndex) {
   }
 }
 
-function safeParseTasks(value) {
-  try {
-    const parsed = JSON.parse(value)
-    return Array.isArray(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-function safeParseCampaigns(value) {
+function safeParseArray(value) {
   try {
     const parsed = JSON.parse(value)
     return Array.isArray(parsed) ? parsed : null
@@ -314,10 +305,10 @@ export const usePlannerStore = defineStore('planner', () => {
       return
     }
 
-    const storedOrder = safeParseCampaigns(
+    const storedOrder = safeParseArray(
       window.localStorage.getItem(getCampaignUiStorageKey(campaignOrderStorageKey)),
     )
-    const storedFolderIds = safeParseCampaigns(
+    const storedFolderIds = safeParseArray(
       window.localStorage.getItem(getCampaignUiStorageKey(campaignFolderStorageKey)),
     )
 
@@ -356,7 +347,7 @@ export const usePlannerStore = defineStore('planner', () => {
         campaigns.value = nextCampaigns
 
         const nextIds = nextCampaigns.map((c) => c.id)
-        const savedOrder = safeParseCampaigns(
+        const savedOrder = safeParseArray(
           typeof window !== 'undefined'
             ? window.localStorage.getItem(getCampaignUiStorageKey(campaignOrderStorageKey))
             : null,
@@ -410,14 +401,14 @@ export const usePlannerStore = defineStore('planner', () => {
     }
 
     if (storedTasks) {
-      const parsedTasks = safeParseTasks(storedTasks)
+      const parsedTasks = safeParseArray(storedTasks)
       if (parsedTasks) {
         tasks.value = parsedTasks
       }
     }
 
     if (storedCampaigns) {
-      const parsedCampaigns = safeParseCampaigns(storedCampaigns)
+      const parsedCampaigns = safeParseArray(storedCampaigns)
       if (parsedCampaigns?.length) {
         campaigns.value = parsedCampaigns
       }
@@ -655,15 +646,6 @@ export const usePlannerStore = defineStore('planner', () => {
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
       mainMessage: payload.mainMessage?.trim() || '',
-      // 캠페인 생성 wizard step 1·3 필드 — 수정 모달에서 다시 채워주려면 store 보존 필요
-      assetName: payload.assetName ?? '',
-      assetDescription: payload.assetDescription ?? '',
-      primaryGoal: payload.primaryGoal ?? '',
-      campaignMethods: Array.isArray(payload.campaignMethods) ? [...payload.campaignMethods] : [],
-      maxCost: payload.maxCost ?? '',
-      minRevenue: payload.minRevenue ?? '',
-      ownerName: payload.ownerName ?? '',
-      ownerEmail: payload.ownerEmail ?? '',
       contributions: Array.isArray(payload.contributions) ? [...payload.contributions] : [],
       ...normalizeCampaignExtraFields(payload),
       status: payload.status || 'draft',
@@ -707,17 +689,6 @@ export const usePlannerStore = defineStore('planner', () => {
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
       mainMessage: payload.mainMessage?.trim() || '',
-      // 수정 모달 재진입 시 form 채우기에 필요 — 응답에 있으면 갱신, 없으면 기존 값 보존
-      assetName: payload.assetName ?? currentCampaign.assetName ?? '',
-      assetDescription: payload.assetDescription ?? currentCampaign.assetDescription ?? '',
-      primaryGoal: payload.primaryGoal ?? currentCampaign.primaryGoal ?? '',
-      campaignMethods: Array.isArray(payload.campaignMethods)
-        ? [...payload.campaignMethods]
-        : (Array.isArray(currentCampaign.campaignMethods) ? currentCampaign.campaignMethods : []),
-      maxCost: payload.maxCost ?? currentCampaign.maxCost ?? '',
-      minRevenue: payload.minRevenue ?? currentCampaign.minRevenue ?? '',
-      ownerName: payload.ownerName ?? currentCampaign.ownerName ?? '',
-      ownerEmail: payload.ownerEmail ?? currentCampaign.ownerEmail ?? '',
       contributions: Array.isArray(payload.contributions)
         ? [...payload.contributions]
         : (Array.isArray(currentCampaign.contributions) ? currentCampaign.contributions : []),
