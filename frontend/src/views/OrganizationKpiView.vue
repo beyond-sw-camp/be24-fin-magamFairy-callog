@@ -13,8 +13,8 @@ const orgType = computed(() => {
   if (fromOrg) return String(fromOrg).toUpperCase()
   const fromClaim = authStore.user?.orgType
   if (fromClaim) return String(fromClaim).toUpperCase()
-  // dev/mock 환경 fallback — 등록 버튼이 항상 노출되도록 HQ로 default
-  return 'HQ'
+  // 미인증 또는 로그인 응답에 orgType 미포함 시 null — 모든 편집권 비활성
+  return null
 })
 const orgId = computed(() =>
   authStore.user?.organization?.idx
@@ -233,6 +233,13 @@ async function handleActivate(kpi) {
     window.alert('활성화 실패: ' + (err?.response?.data?.message || err?.message || err))
   }
 }
+async function handleRestoreDraft(kpi) {
+  try {
+    await store.updateStatus(kpi.idx, 'DRAFT')
+  } catch (err) {
+    window.alert('초안 복원 실패: ' + (err?.response?.data?.message || err?.message || err))
+  }
+}
 
 const periodLabel = computed(() => {
   if (activePeriodChip.value === 'CUSTOM') return customPeriodCode.value || '직접 지정'
@@ -366,6 +373,7 @@ const periodLabel = computed(() => {
           @edit="openEdit"
           @archive="handleArchive"
           @activate="handleActivate"
+          @restore-draft="handleRestoreDraft"
         />
       </section>
 
@@ -384,6 +392,7 @@ const periodLabel = computed(() => {
           @edit="openEdit"
           @archive="handleArchive"
           @activate="handleActivate"
+          @restore-draft="handleRestoreDraft"
         />
       </section>
     </template>
