@@ -131,6 +131,27 @@ function createCampaignInitials(name) {
   return initials.toUpperCase()
 }
 
+function asText(value, fallback = '') {
+  return value?.trim?.() || fallback || ''
+}
+
+function asList(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback
+}
+
+function normalizeCampaignExtraFields(source = {}, fallback = {}) {
+  return {
+    assetName: asText(source.assetName, fallback.assetName),
+    assetDescription: asText(source.assetDescription, fallback.assetDescription),
+    primaryGoal: asText(source.primaryGoal, fallback.primaryGoal),
+    campaignMethods: asList(source.campaignMethods, fallback.campaignMethods || []),
+    maxCost: asText(source.maxCost, fallback.maxCost),
+    minRevenue: asText(source.minRevenue, fallback.minRevenue),
+    ownerName: asText(source.ownerName, fallback.ownerName),
+    ownerEmail: asText(source.ownerEmail, fallback.ownerEmail),
+  }
+}
+
 function normalizeCampaignRecord(source, fallback = {}) {
   const merged = {
     ...fallback,
@@ -153,6 +174,7 @@ function normalizeCampaignRecord(source, fallback = {}) {
     partners: Array.isArray(merged.partners) ? merged.partners : [],
     goals: merged.goals?.trim?.() || '',
     mainMessage: merged.mainMessage?.trim?.() || '',
+    ...normalizeCampaignExtraFields(merged),
     status: merged.status || fallback.status || 'draft',
     initials: merged.initials || createCampaignInitials(name),
     icon: merged.icon || fallback.icon || '',
@@ -610,6 +632,7 @@ export const usePlannerStore = defineStore('planner', () => {
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
       mainMessage: payload.mainMessage?.trim() || '',
+      ...normalizeCampaignExtraFields(payload),
       status: payload.status || 'draft',
       initials: payload.initials || createCampaignInitials(name),
       icon: payload.icon || '',
@@ -651,6 +674,7 @@ export const usePlannerStore = defineStore('planner', () => {
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
       mainMessage: payload.mainMessage?.trim() || '',
+      ...normalizeCampaignExtraFields(payload, currentCampaign),
       status: payload.status || currentCampaign.status,
       initials: payload.initials || createCampaignInitials(name),
       icon: payload.icon || currentCampaign.icon || '',
