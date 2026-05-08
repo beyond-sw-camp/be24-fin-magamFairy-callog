@@ -40,6 +40,7 @@ const dropPlacement = ref('before')
 const folderDropState = ref('idle')
 
 const VIEW_MODE_STORAGE_KEY = 'callog-sidebar2-view-mode'
+const ACTIVE_CAMPAIGN_SESSION_KEY = 'CURRENT_CAMPAIGN'
 const viewMode = ref('compact') // 'compact' | 'kpi'
 
 const contextMenuPosition = reactive({ top: FLOAT_MARGIN, left: FLOAT_MARGIN })
@@ -333,6 +334,11 @@ function closeCreateModal() {
 function selectCampaign(campaignId) {
   closeCampaignMenu()
   store.setActiveCampaign(campaignId)
+
+  if (typeof window !== 'undefined') {
+    window.sessionStorage.setItem(ACTIVE_CAMPAIGN_SESSION_KEY, String(campaignId))
+  }
+
   router.push({ name: 'campaign-detail', params: { campaignId } })
 }
 

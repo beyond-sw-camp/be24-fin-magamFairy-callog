@@ -50,3 +50,39 @@ export const CheckAdFile = async (file) => {
     throw toAdCheckError(error)
   }
 }
+
+export const ListAdReviewRequests = async (campaignId) => {
+  try {
+    return unwrapResponse(await api.get(`/campaigns/${campaignId}/ad-review-requests`))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const CreateAdReviewRequest = async (campaignId, payload) => {
+  try {
+    return unwrapResponse(await api.post(`/campaigns/${campaignId}/ad-review-requests`, payload))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const ApproveAdReviewRequest = async (campaignId, requestId, payload = {}) => {
+  try {
+    return unwrapResponse(
+      await api.patch(`/campaigns/${campaignId}/ad-review-requests/${requestId}/approve`, payload),
+    )
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const RejectAdReviewRequest = async (campaignId, requestId, payload = {}) => {
+  try {
+    return unwrapResponse(
+      await api.patch(`/campaigns/${campaignId}/ad-review-requests/${requestId}/reject`, payload),
+    )
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}

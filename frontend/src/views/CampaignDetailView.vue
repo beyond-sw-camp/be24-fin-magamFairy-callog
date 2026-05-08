@@ -10,6 +10,7 @@ import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
 import MatchOverview from '@/views/MatchOverview.vue'
 import CampaignMembersPanel from '@/components/campaign/CampaignMembersPanel.vue'
 import CampaignKpiTab from '@/components/campaign/kpi/CampaignKpiTab.vue'
+import CampaignKpiCascadeView from '@/components/campaign/CampaignKpiCascadeView.vue'
 import CampaignExportModal from '@/components/campaign/CampaignExportModal.vue'
 import {
   ListMilestones,
@@ -124,6 +125,36 @@ const handleTabClick = async (tabName) => {
 };
 
 const campaignId = computed(() => route.params.campaignId)
+
+// ───── 캠페인 KPI cascade contributions (Phase B)
+const kpiCascadeContributions = ref([])
+const kpiCascadeLoading = ref(false)
+async function loadKpiCascadeContributions() {
+  const cid = campaignId.value
+  if (!cid) return
+  kpiCascadeLoading.value = true
+  try {
+    const { default: api } = await import('/plugins/interceptor.js')
+    const response = await api.get(`/campaigns/${cid}/kpi-contributions`)
+    const payload = response?.data
+    const data = payload?.data ?? payload
+    kpiCascadeContributions.value = Array.isArray(data) ? data : data?.items ?? []
+  } catch (error) {
+    console.warn('[mock fallback] cascade contributions 가져오기 실패', error)
+    kpiCascadeContributions.value = []
+  } finally {
+    kpiCascadeLoading.value = false
+  }
+}
+watch(
+  [() => campaignId.value, () => activeTab.value],
+  ([cid, tab]) => {
+    if (cid && tab === '캠페인 성과/KPI') {
+      void loadKpiCascadeContributions()
+    }
+  },
+  { immediate: true },
+)
 
 const activeCampaign = computed(() => {
   const cid = String(route.params.campaignId ?? '')
@@ -1388,7 +1419,7 @@ watch(
     </section>
 
     <section v-else-if="activeTab === '검수/승인'" class="tab-surface">
-      <ReviewApprovalView />
+      <ReviewApprovalView :campaign-id="campaignId" />
     </section>
 
     <section v-else-if="activeTab === '참여자 설정'" class="tab-surface">
@@ -1396,6 +1427,18 @@ watch(
     </section>
 
     <section v-else-if="activeTab === '캠페인 성과/KPI'" class="tab-surface">
+      <div class="kpi-tab-legend">
+        <span class="kpi-tab-legend__chip kpi-tab-legend__chip--cascade">🟣 cascade</span>
+        <span class="kpi-tab-legend__text">상위 KPI(본사·계열사)에 기여하는 매핑</span>
+        <span class="kpi-tab-legend__divider">·</span>
+        <span class="kpi-tab-legend__chip kpi-tab-legend__chip--ops">🔵 운영</span>
+        <span class="kpi-tab-legend__text">캠페인 자체 metric (CTR / 노출 등)</span>
+      </div>
+      <CampaignKpiCascadeView
+        :contributions="kpiCascadeContributions"
+        :loading="kpiCascadeLoading"
+        style="margin-bottom: 16px;"
+      />
       <CampaignKpiTab :campaign-id="campaignId" />
     </section>
 
@@ -3930,4 +3973,38 @@ textarea:disabled {
   from { transform: translateX(0); }
   to   { transform: translateX(100%); }
 }
+
+/* ───── KPI 탭 분류 안내 (Q2 C) ───── */
+.kpi-tab-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--panel-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 6px 14px;
+  margin-bottom: 14px;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.kpi-tab-legend__chip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 999px;
+}
+.kpi-tab-legend__chip--cascade {
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+.kpi-tab-legend__chip--ops {
+  background: #dbeafe;
+  color: #2563eb;
+}
+.kpi-tab-legend__text { font-weight: 600; color: var(--text-secondary); }
+.kpi-tab-legend__divider { color: var(--subtle-text); margin: 0 4px; }
 </style>
