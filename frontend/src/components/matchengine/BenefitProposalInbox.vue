@@ -36,9 +36,8 @@ function handleEvaluationSubmit(payload) {
 const statusFilters = [
   { id: 'all', label: '전체' },
   { id: 'PENDING', label: '새 제안' },
-  { id: 'INCOMPLETE', label: '보완 필요' },
-  { id: 'APPROVED', label: '승인됨' },
   { id: 'HOLD', label: '보류' },
+  { id: 'APPROVED', label: '승인' },
 ]
 
 function getStatusLabel(status) {
@@ -79,7 +78,6 @@ const selectedBenefit = computed(() => {
 const summary = computed(() => ({
   total: benefits.value.length,
   new: benefits.value.filter((benefit) => benefit.status === 'PENDING').length,
-  incomplete: benefits.value.filter((benefit) => benefit.status === 'INCOMPLETE').length,
   approved: benefits.value.filter((benefit) => benefit.status === 'APPROVED').length,
 }))
 
@@ -93,7 +91,6 @@ function selectFilter(filterId) {
 
 function statusTone(status) {
   if (status === 'PENDING') return 'primary'
-  if (status === 'INCOMPLETE') return 'warning'
   if (status === 'APPROVED') return 'success'
   return 'muted'
 }
@@ -120,12 +117,6 @@ function formatPeriod(benefit) {
         <h3>혜택 평가</h3>
         <p>파트너가 등록한 혜택을 검토하고 평가를 진행합니다.</p>
       </div>
-      <button type="button" class="benefit-inbox__primary" @click="openEvaluationModal">
-        평가 진행하기
-        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
-          <path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      </button>
     </header>
 
     <div class="benefit-layout">
@@ -139,12 +130,8 @@ function formatPeriod(benefit) {
             <span>새 제안</span>
             <strong>{{ summary.new }}<small>건</small></strong>
           </article>
-          <article class="warning">
-            <span>보완 필요</span>
-            <strong>{{ summary.incomplete }}<small>건</small></strong>
-          </article>
           <article class="success">
-            <span>승인됨</span>
+            <span>승인</span>
             <strong>{{ summary.approved }}<small>건</small></strong>
           </article>
         </section>
@@ -205,9 +192,11 @@ function formatPeriod(benefit) {
               <h4>{{ selectedBenefit.managerName }} · {{ selectedBenefit.name }}</h4>
               <p>{{ selectedBenefit.description }}</p>
             </div>
-            <strong :class="{ muted: !selectedBenefit.matchScore }">
-              {{ selectedBenefit.matchScore ? `${selectedBenefit.matchScore}점` : '보완 필요' }}
-            </strong>
+            <div class="benefit-detail__actions">
+              <button type="button">승인</button>
+              <button type="button">보류</button>
+              <button type="button" class="primary" @click="openEvaluationModal">평가하기</button>
+            </div>
           </header>
 
           <dl class="benefit-detail__grid">
@@ -257,11 +246,6 @@ function formatPeriod(benefit) {
           </section>
         </div>
 
-        <footer class="benefit-actions">
-          <button type="button">보완 요청</button>
-          <button type="button">보류</button>
-          <button type="button" class="primary" @click="openEvaluationModal">평가 진행하기</button>
-        </footer>
       </aside>
     </div>
 
@@ -336,8 +320,7 @@ function formatPeriod(benefit) {
   font-weight: 650;
 }
 
-.benefit-inbox__primary,
-.benefit-actions .primary {
+.benefit-detail__actions .primary {
   display: inline-flex;
   height: 2.35rem;
   align-items: center;
@@ -355,7 +338,7 @@ function formatPeriod(benefit) {
 
 .benefit-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
@@ -389,10 +372,6 @@ function formatPeriod(benefit) {
 
 .benefit-summary .accent strong {
   color: var(--benefit-brand);
-}
-
-.benefit-summary .warning strong {
-  color: var(--benefit-amber);
 }
 
 .benefit-summary .success strong {
@@ -696,16 +675,15 @@ function formatPeriod(benefit) {
   line-height: 1.45;
 }
 
-.benefit-actions {
+.benefit-detail__actions {
   display: flex;
+  flex-shrink: 0;
   flex-wrap: wrap;
-  gap: 0.45rem;
-  border-top: 1px solid var(--benefit-line);
-  background: var(--benefit-surface);
-  padding: 0.8rem 1rem 1rem;
+  justify-content: flex-end;
+  gap: 0.4rem;
 }
 
-.benefit-actions button {
+.benefit-detail__actions button {
   min-height: 2.1rem;
   border: 1px solid var(--benefit-line);
   border-radius: 8px;
@@ -750,9 +728,13 @@ function formatPeriod(benefit) {
     grid-template-columns: 1fr;
   }
 
-  .benefit-inbox__primary,
-  .benefit-actions button {
+  .benefit-detail__actions {
     width: 100%;
+    justify-content: stretch;
+  }
+
+  .benefit-detail__actions button {
+    flex: 1;
   }
 }
 </style>

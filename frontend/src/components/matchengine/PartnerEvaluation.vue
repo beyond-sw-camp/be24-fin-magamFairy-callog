@@ -484,7 +484,7 @@ function grade(score) {
   if (score >= 90) return '최우선 추천'
   if (score >= 80) return '우선 검토'
   if (score >= 70) return '조건부 검토'
-  return '보완 필요'
+  return '검토 제외'
 }
 </script>
 
