@@ -695,49 +695,20 @@ const tabs = [
   { id: 'schedule', label: '모집 일정' },
 ]
 
-// fallback mockup — API에서 비어있을 때 보여줄 기본값
+// API에서 비어있을 때 보여줄 기본값 (모두 빈 상태로 시작)
 const FALLBACK = {
-  hanwhaAssets: [
-    { icon: 'mobile-phone', title: '앱/온라인 채널 노출', desc: '한화온 앱 메인 배너 및 기획전 페이지 노출 (예상 트래픽: 50만/월)' },
-    { icon: 'crown', title: 'VIP 고객 베이스', desc: '리조트 회원권 보유 VIP 타깃 e-DM 및 알림톡 발송 (10만 건)' },
-    { icon: 'convenience-store', title: '오프라인 공간 활용', desc: '전국 12개 리조트 로비/객실 내 홍보물 비치 및 팝업 공간 제공' },
-    { icon: 'ticket', title: '객실/티켓 자산', desc: '파트너사 이벤트용 리조트 숙박권 및 워터파크 이용권 지원' },
-  ],
-  partnerRoles: [
-    { icon: 'star', title: '단독 혜택 제공', desc: '한화 패키지 이용객 대상 독점 할인 또는 한정판 굿즈/서비스 제공' },
-    { icon: 'megaphone', title: '상호 마케팅 채널 지원', desc: '파트너사 온/오프라인 채널을 통한 공동 캠페인 홍보' },
-    { icon: 'busts-in-silhouette', title: '운영 리소스 투입', desc: '제휴 서비스 제공을 위한 CS 채널 및 운영 인력 확보' },
-    { icon: 'framed-picture', title: '콘텐츠 에셋 제작', desc: '기획전 구성에 필요한 브랜드 이미지 및 프로모션 소재 제공' },
-  ],
-  customerTags: ['프리미엄 레저', '키즈 에듀테인먼트', '편리한 이동', '미식 여행'],
-  partnerValues: [
-    { icon: 'bullseye', tone: 'primary', title: '고소득 구매력 타깃 확보', desc: '리조트 회원 및 프리미엄 객실 투숙객 대상의 고효율 마케팅' },
-    { icon: 'money-bag', tone: 'info', title: '브랜드 인지도 및 세일즈 증대', desc: '제휴 상품을 통한 직접적인 매출 발생 (예상 전환율 15%)' },
-  ],
-  timelineEvents: [
-    { id: 1, color: 'gray', done: true, title: '모집 공고 오픈', date: '미정' },
-    { id: 2, color: 'yellow', urgent: true, title: '제안서 제출 마감', date: '미정', tag: '중요', tagColor: 'red' },
-    { id: 3, color: 'purple', title: '최종 파트너 선정 발표', date: '미정' },
-  ],
-  submissionDocs: [
-    { icon: 'page-with-curl', color: '#EF4444', required: true, label: '1. 제휴 제안서' },
-    { icon: 'bar-chart', color: '#22C55E', required: true, label: '2. 비용/혜택 구조 및 예상 KPI 산출표' },
-    { icon: 'page-facing-up', color: '#3B82F6', required: false, label: '3. 회사 소개서 및 레퍼런스' },
-  ],
+  hanwhaAssets: [],
+  partnerRoles: [],
+  customerTags: [],
+  partnerValues: [],
+  timelineEvents: [],
+  submissionDocs: [],
   attachedFiles: [],
-  contactInfo: { name: '담당자 미지정', team: '', email: '-', phone: '-' },
-  heroKpis: [
-    { label: '예상 월 노출', value: '50만+' },
-    { label: '예상 전환율', value: '15%' },
-    { label: '파트너 모집', value: '5개 내외' },
-  ],
-  targetSegment: '3040 유자녀 가족 (초등학생 이하 자녀 동반)',
-  targetScale: '캠페인 기간 내 패키지 구매자 약 15,000팀 (4인 기준 6만 명)',
-  submissionInfo: {
-    name: '제안서 온라인 제출',
-    desc: '우측의 \'제안서 제출\' 버튼을 클릭하여 웹 폼 작성 및 파일 업로드',
-    limit: '최대 파일 크기: 50MB (PDF, ZIP 권장)',
-  },
+  contactInfo: { name: '', team: '', email: '', phone: '' },
+  heroKpis: [],
+  targetSegment: '',
+  targetScale: '',
+  submissionInfo: { name: '', desc: '', limit: '' },
 }
 
 const ICON_SUGGESTIONS = [
@@ -1425,6 +1396,46 @@ watch(() => route.params.campaignId, (next) => {
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
+}
+
+/* ─── Dark mode 보정 (deadline-box 밝은 보라 → 차분한 톤) ────── */
+:root[data-theme='dark'] .deadline-box {
+  background: rgba(139, 92, 246, 0.10);
+  border-color: rgba(139, 92, 246, 0.26);
+}
+:root[data-theme='dark'] .deadline-box__label,
+:root[data-theme='dark'] .deadline-box__dday,
+:root[data-theme='dark'] .deadline-progress__labels,
+:root[data-theme='dark'] .deadline-box__social {
+  color: #c4b5fd;
+}
+:root[data-theme='dark'] .deadline-box__date {
+  color: var(--text-1);
+}
+:root[data-theme='dark'] .deadline-progress__track {
+  background: rgba(139, 92, 246, 0.18);
+}
+:root[data-theme='dark'] .deadline-progress__fill {
+  background: #a78bfa;
+}
+:root[data-theme='dark'] .deadline-box__social {
+  border-top-color: rgba(139, 92, 246, 0.22);
+}
+
+/* KEY METRIC 카드: 라이트 라벤더 → 다크 네이비 그라데이션이 어색 → 부드러운 보라 톤으로 */
+:root[data-theme='dark'] .kpi-card:first-child {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.18) 0%, var(--surface) 100%);
+  border-color: rgba(139, 92, 246, 0.30);
+}
+:root[data-theme='dark'] .kpi-card:first-child::before {
+  color: #c4b5fd;
+}
+:root[data-theme='dark'] .kpi-card__value {
+  color: #c4b5fd;
+}
+:root[data-theme='dark'] .kpi-card--add:hover {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.45);
 }
 
 /* ─── Campaign Essentials (주 목표 / 자산명 / 캠페인 방식) ─────── */

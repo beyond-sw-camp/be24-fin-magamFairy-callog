@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignDto;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.campaign.service.CampaignCalendarService;
 import org.example.backend.campaign.service.CampaignService;
 import org.example.backend.common.model.BaseResponse;
 import org.example.backend.user.model.AuthUserDetails;
@@ -26,6 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/campaigns")
 public class CampaignController {
     private final CampaignService campaignService;
+    private final CampaignCalendarService campaignCalendarService;
     private final CampaignRepository campaignRepository;
 
     @GetMapping
@@ -35,6 +37,17 @@ public class CampaignController {
     ) {
         return ResponseEntity.ok(BaseResponse.success(
                 campaignService.listCampaigns(user.getIdx(), scope)
+        ));
+    }
+
+    /** 캘린더 일괄 조회 — 캠페인 + 모집마감 + 마일스톤을 1회 호출로 모두 반환. */
+    @GetMapping("/calendar-events")
+    public ResponseEntity<BaseResponse> calendarEvents(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "mine") String scope
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                campaignCalendarService.loadEvents(user.getIdx(), scope)
         ));
     }
 

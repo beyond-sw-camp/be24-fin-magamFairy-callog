@@ -74,36 +74,7 @@ const goalTypes = [
   },
 ]
 
-const goals = ref([
-  {
-    id: 1,
-    name: '2026 Q2 업셀 프로모션',
-    primaryType: 'upsell',
-    secondaryType: 'customer_revisit',
-    kpiPrimary: '객단가 +5%',
-    kpiSecondary: '재방문율 +10%',
-    budgetLimit: '5,000만 원',
-    effortLimit: '100시간',
-    periodStart: '2026-05-01',
-    periodEnd: '2026-06-30',
-    owner: '갤러리아 마케팅팀 김OO',
-    weights: { revenue: 30, effort: 20, brand: 50 },
-  },
-  {
-    id: 2,
-    name: '신규 회원 가입 캠페인',
-    primaryType: 'member_signup',
-    secondaryType: 'new_customer',
-    kpiPrimary: '신규 다운로드 30,000건',
-    kpiSecondary: 'D7 잔존율 18%',
-    budgetLimit: '3,000만 원',
-    effortLimit: '80시간',
-    periodStart: '2026-06-01',
-    periodEnd: '2026-07-15',
-    owner: '디지털채널팀 박OO',
-    weights: { revenue: 35, effort: 35, brand: 30 },
-  },
-])
+const goals = ref([])
 
 const form = ref(createGoalForm())
 

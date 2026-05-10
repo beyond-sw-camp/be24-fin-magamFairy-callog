@@ -72,34 +72,9 @@ const partnerCategories = [
   '자동차',
 ]
 
-const goals = ref([
-  {
-    id: 1,
-    name: '2026 Q2 업셀 프로모션',
-    primaryType: '객단가/업셀 향상',
-    secondaryType: '기존 고객 재방문',
-    campaignMethod: '멤버십·로열티 강화',
-    kpi: '객단가 +5%, 재방문율 +10%',
-    limit: '5,000만 원 · 100시간',
-    period: '2026.05.01 ~ 2026.06.30',
-    owner: '제휴마케팅팀 김OO',
-    weights: '수익성 30 · 공수 20 · 브랜드 50',
-  },
-  {
-    id: 2,
-    name: '신규 회원 가입 캠페인',
-    primaryType: '회원 가입 유도',
-    secondaryType: '신규 고객 유입',
-    campaignMethod: '채널/앱 프로모션',
-    kpi: '신규 가입 30,000건, D7 잔존율 18%',
-    limit: '3,000만 원 · 80시간',
-    period: '2026.06.01 ~ 2026.07.15',
-    owner: '디지털채널팀 박OO',
-    weights: '수익성 35 · 공수 35 · 브랜드 30',
-  },
-])
+const goals = ref([])
 
-const selectedGoalId = ref(goals.value[0].id)
+const selectedGoalId = ref(null)
 const isAddingGoal = ref(false)
 const form = ref({ ...createGoalForm(), primaryType: 'NEW_CUSTOMER' })
 const isRecommendationModalOpen = ref(false)

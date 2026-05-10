@@ -86,13 +86,7 @@ function mapCandidateToProposal(candidate) {
       operation: getScoreFromBreakdown(candidate, '운영 용이성', fallback),
       brand: getScoreFromBreakdown(candidate, '브랜드 적합도', fallback),
     },
-    comparison: {
-      goalAverage: Math.max(62, Math.round(fallback - 16)),
-      goalSample: 12,
-      partnerAverage: Math.max(60, Math.round(fallback - 6)),
-      partnerCases: 3,
-      percentile: fallback >= 90 ? '상위 12%' : fallback >= 80 ? '상위 28%' : '상위 45%',
-    },
+    comparison: candidate.comparison ?? null,
     warnings: candidate.risk ? [candidate.risk] : [],
     reason: candidate.reasons?.[0] ?? title + '의 평가 후보입니다.',
     targetKpis: candidate.targetKpis?.length ? candidate.targetKpis : [],
@@ -113,19 +107,9 @@ function mapCandidateToProposal(candidate) {
       getDetailMeta(candidate, '일정', '운영 근거 미입력'),
       candidate.reasons?.[0] ?? '브랜드 적합 근거 미입력',
     ],
-    riskMatrix: {
-      impact: '중',
-      probability: '중',
-      checklist: ['일별 사용량 제한', '조기 소진 알림', '대체 혜택 문구 준비'],
-    },
-    nextActions: [
-      { title: '파트너 조건 확인', owner: '김캘리', due: 'D-2', priority: '높음', dependency: '' },
-      { title: '운영 일정 검토', owner: '박운영', due: 'D-5', priority: '보통', dependency: '조건 확인 후' },
-      { title: '검토 의견 기록', owner: '김캘리', due: 'D-1', priority: '낮음', dependency: '' },
-    ],
-    comments: [
-      { author: '시스템', time: '방금 전', text: '새로운 평가 데이터가 수신되어 반영되었습니다.' }
-    ],
+    riskMatrix: candidate.riskMatrix ?? null,
+    nextActions: candidate.nextActions ?? [],
+    comments: candidate.comments ?? [],
     detailedMetrics: candidate.detailedMetrics || null,
     manualScore: score || null,
   }
