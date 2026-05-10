@@ -13,5 +13,11 @@ public interface CampaignInvitationRepository extends JpaRepository<CampaignInvi
             CampaignInvitationStatus status
     );
 
+    boolean existsByCampaign_IdxAndInviteeOrganization_IdxAndStatus(
+            Long campaignIdx,
+            Long inviteeOrganizationIdx,
+            CampaignInvitationStatus status
+    );
+
     Optional<CampaignInvitation> findByIdxAndCampaign_Idx(Long idx, Long campaignIdx);
 }

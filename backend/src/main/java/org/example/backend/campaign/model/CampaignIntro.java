@@ -93,6 +93,19 @@ public class CampaignIntro extends BaseEntity {
     @Column(columnDefinition = "json")
     private Map<String, Object> submissionInfo;
 
+    // 타깃 고객 프로필 — 자유 추가/삭제 가능한 항목 리스트
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "json")
+    private Map<String, Object> customerItems;
+
+    // 누적 조회 수 — 외부 파트너가 GET 호출할 때마다 증가 (PM 팀은 제외)
+    @Column(name = "view_count")
+    private Long viewCount;
+
+    public void recordView() {
+        this.viewCount = (this.viewCount == null ? 0L : this.viewCount) + 1;
+    }
+
     public void updateContent(CampaignIntroDto.UpdateReq dto) {
         if (dto.getRfpCode() != null) this.rfpCode = dto.getRfpCode();
         if (dto.getRecruitDeadline() != null) this.recruitDeadline = dto.getRecruitDeadline();
@@ -114,5 +127,6 @@ public class CampaignIntro extends BaseEntity {
         if (dto.getTargetSegment() != null) this.targetSegment = dto.getTargetSegment();
         if (dto.getTargetScale() != null) this.targetScale = dto.getTargetScale();
         if (dto.getSubmissionInfo() != null) this.submissionInfo = dto.getSubmissionInfo();
+        if (dto.getCustomerItems() != null) this.customerItems = dto.getCustomerItems();
     }
 }

@@ -4,8 +4,11 @@ import { computed } from 'vue'
 const props = defineProps({
   member: { type: Object, required: true },
   canManage: { type: Boolean, default: false },
+  manageMode: { type: Boolean, default: false },
+  canExpel: { type: Boolean, default: false },
+  expelLoading: { type: Boolean, default: false },
 })
-const emit = defineEmits(['manage'])
+const emit = defineEmits(['manage', 'expel'])
 
 const roleLabel = computed(() => {
   switch (props.member.campaignRole) {
@@ -25,6 +28,10 @@ const roleTone = computed(() => {
 function onManage(event) {
   emit('manage', { member: props.member, target: event.currentTarget })
 }
+
+function onExpel() {
+  emit('expel', props.member)
+}
 </script>
 
 <template>
@@ -39,8 +46,22 @@ function onManage(event) {
     <span class="cm-row__cell">{{ member.companyName }} · {{ member.department }}</span>
     <span :class="['cm-row__chip', `cm-row__chip--${roleTone}`]">{{ roleLabel }}</span>
     <span class="cm-row__cell cm-row__cell--muted">{{ member.joinedAt?.slice(0, 10) }}</span>
-    <button v-if="canManage" type="button" class="cm-row__manage" @click="onManage">관리</button>
-    <span v-else />
+    <template v-if="manageMode">
+      <button
+        v-if="canExpel"
+        type="button"
+        class="cm-row__expel"
+        :disabled="expelLoading"
+        @click="onExpel"
+      >
+        {{ expelLoading ? '처리 중' : '추방' }}
+      </button>
+      <span v-else />
+    </template>
+    <template v-else>
+      <button v-if="canManage" type="button" class="cm-row__manage" @click="onManage">관리</button>
+      <span v-else />
+    </template>
   </div>
 </template>
 
@@ -105,4 +126,17 @@ function onManage(event) {
   cursor: pointer;
 }
 .cm-row__manage:hover { background: var(--panel-muted); border-color: var(--border-strong, var(--color-primary-500)); }
+.cm-row__expel {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cm-row__expel:hover:not(:disabled) { filter: brightness(0.92); }
+.cm-row__expel:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

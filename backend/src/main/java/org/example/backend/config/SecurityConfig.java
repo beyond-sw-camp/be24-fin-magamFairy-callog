@@ -60,7 +60,7 @@ public class SecurityConfig {
                         "/workspace/**",
                         "/file/**",
                         "/ws-stomp/**",
-                        "/notification/subscribe",
+                        "/notifications/subscribe",
                         "/api/sse/**",
                         "/sse/**"
                 ).permitAll()

@@ -1,5 +1,6 @@
 <template>
-  <div class="op" @click="activeIconPicker = null">
+  <div class="op" @click="closeIconPicker()">
+    <div class="reading-progress" :style="{ width: scrollProgress + '%' }"></div>
 
     <!-- Breadcrumb + Edit toggle -->
     <div class="op-topbar">
@@ -21,7 +22,7 @@
       </nav>
       <div class="op-topbar__actions">
         <button v-if="!editMode && canEdit" class="btn btn--ghost btn--sm" @click="enterEdit">
-          <i class="ph ph-pencil-simple"></i>편집
+          <iconify-icon icon="fluent-emoji:pencil"></iconify-icon>편집
         </button>
         <template v-else-if="editMode && canEdit">
           <button class="btn btn--ghost btn--sm" :disabled="saving" @click="cancelEdit">취소</button>
@@ -34,8 +35,21 @@
 
     <p v-if="errorMsg" class="op-error-banner">{{ errorMsg }}</p>
 
+    <!-- Skeleton Loader (initial load) -->
+    <div v-if="loading && !introData" class="skeleton-stack" aria-busy="true" aria-label="페이지 로딩 중">
+      <div class="skeleton skeleton--hero"></div>
+      <div class="skeleton-strip">
+        <div class="skeleton skeleton--card"></div>
+        <div class="skeleton skeleton--card"></div>
+        <div class="skeleton skeleton--card"></div>
+      </div>
+      <div class="skeleton skeleton--kpi"></div>
+      <div class="skeleton skeleton--block"></div>
+      <div class="skeleton skeleton--block" style="height:200px"></div>
+    </div>
+
     <!-- Hero -->
-    <header class="op-hero">
+    <header v-show="!loading || introData" class="op-hero">
       <div class="op-hero__left">
         <div v-if="(!editMode && rfpCode) || editMode" class="op-hero__badges">
           <code v-if="!editMode && rfpCode" class="op-rfp">{{ rfpCode }}</code>
@@ -45,6 +59,10 @@
             class="op-input op-input--inline"
             placeholder="RFP 코드 (예: RFP-2026-045)"
           />
+          <span v-if="!editMode" class="trust-badge" title="한화 공식 RFP — 인증된 캠페인 제안서">
+            <iconify-icon icon="fluent-emoji:check-mark-button"></iconify-icon>
+            Verified by 한화
+          </span>
         </div>
         <div class="op-hero__title-row">
           <button
@@ -58,10 +76,10 @@
         </div>
         <div class="op-hero__meta">
           <span>
-            <i class="ph ph-user-circle"></i>담당: {{ ownerDisplay }}
+            <iconify-icon icon="fluent-emoji:bust-in-silhouette"></iconify-icon>담당: {{ ownerDisplay }}
             <em v-if="ownerEmail" class="op-hero__meta-sub">· {{ ownerEmail }}</em>
           </span>
-          <span><i class="ph ph-eye"></i>공개 범위: 인증 사용자</span>
+          <span><iconify-icon icon="fluent-emoji:eyes"></iconify-icon>공개 범위: 인증 사용자</span>
         </div>
       </div>
 
@@ -90,12 +108,44 @@
               <span>모집 마감</span>
             </div>
           </div>
+          <div v-if="!editMode" class="deadline-box__social">
+            <span class="deadline-box__social-dot"></span>
+            <iconify-icon icon="fluent-emoji:eyes"></iconify-icon>
+            지금까지 <strong>{{ viewCount.toLocaleString() }}회</strong> 조회됨
+          </div>
         </div>
       </div>
     </header>
 
+    <!-- Campaign Essentials (주 목표 / 자산명 / 캠페인 방식) -->
+    <div v-if="(primaryGoal || assetName || campaignMethods?.length) && (!loading || introData)" id="sec-essentials" class="essentials-strip">
+      <div v-if="primaryGoal" class="essentials-card">
+        <div class="essentials-card__head">
+          <iconify-icon icon="fluent-emoji:bullseye"></iconify-icon>
+          <span>주 목표</span>
+        </div>
+        <div class="essentials-card__value">{{ primaryGoal }}</div>
+      </div>
+      <div v-if="assetName" class="essentials-card">
+        <div class="essentials-card__head">
+          <iconify-icon icon="fluent-emoji:wrapped-gift"></iconify-icon>
+          <span>자산명</span>
+        </div>
+        <div class="essentials-card__value">{{ assetName }}</div>
+      </div>
+      <div v-if="campaignMethods?.length" class="essentials-card">
+        <div class="essentials-card__head">
+          <iconify-icon icon="fluent-emoji:rocket"></iconify-icon>
+          <span>캠페인 방식</span>
+        </div>
+        <div class="essentials-card__value essentials-card__value--tags">
+          <span v-for="m in campaignMethods" :key="m" class="essentials-tag">{{ m }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Hero KPI Strip (WYSIWYG) -->
-    <div v-if="editMode || heroKpis.length" class="kpi-strip">
+    <div v-if="(editMode || heroKpis.length) && (!loading || introData)" class="kpi-strip">
       <div
         v-for="(kpi, i) in (editMode ? editDraft.heroKpis : heroKpis)"
         :key="i"
@@ -107,17 +157,17 @@
         <input v-if="editMode" v-model="kpi.label" class="kpi-card__label ghost-input ghost-input--center" placeholder="예상 월 노출" />
         <div v-else class="kpi-card__label">{{ kpi.label }}</div>
         <button v-if="editMode" type="button" class="wysiwyg-del wysiwyg-del--kpi" @click="removeKpi(i)">
-          <i class="ph ph-x"></i>
+          <iconify-icon icon="fluent-emoji:cross-mark"></iconify-icon>
         </button>
       </div>
       <button v-if="editMode" type="button" class="kpi-card kpi-card--add" @click="addKpi">
-        <i class="ph ph-plus" style="color:var(--primary);font-size:18px"></i>
+        <iconify-icon icon="fluent-emoji:plus" style="font-size:18px"></iconify-icon>
         <span style="color:var(--text-3);font-size:11px">KPI 추가</span>
       </button>
     </div>
 
     <!-- Tab Nav -->
-    <nav class="op-tabs" aria-label="페이지 섹션">
+    <nav v-show="!loading || introData" class="op-tabs" aria-label="페이지 섹션">
       <button
         v-for="tab in tabs"
         :key="tab.id"
@@ -131,7 +181,7 @@
     </nav>
 
     <!-- Body -->
-    <div class="op-body">
+    <div v-show="!loading || introData" class="op-body">
 
       <!-- Main Content -->
       <main class="op-main">
@@ -139,203 +189,179 @@
         <!-- ───── 상세 정보 탭 ───── -->
         <div v-show="activeTab === 'detail'">
 
-        <!-- 캠페인 개요 (WYSIWYG) -->
-        <section class="card">
-          <div class="edit-card-head">
-            <h2 class="card__title"><i class="ph ph-info"></i>캠페인 개요</h2>
-            <button v-if="editMode" type="button" class="btn-add" @click="addOverviewItem">
-              <i class="ph ph-plus"></i>항목 추가
-            </button>
-          </div>
-          <p v-if="!editMode" class="op-lead">{{ campaignSummary }}</p>
-          <textarea v-else v-model="editDraft.campaignSummary" class="op-lead ghost-textarea" rows="3" placeholder="캠페인 소개 요약 내용을 입력하세요..."></textarea>
-          <div class="overview-grid">
-            <div
-              v-for="(item, i) in (editMode ? editDraft.overviewItems : overviewItems)"
-              :key="i"
-              class="overview-cell"
-              :class="{'overview-cell--editable': editMode}"
-            >
-              <template v-if="editMode">
-                <input v-model="item.label" class="overview-cell__label ghost-input ghost-input--label" placeholder="항목명" />
-                <input v-model="item.value" class="overview-cell__value ghost-input ghost-input--value" placeholder="내용" />
-                <button type="button" class="wysiwyg-del wysiwyg-del--cell" @click="removeOverviewItem(i)" title="삭제">
-                  <i class="ph ph-x"></i>
-                </button>
-              </template>
-              <template v-else>
-                <div class="overview-cell__label">{{ item.label }}</div>
-                <div class="overview-cell__value">{{ item.value }}</div>
-              </template>
-            </div>
-          </div>
-        </section>
+        <!-- 4 통합 섹션 (2×2 그리드) -->
+        <div id="sec-info" class="info-grid">
 
-        <!-- 제공 자산 / 기대 역할 (WYSIWYG) -->
-        <div class="two-col">
-          <section class="card">
-            <div class="edit-card-head">
-              <h2 class="card__title"><i class="ph ph-gift"></i>한화 제공 자산</h2>
-              <button v-if="editMode" type="button" class="btn-add" @click="addAsset"><i class="ph ph-plus"></i>추가</button>
+          <!-- 1) 한화 제공 자산 -->
+          <section class="card info-card">
+            <div class="info-card__head">
+              <h2 class="card__title"><iconify-icon icon="fluent-emoji:wrapped-gift"></iconify-icon>한화 제공 자산</h2>
+              <button v-if="editMode" type="button" class="btn-add" @click="addAsset"><iconify-icon icon="fluent-emoji:plus"></iconify-icon>추가</button>
             </div>
-            <ul class="asset-list">
+            <ul class="info-list">
               <li
                 v-for="(a, i) in (editMode ? editDraft.hanwhaAssets : hanwhaAssets)"
                 :key="i"
-                class="asset-item"
-                :class="{'asset-item--editable': editMode}"
+                class="info-item"
+                :class="{'info-item--editable': editMode}"
               >
-                <div style="position:relative;flex-shrink:0">
-                  <span
-                    class="asset-icon"
-                    :class="{'asset-icon--clickable': editMode}"
-                    @click.stop="editMode && (activeIconPicker = activeIconPicker === 'hanwha-'+i ? null : 'hanwha-'+i)"
-                  ><i :class="`ph ph-${a.icon || 'star'}`"></i></span>
+                <div class="info-item__icon-wrap">
+                  <span class="info-item__icon" :class="{'info-item__icon--clickable': editMode}"
+                    @click.stop="editMode && toggleIconPicker('hanwha-'+i)">
+                    <iconify-icon :icon="`fluent-emoji:${a.icon || 'sparkles'}`"></iconify-icon>
+                  </span>
                   <div v-if="editMode && activeIconPicker === 'hanwha-'+i" class="icon-picker-popup" @click.stop>
                     <div class="icon-chips">
                       <button v-for="ic in ICON_SUGGESTIONS" :key="ic" type="button"
                         class="icon-chip" :class="{'icon-chip--on': a.icon === ic}"
-                        @click="a.icon = ic; activeIconPicker = null" :title="ic">
-                        <i :class="`ph ph-${ic}`"></i>
+                        @click="a.icon = ic; closeIconPicker()" :title="ic">
+                        <iconify-icon :icon="`fluent-emoji:${ic}`"></iconify-icon>
                       </button>
                     </div>
                   </div>
                 </div>
-                <div style="flex:1;min-width:0">
-                  <input v-if="editMode" v-model="a.title" class="asset-item__title ghost-input ghost-input--bold" placeholder="제목" />
-                  <strong v-else class="asset-item__title">{{ a.title }}</strong>
-                  <textarea v-if="editMode" v-model="a.desc" class="asset-item__desc ghost-textarea" rows="2" placeholder="설명"></textarea>
-                  <p v-else class="asset-item__desc">{{ a.desc }}</p>
+                <div class="info-item__body">
+                  <input v-if="editMode" v-model="a.title" class="info-item__title ghost-input ghost-input--bold" placeholder="제목" />
+                  <strong v-else class="info-item__title">{{ a.title }}</strong>
+                  <textarea v-if="editMode" v-model="a.desc" class="info-item__desc ghost-textarea" rows="2" placeholder="설명"></textarea>
+                  <p v-else class="info-item__desc">{{ a.desc }}</p>
                 </div>
-                <button v-if="editMode" type="button" class="wysiwyg-del wysiwyg-del--float" @click="removeAsset(i)">
-                  <i class="ph ph-trash"></i>
+                <button v-if="editMode" type="button" class="wysiwyg-del wysiwyg-del--inline" @click="removeAsset(i)" title="삭제">
+                  <iconify-icon icon="fluent-emoji:wastebasket"></iconify-icon>
                 </button>
               </li>
             </ul>
           </section>
-          <section class="card">
-            <div class="edit-card-head">
-              <h2 class="card__title"><i class="ph ph-handshake"></i>파트너 기대 역할</h2>
-              <button v-if="editMode" type="button" class="btn-add" @click="addRole"><i class="ph ph-plus"></i>추가</button>
+
+          <!-- 2) 파트너 기대 역할 -->
+          <section class="card info-card">
+            <div class="info-card__head">
+              <h2 class="card__title"><iconify-icon icon="fluent-emoji:handshake"></iconify-icon>파트너 기대 역할</h2>
+              <button v-if="editMode" type="button" class="btn-add" @click="addRole"><iconify-icon icon="fluent-emoji:plus"></iconify-icon>추가</button>
             </div>
-            <ul class="asset-list">
+            <ul class="info-list">
               <li
                 v-for="(r, i) in (editMode ? editDraft.partnerRoles : partnerRoles)"
                 :key="i"
-                class="asset-item"
-                :class="{'asset-item--editable': editMode}"
+                class="info-item"
+                :class="{'info-item--editable': editMode}"
               >
-                <div style="position:relative;flex-shrink:0">
-                  <span
-                    class="asset-icon"
-                    :class="{'asset-icon--clickable': editMode}"
-                    @click.stop="editMode && (activeIconPicker = activeIconPicker === 'role-'+i ? null : 'role-'+i)"
-                  ><i :class="`ph ph-${r.icon || 'star'}`"></i></span>
+                <div class="info-item__icon-wrap">
+                  <span class="info-item__icon" :class="{'info-item__icon--clickable': editMode}"
+                    @click.stop="editMode && toggleIconPicker('role-'+i)">
+                    <iconify-icon :icon="`fluent-emoji:${r.icon || 'sparkles'}`"></iconify-icon>
+                  </span>
                   <div v-if="editMode && activeIconPicker === 'role-'+i" class="icon-picker-popup" @click.stop>
                     <div class="icon-chips">
                       <button v-for="ic in ICON_SUGGESTIONS" :key="ic" type="button"
                         class="icon-chip" :class="{'icon-chip--on': r.icon === ic}"
-                        @click="r.icon = ic; activeIconPicker = null" :title="ic">
-                        <i :class="`ph ph-${ic}`"></i>
+                        @click="r.icon = ic; closeIconPicker()" :title="ic">
+                        <iconify-icon :icon="`fluent-emoji:${ic}`"></iconify-icon>
                       </button>
                     </div>
                   </div>
                 </div>
-                <div style="flex:1;min-width:0">
-                  <input v-if="editMode" v-model="r.title" class="asset-item__title ghost-input ghost-input--bold" placeholder="제목" />
-                  <strong v-else class="asset-item__title">{{ r.title }}</strong>
-                  <textarea v-if="editMode" v-model="r.desc" class="asset-item__desc ghost-textarea" rows="2" placeholder="설명"></textarea>
-                  <p v-else class="asset-item__desc">{{ r.desc }}</p>
+                <div class="info-item__body">
+                  <input v-if="editMode" v-model="r.title" class="info-item__title ghost-input ghost-input--bold" placeholder="제목" />
+                  <strong v-else class="info-item__title">{{ r.title }}</strong>
+                  <textarea v-if="editMode" v-model="r.desc" class="info-item__desc ghost-textarea" rows="2" placeholder="설명"></textarea>
+                  <p v-else class="info-item__desc">{{ r.desc }}</p>
                 </div>
-                <button v-if="editMode" type="button" class="wysiwyg-del wysiwyg-del--float" @click="removeRole(i)">
-                  <i class="ph ph-trash"></i>
+                <button v-if="editMode" type="button" class="wysiwyg-del wysiwyg-del--inline" @click="removeRole(i)" title="삭제">
+                  <iconify-icon icon="fluent-emoji:wastebasket"></iconify-icon>
                 </button>
               </li>
             </ul>
           </section>
-        </div>
 
-        <!-- 타깃 고객 + 참여 가치 (WYSIWYG) -->
-        <section class="card card--split">
-          <div class="split-pane split-pane--l">
-            <h2 class="card__title"><i class="ph ph-target"></i>타깃 고객 프로필</h2>
-            <dl class="target-dl">
-              <dt>핵심 세그먼트</dt>
-              <dd>
-                <span v-if="!editMode">{{ targetSegment }}</span>
-                <input v-else v-model="editDraft.targetSegment" class="ghost-input" placeholder="핵심 세그먼트" />
-              </dd>
-              <dt>고객 성향 / 관심사</dt>
-              <dd>
-                <div class="tag-row">
-                  <template v-if="!editMode">
-                    <span v-for="t in customerTags" :key="t" class="tag">{{ t }}</span>
-                  </template>
-                  <template v-else>
-                    <span v-for="(t, i) in editDraft.customerTags" :key="i" class="tag tag--editable">
-                      <input v-model="editDraft.customerTags[i]" class="tag-ghost-input" placeholder="태그" />
-                      <button type="button" class="tag-del-btn" @click="removeTag(i)"><i class="ph ph-x"></i></button>
-                    </span>
-                    <button type="button" class="tag tag--add" @click="addTag">
-                      <i class="ph ph-plus"></i>추가
-                    </button>
-                  </template>
-                </div>
-              </dd>
-              <dt>예상 모객 규모</dt>
-              <dd>
-                <span v-if="!editMode">{{ targetScale }}</span>
-                <input v-else v-model="editDraft.targetScale" class="ghost-input" placeholder="예상 모객 규모" />
-              </dd>
-            </dl>
-          </div>
-          <div class="split-pane split-pane--r">
-            <div class="edit-card-head">
-              <h2 class="card__title"><i class="ph ph-trend-up"></i>파트너 참여 가치</h2>
-              <button v-if="editMode" type="button" class="btn-add" @click="addValue"><i class="ph ph-plus"></i>추가</button>
+          <!-- 3) 타깃 고객 프로필 -->
+          <section class="card info-card">
+            <div class="info-card__head">
+              <h2 class="card__title"><iconify-icon icon="fluent-emoji:bullseye"></iconify-icon>타깃 고객 프로필</h2>
+              <button v-if="editMode" type="button" class="btn-add" @click="addCustomer"><iconify-icon icon="fluent-emoji:plus"></iconify-icon>추가</button>
             </div>
-            <div class="value-list">
-              <div
-                v-for="(v, i) in (editMode ? editDraft.partnerValues : partnerValues)"
+            <ul class="info-list">
+              <li
+                v-for="(c, i) in (editMode ? editDraft.customerItems : customerItems)"
                 :key="i"
-                class="value-item"
-                :class="{'value-item--editable': editMode}"
+                class="info-item"
+                :class="{'info-item--editable': editMode}"
               >
-                <div style="position:relative;flex-shrink:0">
-                  <div
-                    class="value-icon"
-                    :class="[`value-icon--${v.tone}`, {'value-icon--clickable': editMode}]"
-                    @click.stop="editMode && (activeIconPicker = activeIconPicker === 'value-'+i ? null : 'value-'+i)"
-                  ><i :class="`ph ph-${v.icon || 'star'}`"></i></div>
-                  <div v-if="editMode && activeIconPicker === 'value-'+i" class="icon-picker-popup" @click.stop>
-                    <div class="icon-chips" style="margin-bottom:8px">
+                <div class="info-item__icon-wrap">
+                  <span class="info-item__icon" :class="{'info-item__icon--clickable': editMode}"
+                    @click.stop="editMode && toggleIconPicker('customer-'+i)">
+                    <iconify-icon :icon="`fluent-emoji:${c.icon || 'sparkles'}`"></iconify-icon>
+                  </span>
+                  <div v-if="editMode && activeIconPicker === 'customer-'+i" class="icon-picker-popup" @click.stop>
+                    <div class="icon-chips">
                       <button v-for="ic in ICON_SUGGESTIONS" :key="ic" type="button"
-                        class="icon-chip" :class="{'icon-chip--on': v.icon === ic}"
-                        @click="v.icon = ic" :title="ic">
-                        <i :class="`ph ph-${ic}`"></i>
+                        class="icon-chip" :class="{'icon-chip--on': c.icon === ic}"
+                        @click="c.icon = ic; closeIconPicker()" :title="ic">
+                        <iconify-icon :icon="`fluent-emoji:${ic}`"></iconify-icon>
                       </button>
-                    </div>
-                    <div class="tone-chips">
-                      <button v-for="tone in ['primary','info','success','warning','purple']" :key="tone"
-                        type="button"
-                        :class="['tone-chip', `tone-chip--${tone}`, {'tone-chip--on': v.tone === tone}]"
-                        @click="v.tone = tone; activeIconPicker = null"></button>
                     </div>
                   </div>
                 </div>
-                <div style="flex:1;min-width:0">
-                  <input v-if="editMode" v-model="v.title" class="value-item__title ghost-input ghost-input--bold" placeholder="제목" />
-                  <h4 v-else class="value-item__title">{{ v.title }}</h4>
-                  <textarea v-if="editMode" v-model="v.desc" class="value-item__desc ghost-textarea" rows="2" placeholder="설명"></textarea>
-                  <p v-else class="value-item__desc">{{ v.desc }}</p>
+                <div class="info-item__body">
+                  <input v-if="editMode" v-model="c.title" class="info-item__title ghost-input ghost-input--bold" placeholder="제목" />
+                  <strong v-else class="info-item__title">{{ c.title }}</strong>
+                  <textarea v-if="editMode" v-model="c.desc" class="info-item__desc ghost-textarea" rows="2" placeholder="설명"></textarea>
+                  <p v-else class="info-item__desc">{{ c.desc }}</p>
                 </div>
-                <button v-if="editMode" type="button" class="wysiwyg-del wysiwyg-del--float" @click="removeValue(i)">
-                  <i class="ph ph-trash"></i>
+                <button v-if="editMode" type="button" class="wysiwyg-del wysiwyg-del--inline" @click="removeCustomer(i)" title="삭제">
+                  <iconify-icon icon="fluent-emoji:wastebasket"></iconify-icon>
                 </button>
-              </div>
+              </li>
+              <li v-if="!editMode && !customerItems.length" class="info-item">
+                <div class="info-item__body">
+                  <p class="info-item__desc" style="color:var(--text-4)">등록된 항목이 없습니다.</p>
+                </div>
+              </li>
+            </ul>
+          </section>
+
+          <!-- 4) 파트너 참여 가치 -->
+          <section class="card info-card">
+            <div class="info-card__head">
+              <h2 class="card__title"><iconify-icon icon="fluent-emoji:chart-increasing"></iconify-icon>파트너 참여 가치</h2>
+              <button v-if="editMode" type="button" class="btn-add" @click="addValue"><iconify-icon icon="fluent-emoji:plus"></iconify-icon>추가</button>
             </div>
-          </div>
-        </section>
+            <ul class="info-list">
+              <li
+                v-for="(v, i) in (editMode ? editDraft.partnerValues : partnerValues)"
+                :key="i"
+                class="info-item"
+                :class="{'info-item--editable': editMode}"
+              >
+                <div class="info-item__icon-wrap">
+                  <span class="info-item__icon" :class="{'info-item__icon--clickable': editMode}"
+                    @click.stop="editMode && toggleIconPicker('value-'+i)">
+                    <iconify-icon :icon="`fluent-emoji:${v.icon || 'sparkles'}`"></iconify-icon>
+                  </span>
+                  <div v-if="editMode && activeIconPicker === 'value-'+i" class="icon-picker-popup" @click.stop>
+                    <div class="icon-chips">
+                      <button v-for="ic in ICON_SUGGESTIONS" :key="ic" type="button"
+                        class="icon-chip" :class="{'icon-chip--on': v.icon === ic}"
+                        @click="v.icon = ic; closeIconPicker()" :title="ic">
+                        <iconify-icon :icon="`fluent-emoji:${ic}`"></iconify-icon>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="info-item__body">
+                  <input v-if="editMode" v-model="v.title" class="info-item__title ghost-input ghost-input--bold" placeholder="제목" />
+                  <strong v-else class="info-item__title">{{ v.title }}</strong>
+                  <textarea v-if="editMode" v-model="v.desc" class="info-item__desc ghost-textarea" rows="2" placeholder="설명"></textarea>
+                  <p v-else class="info-item__desc">{{ v.desc }}</p>
+                </div>
+                <button v-if="editMode" type="button" class="wysiwyg-del wysiwyg-del--inline" @click="removeValue(i)" title="삭제">
+                  <iconify-icon icon="fluent-emoji:wastebasket"></iconify-icon>
+                </button>
+              </li>
+            </ul>
+          </section>
+
+        </div>
 
         </div>
         <!-- ───── /상세 정보 탭 ───── -->
@@ -344,10 +370,10 @@
         <div v-show="activeTab === 'schedule'">
 
         <!-- 진행 일정 타임라인 (WYSIWYG) -->
-        <section class="card">
+        <section id="sec-timeline" class="card">
           <div class="tl-header">
             <div>
-              <h2 class="card__title"><i class="ph ph-calendar-blank"></i>진행 일정 및 타임라인</h2>
+              <h2 class="card__title"><iconify-icon icon="fluent-emoji:calendar"></iconify-icon>진행 일정 및 타임라인</h2>
               <p class="card__sub">캠페인 런칭 전 주요 일정입니다. 마감 기한을 엄수해 주시기 바랍니다.</p>
             </div>
             <div class="tl-header__right">
@@ -356,7 +382,7 @@
                   <span class="legend-dot" :style="{ background: l.color }"></span>{{ l.label }}
                 </span>
               </div>
-              <button v-if="editMode" type="button" class="btn-add" @click="addEvent"><i class="ph ph-plus"></i>일정 추가</button>
+              <button v-if="editMode" type="button" class="btn-add" @click="addEvent"><iconify-icon icon="fluent-emoji:plus"></iconify-icon>일정 추가</button>
             </div>
           </div>
 
@@ -389,7 +415,7 @@
                 <template v-if="!editMode">
                   <div v-if="ev.detail" class="tl-detail">
                     <p v-if="ev.detail.method" class="tl-detail__method">
-                      <i class="ph ph-video-camera"></i>{{ ev.detail.method }}
+                      <iconify-icon icon="fluent-emoji:movie-camera"></iconify-icon>{{ ev.detail.method }}
                     </p>
                     <p class="tl-detail__text">{{ ev.detail.text }}</p>
                   </div>
@@ -435,7 +461,7 @@
                           <input v-model="ev.note" class="op-input" placeholder="비고" /></label>
                       </div>
                     </details>
-                    <button type="button" class="btn-del" @click="removeEvent(i)"><i class="ph ph-trash"></i></button>
+                    <button type="button" class="btn-del" @click="removeEvent(i)"><iconify-icon icon="fluent-emoji:wastebasket"></iconify-icon></button>
                   </div>
                 </template>
               </div>
@@ -444,8 +470,8 @@
         </section>
 
         <!-- 제출 안내 (WYSIWYG) -->
-        <section class="card">
-          <h2 class="card__title"><i class="ph ph-upload-simple"></i>제출 안내 및 양식</h2>
+        <section id="sec-submission" class="card">
+          <h2 class="card__title"><iconify-icon icon="fluent-emoji:outbox-tray"></iconify-icon>제출 안내 및 양식</h2>
           <div class="submission-box">
             <div class="submission-box__head">
               <div>
@@ -470,7 +496,7 @@
                 :class="{'submission-doc--editable': editMode}"
               >
                 <template v-if="!editMode">
-                  <i :class="`ph ph-${doc.icon}`" :style="{ color: doc.color }"></i>
+                  <iconify-icon :icon="`fluent-emoji:${doc.icon}`"></iconify-icon>
                   <span class="submission-doc__label">{{ doc.label }}</span>
                   <span class="req-badge" :class="{ 'req-badge--opt': !doc.required }">{{ doc.required ? '필수' : '선택' }}</span>
                 </template>
@@ -481,19 +507,37 @@
                     <option value="file-zip">ZIP</option><option value="file-ppt">PPT</option>
                     <option value="file">파일</option>
                   </select>
-                  <i :class="`ph ph-${doc.icon}`" :style="{ color: doc.color, fontSize: '16px', flexShrink: 0 }"></i>
+                  <iconify-icon :icon="`fluent-emoji:${doc.icon}`" :style="{ fontSize: '16px', flexShrink: 0 }"></iconify-icon>
                   <input v-model="doc.color" type="color" class="op-color-input" />
                   <input v-model="doc.label" class="submission-doc__label ghost-input" placeholder="서류 이름" />
                   <label class="op-check"><input type="checkbox" v-model="doc.required" />필수</label>
-                  <button type="button" class="wysiwyg-del" @click="removeDoc(i)"><i class="ph ph-trash"></i></button>
+                  <button type="button" class="wysiwyg-del" @click="removeDoc(i)"><iconify-icon icon="fluent-emoji:wastebasket"></iconify-icon></button>
                 </template>
               </li>
               <li v-if="editMode" class="submission-doc submission-doc--add" @click="addDoc">
-                <i class="ph ph-plus" style="color:var(--primary)"></i>
+                <iconify-icon icon="fluent-emoji:plus"></iconify-icon>
                 <span class="submission-doc__label" style="color:var(--primary)">서류 추가</span>
               </li>
             </ul>
           </div>
+        </section>
+
+        <!-- 자주 묻는 질문 (FAQ) -->
+        <section v-if="!editMode" id="sec-faq" class="card faq-card">
+          <h2 class="card__title"><iconify-icon icon="fluent-emoji:thinking-face"></iconify-icon>자주 묻는 질문</h2>
+          <ul class="faq-list">
+            <li v-for="(item, i) in faqList" :key="i" class="faq-item" :class="{'faq-item--open': openFaqs.has(i)}">
+              <button type="button" class="faq-question" @click="toggleFaq(i)">
+                <span class="faq-question__q">Q.</span>
+                <span class="faq-question__text">{{ item.q }}</span>
+                <iconify-icon class="faq-caret" icon="fluent-emoji:down-arrow"></iconify-icon>
+              </button>
+              <div v-if="openFaqs.has(i)" class="faq-answer">
+                <span class="faq-answer__a">A.</span>
+                <p>{{ item.a }}</p>
+              </div>
+            </li>
+          </ul>
         </section>
 
         </div>
@@ -509,13 +553,13 @@
           <h3 class="cta-title">제휴 제안하기</h3>
           <p class="cta-desc">상세 요건을 확인하셨다면 기한 내에 제안서를 제출해 주세요.</p>
           <button class="btn btn--primary btn--block" @click="goToProposal">
-            <i class="ph ph-paper-plane-right"></i>공식 제안서 제출
+            <iconify-icon icon="fluent-emoji:envelope-with-arrow"></iconify-icon>공식 제안서 제출
           </button>
         </div>
 
         <!-- 첨부 자료실 — 항목이 있을 때만 노출 -->
         <div v-if="attachedFiles && attachedFiles.length > 0" class="card">
-          <h3 class="card__title-sm"><i class="ph ph-folder"></i>첨부 자료실</h3>
+          <h3 class="card__title-sm"><iconify-icon icon="fluent-emoji:file-folder"></iconify-icon>첨부 자료실</h3>
           <div class="file-list">
             <div
               v-for="f in attachedFiles"
@@ -524,13 +568,13 @@
               :class="{ 'file-item--locked': f.locked }"
             >
               <div class="file-icon" :class="`file-icon--${f.tone}`">
-                <i :class="`ph ph-${f.icon}`"></i>
+                <iconify-icon :icon="`fluent-emoji:${f.icon}`"></iconify-icon>
               </div>
               <div class="file-info">
                 <div class="file-name">{{ f.name }}</div>
                 <div class="file-size">{{ f.size }}</div>
               </div>
-              <i :class="`ph ph-${f.locked ? 'lock-key' : 'download-simple'} file-action`"></i>
+              <iconify-icon :icon="`fluent-emoji:${f.locked ? 'locked' : 'down-arrow'}`" class="file-action"></iconify-icon>
             </div>
           </div>
         </div>
@@ -538,7 +582,7 @@
         <!-- 심사 평가 기준 (매칭 5축 가중치) — 내부 사용자(HQ/AFFILIATE)와 편집 권한자만 노출 (P1) -->
         <div v-if="isInternalViewer || canEdit" class="card">
           <h3 class="card__title-sm">
-            <i class="ph ph-scales"></i>심사 평가 기준 (매칭 가중치)
+            <iconify-icon icon="fluent-emoji:balance-scale"></iconify-icon>심사 평가 기준 (매칭 가중치)
             <span class="op-internal-tag" aria-label="내부 전용">내부</span>
           </h3>
           <!-- 보기 모드 -->
@@ -592,8 +636,8 @@
               </div>
             </div>
             <div class="contact-info">
-              <div class="contact-info__row"><i class="ph ph-envelope-simple"></i>{{ contactInfo?.email ?? '-' }}</div>
-              <div class="contact-info__row"><i class="ph ph-phone"></i>{{ contactInfo?.phone ?? '-' }}</div>
+              <div class="contact-info__row"><iconify-icon icon="fluent-emoji:envelope"></iconify-icon>{{ contactInfo?.email ?? '-' }}</div>
+              <div class="contact-info__row"><iconify-icon icon="fluent-emoji:telephone-receiver"></iconify-icon>{{ contactInfo?.phone ?? '-' }}</div>
             </div>
           </template>
           <!-- 편집 모드 -->
@@ -623,7 +667,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { GetCampaignIntro, UpdateCampaignIntro } from '@/api/campaigns'
 
@@ -654,21 +698,21 @@ const tabs = [
 // fallback mockup — API에서 비어있을 때 보여줄 기본값
 const FALLBACK = {
   hanwhaAssets: [
-    { icon: 'device-mobile', title: '앱/온라인 채널 노출', desc: '한화온 앱 메인 배너 및 기획전 페이지 노출 (예상 트래픽: 50만/월)' },
+    { icon: 'mobile-phone', title: '앱/온라인 채널 노출', desc: '한화온 앱 메인 배너 및 기획전 페이지 노출 (예상 트래픽: 50만/월)' },
     { icon: 'crown', title: 'VIP 고객 베이스', desc: '리조트 회원권 보유 VIP 타깃 e-DM 및 알림톡 발송 (10만 건)' },
-    { icon: 'storefront', title: '오프라인 공간 활용', desc: '전국 12개 리조트 로비/객실 내 홍보물 비치 및 팝업 공간 제공' },
+    { icon: 'convenience-store', title: '오프라인 공간 활용', desc: '전국 12개 리조트 로비/객실 내 홍보물 비치 및 팝업 공간 제공' },
     { icon: 'ticket', title: '객실/티켓 자산', desc: '파트너사 이벤트용 리조트 숙박권 및 워터파크 이용권 지원' },
   ],
   partnerRoles: [
     { icon: 'star', title: '단독 혜택 제공', desc: '한화 패키지 이용객 대상 독점 할인 또는 한정판 굿즈/서비스 제공' },
     { icon: 'megaphone', title: '상호 마케팅 채널 지원', desc: '파트너사 온/오프라인 채널을 통한 공동 캠페인 홍보' },
-    { icon: 'users-three', title: '운영 리소스 투입', desc: '제휴 서비스 제공을 위한 CS 채널 및 운영 인력 확보' },
-    { icon: 'image', title: '콘텐츠 에셋 제작', desc: '기획전 구성에 필요한 브랜드 이미지 및 프로모션 소재 제공' },
+    { icon: 'busts-in-silhouette', title: '운영 리소스 투입', desc: '제휴 서비스 제공을 위한 CS 채널 및 운영 인력 확보' },
+    { icon: 'framed-picture', title: '콘텐츠 에셋 제작', desc: '기획전 구성에 필요한 브랜드 이미지 및 프로모션 소재 제공' },
   ],
   customerTags: ['프리미엄 레저', '키즈 에듀테인먼트', '편리한 이동', '미식 여행'],
   partnerValues: [
-    { icon: 'crosshair', tone: 'primary', title: '고소득 구매력 타깃 확보', desc: '리조트 회원 및 프리미엄 객실 투숙객 대상의 고효율 마케팅' },
-    { icon: 'hand-coins', tone: 'info', title: '브랜드 인지도 및 세일즈 증대', desc: '제휴 상품을 통한 직접적인 매출 발생 (예상 전환율 15%)' },
+    { icon: 'bullseye', tone: 'primary', title: '고소득 구매력 타깃 확보', desc: '리조트 회원 및 프리미엄 객실 투숙객 대상의 고효율 마케팅' },
+    { icon: 'money-bag', tone: 'info', title: '브랜드 인지도 및 세일즈 증대', desc: '제휴 상품을 통한 직접적인 매출 발생 (예상 전환율 15%)' },
   ],
   timelineEvents: [
     { id: 1, color: 'gray', done: true, title: '모집 공고 오픈', date: '미정' },
@@ -676,9 +720,9 @@ const FALLBACK = {
     { id: 3, color: 'purple', title: '최종 파트너 선정 발표', date: '미정' },
   ],
   submissionDocs: [
-    { icon: 'file-pdf', color: '#EF4444', required: true, label: '1. 제휴 제안서' },
-    { icon: 'file-xls', color: '#22C55E', required: true, label: '2. 비용/혜택 구조 및 예상 KPI 산출표' },
-    { icon: 'file-text', color: '#3B82F6', required: false, label: '3. 회사 소개서 및 레퍼런스' },
+    { icon: 'page-with-curl', color: '#EF4444', required: true, label: '1. 제휴 제안서' },
+    { icon: 'bar-chart', color: '#22C55E', required: true, label: '2. 비용/혜택 구조 및 예상 KPI 산출표' },
+    { icon: 'page-facing-up', color: '#3B82F6', required: false, label: '3. 회사 소개서 및 레퍼런스' },
   ],
   attachedFiles: [],
   contactInfo: { name: '담당자 미지정', team: '', email: '-', phone: '-' },
@@ -697,9 +741,11 @@ const FALLBACK = {
 }
 
 const ICON_SUGGESTIONS = [
-  'device-mobile', 'crown', 'storefront', 'ticket', 'star', 'megaphone',
-  'users-three', 'image', 'gift', 'buildings', 'crosshair', 'hand-coins',
-  'chart-bar', 'target', 'trend-up', 'handshake', 'broadcast', 'trophy',
+  'bullseye', 'megaphone', 'crown', 'hotel', 'fork-and-knife-with-plate',
+  'airplane', 'shopping-bags', 'play-button', 'wrapped-gift', 'credit-card',
+  'mobile-phone', 'chart-increasing', 'star', 'handshake', 'money-bag',
+  'bar-chart', 'trophy', 'ticket', 'office-building', 'framed-picture',
+  'busts-in-silhouette', 'loudspeaker', 'rocket', 'sparkles',
 ]
 
 const legend = [
@@ -709,12 +755,23 @@ const legend = [
   { label: '운영 시작', color: '#34D399' },
 ]
 
+const faqList = [
+  { q: '제안서 양식이 따로 있나요?', a: '담당자에게 요청하시면 표준 양식 PDF를 보내드립니다. 자유 양식도 허용되지만 비교 평가의 편의를 위해 권장합니다.' },
+  { q: '한 회사가 여러 영역에 동시 지원할 수 있나요?', a: '가능합니다. 단, 영역별로 별도 제안서를 제출해야 하며 각 영역의 매칭 가중치가 따로 평가됩니다.' },
+  { q: '심사 결과는 어떻게 통보되나요?', a: '1차 서류 심사는 등록 이메일로, 2차 발표 심사는 별도 일정 안내 후 최종 결과는 공식 메일로 통보됩니다.' },
+  { q: '계약 후 캠페인 일정 조정이 가능한가요?', a: '킥오프 미팅에서 양 측 합의 하에 조정 가능하나 한화 측 마케팅 일정상 큰 폭 변경은 어려울 수 있습니다.' },
+  { q: '비용 부담은 어떻게 나누나요?', a: '기본 운영비는 한화에서, 파트너사 측의 단독 혜택/굿즈는 파트너 부담입니다. 세부 사항은 제안서 검토 후 협의합니다.' },
+]
+const openFaqs = ref(new Set())
+function toggleFaq(i) {
+  if (openFaqs.value.has(i)) openFaqs.value.delete(i)
+  else openFaqs.value.add(i)
+  openFaqs.value = new Set(openFaqs.value)
+}
+
+
 // Campaign 기본 필드 매핑
 const campaignName = computed(() => introData.value?.campaignName ?? '캠페인 소개')
-const campaignSummary = computed(() =>
-  introData.value?.campaignSummary
-    ?? '아직 캠페인 소개 내용이 등록되지 않았습니다. 편집 모드에서 내용을 입력해 주세요.'
-)
 const campaignStatus = computed(() => introData.value?.campaignStatus ?? '준비중')
 const ownerLoginId = computed(() => introData.value?.ownerLoginId ?? '미지정')
 const ownerName = computed(() => introData.value?.ownerName ?? null)
@@ -753,6 +810,9 @@ const assetName = computed(() => introData.value?.assetName ?? null)
 const campaignMethods = computed(() => introData.value?.campaignMethods ?? null)
 const campaignStartDate = computed(() => introData.value?.campaignStartDate ?? null)
 
+// 누적 조회 수 (PM 팀 자기 페이지 조회는 백엔드에서 제외)
+const viewCount = computed(() => introData.value?.viewCount ?? 0)
+
 // 마감 진행률 — 캠페인 시작일 ~ 모집 마감일 기준
 const deadlineProgress = computed(() => {
   if (!recruitDeadline.value) return null
@@ -779,24 +839,27 @@ const contactInfo = computed(() => {
 })
 
 // 캠페인 개요 그리드 — 저장된 customItems 우선, 없으면 Campaign 기본 필드 + 생성 시 입력 정보
-const overviewItems = computed(() => {
-  const raw = introData.value?.overviewItems
+const targetSegment = computed(() => introData.value?.targetSegment ?? FALLBACK.targetSegment)
+const targetScale = computed(() => introData.value?.targetScale ?? FALLBACK.targetScale)
+
+// 타깃 고객 항목 — 저장된 customerItems 우선, 없으면 segment/scale/tags로 초기 시드
+const customerItems = computed(() => {
+  const raw = introData.value?.customerItems
   if (Array.isArray(raw) && raw.length > 0) return raw
   if (raw && Array.isArray(raw.list) && raw.list.length > 0) return raw.list
-  const items = [
-    { label: '캠페인 이름', value: campaignName.value },
-    { label: '담당자', value: ownerLoginId.value },
-    { label: '캠페인 상태', value: campaignStatus.value },
-    { label: '제안 마감', value: formatDate(recruitDeadline.value) },
-  ]
-  if (primaryGoal.value) items.push({ label: '주 목표', value: primaryGoal.value })
-  if (assetName.value) items.push({ label: '자산명', value: assetName.value })
-  if (campaignMethods.value?.length) items.push({ label: '캠페인 방식', value: campaignMethods.value.join(', ') })
+  const items = []
+  if (targetSegment.value) {
+    items.push({ icon: 'bullseye', title: '핵심 세그먼트', desc: targetSegment.value })
+  }
+  if (targetScale.value) {
+    items.push({ icon: 'busts-in-silhouette', title: '예상 모객 규모', desc: targetScale.value })
+  }
+  if (customerTags.value?.length) {
+    items.push({ icon: 'label', title: '관심사 / 성향', desc: customerTags.value.join(', ') })
+  }
   return items
 })
 
-const targetSegment = computed(() => introData.value?.targetSegment ?? FALLBACK.targetSegment)
-const targetScale = computed(() => introData.value?.targetScale ?? FALLBACK.targetScale)
 const submissionInfo = computed(() => ({
   name:  introData.value?.submissionInfo?.name  ?? FALLBACK.submissionInfo.name,
   desc:  introData.value?.submissionInfo?.desc  ?? FALLBACK.submissionInfo.desc,
@@ -871,16 +934,16 @@ function goToProposal() {
 }
 
 // ─── 편집 헬퍼 ───────────────────────────────────────────────────
-function addOverviewItem() { editDraft.value.overviewItems.push({ label: '', value: '' }) }
-function removeOverviewItem(i) { editDraft.value.overviewItems.splice(i, 1) }
-function addAsset() { editDraft.value.hanwhaAssets.push({ icon: 'star', title: '', desc: '' }) }
+function addAsset() { editDraft.value.hanwhaAssets.push({ icon: 'sparkles', title: '', desc: '' }) }
 function removeAsset(i) { editDraft.value.hanwhaAssets.splice(i, 1) }
 function addRole() { editDraft.value.partnerRoles.push({ icon: 'handshake', title: '', desc: '' }) }
 function removeRole(i) { editDraft.value.partnerRoles.splice(i, 1) }
 function addTag() { editDraft.value.customerTags.push('') }
 function removeTag(i) { editDraft.value.customerTags.splice(i, 1) }
-function addValue() { editDraft.value.partnerValues.push({ icon: 'chart-bar', tone: 'primary', title: '', desc: '' }) }
+function addValue() { editDraft.value.partnerValues.push({ icon: 'bar-chart', tone: 'primary', title: '', desc: '' }) }
 function removeValue(i) { editDraft.value.partnerValues.splice(i, 1) }
+function addCustomer() { editDraft.value.customerItems.push({ icon: 'sparkles', title: '', desc: '' }) }
+function removeCustomer(i) { editDraft.value.customerItems.splice(i, 1) }
 function addEvent() {
   editDraft.value.timelineEvents.push({
     id: Date.now(), color: 'gray', done: false, urgent: false,
@@ -889,10 +952,17 @@ function addEvent() {
   })
 }
 function removeEvent(i) { editDraft.value.timelineEvents.splice(i, 1) }
-function addDoc() { editDraft.value.submissionDocs.push({ icon: 'file-text', color: '#3B82F6', required: false, label: '' }) }
+function addDoc() { editDraft.value.submissionDocs.push({ icon: 'page-facing-up', color: '#3B82F6', required: false, label: '' }) }
 function removeDoc(i) { editDraft.value.submissionDocs.splice(i, 1) }
 function addKpi() { editDraft.value.heroKpis.push({ label: '', value: '' }) }
 function removeKpi(i) { editDraft.value.heroKpis.splice(i, 1) }
+
+function toggleIconPicker(key) {
+  activeIconPicker.value = activeIconPicker.value === key ? null : key
+}
+function closeIconPicker() {
+  activeIconPicker.value = null
+}
 
 // ─── 인라인 편집 함수 ─────────────────────────────────────────────
 function enterEdit() {
@@ -928,12 +998,11 @@ function enterEdit() {
     weightCost: introData.value?.weightCost ?? 0,
     weightOperation: introData.value?.weightOperation ?? 0,
     weightBrand: introData.value?.weightBrand ?? 0,
-    campaignSummary: introData.value?.campaignSummary ?? '',
-    overviewItems: JSON.parse(JSON.stringify(overviewItems.value)),
     heroKpis: JSON.parse(JSON.stringify(heroKpis.value)),
     hanwhaAssets: JSON.parse(JSON.stringify(hanwhaAssets.value)),
     partnerRoles: JSON.parse(JSON.stringify(partnerRoles.value)),
     customerTags: [...customerTags.value],
+    customerItems: JSON.parse(JSON.stringify(customerItems.value)),
     targetSegment: targetSegment.value,
     targetScale: targetScale.value,
     partnerValues: JSON.parse(JSON.stringify(partnerValues.value)),
@@ -971,6 +1040,7 @@ async function saveEdit() {
       docs: ev.docsText ? ev.docsText.split('\n').filter(Boolean) : undefined,
       note: ev.note || undefined,
     }))
+    const wrapList = (arr) => ({ list: Array.isArray(arr) ? arr : [] })
     const payload = {
       rfpCode: editDraft.value.rfpCode || null,
       recruitDeadline: editDraft.value.recruitDeadline
@@ -982,17 +1052,16 @@ async function saveEdit() {
       weightCost:     Number(editDraft.value.weightCost)     || null,
       weightOperation:Number(editDraft.value.weightOperation)|| null,
       weightBrand:    Number(editDraft.value.weightBrand)    || null,
-      campaignSummary: editDraft.value.campaignSummary || null,
-      overviewItems:  editDraft.value.overviewItems,
-      heroKpis:       editDraft.value.heroKpis,
-      hanwhaAssets:   editDraft.value.hanwhaAssets,
-      partnerRoles:   editDraft.value.partnerRoles,
-      customerTags:   editDraft.value.customerTags,
+      heroKpis:       wrapList(editDraft.value.heroKpis),
+      hanwhaAssets:   wrapList(editDraft.value.hanwhaAssets),
+      partnerRoles:   wrapList(editDraft.value.partnerRoles),
+      customerTags:   wrapList(editDraft.value.customerTags),
+      customerItems:  wrapList(editDraft.value.customerItems),
       targetSegment:  editDraft.value.targetSegment || null,
       targetScale:    editDraft.value.targetScale   || null,
-      partnerValues:  editDraft.value.partnerValues,
-      timelineEvents: tlPayload,
-      submissionDocs: editDraft.value.submissionDocs,
+      partnerValues:  wrapList(editDraft.value.partnerValues),
+      timelineEvents: wrapList(tlPayload),
+      submissionDocs: wrapList(editDraft.value.submissionDocs),
       submissionInfo: editDraft.value.submissionInfo,
     }
     await UpdateCampaignIntro(route.params.campaignId, payload)
@@ -1037,7 +1106,21 @@ async function loadIntro(campaignId) {
   }
 }
 
-onMounted(() => loadIntro(route.params.campaignId))
+// 스크롤 진행률 (페이지 상단 progress bar)
+const scrollProgress = ref(0)
+function updateScrollProgress() {
+  const max = document.documentElement.scrollHeight - window.innerHeight
+  scrollProgress.value = max > 0 ? Math.min(100, (window.scrollY / max) * 100) : 0
+}
+
+onMounted(() => {
+  loadIntro(route.params.campaignId)
+  window.addEventListener('scroll', updateScrollProgress, { passive: true })
+  updateScrollProgress()
+})
+onUnmounted(() => {
+  window.removeEventListener('scroll', updateScrollProgress)
+})
 
 // 라우트 param 변경 시 자동 재요청 (component reuse 케이스)
 watch(() => route.params.campaignId, (next) => {
@@ -1095,6 +1178,50 @@ watch(() => route.params.campaignId, (next) => {
   color: var(--text-1);
   padding: 32px 40px 80px;
   min-height: 100vh;
+}
+
+/* ─── Skeleton Loader (initial load) ─────────────────────────── */
+.skeleton-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 8px;
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-muted) 0%,
+    var(--border) 50%,
+    var(--surface-muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+.skeleton--hero { height: 110px; }
+.skeleton--card { flex: 1; height: 90px; }
+.skeleton--kpi { height: 96px; }
+.skeleton--block { height: 320px; }
+.skeleton-strip {
+  display: flex;
+  gap: 12px;
+}
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Reading progress bar (페이지 상단) ──────────────────────── */
+.reading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--color-primary-400, #A78BFA));
+  z-index: 1000;
+  transition: width 0.1s linear;
+  border-radius: 0 2px 2px 0;
+  pointer-events: none;
 }
 
 /* ─── Breadcrumb ─────────────────────────────────────────────── */
@@ -1192,7 +1319,8 @@ watch(() => route.params.campaignId, (next) => {
   align-items: center;
   gap: 5px;
 }
-.op-hero__meta i { font-size: 15px; color: var(--text-4); }
+.op-hero__meta i,
+.op-hero__meta iconify-icon { font-size: 15px; color: var(--text-4); }
 .op-hero__meta-sub {
   margin-left: 4px;
   font-size: 11px; font-weight: 600;
@@ -1273,24 +1401,114 @@ watch(() => route.params.campaignId, (next) => {
   font-variant-numeric: tabular-nums;
 }
 .deadline-progress__pct { font-weight: 700; }
+.deadline-box__social {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--primary-m);
+  font-size: 11px;
+  color: var(--primary);
+  font-weight: 600;
+}
+.deadline-box__social strong { font-weight: 800; }
+.deadline-box__social iconify-icon { font-size: 14px; }
+.deadline-box__social-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success, #22C55E);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+  animation: pulse-dot 1.6s ease-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
 
-/* ─── Hero KPI Strip ─────────────────────────────────────────── */
+/* ─── Campaign Essentials (주 목표 / 자산명 / 캠페인 방식) ─────── */
+.essentials-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.essentials-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  box-shadow: var(--shadow-sm);
+}
+.essentials-card__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.essentials-card__head iconify-icon { font-size: 16px; }
+.essentials-card__value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  line-height: 1.45;
+}
+.essentials-card__value--tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.essentials-tag {
+  display: inline-block;
+  padding: 2px 9px;
+  background: var(--primary-s);
+  color: var(--primary);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ─── Hero KPI Strip (Bento Grid) ─────────────────────────────── */
 .kpi-strip {
   display: flex;
   gap: 12px;
   margin-bottom: 28px;
+  flex-wrap: wrap;
 }
 .kpi-card {
-  flex: 1;
+  flex: 1 1 140px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 16px 20px;
   text-align: center;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.15s;
+  transition: box-shadow 0.15s, transform 0.15s;
+  position: relative;
 }
-.kpi-card:hover { box-shadow: var(--shadow-md); }
+.kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.kpi-card:first-child {
+  flex: 2 1 280px;
+  background: linear-gradient(135deg, var(--primary-s) 0%, var(--surface) 100%);
+  border-color: var(--primary-m);
+}
+.kpi-card:first-child::before {
+  content: '⭐ KEY METRIC';
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: 0.08em;
+}
 .kpi-card__value {
   font-size: 26px;
   font-weight: 900;
@@ -1299,6 +1517,10 @@ watch(() => route.params.campaignId, (next) => {
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   margin-bottom: 4px;
+}
+.kpi-card:first-child .kpi-card__value {
+  font-size: 38px;
+  margin-top: 6px;
 }
 .kpi-card__label {
   font-size: 11px;
@@ -1443,6 +1665,25 @@ watch(() => route.params.campaignId, (next) => {
   padding: 2px 8px;
   border-radius: 4px;
 }
+.trust-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #15803D;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 999px;
+  letter-spacing: -0.01em;
+}
+.trust-badge iconify-icon { font-size: 13px; }
+:root[data-theme='dark'] .trust-badge {
+  color: #86EFAC;
+  background: rgba(74, 222, 128, 0.16);
+  border-color: rgba(74, 222, 128, 0.32);
+}
 
 /* ─── Buttons ────────────────────────────────────────────────── */
 .btn {
@@ -1585,7 +1826,8 @@ watch(() => route.params.campaignId, (next) => {
   margin-bottom: 20px;
   letter-spacing: -0.01em;
 }
-.card__title i { color: var(--primary); font-size: 18px; }
+.card__title i,
+.card__title iconify-icon { font-size: 20px; }
 .card__title-sm {
   display: flex;
   align-items: center;
@@ -1595,23 +1837,10 @@ watch(() => route.params.campaignId, (next) => {
   color: var(--text-1);
   margin-bottom: 16px;
 }
-.card__title-sm i { color: var(--text-3); font-size: 16px; }
+.card__title-sm i,
+.card__title-sm iconify-icon { font-size: 16px; }
 .card__sub { font-size: 13px; color: var(--text-3); margin-top: -14px; margin-bottom: 20px; line-height: 1.5; }
 
-/* Split card */
-.card--split {
-  display: flex;
-  padding: 0;
-  overflow: hidden;
-}
-.split-pane {
-  padding: 28px;
-  flex: 1;
-}
-.split-pane--r {
-  background: var(--surface-muted);
-  border-left: 1px solid var(--border);
-}
 
 /* CTA card */
 .card--cta {
@@ -1619,11 +1848,91 @@ watch(() => route.params.campaignId, (next) => {
   background: var(--surface);
 }
 
-/* ─── Two column grid ────────────────────────────────────────── */
-.two-col {
+/* ─── 통합 정보 그리드 (한화 자산 / 파트너 역할 / 타깃 / 가치) ── */
+.info-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.info-card {
+  display: flex;
+  flex-direction: column;
+}
+.info-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.info-card__head .card__title { margin-bottom: 0; }
+.info-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+.info-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.info-item--editable {
+  position: relative;
+  border-radius: var(--radius-md);
+  padding: 6px;
+  margin: -6px;
+  transition: background 0.12s;
+}
+.info-item--editable:hover { background: rgba(99, 102, 241, 0.04); }
+.info-item__icon-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.info-item__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  font-size: 20px;
+  margin-top: 1px;
+}
+.info-item__icon iconify-icon { font-size: 20px; }
+.info-item__icon--clickable {
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.info-item__icon--clickable:hover {
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+}
+.info-item__body {
+  flex: 1;
+  min-width: 0;
+}
+.info-item__title {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 3px;
+  line-height: 1.35;
+}
+.info-item__desc {
+  font-size: 12.5px;
+  color: var(--text-3);
+  line-height: 1.6;
+  margin: 0;
+}
+@media (max-width: 900px) {
+  .info-grid { grid-template-columns: 1fr; }
 }
 
 /* ─── Overview Grid ──────────────────────────────────────────── */
@@ -1659,44 +1968,14 @@ watch(() => route.params.campaignId, (next) => {
   line-height: 1.4;
 }
 
-/* ─── Asset List ─────────────────────────────────────────────── */
-.asset-list { display: flex; flex-direction: column; gap: 20px; list-style: none; padding: 0; margin: 0; }
-.asset-item { display: flex; gap: 12px; }
-.asset-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  color: var(--text-2);
-  font-size: 16px;
-  margin-top: 1px;
-}
-.asset-item__title {
-  display: block;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-1);
-  margin-bottom: 3px;
-}
-.asset-item__desc { font-size: 12px; color: var(--text-3); line-height: 1.55; }
-
-/* ─── Target DL ──────────────────────────────────────────────── */
-.target-dl { display: flex; flex-direction: column; gap: 16px; }
-.target-dl dt {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-4);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 4px;
-}
-.target-dl dd { font-size: 13px; color: var(--text-2); line-height: 1.5; margin: 0; }
 .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+
+.tag--persona {
+  background: var(--surface);
+  border: 1px solid var(--primary-m);
+  color: var(--primary);
+  font-weight: 600;
+}
 .tag {
   padding: 3px 10px;
   background: var(--surface);
@@ -1706,24 +1985,68 @@ watch(() => route.params.campaignId, (next) => {
   color: var(--text-2);
 }
 
-/* ─── Value List ─────────────────────────────────────────────── */
-.value-list { display: flex; flex-direction: column; gap: 20px; }
-.value-item { display: flex; gap: 14px; }
-.value-icon {
-  width: 38px;
-  height: 38px;
-  flex-shrink: 0;
-  border-radius: 50%;
+/* ─── FAQ Accordion ──────────────────────────────────────────── */
+.faq-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.faq-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.faq-item--open { border-color: var(--primary-m); box-shadow: 0 2px 8px rgba(99,102,241,0.08); }
+.faq-question {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.faq-question:hover { background: var(--surface-muted); }
+.faq-question__q {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--primary);
+  flex-shrink: 0;
   margin-top: 1px;
 }
-.value-icon--primary { background: var(--primary-s); color: var(--primary); }
-.value-icon--info { background: var(--info-s); color: var(--info); }
-.value-item__title { font-size: 13px; font-weight: 700; color: var(--text-1); margin-bottom: 4px; }
-.value-item__desc { font-size: 12px; color: var(--text-3); line-height: 1.6; }
+.faq-question__text {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  line-height: 1.5;
+}
+.faq-caret {
+  flex-shrink: 0;
+  font-size: 14px;
+  transition: transform 0.2s;
+}
+.faq-item--open .faq-caret { transform: rotate(180deg); }
+.faq-answer {
+  display: flex;
+  gap: 10px;
+  padding: 0 16px 14px;
+  border-top: 1px dashed var(--border);
+  padding-top: 12px;
+}
+.faq-answer__a {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text-4);
+  flex-shrink: 0;
+}
+.faq-answer p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.7;
+}
 
 /* ─── Timeline ───────────────────────────────────────────────── */
 .tl-header {
@@ -1927,7 +2250,8 @@ watch(() => route.params.campaignId, (next) => {
   background: var(--surface);
   border-radius: var(--radius-sm);
 }
-.submission-doc i { font-size: 18px; flex-shrink: 0; }
+.submission-doc i,
+.submission-doc iconify-icon { font-size: 18px; flex-shrink: 0; }
 .submission-doc__label { font-size: 13px; color: var(--text-2); flex: 1; }
 .req-badge {
   font-size: 11px;
@@ -2127,7 +2451,8 @@ watch(() => route.params.campaignId, (next) => {
   font-size: 12px;
   color: var(--text-3);
 }
-.contact-info__row i { font-size: 13px; }
+.contact-info__row i,
+.contact-info__row iconify-icon { font-size: 13px; }
 
 /* ─── Edit mode shared ───────────────────────────────────────── */
 .edit-card-head {
@@ -2400,16 +2725,11 @@ watch(() => route.params.campaignId, (next) => {
   flex-shrink: 0;
 }
 .wysiwyg-del:hover { background: rgba(239, 68, 68, 0.18); }
-.wysiwyg-del--float {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  opacity: 0;
-  transition: opacity 0.15s;
-  z-index: 2;
+.wysiwyg-del--inline {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 2px;
 }
-.asset-item--editable:hover .wysiwyg-del--float,
-.value-item--editable:hover .wysiwyg-del--float { opacity: 1; }
 .wysiwyg-del--cell {
   position: absolute;
   top: 4px;
@@ -2442,32 +2762,7 @@ watch(() => route.params.campaignId, (next) => {
   width: 210px;
 }
 
-/* ─── Editable Item Wrappers ─────────────────────────────────────── */
-.asset-item--editable {
-  position: relative;
-  border-radius: var(--radius-md);
-  padding: 6px;
-  margin: -6px;
-  transition: background 0.12s;
-}
-.asset-item--editable:hover { background: rgba(99, 102, 241, 0.04); }
-.value-item--editable {
-  position: relative;
-  border-radius: var(--radius-md);
-  padding: 4px;
-  margin: -4px;
-  transition: background 0.12s;
-}
-.value-item--editable:hover { background: rgba(99, 102, 241, 0.04); }
 .overview-cell--editable { position: relative; }
-
-/* Clickable icon hint */
-.asset-icon--clickable, .value-icon--clickable {
-  cursor: pointer;
-  transition: transform 0.12s, box-shadow 0.12s;
-}
-.asset-icon--clickable:hover { transform: scale(1.08); box-shadow: 0 2px 8px rgba(99,102,241,0.3); }
-.value-icon--clickable:hover { transform: scale(1.08); box-shadow: 0 2px 8px rgba(99,102,241,0.3); }
 
 /* ─── Tag WYSIWYG ────────────────────────────────────────────────── */
 .tag--editable {

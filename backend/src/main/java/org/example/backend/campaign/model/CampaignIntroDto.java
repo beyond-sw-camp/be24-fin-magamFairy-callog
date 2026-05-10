@@ -56,6 +56,8 @@ public class CampaignIntroDto {
         private String targetSegment;
         private String targetScale;
         private Map<String, Object> submissionInfo;
+        private Map<String, Object> customerItems;
+        private Long viewCount;
 
         public static GetRes toDto(CampaignIntro intro, Campaign campaign) {
             return toDto(intro, campaign, false, false, null);
@@ -101,6 +103,8 @@ public class CampaignIntroDto {
                     .targetSegment(intro != null ? intro.getTargetSegment() : null)
                     .targetScale(intro != null ? intro.getTargetScale() : null)
                     .submissionInfo(intro != null ? intro.getSubmissionInfo() : null)
+                    .customerItems(intro != null ? intro.getCustomerItems() : null)
+                    .viewCount(intro != null && intro.getViewCount() != null ? intro.getViewCount() : 0L)
                     .build();
         }
     }
@@ -131,5 +135,6 @@ public class CampaignIntroDto {
         private String targetSegment;
         private String targetScale;
         private Map<String, Object> submissionInfo;
+        private Map<String, Object> customerItems;
     }
 }
