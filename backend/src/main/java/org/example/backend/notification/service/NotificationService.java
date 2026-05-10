@@ -2,6 +2,8 @@ package org.example.backend.notification.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.backend.adcheck.model.AdReviewRequest;
+import org.example.backend.campaign.model.CampaignInvitation;
+import org.example.backend.campaign.model.CampaignInvitationStatus;
 import org.example.backend.notification.model.Notification;
 import org.example.backend.notification.model.NotificationDto;
 import org.example.backend.notification.model.NotificationSeverity;
@@ -21,6 +23,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
@@ -28,10 +31,12 @@ import java.util.Map;
 public class NotificationService {
     private static final int DEFAULT_LIST_LIMIT = 50;
     private static final int MAX_LIST_LIMIT = 100;
+    private static final String REFERENCE_CAMPAIGN_INVITATION = "CAMPAIGN_INVITATION";
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final NotificationSseService notificationSseService;
+    private final NotificationPreferenceResolver preferenceResolver;
 
     public NotificationDto.ListRes list(Long recipientIdx, Integer count) {
         int limit = count == null ? DEFAULT_LIST_LIMIT : Math.min(Math.max(count, 1), MAX_LIST_LIMIT);
@@ -96,20 +101,74 @@ public class NotificationService {
             String targetLabel,
             String targetUrl
     ) {
+        return create(
+                recipient,
+                sender,
+                type,
+                severity,
+                title,
+                message,
+                detail,
+                targetLabel,
+                targetUrl,
+                null,
+                null,
+                null,
+                null,
+                false
+        );
+    }
+
+    @Transactional
+    public NotificationDto.Res create(
+            User recipient,
+            User sender,
+            NotificationType type,
+            NotificationSeverity severity,
+            String title,
+            String message,
+            String detail,
+            String targetLabel,
+            String targetUrl,
+            String dedupeKey,
+            String referenceType,
+            Long referenceId,
+            String referenceStatus,
+            boolean force
+    ) {
         if (recipient == null || recipient.getIdx() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "recipient is required.");
+        }
+
+        NotificationType nextType = type == null ? NotificationType.SYSTEM : type;
+        NotificationSeverity nextSeverity = severity == null ? NotificationSeverity.NORMAL : severity;
+        String nextDedupeKey = normalize(dedupeKey);
+
+        if (nextDedupeKey != null) {
+            Notification existing = notificationRepository.findByDedupeKey(nextDedupeKey).orElse(null);
+            if (existing != null) {
+                return NotificationDto.Res.from(existing);
+            }
+        }
+
+        if (!force && !preferenceResolver.shouldCreate(recipient, nextType, nextSeverity)) {
+            return null;
         }
 
         Notification notification = notificationRepository.save(Notification.builder()
                 .recipient(recipient)
                 .sender(sender)
-                .type(type == null ? NotificationType.SYSTEM : type)
-                .severity(severity == null ? NotificationSeverity.NORMAL : severity)
+                .type(nextType)
+                .severity(nextSeverity)
                 .title(nonBlank(title, "Notification"))
                 .message(nonBlank(message, "New notification has arrived."))
                 .detail(detail)
                 .targetLabel(targetLabel)
                 .targetUrl(targetUrl)
+                .dedupeKey(nextDedupeKey)
+                .referenceType(referenceType)
+                .referenceId(referenceId)
+                .referenceStatus(referenceStatus)
                 .build());
         NotificationDto.Res response = NotificationDto.Res.from(notification);
         notificationSseService.sendToUser(recipient.getIdx(), response);
@@ -129,8 +188,39 @@ public class NotificationService {
             String targetLabel,
             String targetUrl
     ) {
+        createForRecipients(recipients, sender, type, severity, title, message, detail, targetLabel, targetUrl, null);
+    }
+
+    @Transactional
+    public void createForRecipients(
+            Collection<User> recipients,
+            User sender,
+            NotificationType type,
+            NotificationSeverity severity,
+            String title,
+            String message,
+            String detail,
+            String targetLabel,
+            String targetUrl,
+            Function<User, String> dedupeKeyFactory
+    ) {
         uniqueUsers(recipients).forEach(recipient ->
-                create(recipient, sender, type, severity, title, message, detail, targetLabel, targetUrl));
+                create(
+                        recipient,
+                        sender,
+                        type,
+                        severity,
+                        title,
+                        message,
+                        detail,
+                        targetLabel,
+                        targetUrl,
+                        dedupeKeyFactory == null ? null : dedupeKeyFactory.apply(recipient),
+                        null,
+                        null,
+                        null,
+                        false
+                ));
     }
 
     @Transactional
@@ -165,7 +255,26 @@ public class NotificationService {
                 NotificationSeverity.NORMAL,
                 "업무 상태가 변경되었습니다.",
                 task.getName() + " : " + previousStatus + " -> " + nextStatus,
-                "담당 업무의 진행 상태가 변경되었습니다.",
+                "해당 업무의 진행 상태가 변경되었습니다.",
+                "업무 보드로 이동",
+                "/team-board"
+        );
+    }
+
+    @Transactional
+    public void notifyTaskUpdated(Task task, User sender, Collection<User> recipients) {
+        if (task == null) {
+            return;
+        }
+
+        createForRecipients(
+                recipients,
+                sender,
+                NotificationType.TASK_UPDATED,
+                NotificationSeverity.NORMAL,
+                "팀 업무가 수정되었습니다.",
+                task.getName(),
+                senderName(sender) + "님이 업무 정보를 수정했습니다.",
                 "업무 보드로 이동",
                 "/team-board"
         );
@@ -209,6 +318,117 @@ public class NotificationService {
         );
     }
 
+    @Transactional
+    public void notifyDeadline(Task task, Collection<User> recipients, NotificationType type, String dedupePrefix) {
+        if (task == null || type == null) {
+            return;
+        }
+
+        NotificationSeverity severity = type == NotificationType.DEADLINE_OVERDUE
+                ? NotificationSeverity.CRITICAL
+                : NotificationSeverity.HIGH;
+        String title = switch (type) {
+            case DEADLINE_24H -> "업무 마감이 24시간 남았습니다.";
+            case DEADLINE_1H -> "업무 마감이 1시간 남았습니다.";
+            case DEADLINE_OVERDUE -> "업무 마감이 초과되었습니다.";
+            default -> "업무 마감 알림";
+        };
+
+        createForRecipients(
+                recipients,
+                null,
+                type,
+                severity,
+                title,
+                task.getName(),
+                "업무 마감일과 현재 진행 상태를 확인해 주세요.",
+                "업무 보드로 이동",
+                "/team-board",
+                recipient -> dedupePrefix + ":user:" + recipient.getIdx()
+        );
+    }
+
+    @Transactional
+    public void notifyCampaignInvitation(CampaignInvitation invitation) {
+        if (invitation == null || invitation.getInvitee() == null || invitation.getCampaign() == null) {
+            return;
+        }
+
+        create(
+                invitation.getInvitee(),
+                invitation.getInviter(),
+                NotificationType.CAMPAIGN_INVITED,
+                NotificationSeverity.HIGH,
+                "캠페인 초대가 도착했습니다.",
+                invitation.getCampaign().getName(),
+                senderName(invitation.getInviter()) + "님이 캠페인에 초대했습니다. 초대를 승인하거나 반려해 주세요.",
+                "캠페인 초대 확인",
+                "/campaigns/" + invitation.getCampaign().getPublicId(),
+                "campaign-invitation:" + invitation.getIdx() + ":invitee:" + invitation.getInvitee().getIdx(),
+                REFERENCE_CAMPAIGN_INVITATION,
+                invitation.getIdx(),
+                invitation.getStatus().name(),
+                true
+        );
+    }
+
+    @Transactional
+    public void notifyCampaignInvitationDecision(CampaignInvitation invitation) {
+        if (invitation == null || invitation.getInviter() == null || invitation.getCampaign() == null) {
+            return;
+        }
+
+        boolean accepted = invitation.getStatus() == CampaignInvitationStatus.ACCEPTED;
+        create(
+                invitation.getInviter(),
+                invitation.getInvitee(),
+                accepted ? NotificationType.CAMPAIGN_INVITATION_ACCEPTED : NotificationType.CAMPAIGN_INVITATION_REJECTED,
+                accepted ? NotificationSeverity.NORMAL : NotificationSeverity.HIGH,
+                accepted ? "캠페인 초대가 승인되었습니다." : "캠페인 초대가 반려되었습니다.",
+                invitation.getCampaign().getName(),
+                senderName(invitation.getInvitee()) + "님이 캠페인 초대를 "
+                        + (accepted ? "승인했습니다." : "반려했습니다."),
+                "캠페인 보기",
+                "/campaigns/" + invitation.getCampaign().getPublicId(),
+                "campaign-invitation:" + invitation.getIdx() + ":inviter:" + invitation.getInviter().getIdx(),
+                REFERENCE_CAMPAIGN_INVITATION,
+                invitation.getIdx(),
+                invitation.getStatus().name(),
+                true
+        );
+
+        updateReferenceStatus(REFERENCE_CAMPAIGN_INVITATION, invitation.getIdx(), invitation.getStatus().name());
+    }
+
+    @Transactional
+    public void notifyCampaignMemberAdded(User recipient, User sender, String campaignName, String targetUrl) {
+        if (recipient == null) {
+            return;
+        }
+
+        create(
+                recipient,
+                sender,
+                NotificationType.CAMPAIGN_MEMBER_ADDED,
+                NotificationSeverity.NORMAL,
+                "캠페인 구성원으로 추가되었습니다.",
+                campaignName,
+                senderName(sender) + "님이 캠페인 구성원으로 추가했습니다.",
+                "캠페인 보기",
+                targetUrl
+        );
+    }
+
+    @Transactional
+    public void updateReferenceStatus(String referenceType, Long referenceId, String referenceStatus) {
+        if (referenceType == null || referenceId == null) {
+            return;
+        }
+
+        notificationRepository.findAllByReferenceTypeAndReferenceId(referenceType, referenceId)
+                .forEach(notification -> notification.updateReferenceStatus(referenceStatus));
+    }
+
     private List<User> uniqueUsers(Collection<User> users) {
         if (users == null || users.isEmpty()) {
             return List.of();
@@ -223,5 +443,21 @@ public class NotificationService {
 
     private String nonBlank(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private String normalize(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        return value.trim();
+    }
+
+    private String senderName(User sender) {
+        if (sender == null || sender.getName() == null || sender.getName().isBlank()) {
+            return "시스템";
+        }
+
+        return sender.getName();
     }
 }

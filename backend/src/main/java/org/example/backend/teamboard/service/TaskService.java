@@ -1,6 +1,8 @@
 package org.example.backend.teamboard.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.backend.campaign.model.CampaignMember;
+import org.example.backend.campaign.model.CampaignMemberRole;
 import org.example.backend.campaign.model.CampaignParticipant;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -83,6 +86,14 @@ public class TaskService {
         Task task = getTaskOrThrow(taskIdx);
         User previousAssignee = task.getAssignee();
         TaskStatus previousStatus = task.getStatus();
+        String previousName = task.getName();
+        CampaignParticipant previousParticipant = task.getParticipant();
+        java.time.LocalDateTime previousDueDate = task.getDueDate();
+        var previousTaskType = task.getTaskType();
+        TaskParts previousTaskPart = task.getTaskPart();
+        MileStones previousMilestone = task.getMilestone();
+        var previousPriority = task.getPriority();
+        String previousMemo = task.getMemo();
 
         TaskParts taskPart = req.taskPartId() != null ? getTaskPartOrThrow(req.taskPartId()) : task.getTaskPart();
         MileStones milestone = req.milestoneId() != null ? getMilestoneOrThrow(req.milestoneId()) : task.getMilestone();
@@ -104,10 +115,34 @@ public class TaskService {
                 req.memo()
         );
         User actor = findActor(authUser);
-        if (assignee != null && isDifferentUser(previousAssignee, assignee)) {
+        boolean isAssigneeChanged = assignee != null && isDifferentUser(previousAssignee, assignee);
+        boolean isStatusChanged = previousStatus != nextStatus;
+        boolean isGeneralUpdate = hasGeneralUpdate(
+                previousName,
+                task.getName(),
+                previousParticipant,
+                task.getParticipant(),
+                previousDueDate,
+                task.getDueDate(),
+                previousTaskType,
+                task.getTaskType(),
+                previousTaskPart,
+                task.getTaskPart(),
+                previousMilestone,
+                task.getMilestone(),
+                previousPriority,
+                task.getPriority(),
+                previousMemo,
+                task.getMemo()
+        );
+
+        if (isAssigneeChanged) {
             notificationService.notifyTaskAssigned(task, actor);
         }
         notificationService.notifyTaskStatusChanged(task, previousStatus, nextStatus, actor);
+        if (isGeneralUpdate && !isAssigneeChanged && !isStatusChanged) {
+            notificationService.notifyTaskUpdated(task, actor, teamRecipients(task, actor));
+        }
         return TaskDto.ResTask.from(task);
     }
 
@@ -155,5 +190,88 @@ public class TaskService {
         Long previousIdx = previousAssignee != null ? previousAssignee.getIdx() : null;
         Long nextIdx = nextAssignee != null ? nextAssignee.getIdx() : null;
         return previousIdx == null || !previousIdx.equals(nextIdx);
+    }
+
+    private boolean hasGeneralUpdate(
+            String previousName,
+            String nextName,
+            CampaignParticipant previousParticipant,
+            CampaignParticipant nextParticipant,
+            java.time.LocalDateTime previousDueDate,
+            java.time.LocalDateTime nextDueDate,
+            Object previousTaskType,
+            Object nextTaskType,
+            TaskParts previousTaskPart,
+            TaskParts nextTaskPart,
+            MileStones previousMilestone,
+            MileStones nextMilestone,
+            Object previousPriority,
+            Object nextPriority,
+            String previousMemo,
+            String nextMemo
+    ) {
+        return !Objects.equals(previousName, nextName)
+                || !sameEntity(previousParticipant, nextParticipant)
+                || !Objects.equals(previousDueDate, nextDueDate)
+                || !Objects.equals(previousTaskType, nextTaskType)
+                || !sameEntity(previousTaskPart, nextTaskPart)
+                || !sameEntity(previousMilestone, nextMilestone)
+                || !Objects.equals(previousPriority, nextPriority)
+                || !Objects.equals(previousMemo, nextMemo);
+    }
+
+    private boolean sameEntity(Object previous, Object next) {
+        Long previousIdx = entityIdx(previous);
+        Long nextIdx = entityIdx(next);
+
+        return Objects.equals(previousIdx, nextIdx);
+    }
+
+    private Long entityIdx(Object entity) {
+        if (entity instanceof CampaignParticipant participant) {
+            return participant.getIdx();
+        }
+        if (entity instanceof TaskParts taskParts) {
+            return taskParts.getIdx();
+        }
+        if (entity instanceof MileStones mileStones) {
+            return mileStones.getIdx();
+        }
+
+        return null;
+    }
+
+    private List<User> teamRecipients(Task task, User actor) {
+        Long campaignIdx = task.getTaskPart() != null && task.getTaskPart().getCampaign() != null
+                ? task.getTaskPart().getCampaign().getIdx()
+                : null;
+        if (campaignIdx == null) {
+            return List.of();
+        }
+
+        Long participantOrganizationIdx = task.getParticipant() != null
+                && task.getParticipant().getOrganization() != null
+                ? task.getParticipant().getOrganization().getIdx()
+                : null;
+        Long actorIdx = actor != null ? actor.getIdx() : null;
+
+        return campaignMemberRepository.findAllByCampaignIdx(campaignIdx).stream()
+                .filter(member -> shouldNotifyTaskUpdateMember(member, participantOrganizationIdx))
+                .map(CampaignMember::getUser)
+                .filter(user -> user != null && user.getIdx() != null && !user.getIdx().equals(actorIdx))
+                .distinct()
+                .toList();
+    }
+
+    private boolean shouldNotifyTaskUpdateMember(CampaignMember member, Long participantOrganizationIdx) {
+        if (member.getCampaignRole() == CampaignMemberRole.MANAGER
+                || member.getCampaignRole() == CampaignMemberRole.GENERAL_MANAGER) {
+            return true;
+        }
+
+        return participantOrganizationIdx != null
+                && member.getUser() != null
+                && member.getUser().getOrganization() != null
+                && participantOrganizationIdx.equals(member.getUser().getOrganization().getIdx());
     }
 }

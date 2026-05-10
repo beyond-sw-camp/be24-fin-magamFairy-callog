@@ -28,7 +28,8 @@ import java.time.LocalDateTime;
         name = "notifications",
         indexes = {
                 @Index(name = "idx_notifications_recipient_read", columnList = "recipient_idx,is_read"),
-                @Index(name = "idx_notifications_recipient_created", columnList = "recipient_idx,create_date")
+                @Index(name = "idx_notifications_recipient_created", columnList = "recipient_idx,create_date"),
+                @Index(name = "idx_notifications_dedupe", columnList = "dedupe_key")
         }
 )
 @Getter
@@ -72,6 +73,17 @@ public class Notification extends BaseEntity {
     @Column(length = 500)
     private String targetUrl;
 
+    @Column(name = "dedupe_key", unique = true, length = 180)
+    private String dedupeKey;
+
+    @Column(length = 60)
+    private String referenceType;
+
+    private Long referenceId;
+
+    @Column(length = 40)
+    private String referenceStatus;
+
     @Builder.Default
     @Column(name = "is_read", nullable = false)
     private Boolean isRead = false;
@@ -85,5 +97,9 @@ public class Notification extends BaseEntity {
 
         this.isRead = true;
         this.readAt = LocalDateTime.now();
+    }
+
+    public void updateReferenceStatus(String referenceStatus) {
+        this.referenceStatus = referenceStatus;
     }
 }
