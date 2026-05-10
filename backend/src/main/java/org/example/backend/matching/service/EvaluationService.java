@@ -2,7 +2,9 @@ package org.example.backend.matching.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.backend.campaign.model.Campaign;
+import org.example.backend.campaign.model.CampaignDto;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.matching.model.*;
@@ -11,50 +13,48 @@ import org.example.backend.matching.model.evaluation.Evaluation;
 import org.example.backend.matching.model.evaluation.EvaluationDto;
 import org.example.backend.matching.repository.*;
 import org.example.backend.organization.model.Organization;
+import org.example.backend.organization.repository.OrganizationRepository;
 import org.example.backend.user.model.AuthUserDetails;
+import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.GsonBuilderUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 
 @Service
 @RequiredArgsConstructor
 public class EvaluationService {
     private final EvaluationRepository evaluationRepository;
-    private final CampaignParticipantRepository participantRepository;
-    private final UserRepository userRepository;
-    private final AssetRepository assetRepository;
     private final BenefitRepository benefitRepository;
-    private final GoalRepository goalRepository;
     private final CampaignRepository campaignRepository;
     private final RestClient restClient;
+    private final OrganizationRepository organizationRepository;
+    private final UserRepository userRepository;
 
-    @Value("${custom.n8n.webhook-url}/evaluation")
+    @Value("${custom.n8n.webhook-url}${custom.n8n.evaluation-endpoint}")
     String n8nWebhookUrl;
 
     public void startEvaluation(EvaluationDto.StartEvaluationReq dto) {
 
-        Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
-                .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + dto.getCampaignIdx()));
-        MarketingAsset requiredAsset = assetRepository.findById(dto.getAssetIdx())
-                .orElseThrow(() -> new EntityNotFoundException("해당 Asset을 찾을 수 없습니다. Asset ID: " + dto.getAssetIdx()));
         PartnerBenefits requiredBenefit = benefitRepository.findById(dto.getBenefitIdx())
                 .orElseThrow(() -> new EntityNotFoundException("해당 Benefit을 찾을 수 없습니다. Benefit ID: " + dto.getBenefitIdx()));
-        CampaignGoal requiredGoal = goalRepository.findById(dto.getGoalIdx())
-                .orElseThrow(() -> new EntityNotFoundException("해당 Goal을 찾을 수 없습니다. Goal ID: " + dto.getGoalIdx()));
+        Long campaignIdx = requiredBenefit.getCampaign().getIdx();
+        Campaign campaign = campaignRepository.findById(campaignIdx)
+                .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + campaignIdx));
 
         EvaluationDto.StartEvaluation eval;
         eval = EvaluationDto.StartEvaluation.builder()
-                .dependency(dto.getDependency())
-                .campaignIdx(campaign.getIdx())
-                .asset(MatchingDto.AssetRes.toDto(requiredAsset))
+                .campaign(CampaignDto.Res.from(campaign))
                 .benefit(MatchingDto.BenefitRes.toDto(requiredBenefit))
-                .goal(EvaluationDto.StartEvaluation.CampaignGoalRes.toDto(requiredGoal))
                 .build();
 
         try {
@@ -87,9 +87,12 @@ public class EvaluationService {
                 .orElseGet(() -> {
                     Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
                             .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + dto.getCampaignIdx()));
+                    PartnerBenefits benefits = benefitRepository.findById(dto.getBenefitIdx())
+                            .orElseThrow(() -> new EntityNotFoundException("해당 Benefit을 찾을 수 없습니다. Benefit ID: " + dto.getBenefitIdx()));
                     Evaluation newEval = Evaluation.builder()
                             .sessionId(dto.getUuid())
                             .campaign(campaign)
+                            .benefits(benefits)
                             .build();
                     return evaluationRepository.save(newEval);
                 });
@@ -108,5 +111,37 @@ public class EvaluationService {
         evaluation.updateEval(evalEntity, category);
     }
 
+    public List<EvaluationDto.EvaluationRes> result(Long campaignIdx, AuthUserDetails user) {
+       List<Evaluation> evaluations = evaluationRepository.findAllByCampaignIdx(campaignIdx);
 
+       if (evaluations.isEmpty()) {
+           throw new EntityNotFoundException(("해당 캠페인에 대한 평가 정보가 없습니다. CampaignID: " + campaignIdx));
+       }
+
+       return evaluations.stream()
+               .map(evaluation -> {
+                   PartnerBenefits benefits = evaluation.getBenefits();
+                   Campaign campaign = benefits.getCampaign();
+
+                   return EvaluationDto.EvaluationRes.toDto(
+                           campaign,
+                           benefits,
+                           evaluation,
+                           user.getCompanyName()
+                   );
+               })
+               .collect(Collectors.toList());
+
+//        Evaluation evaluation = evaluationRepository.findByCampaignIdx(evaluationId)
+//                .orElseThrow(() -> new EntityNotFoundException("해당 평가를 찾을 수 없습니다. Evaluation ID: " + evaluationId));
+//        PartnerBenefits benefits = benefitRepository.findById(evaluation.getBenefits().getIdx())
+//                .orElseThrow();
+//        Campaign campaign = campaignRepository.findById(evaluation.getCampaign().getIdx())
+//                .orElseThrow();
+//
+//        return EvaluationDto.EvaluationRes.toDto(campaign, benefits, evaluation, user.getCompanyName());
+    }
 }
+
+
+

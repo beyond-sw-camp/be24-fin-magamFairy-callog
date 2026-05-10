@@ -13,6 +13,4 @@ public interface OrganizationRepository extends JpaRepository<Organization, Long
     boolean existsByCode(String code);
 
     Optional<Organization> findByNameIgnoreCase(String name);
-
-    List<Organization> findAllByType(OrganizationType type);
 }

@@ -7,7 +7,7 @@ const props = defineProps({
   editable: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['edit', 'archive', 'activate'])
+const emit = defineEmits(['edit', 'archive', 'activate', 'restore-draft'])
 
 function formatNumber(value) {
   if (value === null || value === undefined || value === '') return '-'
@@ -113,18 +113,34 @@ const periodLabel = computed(() => props.kpi.periodCode || props.kpi.periodType 
       :unit="kpi.unit"
     />
 
-    <footer v-if="editable && kpi.status !== 'ARCHIVED'" class="kpi-card__foot">
-      <button
-        v-if="kpi.status === 'DRAFT'"
-        type="button"
-        class="kpi-card__action"
-        @click="emit('activate', kpi)"
-      >활성화</button>
-      <button
-        type="button"
-        class="kpi-card__action kpi-card__action--ghost"
-        @click="emit('archive', kpi)"
-      >보관</button>
+    <footer v-if="editable" class="kpi-card__foot">
+      <!-- ACTIVE / DRAFT 상태 -->
+      <template v-if="kpi.status !== 'ARCHIVED'">
+        <button
+          v-if="kpi.status === 'DRAFT'"
+          type="button"
+          class="kpi-card__action"
+          @click="emit('activate', kpi)"
+        >활성화</button>
+        <button
+          type="button"
+          class="kpi-card__action kpi-card__action--ghost"
+          @click="emit('archive', kpi)"
+        >보관</button>
+      </template>
+      <!-- ARCHIVED 상태: 활성 / 초안으로 복원 -->
+      <template v-else>
+        <button
+          type="button"
+          class="kpi-card__action"
+          @click="emit('activate', kpi)"
+        >활성</button>
+        <button
+          type="button"
+          class="kpi-card__action kpi-card__action--ghost"
+          @click="emit('restore-draft', kpi)"
+        >초안</button>
+      </template>
     </footer>
   </article>
 </template>

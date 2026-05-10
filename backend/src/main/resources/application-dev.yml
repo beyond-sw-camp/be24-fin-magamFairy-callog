@@ -64,9 +64,10 @@ spring:
 
 logging:
   level:
-    org.hibernate.SQL: debug
-    org.hibernate.orm.jdbc.bind: trace
-    org.example: debug
+    org.example.backend.matching.service: debug
+#    org.hibernate.SQL: debug
+#    org.hibernate.orm.jdbc.bind: trace
+#    org.example: debug
     net.ttddyy.observation: DEBUG
     # RestClient가 요청을 보내는 과정을 로그로 출력
     org.springframework.web.client: DEBUG
@@ -76,6 +77,16 @@ logging:
 custom:
   n8n:
     webhook-url: ${N8N_URL}
+    evaluation-endpoint: ${EVALUATION_ENDPOINT}
     ad-check-url: ${N8N_AD_CHECK_URL}
   ocr:
     url: ${OCR_SERVICE_URL:http://localhost:8000/ocr}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always

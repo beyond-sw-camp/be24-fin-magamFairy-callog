@@ -14,6 +14,7 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  // 실제 데이터에 id가 없으므로 쓰지 않아도 무방합니다.
   initialSelectedId: {
     type: [Number, String, null],
     default: null,
@@ -22,15 +23,15 @@ const props = defineProps({
 
 const emit = defineEmits(['update:isOpen', 'submit'])
 
-// 복수 선택용 배열([])에서 단일 선택용 값(null)으로 변경
-const selectedBenefitId = ref(null)
+// 단일 선택용 '객체' 저장 (id 대신 객체 통째로)
+const selectedBenefit = ref(null)
 
-// 모달이 열릴 때마다 부모에서 전달한 초기 선택값으로 세팅
+// 모달이 열릴 때마다 선택 초기화
 watch(
   () => props.isOpen,
   (newVal) => {
     if (newVal) {
-      selectedBenefitId.value = props.initialSelectedId || null
+      selectedBenefit.value = null
     }
   }
 )
@@ -40,20 +41,19 @@ function closeModal() {
 }
 
 function submitRequest() {
-  // 선택된 값이 없는 경우 검증
-  if (!selectedBenefitId.value) {
+  // 선택된 객체가 없는 경우 검증
+  if (!selectedBenefit.value) {
     alert('평가할 혜택을 선택해주세요.')
     return
   }
 
-  // 선택된 단일 혜택 객체 추출 (filter 대신 find 사용)
-  const selectedBenefit = props.proposals.find((p) => p.id === selectedBenefitId.value)
+  // 평가 요청에 필요한 정보 담기
+  const submit = {
+    benefitIdx: selectedBenefit.value.idx,
+  }
 
-  // 부모 컴포넌트로 데이터 전송 (부모가 배열을 기대할 경우를 대비해 배열로 감싸서 전달)
-  emit('submit', {
-    campaign: props.campaignInfo,
-    benefits: [selectedBenefit],
-  })
+  // console.log(submit)
+  emit('submit', submit)
 
   closeModal()
 }
@@ -83,16 +83,16 @@ function submitRequest() {
 
         <section class="modal-section">
           <h5>제안된 혜택 선택</h5>
-          <!-- 문구 수정 -->
           <p class="modal-desc">이 캠페인에 적용할 혜택을 하나만 선택해주세요.</p>
           <div class="benefit-check-list">
-            <label v-for="proposal in proposals" :key="proposal.id" class="check-item">
-              <!-- checkbox를 radio로 변경하고 v-model 대상을 단일 id로 변경 -->
-              <input type="radio" name="benefitSelection" :value="proposal.id" v-model="selectedBenefitId" />
+            <!-- 고유 id가 없으므로 배열의 index를 key로 사용 -->
+            <label v-for="(proposal, index) in proposals" :key="index" class="check-item">
+              <!-- value를 객체 자체(proposal)로 바인딩 -->
+              <input type="radio" name="benefitSelection" :value="proposal" v-model="selectedBenefit" />
               <div class="check-item__info">
-                <strong>{{ proposal.partner }}</strong>
+                <strong>{{ proposal.managerName || proposal.partner }}</strong>
                 <span>{{ proposal.name }}</span>
-                <small>{{ proposal.type }} · {{ proposal.target }}</small>
+                <small>{{ proposal.type }} · {{ proposal.targetAudience || proposal.target }}</small>
               </div>
             </label>
           </div>

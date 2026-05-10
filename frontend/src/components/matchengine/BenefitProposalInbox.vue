@@ -1,8 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onBeforeUnmount, onMounted } from 'vue'
 import EvaluationModal from './EvaluationModal.vue'
 import { ListBenefits } from '@/api/matchingBenefits/index.js'
-import { onMounted } from 'vue';
 
 defineProps({
   isDark: {
@@ -11,9 +10,16 @@ defineProps({
   },
 })
 
-const emit = defineEmits(['navigate'])
+const emit = defineEmits(['navigate', 'request-evaluation'])
 
 const isEvaluationModalOpen = ref(false)
+const layoutRef = ref(null)
+const listPanelPercent = ref(68)
+const isResizing = ref(false)
+
+const layoutStyle = computed(() => ({
+  '--benefit-list-width': `${listPanelPercent.value}%`,
+}))
 
 const campaignInfo = ref({
   title: '2026 상반기 VIP 스프링 프로모션',
@@ -28,18 +34,37 @@ function openEvaluationModal() {
 
 // 자식 모달에서 최종 선택 완료 후 submit 이벤트 발생 시 실행됨
 function handleEvaluationSubmit(payload) {
-  console.log('최종 제출된 데이터:', payload)
-  emit('requestEvaluation', payload)
+  emit('request-evaluation', payload)
   alert('선택한 혜택의 평가가 요청되었습니다.')
+}
+
+function startResize(event) {
+  isResizing.value = true
+  window.addEventListener('pointermove', resizePanels)
+  window.addEventListener('pointerup', stopResize)
+  resizePanels(event)
+}
+
+function resizePanels(event) {
+  const rect = layoutRef.value?.getBoundingClientRect()
+  if (!rect) return
+
+  const rawPercent = ((event.clientX - rect.left) / rect.width) * 100
+  listPanelPercent.value = Math.min(76, Math.max(42, Math.round(rawPercent)))
+}
+
+function stopResize() {
+  isResizing.value = false
+  window.removeEventListener('pointermove', resizePanels)
+  window.removeEventListener('pointerup', stopResize)
 }
 
 // 실제 상태 코드에 맞게 필터 ID 변경
 const statusFilters = [
   { id: 'all', label: '전체' },
   { id: 'PENDING', label: '새 제안' },
-  { id: 'INCOMPLETE', label: '보완 필요' },
-  { id: 'APPROVED', label: '승인됨' },
   { id: 'HOLD', label: '보류' },
+  { id: 'APPROVED', label: '승인' },
 ]
 
 function getStatusLabel(status) {
@@ -49,107 +74,6 @@ function getStatusLabel(status) {
 
 // 1️⃣ 기존 더미 데이터를 지우고 빈 배열로 초기화합니다.
 const benefits = ref([])
-
-// // 실제 데이터 구조가 반영된 더미 데이터 (benefits)
-// const benefits = ref([
-//   {
-//     id: 1, // 리스트 v-for용 고유 ID
-//     name: "핸드크림 10ml 샘플",
-//     type: "체험/사은품",
-//     description: "럭시드 핸드크림 샘플을 VIP 고객에게 제공하는 체험형 혜택입니다.",
-//     quantity: 10000,
-//     quantityUnit: "개",
-//     valuePerPerson: 5000,
-//     periodStart: "2026.05.01",
-//     periodEnd: "2026.06.30",
-//     alwaysNegotiable: false,
-//     prepDays: 10,
-//     targetAudience: "2040 뷰티 고객, VIP/프리미엄",
-//     expectedReach: 8000,
-//     costBearer: "PARTNER",
-//     costPartnerPercent: "100",
-//     costOursPercent: "0",
-//     costDetails: "파트너 전액 부담",
-//     exposureChannels: "자사 앱, 알림톡, 제휴사 채널",
-//     requiredCollaborations: "샘플 재고 소진 시 대체 혜택 필요",
-//     conditions: "VIP 고객층과 적합도 높음",
-//     desiredAssets: "갤러리아 VIP 고객층",
-//     autoRecommend: true,
-//     managerName: "럭시드",
-//     managerEmail: "contact@luxeed.com",
-//     managerPhone: "010-1234-5678",
-//     status: "PENDING",
-//     campaignIdx: 1,
-//     totalValue: 50000000,
-//     // 화면 표시용 부가 데이터 (실제 응답에 없다면 프론트에서 가공)
-//     receivedAt: '오늘 09:42',
-//     matchScore: 87,
-//   },
-//   {
-//     id: 2,
-//     name: "전시 시설 30% 할인권",
-//     type: "할인/쿠폰",
-//     description: "전시 시설 할인권을 활용해 기존 고객의 재방문을 유도하는 제안입니다.",
-//     quantity: 9999, // 무제한 등을 표현
-//     quantityUnit: "건",
-//     valuePerPerson: 15000,
-//     periodStart: "",
-//     periodEnd: "",
-//     alwaysNegotiable: true,
-//     prepDays: 5,
-//     targetAudience: "패밀리, 4050 기존 고객",
-//     expectedReach: 5000,
-//     costBearer: "PARTNER",
-//     costPartnerPercent: "100",
-//     costOursPercent: "0",
-//     costDetails: "파트너 전액 부담 (할인율 기반 정산)",
-//     exposureChannels: "앱, SNS, 오프라인 매장",
-//     requiredCollaborations: "운영비 부담 기준은 추가 협의 필요",
-//     conditions: "기존 고객 재방문 목표와 연결이 명확함",
-//     desiredAssets: "호텔 객실 패키지",
-//     autoRecommend: false,
-//     managerName: "메리오",
-//     managerEmail: "mkt@merio.com",
-//     managerPhone: "02-987-6543",
-//     status: "APPROVED",
-//     campaignIdx: 1,
-//     totalValue: 0,
-//     receivedAt: '어제 16:20',
-//     matchScore: 82,
-//   },
-//   {
-//     id: 3,
-//     name: "오리지널 콘텐츠 공동 프로모션",
-//     type: "콘텐츠/이벤트",
-//     description: "오리지널 콘텐츠를 활용한 공동 프로모션 제안입니다.",
-//     quantity: 0,
-//     quantityUnit: "건",
-//     valuePerPerson: 0,
-//     periodStart: "미입력",
-//     periodEnd: "미입력",
-//     alwaysNegotiable: false,
-//     prepDays: 0,
-//     targetAudience: "미입력",
-//     expectedReach: 0,
-//     costBearer: "UNKNOWN",
-//     costPartnerPercent: "",
-//     costOursPercent: "",
-//     costDetails: "비용 부담 구조 미입력",
-//     exposureChannels: "보도자료, 영상 콘텐츠 협의 필요",
-//     requiredCollaborations: "대상 고객, 비용 부담, 유효 기간이 없어 검토 불가",
-//     conditions: "콘텐츠 협업 형태로 브랜드 노출 가능",
-//     desiredAssets: "매칭 불가",
-//     autoRecommend: false,
-//     managerName: "어반스테이지",
-//     managerEmail: "info@urban.com",
-//     managerPhone: "-",
-//     status: "INCOMPLETE",
-//     campaignIdx: 1,
-//     totalValue: 0,
-//     receivedAt: '2일 전',
-//     matchScore: null,
-//   }
-// ])
 
 onMounted(async () => {
   try {
@@ -163,6 +87,10 @@ onMounted(async () => {
   } catch (error) {
     console.error('혜택 목록을 불러오는데 실패했습니다:', error)
   }
+})
+
+onBeforeUnmount(() => {
+  stopResize()
 })
 
 
@@ -181,7 +109,6 @@ const selectedBenefit = computed(() => {
 const summary = computed(() => ({
   total: benefits.value.length,
   new: benefits.value.filter((benefit) => benefit.status === 'PENDING').length,
-  incomplete: benefits.value.filter((benefit) => benefit.status === 'INCOMPLETE').length,
   approved: benefits.value.filter((benefit) => benefit.status === 'APPROVED').length,
 }))
 
@@ -195,7 +122,6 @@ function selectFilter(filterId) {
 
 function statusTone(status) {
   if (status === 'PENDING') return 'primary'
-  if (status === 'INCOMPLETE') return 'warning'
   if (status === 'APPROVED') return 'success'
   return 'muted'
 }
@@ -212,6 +138,59 @@ function formatPeriod(benefit) {
   if (!benefit.periodStart || benefit.periodStart === '미입력') return '미입력'
   return `${benefit.periodStart} - ${benefit.periodEnd}`
 }
+
+function isBlank(value) {
+  return value === null || value === undefined || value === '' || value === '미입력'
+}
+
+function displayValue(value) {
+  return isBlank(value) ? '미입력' : value
+}
+
+function formatNumber(value) {
+  if (isBlank(value)) return '미입력'
+  const number = Number(value)
+  return Number.isFinite(number) ? number.toLocaleString() : value
+}
+
+function formatMoney(value) {
+  if (isBlank(value)) return '미입력'
+  const number = Number(value)
+  return Number.isFinite(number) ? `${number.toLocaleString()}원` : value
+}
+
+function formatValuePerPerson(benefit) {
+  return formatMoney(benefit.valuePerPerson)
+}
+
+function formatTotalValue(benefit) {
+  return formatMoney(benefit.totalValue)
+}
+
+function formatPrepDays(benefit) {
+  if (isBlank(benefit.prepDays)) return '미입력'
+  return `${formatNumber(benefit.prepDays)}일`
+}
+
+function formatExpectedReach(benefit) {
+  if (isBlank(benefit.expectedReach)) return '미입력'
+  return `${formatNumber(benefit.expectedReach)}명`
+}
+
+function formatCostBearer(benefit) {
+  if (benefit.costBearer === 'PARTNER') return '파트너 전액 부담'
+  if (benefit.costBearer === 'OURS') return '우리 측 전액 부담'
+  if (benefit.costBearer === 'JOINT') {
+    const partner = displayValue(benefit.costPartnerPercent)
+    const ours = displayValue(benefit.costOursPercent)
+    return `공동 부담 (${partner}% : ${ours}%)`
+  }
+  return displayValue(benefit.costBearer)
+}
+
+function formatAutoRecommend(benefit) {
+  return benefit.autoRecommend ? '추천 받기' : '직접 입력'
+}
 </script>
 
 <template>
@@ -219,18 +198,17 @@ function formatPeriod(benefit) {
     <header class="benefit-inbox__head">
       <div>
         <span>Benefit Proposals</span>
-        <h3>혜택 제안</h3>
-        <p>파트너가 보낸 혜택 제안을 검토하고 매칭 평가로 넘깁니다.</p>
+        <h3>혜택 평가</h3>
+        <p>파트너가 등록한 혜택을 검토하고 평가를 진행합니다.</p>
       </div>
-      <button type="button" class="benefit-inbox__primary" @click="openEvaluationModal">
-        평가 진행하기
-        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
-          <path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      </button>
     </header>
 
-    <div class="benefit-layout">
+    <div
+      ref="layoutRef"
+      class="benefit-layout"
+      :class="{ resizing: isResizing }"
+      :style="layoutStyle"
+    >
       <div class="benefit-list-column">
         <section class="benefit-summary" aria-label="혜택 제안 요약">
           <article>
@@ -241,12 +219,8 @@ function formatPeriod(benefit) {
             <span>새 제안</span>
             <strong>{{ summary.new }}<small>건</small></strong>
           </article>
-          <article class="warning">
-            <span>보완 필요</span>
-            <strong>{{ summary.incomplete }}<small>건</small></strong>
-          </article>
           <article class="success">
-            <span>승인됨</span>
+            <span>승인</span>
             <strong>{{ summary.approved }}<small>건</small></strong>
           </article>
         </section>
@@ -299,71 +273,138 @@ function formatPeriod(benefit) {
         </section>
       </div>
 
+      <button
+        v-if="selectedBenefit"
+        type="button"
+        class="benefit-resizer"
+        aria-label="혜택 목록과 상세 영역 크기 조절"
+        title="좌우 영역 크기 조절"
+        @pointerdown.prevent="startResize"
+      >
+        <span />
+      </button>
+
       <aside v-if="selectedBenefit" class="benefit-detail">
         <div class="benefit-detail__scroll">
-          <header>
-            <div>
-              <span>{{ selectedBenefit.receivedAt }}</span>
-              <h4>{{ selectedBenefit.managerName }} · {{ selectedBenefit.name }}</h4>
-              <p>{{ selectedBenefit.description }}</p>
+          <header class="benefit-detail__head">
+            <div class="benefit-detail__title">
+              <span>혜택 제안 상세</span>
+              <h4>{{ selectedBenefit.name }}</h4>
+              <p>{{ displayValue(selectedBenefit.managerName) }} · 접수 {{ displayValue(selectedBenefit.receivedAt) }}</p>
             </div>
-            <strong :class="{ muted: !selectedBenefit.matchScore }">
-              {{ selectedBenefit.matchScore ? `${selectedBenefit.matchScore}점` : '보완 필요' }}
-            </strong>
+            <div class="benefit-detail__actions">
+              <button type="button">승인</button>
+              <button type="button">보류</button>
+              <button type="button" class="primary" @click="openEvaluationModal">평가하기</button>
+            </div>
           </header>
 
-          <dl class="benefit-detail__grid">
-            <div>
-              <dt>혜택 유형</dt>
-              <dd>{{ selectedBenefit.type }}</dd>
-            </div>
-            <div>
-              <dt>대상 고객</dt>
-              <dd>{{ selectedBenefit.targetAudience }}</dd>
-            </div>
-            <div>
-              <dt>규모/가치</dt>
-              <!-- totalValue가 있으면 포맷팅, 없으면 미입력 처리 -->
-              <dd>{{ formatQuantity(selectedBenefit) }} · {{ selectedBenefit.totalValue ? `총 ${selectedBenefit.totalValue.toLocaleString()}원` : '미산정' }}</dd>
-            </div>
-            <div>
-              <dt>비용 부담</dt>
-              <dd>{{ selectedBenefit.costDetails }}</dd>
-            </div>
-            <div>
-              <dt>유효 기간</dt>
-              <dd>{{ formatPeriod(selectedBenefit) }}</dd>
-            </div>
-            <div>
-              <dt>담당 연락처</dt>
-              <dd>{{ selectedBenefit.managerEmail }}<br/><small>{{ selectedBenefit.managerPhone }}</small></dd>
-            </div>
-          </dl>
+          <section class="benefit-detail__section">
+            <h5>기본 정보</h5>
+            <dl class="benefit-detail__table">
+              <div>
+                <dt>혜택 유형</dt>
+                <dd>{{ displayValue(selectedBenefit.type) }}</dd>
+              </div>
+              <div>
+                <dt>대상 고객</dt>
+                <dd>{{ displayValue(selectedBenefit.targetAudience) }}</dd>
+              </div>
+              <div>
+                <dt>예상 도달 규모</dt>
+                <dd>{{ formatExpectedReach(selectedBenefit) }}</dd>
+              </div>
+              <div>
+                <dt>추천 받기 여부</dt>
+                <dd>{{ formatAutoRecommend(selectedBenefit) }}</dd>
+              </div>
+            </dl>
+          </section>
 
-          <section class="benefit-notes">
-            <div>
-              <h5>제안 조건 및 강점</h5>
-              <ul>
-                <!-- 문자열 기반 데이터를 배열 형태로 화면에 뿌려줌 -->
-                <li v-if="selectedBenefit.conditions">{{ selectedBenefit.conditions }}</li>
-                <li v-else>기재된 내용이 없습니다.</li>
-              </ul>
-            </div>
-            <div>
-              <h5>요구 사항 (확인 필요)</h5>
-              <ul>
-                <li v-if="selectedBenefit.requiredCollaborations">{{ selectedBenefit.requiredCollaborations }}</li>
-                <li v-else>기재된 내용이 없습니다.</li>
-              </ul>
-            </div>
+          <section class="benefit-detail__section">
+            <h5>규모·기간</h5>
+            <dl class="benefit-detail__table">
+              <div>
+                <dt>제공 수량</dt>
+                <dd>{{ formatQuantity(selectedBenefit) }}</dd>
+              </div>
+              <div>
+                <dt>1인당 가치</dt>
+                <dd>{{ formatValuePerPerson(selectedBenefit) }}</dd>
+              </div>
+              <div>
+                <dt>총 환산 가치</dt>
+                <dd>{{ formatTotalValue(selectedBenefit) }}</dd>
+              </div>
+              <div>
+                <dt>유효 기간</dt>
+                <dd>{{ formatPeriod(selectedBenefit) }}</dd>
+              </div>
+              <div>
+                <dt>상시 협의 여부</dt>
+                <dd>{{ selectedBenefit.alwaysNegotiable ? '상시 협의' : '기간 지정' }}</dd>
+              </div>
+              <div>
+                <dt>준비 필요 기간</dt>
+                <dd>{{ formatPrepDays(selectedBenefit) }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="benefit-detail__section">
+            <h5>비용·운영</h5>
+            <dl class="benefit-detail__table benefit-detail__table--wide">
+              <div>
+                <dt>비용 부담</dt>
+                <dd>{{ formatCostBearer(selectedBenefit) }}</dd>
+              </div>
+              <div>
+                <dt>비용 부담 상세</dt>
+                <dd>{{ displayValue(selectedBenefit.costDetails) }}</dd>
+              </div>
+              <div>
+                <dt>노출 채널</dt>
+                <dd>{{ displayValue(selectedBenefit.exposureChannels) }}</dd>
+              </div>
+              <div>
+                <dt>필요 협업 산출물</dt>
+                <dd>{{ displayValue(selectedBenefit.requiredCollaborations) }}</dd>
+              </div>
+              <div>
+                <dt>사용 조건/제약</dt>
+                <dd>{{ displayValue(selectedBenefit.conditions) }}</dd>
+              </div>
+              <div>
+                <dt>연결 희망 자산</dt>
+                <dd>{{ displayValue(selectedBenefit.desiredAssets) }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="benefit-detail__section">
+            <h5>담당자</h5>
+            <dl class="benefit-detail__table benefit-detail__table--stacked">
+              <div>
+                <dt>담당자 이름</dt>
+                <dd>{{ displayValue(selectedBenefit.managerName) }}</dd>
+              </div>
+              <div>
+                <dt>이메일</dt>
+                <dd>{{ displayValue(selectedBenefit.managerEmail) }}</dd>
+              </div>
+              <div>
+                <dt>연락처</dt>
+                <dd>{{ displayValue(selectedBenefit.managerPhone) }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="benefit-detail__section">
+            <h5>혜택 설명</h5>
+            <div class="benefit-detail__memo">{{ displayValue(selectedBenefit.description) }}</div>
           </section>
         </div>
 
-        <footer class="benefit-actions">
-          <button type="button">보완 요청</button>
-          <button type="button">보류</button>
-          <button type="button" class="primary" @click="openEvaluationModal">평가 진행하기</button>
-        </footer>
       </aside>
     </div>
 
@@ -438,8 +479,7 @@ function formatPeriod(benefit) {
   font-weight: 650;
 }
 
-.benefit-inbox__primary,
-.benefit-actions .primary {
+.benefit-detail__actions .primary {
   display: inline-flex;
   height: 2.35rem;
   align-items: center;
@@ -457,7 +497,7 @@ function formatPeriod(benefit) {
 
 .benefit-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
@@ -493,10 +533,6 @@ function formatPeriod(benefit) {
   color: var(--benefit-brand);
 }
 
-.benefit-summary .warning strong {
-  color: var(--benefit-amber);
-}
-
 .benefit-summary .success strong {
   color: var(--benefit-green);
 }
@@ -528,11 +564,16 @@ function formatPeriod(benefit) {
 
 .benefit-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(27rem, 0.8fr);
-  gap: 0.85rem;
+  grid-template-columns: minmax(24rem, var(--benefit-list-width, 68%)) 0.7rem minmax(25rem, 1fr);
+  gap: 0.45rem;
   height: 100%;
   min-height: 0;
   overflow: hidden;
+}
+
+.benefit-layout.resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .benefit-list-column {
@@ -541,6 +582,35 @@ function formatPeriod(benefit) {
   gap: 0.85rem;
   min-width: 0;
   min-height: 0;
+}
+
+.benefit-resizer {
+  display: flex;
+  width: 0.7rem;
+  min-width: 0.7rem;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: col-resize;
+  padding: 0;
+}
+
+.benefit-resizer span {
+  display: block;
+  width: 3px;
+  height: 3.2rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--benefit-strong) 80%, transparent);
+  transition: width 0.15s, background 0.15s;
+}
+
+.benefit-resizer:hover span,
+.benefit-layout.resizing .benefit-resizer span {
+  width: 4px;
+  background: var(--benefit-brand);
 }
 
 .benefit-table,
@@ -677,6 +747,7 @@ function formatPeriod(benefit) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--benefit-surface);
 }
 
 .benefit-detail__scroll {
@@ -684,150 +755,183 @@ function formatPeriod(benefit) {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.95rem;
   overflow: auto;
-  padding: 1rem;
+  padding: 1rem 1.05rem 1.15rem;
   scrollbar-gutter: stable;
 }
 
-.benefit-detail header {
+.benefit-detail__head {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.8rem;
-  border-bottom: 1px solid var(--benefit-line);
-  padding-bottom: 0.85rem;
+  gap: 1rem;
+  border-bottom: 2px solid var(--benefit-strong);
+  background: #fff;
+  padding: 0.2rem 0 0.9rem;
 }
 
-.benefit-detail header span {
+.benefit-detail__title {
+  min-width: 0;
+}
+
+.benefit-detail__title span {
+  display: block;
   color: var(--benefit-text-3);
-  font-size: 0.7rem;
-  font-weight: 800;
-}
-
-.benefit-detail h4 {
-  margin: 0.2rem 0 0;
-  color: var(--benefit-text);
-  font-size: 1rem;
+  font-size: 0.68rem;
   font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.benefit-detail header p {
+.benefit-detail__title h4 {
   margin: 0.35rem 0 0;
+  color: var(--benefit-text);
+  font-size: 1.05rem;
+  font-weight: 900;
+  line-height: 1.28;
+}
+
+.benefit-detail__title p {
+  margin: 0.3rem 0 0;
   color: var(--benefit-text-2);
   font-size: 0.76rem;
-  font-weight: 650;
+  font-weight: 700;
   line-height: 1.45;
 }
 
-.benefit-detail header > strong {
+.benefit-detail__actions {
+  display: flex;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.benefit-detail__actions button {
+  min-height: 2rem;
+  border: 1px solid var(--benefit-strong);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--benefit-text-2);
+  padding: 0 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.benefit-detail__actions button:hover {
+  border-color: var(--benefit-brand);
   color: var(--benefit-brand);
-  font-size: 1.35rem;
-  font-weight: 900;
 }
 
-.benefit-detail header > strong.muted {
-  color: var(--benefit-amber);
-  font-size: 0.9rem;
+.benefit-detail__actions .primary {
+  border-color: var(--benefit-brand);
+  background: var(--benefit-brand);
+  color: #fff;
 }
 
-.benefit-detail__grid {
+.benefit-detail__actions .primary:hover {
+  background: color-mix(in srgb, var(--benefit-brand) 88%, black);
+  color: #fff;
+}
+
+.benefit-detail__section {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.45rem;
+}
+
+.benefit-detail__section h5 {
   margin: 0;
-}
-
-.benefit-detail__grid div {
-  min-width: 0;
-  border: 1px solid var(--benefit-line);
-  border-radius: 9px;
-  background: var(--benefit-muted);
-  padding: 0.62rem 0.7rem;
-}
-
-.benefit-detail__grid dt,
-.benefit-detail__grid dd {
-  margin: 0;
-}
-
-.benefit-detail__grid dt {
-  color: var(--benefit-text-3);
-  font-size: 0.66rem;
-  font-weight: 900;
-}
-
-.benefit-detail__grid dd {
-  overflow-wrap: anywhere;
-  margin-top: 0.18rem;
-  color: var(--benefit-text);
-  font-size: 0.76rem;
-  font-weight: 800;
-  line-height: 1.35;
-}
-
-.benefit-notes {
-  display: grid;
-  gap: 0.55rem;
-}
-
-.benefit-notes div {
-  border: 1px solid var(--benefit-line);
-  border-radius: 9px;
-  padding: 0.7rem;
-}
-
-.benefit-notes h5 {
-  margin: 0 0 0.45rem;
   color: var(--benefit-text);
   font-size: 0.78rem;
   font-weight: 900;
 }
 
-.benefit-notes ul {
+.benefit-detail__table {
   display: grid;
-  gap: 0.28rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
-  padding-left: 1rem;
+  border-top: 1px solid var(--benefit-strong);
+  border-left: 1px solid var(--benefit-strong);
+  background: #fff;
 }
 
-.benefit-notes li {
-  color: var(--benefit-text-2);
-  font-size: 0.72rem;
-  font-weight: 650;
+.benefit-detail__table div {
+  display: grid;
+  grid-template-columns: 7.2rem minmax(0, 1fr);
+  min-width: 0;
+  border-right: 1px solid var(--benefit-strong);
+  border-bottom: 1px solid var(--benefit-strong);
+}
+
+.benefit-detail__table--wide div {
+  grid-column: span 2;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+}
+
+.benefit-detail__table--stacked {
+  grid-template-columns: 1fr;
+}
+
+.benefit-detail__table--stacked div {
+  grid-column: span 1;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+}
+
+.benefit-detail__table dt,
+.benefit-detail__table dd {
+  min-width: 0;
+  margin: 0;
   line-height: 1.45;
 }
 
-.benefit-actions {
+.benefit-detail__table dt {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  border-top: 1px solid var(--benefit-line);
-  background: var(--benefit-surface);
-  padding: 0.8rem 1rem 1rem;
+  align-items: center;
+  background: #f6f7f9;
+  color: var(--benefit-text-2);
+  padding: 0.55rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 900;
 }
 
-.benefit-actions button {
-  min-height: 2.1rem;
-  border: 1px solid var(--benefit-line);
-  border-radius: 8px;
-  background: var(--benefit-surface);
-  color: var(--benefit-text-2);
-  padding: 0 0.8rem;
-  font-size: 0.74rem;
-  font-weight: 900;
-  cursor: pointer;
+.benefit-detail__table dd {
+  overflow-wrap: anywhere;
+  background: #fff;
+  color: var(--benefit-text);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.benefit-detail__memo {
+  min-height: 5.2rem;
+  border: 1px solid var(--benefit-strong);
+  background: #fff;
+  color: var(--benefit-text);
+  padding: 0.75rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 1120px) {
   .benefit-layout {
     grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+
+  .benefit-resizer {
+    display: none;
   }
 }
 
 @media (max-width: 860px) {
   .benefit-summary,
-  .benefit-detail__grid {
+  .benefit-detail__table {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -843,18 +947,28 @@ function formatPeriod(benefit) {
 
 @media (max-width: 560px) {
   .benefit-inbox__head,
-  .benefit-detail header {
+  .benefit-detail__head {
     flex-direction: column;
   }
 
   .benefit-summary,
-  .benefit-detail__grid {
+  .benefit-detail__table {
     grid-template-columns: 1fr;
   }
 
-  .benefit-inbox__primary,
-  .benefit-actions button {
+  .benefit-detail__table--wide div,
+  .benefit-detail__table div {
+    grid-column: span 1;
+    grid-template-columns: 6.8rem minmax(0, 1fr);
+  }
+
+  .benefit-detail__actions {
     width: 100%;
+    justify-content: stretch;
+  }
+
+  .benefit-detail__actions button {
+    flex: 1;
   }
 }
 </style>

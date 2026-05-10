@@ -53,6 +53,47 @@ public class CampaignMemberDto {
 
     public record UpdateRoleReq(CampaignMemberRole campaignRole) {}
 
+    @Builder
+    public record InvitationRes(
+            Long idx,
+            Long campaignIdx,
+            String campaignName,
+            Long inviterIdx,
+            String inviterName,
+            Long inviteeIdx,
+            String inviteeName,
+            Long inviteeOrganizationIdx,
+            String inviteeOrganizationName,
+            CampaignInvitationStatus status,
+            LocalDateTime createdAt,
+            LocalDateTime respondedAt
+    ) {
+        public static InvitationRes from(CampaignInvitation entity) {
+            User inviter = entity.getInviter();
+            User invitee = entity.getInvitee();
+
+            return InvitationRes.builder()
+                    .idx(entity.getIdx())
+                    .campaignIdx(entity.getCampaign().getIdx())
+                    .campaignName(entity.getCampaign().getName())
+                    .inviterIdx(inviter != null ? inviter.getIdx() : null)
+                    .inviterName(inviter != null ? inviter.getName() : null)
+                    .inviteeIdx(invitee != null ? invitee.getIdx() : null)
+                    .inviteeName(invitee != null ? invitee.getName() : null)
+                    .inviteeOrganizationIdx(entity.getInviteeOrganization() != null
+                            ? entity.getInviteeOrganization().getIdx()
+                            : null)
+                    .inviteeOrganizationName(entity.getInviteeOrganization() != null
+                            ? entity.getInviteeOrganization().getName()
+                            : null)
+                    .status(entity.getStatus())
+                    .createdAt(entity.getCreatedAt() == null ? null : entity.getCreatedAt().toInstant()
+                            .atZone(java.time.ZoneId.systemDefault()).toLocalDateTime())
+                    .respondedAt(entity.getRespondedAt())
+                    .build();
+        }
+    }
+
     public record ParticipantRes(Long idx, String organizationName) {
         public static ParticipantRes from(CampaignParticipant entity) {
             return new ParticipantRes(
