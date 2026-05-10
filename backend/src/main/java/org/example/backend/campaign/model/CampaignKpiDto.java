@@ -62,7 +62,8 @@ public class CampaignKpiDto {
             BigDecimal targetValue,
             String unit,
             String ownerLabel,
-            Long ownerUserIdx
+            Long ownerUserIdx,
+            Long parentOrgKpiId
     ) {}
 
     public record UpdateMetaReq(

@@ -22,7 +22,7 @@ const evaluationCandidate = ref(null)
 const tabs = computed(() => [
   {
     id: 'dashboard',
-    name: '현황',
+    name: '홈',
     caption: '요약',
     count: 8,
     component: MatchDashboard,
@@ -30,7 +30,7 @@ const tabs = computed(() => [
   },
   {
     id: 'benefits',
-    name: '혜택 평가',
+    name: '혜택 목록',
     caption: '검토',
     count: 4,
     component: BenefitProposalInbox,

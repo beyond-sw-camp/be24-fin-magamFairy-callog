@@ -17,6 +17,7 @@ public record DashboardSummaryDto(
         long newPartnerCount,        // 30일 내 신규 (현재는 partnerCount stub)
         long rfpCount,               // RFP 응모(=PartnerBenefits) 카운트
         Integer trend,               // 지난주 대비 +%p (Phase 2 stub: 0)
+        Integer companyAveragePct,   // AFFILIATE/EXTERNAL_PARTNER scope일 때 전사 OrgKpi 평균 (HQ scope면 null)
         List<MiniStat> miniStats,    // [검수 패스율, 매칭 평균, 자산 LIVE]
         String scope
 ) {

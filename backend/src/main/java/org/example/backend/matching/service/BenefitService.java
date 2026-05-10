@@ -18,7 +18,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 
 import static org.example.backend.organization.model.OrganizationType.EXTERNAL_PARTNER;
 
@@ -29,8 +31,14 @@ public class BenefitService {
     private final UserRepository userRepository;
     private final CampaignRepository campaignRepository;
 
-    public MatchingDto.BenefitRes getBenefit(Long idx) {
-        return MatchingDto.BenefitRes.toDto(benefitRepository.findById(idx).orElseThrow(NoSuchElementException::new));
+    public List<MatchingDto.BenefitRes> getBenefit(Long campaignIdx) {
+        List<PartnerBenefits> benefits = benefitRepository.findAllByCampaignIdx(campaignIdx);
+        if (benefits.isEmpty()) {
+            throw new NoSuchElementException("해당 캠페인에 등록된 혜택이 존재하지 않습니다.");
+        }
+        return benefits.stream()
+                .map(MatchingDto.BenefitRes::toDto)
+                .collect(Collectors.toList());
     }
 
     public MatchingDto.BenefitList getBenefitList(int page, int size) {

@@ -316,7 +316,7 @@ function selectBenefitProposal(proposal) {
 }
 
 function proposalPrimaryAction(proposal) {
-  if (proposal.missing?.length) return '보완 요청'
+  if (proposal.missing?.length) return '보류'
   if (proposal.status === '평가 반영') return '운영 보드로 전환'
   return '수락하기'
 }
@@ -840,7 +840,7 @@ const emptyAssetMetaItems = computed(() =>
               <p>{{ selectedBenefitProposal.type }} · {{ selectedBenefitProposal.target }} · 도달 {{ selectedBenefitProposal.reach }}</p>
             </div>
             <span class="benefit-score" :class="{ muted: !selectedBenefitProposal.matchScore }">
-              {{ selectedBenefitProposal.matchScore ? selectedBenefitProposal.matchScore + '점' : '보완 필요' }}
+              {{ selectedBenefitProposal.matchScore ? selectedBenefitProposal.matchScore + '점' : '평가 전' }}
             </span>
           </header>
 
@@ -859,7 +859,7 @@ const emptyAssetMetaItems = computed(() =>
           </section>
 
           <section v-else class="benefit-missing-box">
-            <h4>보완 필요 항목</h4>
+            <h4>확인 필요 항목</h4>
             <span v-for="item in selectedBenefitProposal.missing" :key="item">{{ item }}</span>
           </section>
 
@@ -899,14 +899,13 @@ const emptyAssetMetaItems = computed(() =>
           </dl>
 
           <label class="benefit-comment">
-            <span>코멘트 / 보완 요청</span>
-            <textarea rows="3" placeholder="검토 의견이나 파트너에게 요청할 보완 내용을 입력하세요." />
+            <span>코멘트</span>
+            <textarea rows="3" placeholder="검토 의견을 입력하세요." />
           </label>
 
           <div class="benefit-actions">
             <button type="button" class="primary">{{ proposalPrimaryAction(selectedBenefitProposal) }}</button>
             <button type="button">보류</button>
-            <button type="button">보완 요청</button>
             <button type="button">거절</button>
           </div>
         </aside>

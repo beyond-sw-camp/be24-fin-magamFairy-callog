@@ -40,48 +40,30 @@ export const useOrganizationKpiStore = defineStore('organizationKpi', () => {
   }
 
   async function create(payload) {
-    try {
-      const created = await orgKpiApi.CreateOrganizationKpi(payload)
-      await fetch()
-      return created
-    } catch (error) {
-      console.warn('[mock fallback] OrganizationKpi 생성 실패. local push', error)
-      const fakeId = Date.now()
-      const local = { idx: fakeId, ...payload }
-      items.value.unshift(local)
-      return local
-    }
+    // 쓰기 작업은 mock fallback 금지 — 사용자가 실패를 명확히 인지해야 함
+    const created = await orgKpiApi.CreateOrganizationKpi(payload)
+    await fetch()
+    return created
   }
 
   async function update(id, payload) {
-    try {
-      const updated = await orgKpiApi.UpdateOrganizationKpi(id, payload)
-      await fetch()
-      return updated
-    } catch (error) {
-      console.warn('[mock fallback] OrganizationKpi 수정 실패. local merge', error)
-      const idx = items.value.findIndex((k) => k.idx === id)
-      if (idx >= 0) items.value[idx] = { ...items.value[idx], ...payload }
-      return items.value[idx]
-    }
+    const updated = await orgKpiApi.UpdateOrganizationKpi(id, payload)
+    await fetch()
+    return updated
   }
 
   async function updateStatus(id, status) {
-    try {
-      const result = await orgKpiApi.UpdateOrganizationKpiStatus(id, status)
-      await fetch()
-      return result
-    } catch (error) {
-      console.warn('[mock fallback] OrganizationKpi status 변경 실패', error)
-      const idx = items.value.findIndex((k) => k.idx === id)
-      if (idx >= 0) items.value[idx] = { ...items.value[idx], status }
-    }
+    const result = await orgKpiApi.UpdateOrganizationKpiStatus(id, status)
+    await fetch()
+    return result
   }
 
   async function fetchTemplates(params = {}) {
     try {
       const data = await templateApi.ListKpiTemplates(params)
-      templates.value = Array.isArray(data) ? data : data?.items ?? []
+      const list = Array.isArray(data) ? data : data?.items ?? []
+      // 백엔드가 비어있을 때도 사용자 경험 위해 mock 보여줌
+      templates.value = list.length > 0 ? list : buildMockTemplates()
     } catch (error) {
       console.warn('[mock fallback] KpiTemplate 목록 fetch 실패. mock 사용', error)
       templates.value = buildMockTemplates()
@@ -208,10 +190,39 @@ function buildMockKpis() {
 }
 
 function buildMockTemplates() {
+  // 디지털 마케팅 5축 (노출/참여/전환/매출/브랜드) + 운영·ESG 기준 표준 템플릿.
+  // backend KpiTemplateSeeder 와 동일한 catalog.
   return [
-    { idx: 1, name: '신규 제휴사 (분기)', defaultUnit: '곳', defaultCategory: 'OTHER', scope: 'GLOBAL', usageCount: 12 },
-    { idx: 2, name: '캠페인 런칭 (분기)', defaultUnit: '건', defaultCategory: 'BRAND', scope: 'GLOBAL', usageCount: 8 },
-    { idx: 3, name: '브랜드 인지도 (연)', defaultUnit: '%', defaultCategory: 'BRAND', scope: 'GLOBAL', usageCount: 5 },
-    { idx: 4, name: '매출 ROAS (분기)', defaultUnit: '%', defaultCategory: 'REVENUE', scope: 'GLOBAL', usageCount: 9 },
+    // 노출
+    { idx: 1, name: '순도달 (Reach) 500만 UU', defaultUnit: 'UU', defaultCategory: 'IMPRESSION', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 2, name: 'SOV (Share of Voice) 25%', defaultUnit: '%', defaultCategory: 'IMPRESSION', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 3, name: '광고 노출 1,000만 회', defaultUnit: '회', defaultCategory: 'IMPRESSION', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    // 참여
+    { idx: 4, name: 'CTR 1.5% 유지', defaultUnit: '%', defaultCategory: 'ENGAGEMENT', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 5, name: '영상 완주율 (VTR) 50%', defaultUnit: '%', defaultCategory: 'ENGAGEMENT', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 6, name: 'SNS 팔로워 순증 1만 명', defaultUnit: '명', defaultCategory: 'ENGAGEMENT', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 7, name: 'UGC 생성 1,000건', defaultUnit: '건', defaultCategory: 'ENGAGEMENT', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    // 전환
+    { idx: 8, name: 'CVR (전환율) 3%', defaultUnit: '%', defaultCategory: 'CONVERSION', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 9, name: '랜딩페이지 방문 10만 세션', defaultUnit: 'Sessions', defaultCategory: 'CONVERSION', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 10, name: '신규 회원가입 5,000명', defaultUnit: '명', defaultCategory: 'CONVERSION', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    // 매출
+    { idx: 11, name: 'ROAS 400%', defaultUnit: '%', defaultCategory: 'REVENUE', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 12, name: 'CPA 25,000원 이하', defaultUnit: '원', defaultCategory: 'REVENUE', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 13, name: 'LTV:CAC 3배', defaultUnit: '배수', defaultCategory: 'REVENUE', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
+    // 브랜드
+    { idx: 14, name: '브랜드 인지도 +5%p', defaultUnit: '%p', defaultCategory: 'BRAND', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 15, name: 'Branded Search +30%', defaultUnit: '%', defaultCategory: 'BRAND', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 16, name: '긍정 Sentiment 비율 70%', defaultUnit: '%', defaultCategory: 'BRAND', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 17, name: 'NPS 50점 이상', defaultUnit: '점', defaultCategory: 'BRAND', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
+    // 운영·기타
+    { idx: 18, name: '신규 협력사 25곳 확보', defaultUnit: '곳', defaultCategory: 'OTHER', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 19, name: '캠페인 12건 런칭', defaultUnit: '건', defaultCategory: 'OTHER', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 20, name: '자산 LIVE 100건 유지', defaultUnit: '건', defaultCategory: 'OTHER', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 21, name: '검수 패스율 90%', defaultUnit: '%', defaultCategory: 'OTHER', defaultKind: 'TACTICAL', scope: 'GLOBAL', usageCount: 0 },
+    // ESG
+    { idx: 22, name: '탄소 배출 10% 절감', defaultUnit: '%', defaultCategory: 'OTHER', defaultEsgCategory: 'ENVIRONMENTAL', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 23, name: '협력사 ESG 평가 80점 이상', defaultUnit: '점', defaultCategory: 'OTHER', defaultEsgCategory: 'GOVERNANCE', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
+    { idx: 24, name: '사회 공헌 캠페인 4건', defaultUnit: '건', defaultCategory: 'OTHER', defaultEsgCategory: 'SOCIAL', defaultKind: 'STRATEGIC', scope: 'GLOBAL', usageCount: 0 },
   ]
 }

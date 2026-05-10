@@ -13,7 +13,6 @@ const emit = defineEmits(['navigate', 'requestEvaluation'])
 const statusFilters = [
   { id: 'all', label: '전체' },
   { id: 'new', label: '새 제안' },
-  { id: 'incomplete', label: '보완 필요' },
   { id: 'approved', label: '승인됨' },
   { id: 'hold', label: '보류' },
 ]
@@ -73,7 +72,7 @@ const proposals = ref([
     receivedAt: '2일 전',
     owner: '담당자 미지정',
     status: 'incomplete',
-    statusLabel: '보완 필요',
+    statusLabel: '정보 부족',
     matchAsset: '매칭 불가',
     matchScore: null,
     cost: '비용 부담 구조 미입력',
@@ -131,7 +130,6 @@ const selectedProposal = computed(() => {
 const summary = computed(() => ({
   total: proposals.value.length,
   new: proposals.value.filter((proposal) => proposal.status === 'new').length,
-  incomplete: proposals.value.filter((proposal) => proposal.status === 'incomplete').length,
   approved: proposals.value.filter((proposal) => proposal.status === 'approved').length,
 }))
 
@@ -145,7 +143,6 @@ function selectFilter(filterId) {
 
 function statusTone(status) {
   if (status === 'new') return 'primary'
-  if (status === 'incomplete') return 'warning'
   if (status === 'approved') return 'success'
   return 'muted'
 }
@@ -217,10 +214,6 @@ function submitEvaluationRequest() {
             <span>새 제안</span>
             <strong>{{ summary.new }}<small>건</small></strong>
           </article>
-          <article class="warning">
-            <span>보완 필요</span>
-            <strong>{{ summary.incomplete }}<small>건</small></strong>
-          </article>
           <article class="success">
             <span>승인됨</span>
             <strong>{{ summary.approved }}<small>건</small></strong>
@@ -284,7 +277,7 @@ function submitEvaluationRequest() {
               <p>{{ selectedProposal.summary }}</p>
             </div>
             <strong :class="{ muted: !selectedProposal.matchScore }">
-              {{ selectedProposal.matchScore ? `${selectedProposal.matchScore}점` : '보완 필요' }}
+              {{ selectedProposal.matchScore ? `${selectedProposal.matchScore}점` : '평가 전' }}
             </strong>
           </header>
 
@@ -332,7 +325,6 @@ function submitEvaluationRequest() {
         </div>
 
         <footer class="benefit-actions">
-          <button type="button">보완 요청</button>
           <button type="button">보류</button>
           <!-- 우측 패널 평가 요청 버튼도 동일하게 변경 -->
           <button type="button" class="primary" @click="openEvaluationModal">평가 요청하기</button>

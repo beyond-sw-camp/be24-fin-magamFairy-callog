@@ -16,6 +16,7 @@ import {
 import { useAuthStore } from '@/stores/useAuthStore'
 import { usePlannerStore } from '@/stores/planner'
 import { useUserSettingsStore } from '@/stores/userSettings'
+import NotificationSettingsPanel from '@/components/notifications/NotificationSettingsPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -53,75 +54,6 @@ const tabs = [
 const densityOptions = [
   { value: 'comfortable', label: '기본', description: '정보 간격을 여유 있게 표시합니다.' },
   { value: 'compact', label: '컴팩트', description: '반복 작업에 맞춰 간격을 줄입니다.' },
-]
-
-const notificationMethodOptions = [
-  {
-    key: 'inApp',
-    label: '앱 내 알림',
-    description: '헤더 알림 패널과 알림 센터에 표시합니다.',
-  },
-  {
-    key: 'email',
-    label: '이메일',
-    description: '계정 이메일로 주요 알림을 전달합니다.',
-  },
-  {
-    key: 'browser',
-    label: '브라우저 알림',
-    description: '브라우저 권한이 허용된 경우 데스크톱 알림으로 표시합니다.',
-  },
-]
-
-const notificationLevelOptions = [
-  {
-    value: 'essential',
-    label: '중요만',
-    description: '마감 임박, 지연, 검수 요청처럼 놓치면 안 되는 알림만 받습니다.',
-  },
-  {
-    value: 'normal',
-    label: '기본',
-    description: '업무, QA, 캠페인 변경 등 협업에 필요한 핵심 알림을 받습니다.',
-  },
-  {
-    value: 'all',
-    label: '전체',
-    description: 'AI 분석과 세부 활동 변경까지 최대한 넓게 받습니다.',
-  },
-]
-
-const notificationConditionOptions = [
-  {
-    key: 'taskAssigned',
-    label: '업무 생성/배정',
-    description: '새 업무가 생성되거나 담당자로 배정될 때 알림을 받습니다.',
-  },
-  {
-    key: 'taskStatusChanged',
-    label: '업무 상태 변경',
-    description: '진행중, 검토, 완료 등 주요 상태가 바뀔 때 알림을 받습니다.',
-  },
-  {
-    key: 'qaReview',
-    label: 'QA 검수',
-    description: '검수 요청, 승인, 반려, 수정 요청 결과를 알림으로 받습니다.',
-  },
-  {
-    key: 'deadline',
-    label: '마감 임박/지연',
-    description: '마감 24시간 전, 1시간 전, 지연 상태 알림을 받습니다.',
-  },
-  {
-    key: 'campaign',
-    label: '캠페인 초대/변경',
-    description: '캠페인 초대, 승인/반려, 구성원 추가 알림을 받습니다.',
-  },
-  {
-    key: 'aiAnalysis',
-    label: 'AI 분석',
-    description: '리스크, 병목, 성과 저하 등 AI 기반 알림을 받습니다.',
-  },
 ]
 
 const ALLOWED_PROFILE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
@@ -214,25 +146,6 @@ const isPasswordFormReady = computed(
 )
 const hasPendingProfileImageChange = computed(
   () => Boolean(pendingProfileImageFile.value) || shouldRemoveProfileImage.value,
-)
-const notificationMethodSummary = computed(() => {
-  const selectedMethods = notificationMethodOptions
-    .filter((option) => userSettingsStore.notifications.methods[option.key])
-    .map((option) => option.label)
-
-  return selectedMethods.length ? selectedMethods.join(', ') : '선택 없음'
-})
-const notificationConditionCount = computed(
-  () =>
-    notificationConditionOptions.filter(
-      (option) => userSettingsStore.notifications.conditions[option.key],
-    ).length,
-)
-const notificationLevelLabel = computed(
-  () =>
-    notificationLevelOptions.find(
-      (option) => option.value === userSettingsStore.notifications.level,
-    )?.label ?? '기본',
 )
 
 function resolveUserKey(user) {
@@ -357,31 +270,6 @@ function toggleThemeUiValue(key) {
 function resetDisplaySettings() {
   plannerStore.setTheme('light')
   userSettingsStore.resetThemeUi()
-}
-
-function toggleNotificationEnabled() {
-  userSettingsStore.updateNotifications({
-    enabled: !userSettingsStore.notifications.enabled,
-  })
-}
-
-function toggleNotificationMethod(key) {
-  userSettingsStore.updateNotificationMethod(key, !userSettingsStore.notifications.methods[key])
-}
-
-function setNotificationLevel(value) {
-  userSettingsStore.updateNotifications({ level: value })
-}
-
-function toggleNotificationCondition(key) {
-  userSettingsStore.updateNotificationCondition(
-    key,
-    !userSettingsStore.notifications.conditions[key],
-  )
-}
-
-function resetNotificationSettings() {
-  userSettingsStore.resetNotifications()
 }
 
 function readFileAsDataUrl(file) {
@@ -904,103 +792,7 @@ watch(
         </form>
 
         <div v-else-if="activeTab === 'notifications'" class="settings-pane">
-          <section class="settings-block settings-block--split">
-            <div>
-              <strong>알림 사용</strong>
-              <p>전체 알림 수신 여부를 관리합니다. 변경 사항은 브라우저에 즉시 저장됩니다.</p>
-            </div>
-            <button
-              type="button"
-              class="ui-toggle"
-              :class="{ 'is-active': userSettingsStore.notifications.enabled }"
-              :aria-pressed="userSettingsStore.notifications.enabled"
-              aria-label="알림 사용 설정"
-              @click="toggleNotificationEnabled"
-            >
-              <span class="ui-toggle-thumb" />
-            </button>
-          </section>
-
-          <section class="settings-block">
-            <div>
-              <strong>알림 방법</strong>
-              <p>notification 기능 구현 시 선택한 채널 기준으로 알림을 전달합니다.</p>
-            </div>
-            <div class="notification-methods" role="group" aria-label="알림 방법 선택">
-              <button
-                v-for="option in notificationMethodOptions"
-                :key="option.key"
-                type="button"
-                class="notification-method"
-                :class="{
-                  'is-active': userSettingsStore.notifications.methods[option.key],
-                }"
-                :disabled="!userSettingsStore.notifications.enabled"
-                @click="toggleNotificationMethod(option.key)"
-              >
-                <span class="notification-method__check material-symbols-outlined">
-                  {{
-                    userSettingsStore.notifications.methods[option.key]
-                      ? 'check_circle'
-                      : 'radio_button_unchecked'
-                  }}
-                </span>
-                <span>
-                  <strong>{{ option.label }}</strong>
-                  <small>{{ option.description }}</small>
-                </span>
-              </button>
-            </div>
-          </section>
-
-          <section class="settings-block settings-block--split">
-            <div>
-              <strong>알림 정도</strong>
-              <p>알림을 얼마나 넓은 범위로 받을지 선택합니다.</p>
-            </div>
-            <div class="settings-segmented" role="group" aria-label="알림 정도 선택">
-              <button
-                v-for="option in notificationLevelOptions"
-                :key="option.value"
-                type="button"
-                :title="option.description"
-                :class="{ 'is-active': userSettingsStore.notifications.level === option.value }"
-                :disabled="!userSettingsStore.notifications.enabled"
-                @click="setNotificationLevel(option.value)"
-              >
-                {{ option.label }}
-              </button>
-            </div>
-          </section>
-
-
-          <div><strong>알림 세부 설정</strong></div>
-          <section class="settings-list" aria-label="알림 조건">
-            <div
-              v-for="option in notificationConditionOptions"
-              :key="option.key"
-              class="settings-row"
-            >
-              <div>
-                <strong>{{ option.label }}</strong>
-                <p>{{ option.description }}</p>
-              </div>
-              <button
-                type="button"
-                class="ui-toggle"
-                :class="{
-                  'is-active': userSettingsStore.notifications.conditions[option.key],
-                }"
-                :aria-pressed="userSettingsStore.notifications.conditions[option.key]"
-                :aria-label="`${option.label} 알림 조건 설정`"
-                :disabled="!userSettingsStore.notifications.enabled"
-                @click="toggleNotificationCondition(option.key)"
-              >
-                <span class="ui-toggle-thumb" />
-              </button>
-            </div>
-          </section>
-
+          <NotificationSettingsPanel show-center-link />
         </div>
 
         <div v-else-if="activeTab === 'theme'" class="settings-pane">

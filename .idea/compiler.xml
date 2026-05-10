@@ -12,6 +12,8 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="callog" target="17" />
+      <module name="callog.main" target="17" />
       <module name="callog.test" target="17" />
     </bytecodeTargetLevel>
   </component>
