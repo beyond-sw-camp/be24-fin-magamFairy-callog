@@ -12,6 +12,7 @@ import org.example.backend.campaign.repository.CampaignIntroRepository;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.notification.service.NotificationSseService;
 import org.example.backend.organization.model.OrganizationType;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
@@ -31,6 +32,7 @@ public class CampaignIntroService {
     private final UserRepository userRepository;
     private final CampaignParticipantRepository participantRepository;
     private final CampaignMemberRepository memberRepository;
+    private final NotificationSseService sseService;
 
     @Transactional
     public CampaignIntroDto.GetRes getIntro(Long campaignIdx, Long callerIdx) {
@@ -93,6 +95,8 @@ public class CampaignIntroService {
                     .build();
             introRepository.save(intro);
         }
+
+        sseService.broadcastCalendarRefresh(campaignIdx, "deadline");
     }
 
     /** PM 조직이고 캠페인 멤버 GM/MGR 인 경우만 편집 가능. */

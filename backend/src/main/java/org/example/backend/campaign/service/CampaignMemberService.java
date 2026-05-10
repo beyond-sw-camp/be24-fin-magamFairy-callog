@@ -44,6 +44,7 @@ public class CampaignMemberService {
     private final CampaignInvitationRepository invitationRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final org.example.backend.notification.service.NotificationSseService sseService;
 
     public List<CampaignMemberDto.ParticipantRes> listParticipants(Long campaignId) {
         return participantRepository.findAllByCampaignIdx(campaignId).stream()
@@ -124,6 +125,9 @@ public class CampaignMemberService {
                 campaign.getName(),
                 "/campaigns/" + campaign.getPublicId()
         ));
+
+        // SSE — 추가된 멤버들에게 my-campaigns.refresh 푸시
+        created.forEach(member -> sseService.notifyMyCampaignsRefresh(member.getUser().getIdx()));
 
         return created.stream().map(CampaignMemberDto.Res::from).toList();
     }
@@ -406,7 +410,10 @@ public class CampaignMemberService {
             CampaignMemberGuard.requireSameCompany(caller, target.getUser());
         }
 
+        Long removedUserIdx = target.getUser().getIdx();
         memberRepository.delete(target);
+        // SSE — 추방된 사용자에게 my-campaigns.refresh 푸시 (그 사람의 사이드바에서 즉시 사라짐)
+        sseService.notifyMyCampaignsRefresh(removedUserIdx);
     }
 
     @Transactional
@@ -437,6 +444,15 @@ public class CampaignMemberService {
 
         invitation.accept();
         notificationService.notifyCampaignInvitationDecision(invitation);
+
+        // SSE — 수락한 본인(개인) 또는 그룹의 모든 멤버에게 푸시
+        if (invitation.getType() == CampaignInvitationType.GROUP) {
+            // 그룹 멤버 전원 — 새로 join된 user들에게 sidebar 갱신
+            memberRepository.findAllByCampaignIdx(campaignId).forEach(m ->
+                    sseService.notifyMyCampaignsRefresh(m.getUser().getIdx()));
+        } else {
+            sseService.notifyMyCampaignsRefresh(caller.getIdx());
+        }
 
         return CampaignMemberDto.InvitationRes.from(invitation, joinedCount, null);
     }

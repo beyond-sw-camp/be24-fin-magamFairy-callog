@@ -11,6 +11,7 @@ import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.kpi.service.CampaignKpiContributionService;
+import org.example.backend.notification.service.NotificationSseService;
 import org.example.backend.organization.model.OrganizationType;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
@@ -70,6 +71,7 @@ public class CampaignService {
     private final CampaignKpiContributionService contributionService;
     private final CampaignImageStorageService thumbnailStorage;
     private final CampaignThumbnailGenerator thumbnailGenerator;
+    private final NotificationSseService sseService;
     public List<CampaignDto.Res> listCampaigns(Long userIdx) {
         return listCampaigns(userIdx, "mine");
     }
@@ -238,6 +240,7 @@ public class CampaignService {
                 normalizeColor(dto.color())
         );
 
+        sseService.broadcastCalendarRefresh(campaign.getIdx(), "campaign");
         return buildResponseFor(campaign, user);
     }
 

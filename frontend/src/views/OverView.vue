@@ -19,6 +19,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { useTeamTaskStore } from '@/stores/teamTask'
 import { useToastStore } from '@/stores/toast'
 import { useConfirmStore } from '@/stores/confirmDialog'
+import { useNotificationsStore } from '@/stores/notifications'
 import { ListCalendarEvents, UpdateCampaign, UpdateCampaignIntro } from '@/api/campaigns'
 import { UpdateMilestone, UpdateTask, CreateMilestone, CreateTask } from '@/api/teamboard'
 
@@ -28,8 +29,17 @@ const authStore = useAuthStore()
 const teamTaskStore = useTeamTaskStore()
 const toast = useToastStore()
 const confirm = useConfirmStore()
+const notiStore = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
+
+/* SSE — 캘린더 / 내 캠페인 변경 시 자동 재로드 */
+watch(() => notiStore.lastCalendarRefresh, () => {
+  loadAll()
+})
+watch(() => notiStore.lastMyCampaignsRefresh, () => {
+  loadAll()
+})
 
 /* ─── URL 쿼리 동기화 + localStorage 토글 ─── */
 const TOGGLES_KEY = 'overviewToggles'

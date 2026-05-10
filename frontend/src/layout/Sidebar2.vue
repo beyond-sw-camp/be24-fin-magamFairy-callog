@@ -5,6 +5,7 @@ import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUserSettingsStore } from '@/stores/userSettings'
 import { useTeamTaskStore } from '@/stores/teamTask'
+import { useNotificationsStore } from '@/stores/notifications'
 import CampaignCreateModal from '@/components/campaign/CampaignCreateModal.vue'
 import { campaignLabels, campaignSidebarText, campaignStatusMeta } from '@/constants/campaignText'
 import { CreateCampaign, UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
@@ -15,6 +16,16 @@ const store = usePlannerStore()
 const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
 const teamTaskStore = useTeamTaskStore()
+const notiStore = useNotificationsStore()
+
+/* SSE — 멤버십 변경(초대 수락/추방/직접 추가) 즉시 반영 */
+watch(() => notiStore.lastMyCampaignsRefresh, () => {
+  void store.loadCampaignsFromServer()
+})
+/* SSE — 캠페인/마일스톤/태스크 변경 시 진행률 등 갱신 */
+watch(() => notiStore.lastCalendarRefresh, () => {
+  teamTaskStore.fetch()
+})
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'callog-sidebar2-width'
 const SIDEBAR_DEFAULT_WIDTH = 240

@@ -101,6 +101,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const sseError = ref('')
   const eventSource = ref(null)
   const currentToken = ref('')
+
+  // SSE — 캘린더/내 캠페인 실시간 갱신 신호 (구독자가 watch로 수신)
+  const lastCalendarRefresh = ref(0)
+  const lastMyCampaignsRefresh = ref(0)
   let reconnectTimer = null
 
   const recentNotifications = computed(() => notifications.value.slice(0, 3))
@@ -245,6 +249,16 @@ export const useNotificationsStore = defineStore('notifications', () => {
       isSseConnected.value = true
     })
 
+    // 캘린더 데이터 변경 → 구독자(OverView 등)가 watch로 감지해서 재로드
+    source.addEventListener('calendar.refresh', () => {
+      lastCalendarRefresh.value = Date.now()
+    })
+
+    // 내 캠페인 멤버십 변경 (초대 수락 / 추방 / 직접 추가) → Sidebar2 + dashboardStore 재로드 트리거
+    source.addEventListener('my-campaigns.refresh', () => {
+      lastMyCampaignsRefresh.value = Date.now()
+    })
+
     source.onerror = () => {
       isSseConnected.value = false
       sseError.value = '알림 실시간 연결을 재시도하고 있습니다.'
@@ -264,6 +278,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
     loadError,
     isSseConnected,
     sseError,
+    lastCalendarRefresh,
+    lastMyCampaignsRefresh,
     connect,
     disconnect,
     loadNotifications,
