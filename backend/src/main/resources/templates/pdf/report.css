@@ -116,13 +116,13 @@ html, body {
 .stat-bar {
   height: 3pt;
   background: #E5E7EB;
-  border-radius: 999pt;
+  border-radius: 1.5pt;
   overflow: hidden;
 }
 .stat-fill {
   display: block;
-  height: 100%;
-  border-radius: 999pt;
+  height: 3pt;
+  border-radius: 1.5pt;
 }
 .stat-info .stat-fill    { background: #3B82F6; }
 .stat-success .stat-fill { background: #10B981; }
@@ -227,14 +227,14 @@ html, body {
 .gauge-bar {
   height: 5pt;
   background: #E5E7EB;
-  border-radius: 999pt;
+  border-radius: 2.5pt;
   overflow: hidden;
   margin: 0 8pt 6pt 8pt;
 }
 .gauge-bar-fill {
   display: block;
-  height: 100%;
-  border-radius: 999pt;
+  height: 5pt;
+  border-radius: 2.5pt;
 }
 .gauge-bar-fill-kpi { background: #7C3AED; }
 .gauge-bar-fill-esg { background: #10B981; }
@@ -269,32 +269,40 @@ html, body {
   margin-top: 1pt;
 }
 .top-bar-wrap {
-  display: table;
-  width: 100%;
+  display: block;
+  position: relative;
+  height: 14pt;
 }
 .top-bar {
-  display: table-cell;
-  width: 100%;
+  display: block;
+  position: absolute;
+  left: 0;
+  right: 70pt;
+  top: 4pt;
   height: 6pt;
   background: #E5E7EB;
-  border-radius: 999pt;
+  border-radius: 3pt;
   overflow: hidden;
 }
 .top-fill {
   display: block;
-  height: 100%;
-  border-radius: 999pt;
+  height: 6pt;
+  border-radius: 3pt;
 }
 .fill-success { background: #10B981; }
 .fill-warn    { background: #F59E0B; }
 
 .top-pct {
-  display: table-cell;
-  width: 38pt;
+  display: block;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 65pt;
   text-align: right;
   font-size: 9pt;
   font-weight: 800;
-  padding-left: 8pt;
+  line-height: 14pt;
+  white-space: nowrap;
 }
 .pct-success { color: #047857; }
 .pct-warn    { color: #92400E; }

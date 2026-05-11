@@ -34,6 +34,29 @@ public class NotificationSseService {
         sendToUser(userIdx, "notification.created", notification);
     }
 
+    /**
+     * 캘린더 데이터 변경을 모든 SSE 구독자에게 broadcast.
+     * 클라이언트는 calendar.refresh 이벤트를 받으면 본인 캘린더 데이터를 다시 로드.
+     * payload: { campaignIdx, kind } — kind: "campaign" | "milestone" | "deadline" | "task"
+     */
+    public void broadcastCalendarRefresh(Long campaignIdx, String kind) {
+        Map<String, Object> payload = Map.of(
+                "campaignIdx", campaignIdx == null ? -1 : campaignIdx,
+                "kind", kind == null ? "unknown" : kind
+        );
+        emitters.forEach((userIdx, userEmitters) ->
+                userEmitters.forEach(emitter -> sendEvent(userIdx, emitter, "calendar.refresh", payload)));
+    }
+
+    /**
+     * 특정 사용자의 "내 캠페인" 목록 변경 알림 (멤버 추가/추방/초대 수락).
+     * Sidebar2 / OverView가 my-campaigns.refresh 이벤트를 받으면 본인 캠페인 목록 재로드.
+     */
+    public void notifyMyCampaignsRefresh(Long userIdx) {
+        if (userIdx == null) return;
+        sendToUser(userIdx, "my-campaigns.refresh", Map.of("ts", System.currentTimeMillis()));
+    }
+
     @Scheduled(fixedRate = 25000)
     public void sendHeartbeat() {
         emitters.forEach((userIdx, userEmitters) ->

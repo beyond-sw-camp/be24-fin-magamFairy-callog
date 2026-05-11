@@ -5,7 +5,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class CampaignIntroDto {
@@ -21,9 +24,9 @@ public class CampaignIntroDto {
         private String campaignSummary;
         private String campaignStatus;
         private String ownerLoginId;
-        private String ownerName;          // 캠페인 생성자(=PM)의 user 이름
-        private String ownerEmail;         // 캠페인 생성자의 이메일
-        private String ownerDepartment;    // 캠페인 생성자의 부서
+        private String ownerName;
+        private String ownerEmail;
+        private String ownerDepartment;
         private String rfpCode;
         private LocalDateTime recruitDeadline;
         private Map<String, Object> hanwhaAssets;
@@ -39,9 +42,22 @@ public class CampaignIntroDto {
         private Integer weightCost;
         private Integer weightOperation;
         private Integer weightBrand;
-        private Boolean canEdit;             // P0 — caller가 편집 가능한지 (PM 조직 + GM/MGR)
-        private Boolean isInternalViewer;    // P1 — 내부 사용자(HQ/AFFILIATE)인지 → 가중치/심사 기준 노출
-        private String visibility;           // PRIVATE/HQ_ONLY/HQ_AND_AFFILIATE/AFFILIATE_ONLY/EXTERNAL_ONLY/ALL
+        private Boolean canEdit;
+        private Boolean isInternalViewer;
+        private String visibility;
+        // 캠페인 생성 시 입력한 정보 (읽기 전용)
+        private String primaryGoal;
+        private String assetName;
+        private List<String> campaignMethods;
+        private LocalDate campaignStartDate;
+        // 소개 페이지 커스텀 콘텐츠
+        private Map<String, Object> overviewItems;
+        private Map<String, Object> heroKpis;
+        private String targetSegment;
+        private String targetScale;
+        private Map<String, Object> submissionInfo;
+        private Map<String, Object> customerItems;
+        private Long viewCount;
 
         public static GetRes toDto(CampaignIntro intro, Campaign campaign) {
             return toDto(intro, campaign, false, false, null);
@@ -77,6 +93,18 @@ public class CampaignIntroDto {
                     .canEdit(canEdit)
                     .isInternalViewer(isInternalViewer)
                     .visibility(campaign.getVisibility() == null ? "PRIVATE" : campaign.getVisibility())
+                    .primaryGoal(campaign.getPrimaryGoal())
+                    .assetName(campaign.getAssetName())
+                    .campaignMethods(campaign.getCampaignMethods() != null
+                            ? new ArrayList<>(campaign.getCampaignMethods()) : null)
+                    .campaignStartDate(campaign.getStartDate())
+                    .overviewItems(intro != null ? intro.getOverviewItems() : null)
+                    .heroKpis(intro != null ? intro.getHeroKpis() : null)
+                    .targetSegment(intro != null ? intro.getTargetSegment() : null)
+                    .targetScale(intro != null ? intro.getTargetScale() : null)
+                    .submissionInfo(intro != null ? intro.getSubmissionInfo() : null)
+                    .customerItems(intro != null ? intro.getCustomerItems() : null)
+                    .viewCount(intro != null && intro.getViewCount() != null ? intro.getViewCount() : 0L)
                     .build();
         }
     }
@@ -102,5 +130,11 @@ public class CampaignIntroDto {
         private Integer weightOperation;
         private Integer weightBrand;
         private String visibility;
+        private Map<String, Object> overviewItems;
+        private Map<String, Object> heroKpis;
+        private String targetSegment;
+        private String targetScale;
+        private Map<String, Object> submissionInfo;
+        private Map<String, Object> customerItems;
     }
 }

@@ -27,11 +27,15 @@ public class NotificationDto {
             String targetUrl,
             String referenceType,
             Long referenceId,
-            String referenceStatus
+            String referenceStatus,
+            org.example.backend.campaign.model.CampaignMemberDto.GroupPreview groupPreview
     ) {
         public static Res from(Notification notification) {
-            User sender = notification.getSender();
+            return from(notification, null);
+        }
 
+        public static Res from(Notification notification, org.example.backend.campaign.model.CampaignMemberDto.GroupPreview groupPreview) {
+            User sender = notification.getSender();
             return new Res(
                     notification.getIdx(),
                     notification.getIdx(),
@@ -48,7 +52,8 @@ public class NotificationDto {
                     notification.getTargetUrl(),
                     notification.getReferenceType(),
                     notification.getReferenceId(),
-                    notification.getReferenceStatus()
+                    notification.getReferenceStatus(),
+                    groupPreview
             );
         }
     }
