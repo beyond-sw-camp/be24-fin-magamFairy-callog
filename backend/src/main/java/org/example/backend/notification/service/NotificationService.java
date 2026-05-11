@@ -4,6 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.example.backend.adcheck.model.AdReviewRequest;
 import org.example.backend.campaign.model.CampaignInvitation;
 import org.example.backend.campaign.model.CampaignInvitationStatus;
+import org.example.backend.campaign.model.CampaignInvitationType;
+import org.example.backend.campaign.model.CampaignMemberDto;
+import org.example.backend.campaign.repository.CampaignInvitationRepository;
 import org.example.backend.notification.model.Notification;
 import org.example.backend.notification.model.NotificationDto;
 import org.example.backend.notification.model.NotificationSeverity;
@@ -12,6 +15,8 @@ import org.example.backend.notification.repository.NotificationRepository;
 import org.example.backend.teamboard.model.Task;
 import org.example.backend.teamboard.model.TaskStatus;
 import org.example.backend.user.model.User;
+import org.example.backend.organization.model.Organization;
+import org.example.backend.user.model.UserAccountStatus;
 import org.example.backend.user.repository.UserRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -35,19 +40,49 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final CampaignInvitationRepository campaignInvitationRepository;
     private final NotificationSseService notificationSseService;
     private final NotificationPreferenceResolver preferenceResolver;
 
     public NotificationDto.ListRes list(Long recipientIdx, Integer count) {
         int limit = count == null ? DEFAULT_LIST_LIMIT : Math.min(Math.max(count, 1), MAX_LIST_LIMIT);
-        List<NotificationDto.Res> notifications = notificationRepository
-                .findAllByRecipient_IdxOrderByCreatedAtDesc(recipientIdx, PageRequest.of(0, limit))
-                .stream()
-                .map(NotificationDto.Res::from)
+        List<Notification> raw = notificationRepository
+                .findAllByRecipient_IdxOrderByCreatedAtDesc(recipientIdx, PageRequest.of(0, limit));
+        List<NotificationDto.Res> notifications = raw.stream()
+                .map(this::toRes)
                 .toList();
         long unreadCount = notificationRepository.countByRecipient_IdxAndIsReadFalse(recipientIdx);
-
         return new NotificationDto.ListRes(notifications, unreadCount);
+    }
+
+    private NotificationDto.Res toRes(Notification notification) {
+        if (REFERENCE_CAMPAIGN_INVITATION.equals(notification.getReferenceType())
+                && notification.getReferenceId() != null) {
+            return campaignInvitationRepository.findById(notification.getReferenceId())
+                    .filter(inv -> inv.getType() == CampaignInvitationType.GROUP)
+                    .map(this::toGroupPreview)
+                    .map(preview -> NotificationDto.Res.from(notification, preview))
+                    .orElseGet(() -> NotificationDto.Res.from(notification));
+        }
+        return NotificationDto.Res.from(notification);
+    }
+
+    private CampaignMemberDto.GroupPreview toGroupPreview(CampaignInvitation invitation) {
+        Organization inviteeOrg = invitation.getInviteeOrganization();
+        if (inviteeOrg == null) return null;
+        List<User> users = userRepository.findAllByOrganization_IdxAndAccountStatus(
+                inviteeOrg.getIdx(), UserAccountStatus.ACTIVE);
+        List<CampaignMemberDto.GroupPreview.GroupPreviewMember> members = users.stream()
+                .map(u -> CampaignMemberDto.GroupPreview.GroupPreviewMember.builder()
+                        .name(u.getName())
+                        .email(u.getEmail())
+                        .role(u.getRole())
+                        .build())
+                .toList();
+        return CampaignMemberDto.GroupPreview.builder()
+                .organizationName(inviteeOrg.getName())
+                .members(members)
+                .build();
     }
 
     @Transactional
@@ -354,15 +389,47 @@ public class NotificationService {
             return;
         }
 
+        String campaignName = nonBlank(invitation.getCampaign().getName(), "캠페인");
         create(
                 invitation.getInvitee(),
                 invitation.getInviter(),
                 NotificationType.CAMPAIGN_INVITED,
                 NotificationSeverity.HIGH,
-                "캠페인 초대가 도착했습니다.",
-                invitation.getCampaign().getName(),
-                senderName(invitation.getInviter()) + "님이 캠페인에 초대했습니다. 초대를 승인하거나 반려해 주세요.",
-                "캠페인 초대 확인",
+                "협력사 초대가 도착했습니다",
+                senderName(invitation.getInviter()) + "님이 [" + campaignName + "] 협력사 GM으로 초대했습니다. 승인하거나 반려해 주세요.",
+                null,
+                "초대 확인하기",
+                "/campaigns/" + invitation.getCampaign().getPublicId(),
+                "campaign-invitation:" + invitation.getIdx() + ":invitee:" + invitation.getInvitee().getIdx(),
+                REFERENCE_CAMPAIGN_INVITATION,
+                invitation.getIdx(),
+                invitation.getStatus().name(),
+                true
+        );
+    }
+
+    @Transactional
+    public void notifyCampaignGroupInvitation(
+            org.example.backend.campaign.model.CampaignInvitation invitation,
+            int eligibleCount
+    ) {
+        if (invitation == null || invitation.getInvitee() == null || invitation.getCampaign() == null) {
+            return;
+        }
+        String campaignName = nonBlank(invitation.getCampaign().getName(), "캠페인");
+        String orgName = invitation.getInviteeOrganization() != null
+                ? invitation.getInviteeOrganization().getName()
+                : "협력사";
+        create(
+                invitation.getInvitee(),
+                invitation.getInviter(),
+                NotificationType.CAMPAIGN_INVITED,
+                NotificationSeverity.HIGH,
+                "협력사 그룹 초대가 도착했습니다",
+                senderName(invitation.getInviter()) + "님이 [" + campaignName + "]에 "
+                        + orgName + "(" + eligibleCount + "명) 그룹 초대를 보냈습니다. 수락 시 우리 조직 인원이 함께 합류합니다.",
+                null,
+                "초대 확인하기",
                 "/campaigns/" + invitation.getCampaign().getPublicId(),
                 "campaign-invitation:" + invitation.getIdx() + ":invitee:" + invitation.getInvitee().getIdx(),
                 REFERENCE_CAMPAIGN_INVITATION,
@@ -411,10 +478,10 @@ public class NotificationService {
                 sender,
                 NotificationType.CAMPAIGN_MEMBER_ADDED,
                 NotificationSeverity.NORMAL,
-                "캠페인 구성원으로 추가되었습니다.",
-                campaignName,
-                senderName(sender) + "님이 캠페인 구성원으로 추가했습니다.",
-                "캠페인 보기",
+                "캠페인 구성원으로 추가되었습니다",
+                senderName(sender) + "님이 [" + nonBlank(campaignName, "캠페인") + "]에 당신을 구성원으로 추가했습니다.",
+                null,
+                "캠페인 열기",
                 targetUrl
         );
     }

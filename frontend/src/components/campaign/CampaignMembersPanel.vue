@@ -9,6 +9,7 @@ import CampaignMemberRow from './CampaignMemberRow.vue'
 import CampaignMemberManagePopover from './CampaignMemberManagePopover.vue'
 import AddTeamMemberModal from './AddTeamMemberModal.vue'
 import InvitePartnerGmModal from './InvitePartnerGmModal.vue'
+import InvitePartnerGroupModal from './InvitePartnerGroupModal.vue'
 
 const props = defineProps({
   campaignId: { type: [String, Number], required: true },
@@ -17,11 +18,91 @@ const props = defineProps({
 const members = ref([])
 const me = ref(null)
 const isPm = ref(false)
+const pmOrganizationIdx = ref(null)
 const loading = ref(false)
 const errorMsg = ref('')
 
 const showAddTeam = ref(false)
 const showInvitePartner = ref(false)
+const showInvitePartnerGroup = ref(false)
+
+const expandedMap = reactive({})
+const manageModeMap = reactive({})
+const expelLoading = reactive({})
+
+const callerKey = computed(() => {
+  if (!me.value) return null
+  return me.value.organizationIdx != null
+    ? `org:${me.value.organizationIdx}`
+    : `name:${me.value.companyName ?? ''}`
+})
+
+function canShowGroupManage(g) {
+  if (me.value?.campaignRole !== 'GENERAL_MANAGER') return false
+  if (isPm.value) return true
+  return g.key === callerKey.value
+}
+
+function toggleGroupManage(g) {
+  manageModeMap[g.key] = !manageModeMap[g.key]
+}
+
+function canExpel(member) {
+  if (!member || member.userIdx === me.value?.userIdx) return false
+  return canManage(member)
+}
+
+async function expelMember(member) {
+  const ok = window.confirm(`${member.name}님을 캠페인에서 제거합니다.\n작성한 자료실/레퍼런스/업무는 유지됩니다.\n계속하시겠습니까?`)
+  if (!ok) return
+  expelLoading[member.idx] = true
+  try {
+    await removeMember(props.campaignId, member.idx)
+    await fetchMembers()
+  } catch (e) {
+    errorMsg.value = '추방 처리 실패'
+  } finally {
+    delete expelLoading[member.idx]
+  }
+}
+
+const groupedMembers = computed(() => {
+  if (!members.value.length) return []
+
+  const groups = new Map()
+  for (const m of members.value) {
+    const key = m.organizationIdx != null ? `org:${m.organizationIdx}` : `name:${m.companyName ?? ''}`
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        organizationIdx: m.organizationIdx ?? null,
+        organizationName: m.companyName ?? '미지정',
+        members: [],
+      })
+    }
+    groups.get(key).members.push(m)
+  }
+
+  const callerKey = me.value
+    ? (me.value.organizationIdx != null ? `org:${me.value.organizationIdx}` : `name:${me.value.companyName ?? ''}`)
+    : null
+
+  const list = Array.from(groups.values())
+  list.forEach((g) => {
+    g.isPm = pmOrganizationIdx.value != null && g.organizationIdx === pmOrganizationIdx.value
+    if (expandedMap[g.key] === undefined) expandedMap[g.key] = true
+  })
+
+  list.sort((a, b) => {
+    if (a.isPm !== b.isPm) return a.isPm ? -1 : 1
+    return (a.organizationName || '').localeCompare(b.organizationName || '', 'ko')
+  })
+  return list
+})
+
+function toggleGroup(g) {
+  expandedMap[g.key] = !expandedMap[g.key]
+}
 
 const popoverFor = ref(null) // member object
 const popoverPos = reactive({ top: 0, right: 0 })
@@ -42,6 +123,7 @@ async function fetchMembers() {
     members.value = payload.members ?? []
     me.value = payload.me ?? null
     isPm.value = payload.organizationIsPm ?? false
+    pmOrganizationIdx.value = payload.pmOrganizationIdx ?? null
   } catch (e) {
     errorMsg.value = '참여자 목록을 불러오지 못했습니다.'
   } finally {
@@ -53,7 +135,13 @@ onMounted(fetchMembers)
 
 function canManage(member) {
   const role = me.value?.campaignRole
-  if (role === 'GENERAL_MANAGER') return true
+  if (role === 'GENERAL_MANAGER') {
+    // PM 조직 GM은 모든 멤버 관리 가능 (기존 정책 유지)
+    if (isPm.value) return true
+    // 그 외 GM은 같은 조직 멤버만
+    return member.organizationIdx != null
+      && member.organizationIdx === me.value?.organizationIdx
+  }
   if (role === 'MANAGER') {
     return member.campaignRole === 'USER'
       && member.companyName === me.value?.companyName
@@ -129,6 +217,9 @@ async function handleAction(action) {
       <div class="members-panel__actions">
         <button v-if="canAddTeam" type="button" class="btn btn--secondary" @click="showAddTeam = true">팀원 추가</button>
         <button v-if="canInvitePartner" type="button" class="btn btn--primary" @click="showInvitePartner = true">협력사 초대</button>
+        <button v-if="canInvitePartner" type="button" class="btn btn--primary" @click="showInvitePartnerGroup = true">
+          그룹 초대
+        </button>
       </div>
     </div>
 
@@ -144,13 +235,39 @@ async function handleAction(action) {
         <span>참여일</span>
         <span>관리</span>
       </div>
-      <CampaignMemberRow
-        v-for="m in members"
-        :key="m.idx"
-        :member="m"
-        :can-manage="canManage(m)"
-        @manage="openPopover"
-      />
+
+      <section v-for="g in groupedMembers" :key="g.key" class="members-group">
+        <div class="members-group__header-row">
+          <button type="button" class="members-group__header" @click="toggleGroup(g)">
+            <span class="members-group__chev" :class="{ 'is-open': expandedMap[g.key] }" aria-hidden="true">▶</span>
+            <strong>{{ g.organizationName }}</strong>
+            <small>· 인원 {{ g.members.length }}명</small>
+            <span class="members-group__tag" :data-pm="g.isPm">{{ g.isPm ? 'PM' : '협력사' }}</span>
+          </button>
+          <button
+            v-if="canShowGroupManage(g)"
+            type="button"
+            class="members-group__manage"
+            :class="{ 'is-active': manageModeMap[g.key] }"
+            @click="toggleGroupManage(g)"
+          >
+            {{ manageModeMap[g.key] ? '완료' : '관리' }}
+          </button>
+        </div>
+        <div v-show="expandedMap[g.key]" class="members-group__body">
+          <CampaignMemberRow
+            v-for="m in g.members"
+            :key="m.idx"
+            :member="m"
+            :can-manage="canManage(m)"
+            :manage-mode="Boolean(manageModeMap[g.key])"
+            :can-expel="canExpel(m)"
+            :expel-loading="Boolean(expelLoading[m.idx])"
+            @manage="openPopover"
+            @expel="expelMember"
+          />
+        </div>
+      </section>
     </div>
 
     <CampaignMemberManagePopover
@@ -172,6 +289,13 @@ async function handleAction(action) {
       v-if="showInvitePartner"
       :campaign-id="campaignId"
       @close="showInvitePartner = false"
+      @invited="fetchMembers"
+    />
+
+    <InvitePartnerGroupModal
+      v-if="showInvitePartnerGroup"
+      :campaign-id="campaignId"
+      @close="showInvitePartnerGroup = false"
       @invited="fetchMembers"
     />
   </article>
@@ -200,4 +324,20 @@ async function handleAction(action) {
 .btn--primary:hover { background: var(--color-primary-600); }
 .btn--secondary { background: var(--panel-color); color: var(--text-primary); border: 1px solid var(--border-color); }
 .btn--secondary:hover { background: var(--panel-muted); }
+.members-group { border-bottom: 1px solid var(--border-color); }
+.members-group:last-child { border-bottom: none; }
+.members-group__header { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; background: transparent; border: none; cursor: pointer; color: var(--text-primary); text-align: left; }
+.members-group__header:hover { background: var(--panel-muted); }
+.members-group__chev { display: inline-block; transition: transform 0.15s ease; font-size: 10px; color: var(--muted-text); }
+.members-group__chev.is-open { transform: rotate(90deg); }
+.members-group__header strong { font-size: 13px; font-weight: 700; }
+.members-group__header small { font-size: 12px; color: var(--muted-text); }
+.members-group__tag { margin-left: auto; padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 999px; background: var(--panel-muted); color: var(--text-secondary); }
+.members-group__tag[data-pm="true"] { background: color-mix(in srgb, var(--color-primary-500) 18%, transparent); color: var(--color-primary-600); }
+.members-group__body { display: contents; }
+.members-group__header-row { display: flex; align-items: center; gap: 8px; }
+.members-group__header-row > .members-group__header { flex: 1; }
+.members-group__manage { margin-right: 16px; padding: 4px 12px; font-size: 12px; font-weight: 700; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--panel-color); color: var(--text-primary); cursor: pointer; }
+.members-group__manage:hover { background: var(--panel-muted); }
+.members-group__manage.is-active { background: var(--color-primary-500); color: #fff; border-color: var(--color-primary-500); }
 </style>

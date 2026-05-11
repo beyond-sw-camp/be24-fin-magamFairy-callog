@@ -8,39 +8,17 @@ const props = defineProps({
   },
   actions: {
     type: Array,
-    default: () => [
-      {
-        id: 'pending_review',
-        label: '검토 대기',
-        count: 3,
-        description: '파트너 혜택 제안 확인 필요',
-        recentTitle: '최근 들어온 제안:',
-        recent: ['호텔앤드 (5/6)', '갤러리아 (5/6)', 'CGV (5/5)'],
-        tone: 'primary',
-      },
-      {
-        id: 'ready_to_run',
-        label: '운영 시작 대기',
-        count: 2,
-        description: '진행 결정된 조합 운영 시작 필요',
-        recentTitle: '최근 진행 결정:',
-        recent: ['스타벅스 코리아 (5/6)', '나이키 코리아 (5/6)'],
-        tone: 'success',
-      },
-    ],
+    default: () => [],
+  },
+  funnelSteps: {
+    type: Array,
+    default: () => [],
   },
 })
 
 const emit = defineEmits(['action'])
 
-const funnelSteps = [
-  { id: 'received', label: '접수', count: 8, rate: 100 },
-  { id: 'review', label: '검토', count: 6, rate: 75 },
-  { id: 'decision', label: '결정', count: 3, rate: 50 },
-  { id: 'running', label: '운영', count: 2, rate: 67 },
-]
-
-const funnelWarnings = computed(() => funnelSteps.filter((step) => step.rate < 50))
+const funnelWarnings = computed(() => props.funnelSteps.filter((step) => step.rate < 50))
 const visibleActions = computed(() => props.actions.filter((action) => Number(action.count || 0) > 0))
 const totalActions = computed(() =>
   visibleActions.value.reduce((sum, action) => sum + Number(action.count || 0), 0),

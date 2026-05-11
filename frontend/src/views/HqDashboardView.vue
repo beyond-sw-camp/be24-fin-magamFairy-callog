@@ -3,10 +3,12 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useDashboardStore } from '@/stores/dashboard'
+import { useTeamTaskStore } from '@/stores/teamTask'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const dashboardStore = useDashboardStore()
+const teamTaskStore = useTeamTaskStore()
 
 /* ═══════════ 분기 헬퍼 ═══════════ */
 function currentQuarterCode() {
@@ -52,6 +54,8 @@ const PERIOD_TABS = [
 onMounted(async () => {
   await dashboardStore.loadAll(currentPeriod.value)
   if (compareMode.value) await dashboardStore.loadCompare(comparePeriod.value)
+  // 캠페인 진행률 동기화 — Sidebar2와 동일한 teamTaskStore 사용
+  teamTaskStore.fetch()
 })
 
 /* 분기 키 변경 시 → 메인 + (옵션) 비교 데이터 재로드 */
@@ -486,12 +490,11 @@ function calcDDay(endDate) {
   return Math.round((end - today) / 86400000)
 }
 function deriveProgress(c) {
-  if (typeof c.progress === 'number') return c.progress
-  const s = (c.status ?? '').toLowerCase()
-  if (s === 'completed' || s === 'archived') return 100
-  if (s === 'review' || s === 'in_review') return 70
-  if (s === 'live' || s === 'running' || s === 'active') return 55
-  return 20
+  // Sidebar2와 동일하게 teamTaskStore의 태스크 완료율만 사용 — task가 없으면 0%
+  const id = c.idx ?? c.id
+  if (id == null) return 0
+  const rate = teamTaskStore.completionRateByCampaignId[String(id)]
+  return typeof rate === 'number' ? rate : 0
 }
 function statusOf(s) { return STATUS_MAP[s] ?? STATUS_MAP.draft }
 function fmtDDay(d) { return d == null ? '·' : (d >= 0 ? `D-${d}` : `D+${-d}`) }

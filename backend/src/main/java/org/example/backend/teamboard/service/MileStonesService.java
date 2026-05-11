@@ -3,6 +3,7 @@ package org.example.backend.teamboard.service;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.notification.service.NotificationSseService;
 import org.example.backend.teamboard.model.MileStones;
 import org.example.backend.teamboard.model.MileStonesDto;
 import org.example.backend.teamboard.repository.MileStonesRepository;
@@ -20,6 +21,7 @@ public class MileStonesService {
 
     private final MileStonesRepository mileStonesRepository;
     private final CampaignRepository campaignRepository;
+    private final NotificationSseService sseService;
 
     public List<MileStonesDto.ResList> listByCampaign(Long campaignIdx) {
         return mileStonesRepository.findAllByCampaign_IdxOrderBySortOrderAscIdxAsc(campaignIdx).stream()
@@ -35,6 +37,7 @@ public class MileStonesService {
     public MileStonesDto.ResMileStones create(Long campaignIdx, MileStonesDto.ReqMileStones req) {
         Campaign campaign = getCampaignOrThrow(campaignIdx);
         MileStones saved = mileStonesRepository.save(req.toEntity(campaign));
+        sseService.broadcastCalendarRefresh(campaignIdx, "milestone");
         return MileStonesDto.ResMileStones.from(saved);
     }
 
@@ -42,15 +45,17 @@ public class MileStonesService {
     public MileStonesDto.ResMileStones update(Long milestoneIdx, MileStonesDto.ReqMileStones req) {
         MileStones milestone = getMilestoneOrThrow(milestoneIdx);
         milestone.update(req.name(), req.startDate(), req.endDate(), req.description(), req.sortOrder());
+        sseService.broadcastCalendarRefresh(milestone.getCampaign().getIdx(), "milestone");
         return MileStonesDto.ResMileStones.from(milestone);
     }
 
     @Transactional
     public void delete(Long milestoneIdx) {
-        if (!mileStonesRepository.existsById(milestoneIdx)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "마일스톤을 찾을 수 없습니다.");
-        }
+        MileStones milestone = mileStonesRepository.findById(milestoneIdx)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "마일스톤을 찾을 수 없습니다."));
+        Long campaignIdx = milestone.getCampaign().getIdx();
         mileStonesRepository.deleteById(milestoneIdx);
+        sseService.broadcastCalendarRefresh(campaignIdx, "milestone");
     }
 
     private MileStones getMilestoneOrThrow(Long milestoneIdx) {
