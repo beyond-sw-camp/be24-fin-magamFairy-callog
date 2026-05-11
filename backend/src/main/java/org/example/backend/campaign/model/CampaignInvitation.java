@@ -66,6 +66,11 @@ public class CampaignInvitation extends BaseEntity {
     @Column(nullable = false, length = 20)
     private CampaignInvitationStatus status = CampaignInvitationStatus.PENDING;
 
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private CampaignInvitationType type = CampaignInvitationType.INDIVIDUAL;
+
     private LocalDateTime respondedAt;
 
     public void accept() {

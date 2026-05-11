@@ -5,6 +5,7 @@ import { usePlannerStore } from '@/stores/planner'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useUserSettingsStore } from '@/stores/userSettings'
 import { useTeamTaskStore } from '@/stores/teamTask'
+import { useNotificationsStore } from '@/stores/notifications'
 import CampaignCreateModal from '@/components/campaign/CampaignCreateModal.vue'
 import { campaignLabels, campaignSidebarText, campaignStatusMeta } from '@/constants/campaignText'
 import { CreateCampaign, UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
@@ -15,6 +16,16 @@ const store = usePlannerStore()
 const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
 const teamTaskStore = useTeamTaskStore()
+const notiStore = useNotificationsStore()
+
+/* SSE — 멤버십 변경(초대 수락/추방/직접 추가) 즉시 반영 */
+watch(() => notiStore.lastMyCampaignsRefresh, () => {
+  void store.loadCampaignsFromServer()
+})
+/* SSE — 캠페인/마일스톤/태스크 변경 시 진행률 등 갱신 */
+watch(() => notiStore.lastCalendarRefresh, () => {
+  teamTaskStore.fetch()
+})
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'callog-sidebar2-width'
 const SIDEBAR_DEFAULT_WIDTH = 240
@@ -175,7 +186,7 @@ const userStorageKey = computed(
 )
 
 function getCampaignStatusMeta(status) {
-  return campaignStatusMeta[status] ?? { label: campaignStatusMeta.draft.label, tone: 'draft' }
+  return campaignStatusMeta[status] ?? { label: campaignStatusMeta.draft.label, tone: 'gray' }
 }
 
 function toggleViewMode() {
@@ -203,12 +214,8 @@ function formatDDay(daysLeft) {
 }
 
 function getProgressPercent(campaign) {
-  if (typeof campaign.progress === 'number') {
-    return Math.max(0, Math.min(100, Math.round(campaign.progress)))
-  }
-  // store에 progress가 없을 때 status 기반 placeholder
-  const fallbackByStatus = { draft: 10, review: 70, live: 50, paused: 30, completed: 100 }
-  return fallbackByStatus[campaign.status] ?? 0
+  const rate = teamTaskStore.completionRateByCampaignId[String(campaign.id)]
+  return typeof rate === 'number' ? rate : 0
 }
 
 function getTaskCount(campaign) {
@@ -1366,30 +1373,42 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
 }
 
-.campaign-card__chip--live {
-  background: var(--color-success-light);
-  color: var(--color-success-dark);
+.campaign-card__chip--gray {
+  background: var(--color-gray-100, #f1f5f9);
+  color: var(--color-gray-700, #374151);
 }
 
-.campaign-card__chip--review {
-  background: var(--color-warning-light);
-  color: var(--color-warning-dark);
+.campaign-card__chip--emerald {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
 }
 
-.campaign-card__chip--paused {
+.campaign-card__chip--blue {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.campaign-card__chip--amber {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.campaign-card__chip--indigo {
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+}
+
+.campaign-card__chip--slate {
   background: var(--panel-muted);
   color: var(--muted-text);
 }
 
-.campaign-card__chip--draft {
-  background: var(--color-primary-100, var(--panel-muted));
-  color: var(--color-primary-700, var(--text-primary));
-}
-
-.campaign-card__chip--completed {
-  background: var(--color-success-light);
-  color: var(--color-success-dark);
-}
+/* 하위 호환 (구 데이터/코드 참조) */
+.campaign-card__chip--live     { background: rgba(16, 185, 129, 0.12); color: #059669; }
+.campaign-card__chip--review   { background: rgba(245, 158, 11, 0.12); color: #b45309; }
+.campaign-card__chip--paused   { background: var(--panel-muted); color: var(--muted-text); }
+.campaign-card__chip--draft    { background: var(--color-gray-100, #f1f5f9); color: var(--color-gray-700, #374151); }
+.campaign-card__chip--completed { background: rgba(99, 102, 241, 0.12); color: #4338ca; }
 
 .campaign-list__footer {
   padding: 8px;
@@ -1787,11 +1806,19 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.campaign-list__status--draft { background: var(--color-gray-100); color: var(--color-gray-600); }
-.campaign-list__status--review { background: var(--color-primary-100); color: var(--color-primary-700); }
-.campaign-list__status--live { background: var(--color-primary-500); color: #fff; }
-.campaign-list__status--completed { background: var(--color-success-light); color: var(--color-success-dark); }
-.campaign-list__status--paused { background: var(--color-warning-light); color: var(--color-warning-dark); }
+.campaign-list__status--gray    { background: var(--color-gray-100, #f1f5f9); color: var(--color-gray-700, #374151); }
+.campaign-list__status--emerald { background: rgba(16, 185, 129, 0.12); color: #059669; }
+.campaign-list__status--blue    { background: rgba(59, 130, 246, 0.12); color: #1d4ed8; }
+.campaign-list__status--amber   { background: rgba(245, 158, 11, 0.12); color: #b45309; }
+.campaign-list__status--indigo  { background: rgba(99, 102, 241, 0.12); color: #4338ca; }
+.campaign-list__status--slate   { background: var(--panel-muted); color: var(--muted-text); }
+
+/* 하위 호환 */
+.campaign-list__status--draft     { background: var(--color-gray-100, #f1f5f9); color: var(--color-gray-700, #374151); }
+.campaign-list__status--review    { background: rgba(245, 158, 11, 0.12); color: #b45309; }
+.campaign-list__status--live      { background: rgba(16, 185, 129, 0.12); color: #059669; }
+.campaign-list__status--completed { background: rgba(99, 102, 241, 0.12); color: #4338ca; }
+.campaign-list__status--paused    { background: var(--panel-muted); color: var(--muted-text); }
 
 .campaign-list-anim-move { transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 .campaign-list-anim-enter-active,

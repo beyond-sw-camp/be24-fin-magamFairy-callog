@@ -7,6 +7,8 @@ import { addBenefit } from '@/api/matchingBenefits'
 const route = useRoute()
 const router = useRouter()
 
+const emit = defineEmits(['close'])
+
 const campaignName = ref('')
 const submitting = ref(false)
 const errorMsg = ref('')
@@ -96,10 +98,7 @@ async function submitBenefit() {
       totalValue: totalValue.value
     })
 
-    router.push({ 
-      name: 'campaign-intro', 
-      params: { campaignId: route.params.campaignId } 
-    })
+    emit('close')
   } catch (e) {
     errorMsg.value = e.message ?? '혜택 등록에 실패했습니다.'
   } finally {
@@ -108,7 +107,7 @@ async function submitBenefit() {
 }
 
 function cancelSubmit() {
-  router.back()
+  emit('close')
 }
 </script>
 

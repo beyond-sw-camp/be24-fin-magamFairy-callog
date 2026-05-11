@@ -12,6 +12,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.List;
 
 @Entity
 @Table(name = "campaign_intro")
@@ -73,6 +74,38 @@ public class CampaignIntro extends BaseEntity {
     private Integer weightOperation;
     private Integer weightBrand;
 
+    // 소개 페이지 커스텀 콘텐츠 필드
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "json")
+    private Map<String, Object> overviewItems;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "json")
+    private Map<String, Object> heroKpis;
+
+    @Column(length = 500)
+    private String targetSegment;
+
+    @Column(length = 500)
+    private String targetScale;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "json")
+    private Map<String, Object> submissionInfo;
+
+    // 타깃 고객 프로필 — 자유 추가/삭제 가능한 항목 리스트
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "json")
+    private Map<String, Object> customerItems;
+
+    // 누적 조회 수 — 외부 파트너가 GET 호출할 때마다 증가 (PM 팀은 제외)
+    @Column(name = "view_count")
+    private Long viewCount;
+
+    public void recordView() {
+        this.viewCount = (this.viewCount == null ? 0L : this.viewCount) + 1;
+    }
+
     public void updateContent(CampaignIntroDto.UpdateReq dto) {
         if (dto.getRfpCode() != null) this.rfpCode = dto.getRfpCode();
         if (dto.getRecruitDeadline() != null) this.recruitDeadline = dto.getRecruitDeadline();
@@ -89,5 +122,11 @@ public class CampaignIntro extends BaseEntity {
         if (dto.getWeightCost() != null) this.weightCost = dto.getWeightCost();
         if (dto.getWeightOperation() != null) this.weightOperation = dto.getWeightOperation();
         if (dto.getWeightBrand() != null) this.weightBrand = dto.getWeightBrand();
+        if (dto.getOverviewItems() != null) this.overviewItems = dto.getOverviewItems();
+        if (dto.getHeroKpis() != null) this.heroKpis = dto.getHeroKpis();
+        if (dto.getTargetSegment() != null) this.targetSegment = dto.getTargetSegment();
+        if (dto.getTargetScale() != null) this.targetScale = dto.getTargetScale();
+        if (dto.getSubmissionInfo() != null) this.submissionInfo = dto.getSubmissionInfo();
+        if (dto.getCustomerItems() != null) this.customerItems = dto.getCustomerItems();
     }
 }

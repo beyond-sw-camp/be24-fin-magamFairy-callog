@@ -5,6 +5,49 @@ import api from '/plugins/interceptor'
 // - Vue 컴포넌트에서는 백엔드 주소를 직접 적지 않고 이 함수들만 호출합니다.
 // ==========================================
 
+function isSuccessResponse(payload) {
+  return (
+    payload?.success === true ||
+    payload?.success === 'true' ||
+    payload?.isSuccess === true ||
+    payload?.isSuccess === 'true'
+  )
+}
+
+function unwrapResponse(response) {
+  const payload = response?.data
+
+  if (!payload) {
+    throw new Error('프레임 응답이 비어있습니다.')
+  }
+
+  if (!isSuccessResponse(payload)) {
+    throw new Error(payload?.message ?? '프레임 요청이 실패했습니다.')
+  }
+
+  return payload.data
+}
+
+export const listFrames = async () => {
+  return unwrapResponse(await api.get('/frames'))
+}
+
+export const getFrame = async (frameId) => {
+  return unwrapResponse(await api.get(`/frames/${frameId}`))
+}
+
+export const createFrame = async (payload) => {
+  return unwrapResponse(await api.post('/frames', payload))
+}
+
+export const updateFrame = async (frameId, payload) => {
+  return unwrapResponse(await api.put(`/frames/${frameId}`, payload))
+}
+
+export const deleteFrame = async (frameId) => {
+  return unwrapResponse(await api.delete(`/frames/${frameId}`))
+}
+
 /**
  * 1. AI 운영 프레임 초안 생성 요청
  * @param {Object} params - { prompt: string, format: string, campaignPurpose?: string, targetAudience?: string, channel?: string }
@@ -29,4 +72,13 @@ export const saveFrameDraft = (params) => {
   return api.post('/frames/draft', params)
 }
 
-export default { saveFrameDraft, refineAIFrame, generateAIFrame }
+export default {
+  listFrames,
+  getFrame,
+  createFrame,
+  updateFrame,
+  deleteFrame,
+  saveFrameDraft,
+  refineAIFrame,
+  generateAIFrame,
+}

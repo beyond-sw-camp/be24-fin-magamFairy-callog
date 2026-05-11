@@ -133,6 +133,7 @@ async function selectNotification(notification) {
 
   selectedNotificationId.value = notification.id
   activeDetailTab.value = 'content'
+  groupPreviewExpanded.value = false
 
   if (route.query.notificationId !== notification.id) {
     await router.replace({
@@ -179,6 +180,32 @@ function getCampaignIdFromTargetUrl(notification) {
   return campaignId
 }
 
+const groupPreviewExpanded = ref(false)
+
+function isGroupCampaignInvitation(notification) {
+  return (
+    isCampaignInvitationActionable(notification)
+    && Boolean(notification?.groupPreview)
+  )
+}
+
+function groupPreviewSummary(notification) {
+  const preview = notification?.groupPreview
+  if (!preview) return ''
+  return `그룹 초대 — 수락 시 ${preview.organizationName} 활성 인원 ${preview.members?.length ?? 0}명이 함께 캠페인에 합류합니다.`
+}
+
+function confirmGroupAccept(notification) {
+  const preview = notification?.groupPreview
+  const orgName = preview?.organizationName ?? '협력사'
+  const count = preview?.members?.length ?? 0
+  return window.confirm(`${orgName} ${count}명이 캠페인에 합류합니다. 진행할까요?`)
+}
+
+function confirmGroupReject() {
+  return window.confirm('이 그룹 초대를 거절합니다. 같은 조직 인원도 합류하지 않습니다. 계속할까요?')
+}
+
 async function respondCampaignInvitation(notification, action) {
   if (!isCampaignInvitationActionable(notification)) {
     return
@@ -190,12 +217,20 @@ async function respondCampaignInvitation(notification, action) {
     return
   }
 
+  if (isGroupCampaignInvitation(notification)) {
+    if (action === 'accept' && !confirmGroupAccept(notification)) return
+    if (action === 'reject' && !confirmGroupReject()) return
+  }
+
   invitationActionLoading.value = action
   invitationActionError.value = ''
 
   try {
     if (action === 'accept') {
-      await acceptCampaignInvitation(campaignId, notification.referenceId)
+      const res = await acceptCampaignInvitation(campaignId, notification.referenceId)
+      const joined = res?.data?.data?.joinedCount ?? 1
+      const isGroup = res?.data?.data?.type === 'GROUP'
+      window.alert(isGroup ? `그룹 초대를 수락했습니다. (${joined}명 합류)` : '초대를 수락했습니다.')
     } else {
       await rejectCampaignInvitation(campaignId, notification.referenceId)
     }
@@ -397,6 +432,32 @@ onMounted(() => {
               {{ selectedNotification.detail }}
             </div>
             <div
+              v-if="isGroupCampaignInvitation(selectedNotification)"
+              class="notification-group-banner"
+            >
+              <p>{{ groupPreviewSummary(selectedNotification) }}</p>
+              <button type="button" class="notification-group-banner__toggle" @click="groupPreviewExpanded = !groupPreviewExpanded">
+                {{ groupPreviewExpanded ? '미리보기 접기' : '합류 예정 인원 미리보기' }}
+              </button>
+              <div v-if="groupPreviewExpanded" class="notification-group-preview" role="table">
+                <div class="notification-group-preview__head" role="row">
+                  <span role="columnheader">이름</span>
+                  <span role="columnheader">이메일</span>
+                  <span role="columnheader">조직 내 역할</span>
+                </div>
+                <div
+                  v-for="m in (selectedNotification.groupPreview?.members ?? [])"
+                  :key="`${m.email}-${m.name}`"
+                  class="notification-group-preview__row"
+                  role="row"
+                >
+                  <span>{{ m.name }}</span>
+                  <span>{{ m.email }}</span>
+                  <span>{{ m.role }}</span>
+                </div>
+              </div>
+            </div>
+            <div
               v-if="isCampaignInvitationActionable(selectedNotification)"
               class="notification-invitation-actions"
             >
@@ -460,7 +521,7 @@ onMounted(() => {
             <div v-if="selectedNotification.targetUrl" class="notification-detail__box">
               <p>{{ selectedNotification.targetLabel }}</p>
               <button type="button" class="notification-link-button" @click="openTarget(selectedNotification)">
-                관련 화면으로 이동
+                {{ selectedNotification.targetLabel || '관련 화면으로 이동' }}
               </button>
             </div>
             <div v-else class="notification-detail__box">
@@ -906,6 +967,13 @@ onMounted(() => {
 .notification-severity--low {
   color: var(--text-muted);
 }
+
+.notification-group-banner { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--panel-muted); display: flex; flex-direction: column; gap: 8px; }
+.notification-group-banner p { margin: 0; font-size: 13px; color: var(--text-primary); }
+.notification-group-banner__toggle { align-self: flex-start; padding: 4px 10px; font-size: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--panel-color); cursor: pointer; }
+.notification-group-preview { display: grid; gap: 4px; padding-top: 4px; }
+.notification-group-preview__head, .notification-group-preview__row { display: grid; grid-template-columns: 1fr 1.4fr 0.8fr; gap: 8px; padding: 6px 0; font-size: 12px; }
+.notification-group-preview__head { color: var(--muted-text); font-weight: 700; border-bottom: 1px dashed var(--border-color); }
 
 .notification-unread-dot {
   width: 8px;

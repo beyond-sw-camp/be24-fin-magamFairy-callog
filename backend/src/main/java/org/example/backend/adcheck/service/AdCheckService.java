@@ -31,7 +31,7 @@ public class AdCheckService {
     private final TextExtractorService textExtractorService;
     private final AdCheckFileStorageService adCheckFileStorageService;
 
-    @Value("${custom.n8n.webhook-url}/check")
+    @Value("${custom.n8n.webhook-url}${custom.n8n.check-endpoint}")
     private String adCheckUrl;
 
     public AdCheckService(
