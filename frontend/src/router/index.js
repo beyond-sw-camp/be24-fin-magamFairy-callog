@@ -124,8 +124,8 @@ const routes = [
         name: 'frames',
         component: () => import('@/views/FramesView.vue'),
         meta: {
-          title: '캠페인 프레임',
-          section: '??? ?? ??',
+          title: '운영 프레임',
+          section: '캠페인 실행 기준',
         
         },
       },
