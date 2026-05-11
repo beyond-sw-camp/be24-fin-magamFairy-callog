@@ -12,4 +12,6 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long> {
     Optional<Campaign> findByIdxAndOwnerLoginId(Long idx, String ownerLoginId);
 
     Optional<Campaign> findByPublicId(String publicId);
+
+    boolean existsByPublicId(String publicId);
 }

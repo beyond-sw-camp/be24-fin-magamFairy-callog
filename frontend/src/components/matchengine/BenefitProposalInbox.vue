@@ -10,6 +10,23 @@ defineProps({
   },
 })
 
+// 👇 1. 제안하기 뷰(컴포넌트) 임포트
+import CampaignProposalSubmitView from '@/views/CampaignProposalSubmitView.vue'
+
+// ... 기존 코드 ...
+
+// 👇 2. 모달 상태를 관리할 변수 추가
+const isCreateModalOpen = ref(false)
+
+// 👇 3. 이전의 alert를 지우고 상태를 true로 변경
+function openCreateBenefitModal() {
+  isCreateModalOpen.value = true
+}
+
+// 👇 4. 모달 닫기 함수 추가
+function closeCreateBenefitModal() {
+  isCreateModalOpen.value = false
+}
 const emit = defineEmits(['navigate', 'request-evaluation'])
 
 const isEvaluationModalOpen = ref(false)
@@ -201,6 +218,13 @@ function formatAutoRecommend(benefit) {
         <h3>혜택 평가</h3>
         <p>파트너가 등록한 혜택을 검토하고 평가를 진행합니다.</p>
       </div>
+      <button 
+        type="button" 
+        class="benefit-create-btn"
+        @click="openCreateBenefitModal"
+      >
+        새로운 혜택 제안하기
+      </button>
     </header>
 
     <div
@@ -416,10 +440,91 @@ function formatAutoRecommend(benefit) {
       :initial-selected-id="selectedBenefit?.id"
       @submit="handleEvaluationSubmit"
     />
+
+    <div 
+      v-if="isCreateModalOpen" 
+      class="custom-modal-overlay" 
+      @click.self="closeCreateBenefitModal"
+    >
+      <div class="custom-modal-content">
+        <header class="custom-modal-header">
+          <button type="button" class="close-btn" @click="closeCreateBenefitModal">✕</button>
+        </header>
+        
+        <div class="custom-modal-body">
+          <CampaignProposalSubmitView @close="closeCreateBenefitModal" />
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
 <style scoped>
+
+/* 👇 제안하기 모달 스타일 👇 */
+.custom-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 17, 21, 0.4); /* 어두운 반투명 배경 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999; /* 다른 요소들보다 무조건 위에 오도록 */
+  backdrop-filter: blur(2px);
+}
+
+.custom-modal-content {
+  background: var(--benefit-surface);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 900px; /* 제안 폼 크기에 맞게 조절하세요 */
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  animation: modal-fade-in 0.2s ease-out;
+}
+
+.custom-modal-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--benefit-line);
+  background: var(--benefit-surface);
+}
+
+.custom-modal-header .close-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: var(--benefit-text-3);
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  transition: color 0.15s;
+}
+
+.custom-modal-header .close-btn:hover {
+  color: var(--benefit-text);
+}
+
+.custom-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  /* 스크롤바 스타일 부드럽게 */
+  scrollbar-gutter: stable;
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* 기존의 CSS와 100% 동일하므로 UI가 깨지지 않습니다. */
 .benefit-inbox {
   --benefit-surface: #ffffff;
@@ -969,6 +1074,40 @@ function formatAutoRecommend(benefit) {
 
   .benefit-detail__actions button {
     flex: 1;
+  }
+}
+
+/* 👇 새로운 혜택 제안하기 버튼 스타일 👇 */
+.benefit-create-btn {
+  display: inline-flex;
+  height: 2.6rem;
+  align-items: center;
+  justify-content: center;
+  align-self: center; /* 헤더 텍스트와 수직 중앙을 맞추기 위함 */
+  border: none;
+  border-radius: 8px;
+  background: var(--benefit-brand);
+  color: #ffffff;
+  padding: 0 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.benefit-create-btn:hover {
+  background: color-mix(in srgb, var(--benefit-brand) 88%, black);
+}
+
+.benefit-create-btn:active {
+  transform: scale(0.98);
+}
+
+/* 모바일 대응 (선택 사항): 화면이 좁아졌을 때 텍스트와 버튼 간격 조정 */
+@media (max-width: 560px) {
+  .benefit-create-btn {
+    width: 100%;
+    margin-top: 1rem;
   }
 }
 </style>
