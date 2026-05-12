@@ -1,11 +1,69 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, onUnmounted } from 'vue';
 import { usePlannerStore } from '@/stores/planner'
 
 const store = usePlannerStore()
 
 // 다크모드 여부 계산
 const isDark = computed(() => store.theme === 'dark');
+
+/* ─── 컬럼 리사이즈 (담당사명 / 캠페인명 각각) ─── */
+const LEFT_COL_KEY = 'overviewTimelineLeftColWidth'
+const NAME_COL_KEY = 'overviewTimelineNameColWidth'
+const LEFT_MIN = 80
+const LEFT_MAX = 320
+const NAME_MIN = 120
+const NAME_MAX = 600
+
+const leftColWidth = ref(
+  Number(typeof window !== 'undefined' ? window.localStorage.getItem(LEFT_COL_KEY) : null) || 160
+)
+const nameColWidth = ref(
+  Number(typeof window !== 'undefined' ? window.localStorage.getItem(NAME_COL_KEY) : null) || 340
+)
+const activeResize = ref(null)  // 'left' | 'name' | null
+
+function clamp(v, min, max) { return Math.min(max, Math.max(min, v)) }
+
+const panelWidth = computed(() => leftColWidth.value + nameColWidth.value)
+
+function startResize(target, e) {
+  e.preventDefault()
+  activeResize.value = target
+  const startX = e.clientX
+  const startLeft = leftColWidth.value
+  const startName = nameColWidth.value
+  const onMove = (ev) => {
+    const dx = ev.clientX - startX
+    if (target === 'left') {
+      leftColWidth.value = clamp(startLeft + dx, LEFT_MIN, LEFT_MAX)
+    } else if (target === 'name') {
+      nameColWidth.value = clamp(startName + dx, NAME_MIN, NAME_MAX)
+    }
+  }
+  const onUp = () => {
+    activeResize.value = null
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    try {
+      window.localStorage.setItem(LEFT_COL_KEY, String(leftColWidth.value))
+      window.localStorage.setItem(NAME_COL_KEY, String(nameColWidth.value))
+    } catch { /* ignore */ }
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+const startLeftResize = (e) => startResize('left', e)
+const startNameResize = (e) => startResize('name', e)
+
+onUnmounted(() => {
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+})
 
 // const events = ref([])
 const props = defineProps({
@@ -106,15 +164,47 @@ const getTodayLineStyle = () => {
     <div class="flex-1 overflow-auto flex relative custom-scrollbar"
          :class="isDark ? 'bg-[#1e1e2d]' : 'bg-white'">
       
-      <div class="sticky left-0 z-30 flex-shrink-0 flex flex-col w-[500px] border-r transition-colors duration-300"
+      <div class="sticky left-0 z-30 flex-shrink-0 flex flex-col border-r transition-colors duration-300 relative"
+           :style="{ width: panelWidth + 'px' }"
            :class="isDark ? 'bg-[#252537] border-[#2d2d3f] shadow-[3px_0_10px_rgba(0,0,0,0.2)]' : 'bg-white border-gray-200 shadow-[3px_0_10px_rgba(0,0,0,0.03)]'">
-        
+
+        <!-- 핸들 1: 담당사명 ↔ 캠페인명 -->
+        <div
+          class="col-resize-handle"
+          :class="{ 'col-resize-handle--active': activeResize === 'left' }"
+          :style="{ left: (leftColWidth - 3) + 'px' }"
+          @pointerdown="startLeftResize"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="담당사명 컬럼 너비 조절"
+          title="좌우로 드래그해서 담당사명 컬럼 너비를 조절하세요"
+        ></div>
+
+        <!-- 핸들 2: 캠페인명 ↔ 타임라인 -->
+        <div
+          class="col-resize-handle"
+          :class="{ 'col-resize-handle--active': activeResize === 'name' }"
+          :style="{ left: (panelWidth - 3) + 'px' }"
+          @pointerdown="startNameResize"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="캠페인명 컬럼 너비 조절"
+          title="좌우로 드래그해서 캠페인명 컬럼 너비를 조절하세요"
+        ></div>
+
         <div class="sticky top-0 z-50 h-10 border-b flex flex-col box-border transition-colors duration-300"
              :class="isDark ? 'bg-[#2d2d3f] border-[#3f3f56]' : 'bg-gray-50 border-gray-200'">
           <div class="h-full flex text-xs font-bold text-center"
                :class="isDark ? 'text-slate-400' : 'text-gray-500'">
-            <div class="w-40 border-r flex items-center justify-center" :class="isDark ? 'border-[#3f3f56]' : 'border-gray-200'">담당사명</div>
-            <div class="flex-1 flex items-center justify-center">캠페인명</div>
+            <div
+              class="border-r flex items-center justify-center flex-shrink-0"
+              :class="isDark ? 'border-[#3f3f56]' : 'border-gray-200'"
+              :style="{ width: leftColWidth + 'px' }"
+            >담당사명</div>
+            <div
+              class="flex items-center justify-center flex-shrink-0"
+              :style="{ width: nameColWidth + 'px' }"
+            >캠페인명</div>
           </div>
         </div>
 
@@ -125,13 +215,19 @@ const getTodayLineStyle = () => {
             class="h-14 border-b flex items-center text-center transition-colors duration-200"
             :class="isDark ? 'border-[#2d2d3f] hover:bg-[#2d2d3f]/50' : 'border-gray-100 hover:bg-gray-50'"
           >
-            <div class="w-40 border-r font-bold truncate px-2 text-[#8B5CF6]" 
-                 :class="isDark ? 'border-[#2d2d3f]' : 'border-gray-100'">
-                 {{ event.projectManager }}
+            <div
+              class="border-r font-bold truncate px-2 text-[#8B5CF6] flex-shrink-0 flex items-center"
+              :class="isDark ? 'border-[#2d2d3f]' : 'border-gray-100'"
+              :style="{ width: leftColWidth + 'px' }"
+            >
+              {{ event.projectManager }}
             </div>
-            <div class="flex-1 px-4 text-left font-bold truncate transition-colors"
-                 :class="isDark ? 'text-slate-200' : 'text-gray-800'">
-                 {{ event.title }}
+            <div
+              class="px-4 text-left font-bold truncate transition-colors flex items-center flex-shrink-0"
+              :class="isDark ? 'text-slate-200' : 'text-gray-800'"
+              :style="{ width: nameColWidth + 'px' }"
+            >
+              {{ event.title }}
             </div>
           </div>
         </div>
@@ -223,5 +319,38 @@ const getTodayLineStyle = () => {
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: #8B5CF6;
+}
+
+/* 컬럼 너비 리사이즈 핸들 */
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 60;
+  transition: background-color 0.15s;
+  touch-action: none;
+}
+.col-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  margin-left: -0.5px;
+  background: transparent;
+  transition: background-color 0.15s;
+}
+.col-resize-handle:hover::after,
+.col-resize-handle--active::after {
+  background: #8B5CF6;
+  width: 2px;
+  margin-left: -1px;
+}
+.col-resize-handle:hover,
+.col-resize-handle--active {
+  background: rgba(139, 92, 246, 0.08);
 }
 </style>

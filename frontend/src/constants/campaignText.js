@@ -9,13 +9,21 @@ export const campaignLabels = {
 }
 
 export const campaignStatusMeta = {
-  draft: { label: '초안', tone: 'draft' },
-  review: { label: '검토 중', tone: 'review' },
-  in_review: { label: '검토 중', tone: 'review' },
-  live: { label: '진행 중', tone: 'live' },
-  partner_done: { label: '파트너 완료', tone: 'info' },
-  completed: { label: '완료', tone: 'completed' },
-  paused: { label: '일시 중지', tone: 'paused' },
+  // 현재 사용 상태 (STATUS_OPTIONS 기준)
+  draft:        { label: '초안',       tone: 'gray'    },
+  in_progress:  { label: '진행중',     tone: 'emerald' },
+  recruiting:   { label: '모집중',     tone: 'blue'    },
+  review:       { label: '검토중',     tone: 'amber'   },
+  completed:    { label: '완료',       tone: 'indigo'  },
+  closed:       { label: '종료',       tone: 'slate'   },
+  // 하위 호환 (구 데이터)
+  live:         { label: '진행중',     tone: 'emerald' },
+  active:       { label: '진행중',     tone: 'emerald' },
+  planned:      { label: '초안',       tone: 'gray'    },
+  in_review:    { label: '검토중',     tone: 'amber'   },
+  at_risk:      { label: '위험',       tone: 'amber'   },
+  paused:       { label: '일시중지',   tone: 'gray'    },
+  partner_done: { label: '파트너완료', tone: 'indigo'  },
 }
 
 export const campaignModalText = {

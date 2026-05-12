@@ -1,13 +1,14 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { usePlannerStore } from '@/stores/planner'
+
+const plannerStore = usePlannerStore()
 
 const t = {
   eyebrow: '\uCEA0\uD398\uC778 \uC2E4\uD589 \uAE30\uC900',
   title: '\uCEA0\uD398\uC778 \uD504\uB808\uC784 \uB77C\uC774\uBE0C\uB7EC\uB9AC',
   desc: '\uBCF8\uC0AC, \uD611\uB825\uC0AC, \uB300\uD589\uC0AC\uAC00 \uAC19\uC740 \uAE30\uC900\uC73C\uB85C \uCEA0\uD398\uC778 \uBB38\uC11C\uB97C \uC791\uC131\uD558\uACE0 \uAC80\uC218\uD558\uB294 \uC2E4\uD589 \uAD6C\uC870\uC785\uB2C8\uB2E4.',
   all: '\uC804\uCCB4',
-  newFrame: '\uC0C8 \uD504\uB808\uC784',
-  aiDraft: 'AI \uCD08\uC548',
   standardZone: '\uD45C\uC900 \uD504\uB808\uC784\uC874',
   referenceZone: '\uB808\uD37C\uB7F0\uC2A4 \uAE30\uBC18 \uD504\uB808\uC784\uC874',
   draftZone: '\uAC80\uD1A0 \uC911 \uD504\uB808\uC784\uC874',
@@ -125,31 +126,157 @@ const frames = [
 ]
 
 const selectedFrameId = ref(frames[0].id)
-const selectedZone = ref('all')
+const selectedCampaignType = ref('전체 캠페인 방식')
+const selectedLibrarySort = ref('점수 높은순')
 const uploadedFileName = ref('')
-const showStructureInfo = ref(false)
 
-const zones = computed(() => [
-  { id: 'standard', title: t.standardZone, desc: t.standardDesc, icon: 'verified', frames: frames.filter((frame) => frame.zone === 'standard') },
-  { id: 'reference', title: t.referenceZone, desc: t.referenceDesc, icon: 'auto_awesome', frames: frames.filter((frame) => frame.zone === 'reference') },
-  { id: 'draft', title: t.draftZone, desc: t.draftDesc, icon: 'rate_review', frames: frames.filter((frame) => frame.zone === 'draft') },
+const frameCatalog = {
+  frames: [
+    {
+      id: 'coupon_discount',
+      category: '쿠폰/할인',
+      version: 'v2.3',
+      title: '쿠폰·할인 표준 프레임',
+      score: 91,
+      overview: '할인율, 사용 기간, 사용 조건, 제외 대상 표기를 검수합니다. "무조건", "최대 할인" 등 과장 표현을 차단합니다.',
+      required_fields: ['할인율 또는 할인 금액 명시', '유효 기간 (시작일·종료일)', '사용 조건 (최소 구매 금액 등)', '제외 대상·중복 사용 가능 여부', '발급 수량 또는 한정 조건', '고객 문의 채널'],
+      banned_expressions: ['무조건', '최대 할인', '단독 혜택', '최저가', '절대 후회 없음', '한정 마감 임박'],
+      recommended_expressions: ['합리적인 가격', '기간 한정 혜택', '회원 전용 할인', '특별 제공가'],
+      tone_guide: '혜택의 가치를 정확하고 구체적으로 전달하되, 과장이나 긴급성 강조는 피합니다. 고객이 혜택의 조건을 명확히 이해할 수 있도록 작성하고, 비교급 표현("최고", "최저")은 사용하지 않습니다. 프리미엄 브랜드의 신뢰감을 유지하며, 거래 조건을 투명하게 제시하는 어투를 권장합니다.',
+      approval_process: ['PM사 캠페인 매니저', '파트너사 제휴 담당자', '본사 브랜드/법무 담당'],
+      performance: { usage_count: 24, pass_rate: 91, avg_revisions: 3.2 },
+    },
+    {
+      id: 'experience_gift',
+      category: '체험권/사은품',
+      version: 'v1.8',
+      title: '체험권·사은품 표준 프레임',
+      score: 93,
+      overview: '제공 수량, 받는 방법, 유효 기간 표기를 검수합니다. "선착순 마감 임박" 같은 과장 표현을 제한하고 신뢰감 있는 안내를 유도합니다.',
+      required_fields: ['제공 수량 또는 재고 명시', '수령 방법·수령 장소', '유효 기간 또는 사용 기한', '참여 자격·대상 조건', '체험 범위 및 제한 사항', '사후 처리·반환 정책'],
+      banned_expressions: ['선착순 마감 임박', '한정 수량 단독', '지금 아니면 못 받음', '100% 당첨 보장', '공짜', '묻지도 따지지도 않고'],
+      recommended_expressions: ['선착순 제공', '사전 등록 시 증정', '체험 기회 제공', '특별 사은 이벤트'],
+      tone_guide: '체험과 증정의 가치를 진정성 있게 전달합니다. 수량과 조건을 명확히 안내해 고객이 헛걸음하지 않도록 하며, 과도한 긴급성이나 희소성 자극은 자제합니다. 브랜드가 고객에게 경험을 선사한다는 호의적인 어투를 유지하고, 추첨·증정 결과의 공정성을 신뢰할 수 있도록 작성합니다.',
+      approval_process: ['PM사 캠페인 매니저', '파트너사 운영 담당자', '본사 CS/법무 담당'],
+      performance: { usage_count: 9, pass_rate: 93, avg_revisions: 2.5 },
+    },
+    {
+      id: 'membership_benefit',
+      category: '멤버십 혜택',
+      version: 'v2.1',
+      title: '멤버십 혜택 표준 프레임',
+      score: 88,
+      overview: '대상 등급, 혜택 내용, 이용 방법 표기를 검수합니다. 등급 차별을 강조하는 배타적 표현을 제한합니다.',
+      required_fields: ['대상 회원 등급 명시', '혜택 내용·제공 범위', '이용 방법·신청 절차', '유효 기간 또는 갱신 조건', '중복 적용 가능 여부', '회원 등급별 차등 안내'],
+      banned_expressions: ['VIP만', '일반 회원 제외', '특권층 전용', '당신은 안 됩니다', '등급 미달', '선택받은 자'],
+      recommended_expressions: ['프리미엄 멤버 전용', 'GOLD 등급 이상', '회원 등급별 맞춤 혜택', '특별 회원 라운지'],
+      tone_guide: '프리미엄한 가치는 강조하되 배타적이거나 차별적인 인상을 주지 않도록 합니다. 등급별 혜택을 안내할 때는 객관적 정보로 전달하며, 비회원이나 하위 등급 고객을 폄하하는 표현은 금지합니다. 멤버십이 고객에게 제공하는 경험과 가치에 초점을 맞추고, 우월감보다는 소속감을 자극하는 어투를 권장합니다.',
+      approval_process: ['PM사 멤버십 매니저', '파트너사 제휴 담당자', '본사 브랜드/CRM 담당'],
+      performance: { usage_count: 17, pass_rate: 88, avg_revisions: 3.5 },
+    },
+    {
+      id: 'joint_promotion',
+      category: '공동 프로모션',
+      version: 'v2.0',
+      title: '공동 프로모션 표준 프레임',
+      score: 85,
+      overview: '양사 로고, 비용 부담 비율, 운영 책임 범위 표기를 검수합니다. 한쪽 브랜드만 부각되지 않도록 합니다.',
+      required_fields: ['양사 브랜드명·로고 동등 노출', '비용 부담 주체 및 비율', '운영 책임 범위 (CS·환불 등)', '공동 캠페인 기간', '각사 기여 자산 명시', '분쟁 시 협의 절차'],
+      banned_expressions: ['단독 진행', '독점 제휴', '유일한 파트너', '타사 대비 우위', '본사 주도', '주관·협찬'],
+      recommended_expressions: ['공동 기획', '양사 협력 캠페인', '함께 준비한 혜택', '공동 브랜딩'],
+      tone_guide: '두 브랜드가 대등한 파트너로 협력하고 있음을 분명히 드러냅니다. 한쪽 브랜드가 주도하거나 다른 쪽이 보조 역할로 보이지 않도록 표현의 비중을 균형 있게 맞춥니다. 양사가 함께 만든 가치라는 점을 강조하고, 고객이 혜택을 받는 데 있어 어느 쪽 채널에서도 동일한 경험을 할 수 있음을 전달합니다.',
+      approval_process: ['PM사 캠페인 매니저', '파트너사 제휴 담당자', '양사 법무·브랜드 담당'],
+      performance: { usage_count: 12, pass_rate: 85, avg_revisions: 4.1 },
+    },
+    {
+      id: 'content_collab',
+      category: '콘텐츠 협업',
+      version: 'v1.5',
+      title: '콘텐츠 협업 프레임',
+      score: 80,
+      overview: '협업 형식, 노출 채널, 저작권 귀속 표기를 검수합니다. 미공개 정보의 사전 노출을 차단합니다.',
+      required_fields: ['협업 형식 (영상·기사·SNS 등)', '노출 채널 및 노출 기간', '저작권·2차 활용 권리', '협업자(인플루언서·매체) 정보', '광고성 표기 (#광고 #협찬)', '원본 콘텐츠 보관 조건'],
+      banned_expressions: ['내돈내산', '협찬 아닙니다', '광고 X', '솔직 후기 보장', '비밀리에 공개', '단독 입수'],
+      recommended_expressions: ['유료 광고 포함', '협업 콘텐츠', '브랜드 제공', '공식 콘텐츠 파트너'],
+      tone_guide: '광고성 콘텐츠임을 투명하게 밝히는 것이 가장 중요합니다. 표시광고법 및 공정거래위원회 가이드를 준수하며, 협찬·광고 사실을 숨기거나 모호하게 표현하지 않습니다. 콘텐츠의 진정성과 정보 전달력을 살리되, 고객이 광고임을 명확히 인지할 수 있는 어투를 유지합니다.',
+      approval_process: ['PM사 콘텐츠 담당자', '파트너사·크리에이터', '본사 법무·브랜드 담당'],
+      performance: { usage_count: 5, pass_rate: 80, avg_revisions: 4.8 },
+    },
+    {
+      id: 'channel_app_exposure',
+      category: '채널/앱 노출',
+      version: 'v1.2',
+      title: '채널·앱 노출 표준 프레임',
+      score: 86,
+      overview: '노출 채널, 노출 기간, 도달 규모 예상치 표기를 검수합니다. 클릭 유도 과장 표현을 제한합니다.',
+      required_fields: ['노출 채널 (앱 푸시·배너·알림톡 등)', '노출 기간 및 노출 빈도', '예상 도달 규모 또는 노출 지면', '타겟 세그먼트 정의', '수신 거부·옵트아웃 안내', '성과 측정 지표 (CTR·CVR 등)'],
+      banned_expressions: ['지금 클릭', '놓치면 후회', '긴급 알림', '100만 명이 본 광고', '마지막 기회', '당신만 못 받은 혜택'],
+      recommended_expressions: ['회원님께 추천', '맞춤 혜택 안내', '관심 카테고리 정보', '이번 주 추천'],
+      tone_guide: '고객의 알림 피로도를 고려한 절제된 어투를 유지합니다. 클릭을 유도하는 과장이나 거짓 긴급성은 사용하지 않으며, 고객이 채널을 신뢰하고 계속 받아볼 수 있도록 정보 가치를 우선시합니다. 푸시·알림톡은 짧고 명확하게, 배너는 핵심 메시지와 CTA를 분명히 전달합니다. 수신 거부 안내가 자연스럽게 노출되도록 합니다.',
+      approval_process: ['PM사 채널 운영 담당자', '파트너사 마케팅 담당자', '본사 CRM·법무 담당'],
+      performance: { usage_count: 14, pass_rate: 86, avg_revisions: 2.8 },
+    },
+  ],
+}
+
+const frameSourceMap = {
+  coupon_discount: 'vip-talk-standard',
+  experience_gift: 'banner-standard',
+  membership_benefit: 'vip-talk-standard',
+  joint_promotion: 'banner-standard',
+  content_collab: 'premium-reference',
+  channel_app_exposure: 'banner-standard',
+}
+
+const libraryFrames = frameCatalog.frames.map((frame) => ({
+  ...frame,
+  sourceFrameId: frameSourceMap[frame.id] ?? frames[0].id,
+}))
+
+const selectedLibraryFrameId = ref(libraryFrames[0].id)
+const selectedModalFrameId = ref('')
+const campaignTypeOptions = computed(() => [
+  '전체 캠페인 방식',
+  ...new Set(libraryFrames.map((frame) => frame.category)),
 ])
+const librarySortOptions = ['점수 높은순', '사용 많은순', '통과율 높은순']
 
-const visibleZones = computed(() => {
-  if (selectedZone.value === 'all') return zones.value
-  return zones.value.filter((zone) => zone.id === selectedZone.value)
+const filteredLibraryFrames = computed(() => {
+  const result = libraryFrames.filter((frame) =>
+    selectedCampaignType.value === '전체 캠페인 방식' || frame.category === selectedCampaignType.value,
+  )
+
+  if (selectedLibrarySort.value === '사용 많은순') {
+    return [...result].sort((a, b) => b.performance.usage_count - a.performance.usage_count)
+  }
+
+  if (selectedLibrarySort.value === '통과율 높은순') {
+    return [...result].sort((a, b) => b.performance.pass_rate - a.performance.pass_rate)
+  }
+
+  return [...result].sort((a, b) => b.score - a.score)
 })
 
 const selectedFrame = computed(() => frames.find((frame) => frame.id === selectedFrameId.value) ?? frames[0])
+const modalFrame = computed(() => libraryFrames.find((frame) => frame.id === selectedModalFrameId.value) ?? null)
+const modalFrameCampaignHistory = computed(() => {
+  if (!modalFrame.value) return []
 
-const structureGroups = computed(() => [
-  { title: t.required, icon: 'fact_check', items: selectedFrame.value.required },
-  { title: t.tone, icon: 'record_voice_over', items: selectedFrame.value.tone },
-  { title: t.banned, icon: 'block', items: selectedFrame.value.banned },
-  { title: t.evidence, icon: 'attach_file', items: selectedFrame.value.evidence },
-  { title: t.channel, icon: 'rule', items: selectedFrame.value.channel },
-  { title: t.reuse, icon: 'history', items: selectedFrame.value.reuse },
-])
+  return plannerStore.campaigns
+    .filter((campaign) => Array.isArray(campaign.campaignMethods) && campaign.campaignMethods.includes(modalFrame.value.category))
+    .map((campaign) => ({
+      id: campaign.id,
+      title: campaign.name,
+      createdAt: formatHistoryDate(campaign.createdAt),
+      status: campaign.status === 'completed' ? '완료 캠페인' : campaign.status === 'active' ? '진행 중' : '초안',
+      passRate: modalFrame.value.performance.pass_rate,
+    }))
+})
+
+const modalUsageCount = computed(() => {
+  if (!modalFrame.value) return 0
+  return modalFrame.value.performance.usage_count + modalFrameCampaignHistory.value.length
+})
 
 const judgeItems = computed(() => [
   { label: t.required, result: selectedFrame.value.score >= 80 ? t.pass : t.caution },
@@ -158,13 +285,29 @@ const judgeItems = computed(() => [
   { label: t.channel, result: selectedFrame.value.channel.length >= 3 ? t.pass : t.caution },
 ])
 
-function selectFrame(frame) {
-  selectedFrameId.value = frame.id
-  showStructureInfo.value = false
-}
-
 function updateFile(event) {
   uploadedFileName.value = event.target.files?.[0]?.name ?? ''
+}
+
+function openFrameModal(frame) {
+  selectedLibraryFrameId.value = frame.id
+  selectedFrameId.value = frame.sourceFrameId
+  selectedModalFrameId.value = frame.id
+}
+
+function closeFrameModal() {
+  selectedModalFrameId.value = ''
+}
+
+function formatHistoryDate(value) {
+  if (!value) return '날짜 없음'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return String(value).slice(0, 10).replaceAll('-', '.')
+  }
+
+  return date.toISOString().slice(0, 10).replaceAll('-', '.')
 }
 </script>
 
@@ -176,82 +319,52 @@ function updateFile(event) {
         <h2>{{ t.title }}</h2>
         <span>{{ t.desc }}</span>
       </div>
-      <div class="hero-actions">
-        <button type="button" class="soft-action">
-          <span class="material-symbols-outlined">auto_awesome</span>
-          {{ t.aiDraft }}
-        </button>
-        <button type="button" class="primary-action">
-          <span class="material-symbols-outlined">add</span>
-          {{ t.newFrame }}
-        </button>
-      </div>
     </header>
-
-    <section class="review-strip" aria-label="frame review steps">
-      <article class="review-metric">
-        <h3>{{ t.review }}</h3>
-        <ol>
-          <li v-for="(step, index) in selectedFrame.review" :key="step">
-            <span>{{ index + 1 }}</span>
-            {{ step }}
-          </li>
-        </ol>
-      </article>
-    </section>
 
     <section class="frames-layout">
       <main class="library-column">
         <div class="library-head">
-          <div>
+          <div class="library-title">
             <p class="section-eyebrow">FRAME LIBRARY</p>
-            <h3>{{ t.title }}</h3>
+            <h3>표준 프레임</h3>
           </div>
-          <div class="zone-filter" aria-label="frame zone filter">
-            <button type="button" :class="{ active: selectedZone === 'all' }" @click="selectedZone = 'all'">
-              {{ t.all }} ({{ frames.length }})
-            </button>
-            <button
-              v-for="zone in zones"
-              :key="zone.id"
-              type="button"
-              :class="{ active: selectedZone === zone.id }"
-              @click="selectedZone = zone.id"
-            >
-              {{ zone.title }} ({{ zone.frames.length }})
-            </button>
+          <div class="library-filters">
+            <select v-model="selectedCampaignType" aria-label="캠페인 방식">
+              <option v-for="option in campaignTypeOptions" :key="option" :value="option">
+                {{ option }}
+              </option>
+            </select>
+            <select v-model="selectedLibrarySort" aria-label="정렬">
+              <option v-for="option in librarySortOptions" :key="option" :value="option">
+                {{ option }}
+              </option>
+            </select>
           </div>
         </div>
 
-        <section v-for="zone in visibleZones" :key="zone.id" class="frame-zone">
-          <div class="zone-head">
-            <span class="material-symbols-outlined">{{ zone.icon }}</span>
-            <div>
-              <h4>{{ zone.title }}</h4>
-              <p>{{ zone.desc }}</p>
-            </div>
-            <strong>{{ zone.frames.length }}</strong>
-          </div>
+        <div class="standard-frame-grid">
+          <button
+            v-for="frame in filteredLibraryFrames"
+            :key="frame.id"
+            type="button"
+            class="standard-frame-card"
+            :class="{ active: selectedLibraryFrameId === frame.id }"
+            @click="openFrameModal(frame)"
+          >
+            <span class="standard-frame-card__meta">
+              {{ frame.category }} <i>/</i> 캠페인 검수 <i>/</i>
+              <strong>표준</strong>
+            </span>
+            <h4>{{ frame.title }}</h4>
+            <p>{{ frame.overview }}</p>
+            <footer>
+              <span>사용 <strong>{{ frame.performance.usage_count }}회</strong></span>
+              <span>통과율 <strong class="success">{{ frame.performance.pass_rate }}%</strong></span>
+              <span>점수 <strong>{{ frame.score }}</strong></span>
+            </footer>
+          </button>
 
-          <div class="zone-card-grid">
-            <button
-              v-for="frame in zone.frames"
-              :key="frame.id"
-              type="button"
-              class="frame-card"
-              :class="{ active: selectedFrame.id === frame.id }"
-              @click="selectFrame(frame)"
-            >
-              <span>{{ frame.type }} / {{ frame.status }}</span>
-              <strong>{{ frame.name }}</strong>
-              <p>{{ frame.summary }}</p>
-              <div>
-                <small>{{ frame.version }} / {{ frame.updatedAt }}</small>
-                <em>{{ frame.used }} used</em>
-              </div>
-            </button>
-          </div>
-        </section>
+        </div>
       </main>
 
       <aside class="judge-panel">
@@ -285,79 +398,157 @@ function updateFile(event) {
       </aside>
     </section>
 
-    <section class="detail-grid" :class="{ 'detail-grid--single': !showStructureInfo }">
-      <article class="selected-summary">
-        <div class="summary-top">
+    <div v-if="modalFrame" class="frame-modal-backdrop" @click.self="closeFrameModal">
+      <section class="frame-modal" role="dialog" aria-modal="true" :aria-label="modalFrame.title">
+        <header class="frame-modal__hero">
           <div>
-            <span>{{ selectedFrame.type }} / {{ selectedFrame.status }}</span>
-            <h3>{{ selectedFrame.name }}</h3>
-            <p>{{ selectedFrame.purpose }}</p>
-          </div>
-          <div class="summary-actions">
-            <button
-              type="button"
-              class="info-button"
-              :aria-label="t.structureInfo"
-              @click="showStructureInfo = !showStructureInfo"
-            >
-              <span class="material-symbols-outlined">info</span>
-            </button>
-            <div class="score-pill">
-              <small>FRAME SCORE</small>
-              <strong>{{ selectedFrame.score }}</strong>
+            <nav class="frame-modal__breadcrumb" aria-label="프레임 경로">
+                <span>캠페인 프레임</span>
+                <span>표준 프레임</span>
+                <span>{{ modalFrame.category }}</span>
+                <strong>{{ modalFrame.title }}</strong>
+              </nav>
+            <h3>{{ modalFrame.title }}</h3>
+            <div class="frame-modal__badges">
+              <span>{{ modalFrame.category }}</span>
+              <strong>표준 · {{ modalFrame.version }}</strong>
             </div>
           </div>
-        </div>
+        </header>
 
-        <div class="approver-list">
-          <h4>{{ t.approver }}</h4>
-          <span v-for="item in selectedFrame.approver" :key="item">{{ item }}</span>
-        </div>
-      </article>
+        <div class="frame-modal__layout">
+          <main class="frame-modal__main">
+            <article class="frame-detail-panel">
+              <div class="frame-detail-panel__head">
+                <div>
+                  <span class="material-symbols-outlined">assignment</span>
+                  <h4>필수 표기 항목</h4>
+                </div>
+                <p>캠페인 입력 시 반드시 포함</p>
+              </div>
+              <div class="required-item-grid">
+                <span v-for="item in modalFrame.required_fields" :key="item">
+                  <i class="material-symbols-outlined">check_circle</i>
+                  {{ item }}
+                </span>
+              </div>
+            </article>
 
-      <article v-if="showStructureInfo" class="structure-panel">
-        <div class="panel-title">
-          <div>
-            <p class="section-eyebrow">{{ t.detail }}</p>
-            <h3>{{ t.detail }}</h3>
-          </div>
-          <button type="button" class="info-button" :aria-label="t.close" @click="showStructureInfo = false">
-            <span class="material-symbols-outlined">close</span>
-          </button>
+            <article class="frame-detail-panel">
+              <div class="frame-detail-panel__head">
+                <div>
+                  <span class="material-symbols-outlined danger">block</span>
+                  <h4>금지 · 권장 표현</h4>
+                </div>
+                <p>AI 판사가 자동 감지</p>
+              </div>
+              <div class="phrase-section">
+                <strong>금지 표현</strong>
+                <div class="phrase-list phrase-list--danger">
+                  <span v-for="item in modalFrame.banned_expressions" :key="item">× {{ item }}</span>
+                </div>
+              </div>
+              <div class="phrase-section">
+                <strong>권장 표현</strong>
+                <div class="phrase-list phrase-list--success">
+                  <span v-for="item in modalFrame.recommended_expressions" :key="item">✓ {{ item }}</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="frame-detail-panel">
+              <div class="frame-detail-panel__head">
+                <div>
+                  <span class="material-symbols-outlined">forum</span>
+                  <h4>톤앤매너 가이드</h4>
+                </div>
+                <p>브랜드 톤 일관성 유지</p>
+              </div>
+              <p class="tone-guide-copy">{{ modalFrame.tone_guide }}</p>
+            </article>
+
+            <article class="frame-detail-panel">
+              <div class="frame-detail-panel__head">
+                <div>
+                  <span class="material-symbols-outlined">approval_delegation</span>
+                  <h4>승인 프로세스</h4>
+                </div>
+                <p>양사가 같은 기준으로 확인하는 승인 라인</p>
+              </div>
+              <ol class="approval-step-list">
+                <li v-for="(item, index) in modalFrame.approval_process" :key="item">
+                  <span>{{ index + 1 }}</span>
+                  {{ item }}
+                </li>
+              </ol>
+            </article>
+          </main>
+
+          <aside class="frame-modal__aside">
+            <article class="modal-side-panel">
+              <p class="section-eyebrow">PERFORMANCE</p>
+              <div class="performance-grid">
+                <div>
+                  <strong>{{ modalUsageCount }}</strong>
+                  <span>사용 캠페인</span>
+                </div>
+                <div>
+                  <strong class="success">{{ modalFrame.performance.pass_rate }}%</strong>
+                  <span>평균 통과율</span>
+                </div>
+                <div>
+                  <strong>{{ modalFrame.performance.avg_revisions }}</strong>
+                  <span>평균 수정 횟수</span>
+                </div>
+                <div>
+                  <strong>{{ modalFrame.version }}</strong>
+                  <span>현재 버전</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="modal-side-panel">
+              <p class="section-eyebrow">FRAME HISTORY</p>
+              <ul v-if="modalFrameCampaignHistory.length" class="history-list">
+                <li v-for="item in modalFrameCampaignHistory" :key="item.id">
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.status }} · 통과율 <em>{{ item.passRate }}%</em> · {{ item.createdAt }}</span>
+                </li>
+              </ul>
+              <p v-else class="history-empty">
+                아직 이 방식으로 생성된 캠페인이 없습니다.
+              </p>
+              <button type="button" class="history-link">전체 이력 보기 →</button>
+            </article>
+
+            <article class="modal-side-panel">
+              <p class="section-eyebrow">FRAME SCORE</p>
+              <div class="score-meter">
+                <strong>{{ modalFrame.score }}</strong>
+                <span>프레임 품질 점수</span>
+              </div>
+            </article>
+          </aside>
         </div>
-        <div class="structure-card-grid">
-          <section v-for="group in structureGroups" :key="group.title" class="structure-card">
-            <div>
-              <span class="material-symbols-outlined">{{ group.icon }}</span>
-              <h4>{{ group.title }}</h4>
-            </div>
-            <ul>
-              <li v-for="item in group.items" :key="item">{{ item }}</li>
-            </ul>
-          </section>
-        </div>
-      </article>
-    </section>
+      </section>
+    </div>
   </section>
 </template>
 
 <style scoped>
 .frames-page {
   display: flex;
-  width: 100%;
-  max-width: var(--content-max-width);
+  width: calc(100% + 24px);
+  max-width: none;
   flex-direction: column;
-  gap: 16px;
-  margin: 0 auto;
+  gap: 10px;
+  margin: -12px -12px 0;
   color: var(--text-primary);
 }
 
 .frames-hero,
-.review-strip,
 .library-column,
-.judge-panel,
-.selected-summary,
-.structure-panel {
+.judge-panel {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   background: var(--panel-color);
@@ -368,17 +559,15 @@ function updateFile(event) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 22px 24px;
+  gap: 10px;
+  padding: 14px 16px;
 }
 
 .frames-hero h2,
 .library-head h3,
-.judge-head h3,
-.summary-top h3,
-.panel-title h3 {
+.judge-head h3 {
   margin: 4px 0 0;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
   letter-spacing: 0;
 }
@@ -387,123 +576,163 @@ function updateFile(event) {
 .frame-card p,
 .zone-head p,
 .judge-desc,
-.summary-top p,
 .upload-box small {
   color: var(--muted-text);
   font-size: 13px;
   line-height: 1.55;
 }
 
-.hero-actions {
-  display: flex;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.primary-action,
-.soft-action {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 0 14px;
-  font-weight: 800;
-}
-
-.primary-action {
-  border-color: transparent;
-  background: var(--accent-color);
-  color: #fff;
-}
-
-.soft-action {
-  background: var(--panel-muted);
-  color: var(--text-primary);
-}
-
-.review-strip {
-  padding: 14px 16px;
-}
-
-.review-metric {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
-}
-
 .frame-card span,
-.summary-top span,
-.score-pill small {
+.standard-frame-card__meta {
   color: var(--muted-text);
   font-size: 12px;
   font-weight: 800;
 }
 
-.review-metric h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.review-metric ol {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.review-metric li {
-  display: flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 6px;
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 0 9px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.review-metric li span {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: var(--radius-full);
-  background: var(--accent-color);
-  color: #fff;
-  font-size: 11px;
-}
-
 .frames-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) clamp(286px, 18vw, 340px);
+  gap: 10px;
   align-items: start;
 }
 
 .library-column,
-.judge-panel,
-.selected-summary,
-.structure-panel {
+.judge-panel {
   display: grid;
-  gap: 16px;
-  padding: 18px;
+  gap: 10px;
+  padding: 14px;
 }
 
 .library-head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
+}
+
+.library-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.library-title h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.library-filters {
+  display: grid;
+  grid-template-columns: 160px 128px;
+  gap: 8px;
+}
+
+.library-filters select {
+  min-height: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 10px;
+}
+
+.standard-frame-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 10px;
+}
+
+.standard-frame-card {
+  min-height: 138px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-color);
+  cursor: pointer;
+  text-align: left;
+}
+
+.standard-frame-card {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 12px;
+}
+
+.standard-frame-card.active {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 5%, var(--panel-color));
+}
+
+.standard-frame-card__meta {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.standard-frame-card__meta i {
+  padding: 0 5px;
+  color: var(--border-strong);
+  font-style: normal;
+}
+
+.standard-frame-card__meta strong {
+  color: var(--accent-strong);
+}
+
+.standard-frame-card h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.standard-frame-card p {
+  align-self: start;
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.standard-frame-card footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 9px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.standard-frame-card footer span {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.standard-frame-card footer span + span {
+  border-left: 1px solid var(--border-color);
+  padding-left: 12px;
+}
+
+.standard-frame-card footer strong {
+  color: var(--text-primary);
+}
+
+.standard-frame-card footer .success {
+  color: var(--success-color);
+}
+
+.standard-frame-card footer time {
+  margin-left: auto;
+  color: var(--text-tertiary, var(--muted-text));
 }
 
 .zone-filter {
@@ -553,9 +782,7 @@ function updateFile(event) {
 }
 
 .zone-head h4,
-.zone-head p,
-.structure-card h4,
-.approver-list h4 {
+.zone-head p {
   margin: 0;
 }
 
@@ -622,8 +849,8 @@ function updateFile(event) {
 
 .judge-head > span {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   place-items: center;
   border-radius: var(--radius-md);
   background: var(--color-primary-100);
@@ -632,13 +859,13 @@ function updateFile(event) {
 
 .upload-box {
   display: grid;
-  min-height: 138px;
+  min-height: 132px;
   place-items: center;
   gap: 6px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--panel-muted);
-  padding: 18px;
+  padding: 16px;
   text-align: center;
   cursor: pointer;
 }
@@ -662,7 +889,7 @@ function updateFile(event) {
   justify-content: space-between;
   border-radius: var(--radius-md);
   background: var(--color-primary-50);
-  padding: 14px;
+  padding: 12px;
   color: var(--color-primary-800);
 }
 
@@ -672,7 +899,7 @@ function updateFile(event) {
 }
 
 .judge-score strong {
-  font-size: 30px;
+  font-size: 28px;
 }
 
 .judge-checks {
@@ -708,144 +935,479 @@ function updateFile(event) {
   color: var(--warning-color);
 }
 
-.detail-grid {
+.frame-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
+  align-items: start;
+  justify-items: center;
+  overflow-y: auto;
+  background: rgb(15 23 42 / 46%);
+  padding: 28px;
+}
+
+.frame-modal {
+  display: grid;
+  width: min(1020px, 100%);
   gap: 16px;
-  align-items: start;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--app-bg, var(--panel-muted));
+  box-shadow: 0 28px 80px rgb(15 23 42 / 28%);
+  padding: 22px;
 }
 
-.detail-grid--single {
-  grid-template-columns: 1fr;
-}
-
-.summary-top {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.summary-actions {
+.frame-modal__hero {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 20px;
 }
 
-.info-button {
-  display: inline-grid;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  color: var(--accent-strong);
-  cursor: pointer;
-}
-
-.score-pill {
-  display: grid;
-  min-width: 82px;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 10px;
-}
-
-.score-pill strong {
-  color: var(--accent-strong);
-  font-size: 28px;
-}
-
-.approver-list {
-  display: grid;
-  gap: 10px;
-}
-
-.approver-list {
-  grid-template-columns: 1fr;
-}
-
-.approver-list span {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-full);
-  background: var(--panel-muted);
-  padding: 7px 10px;
-  color: var(--text-secondary);
+.frame-modal__breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted-text);
   font-size: 12px;
   font-weight: 800;
 }
 
-.structure-card-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+.frame-modal__breadcrumb span::after {
+  content: '›';
+  margin-left: 7px;
+  color: var(--border-strong);
 }
 
-.panel-title {
+.frame-modal__breadcrumb strong {
+  color: var(--text-secondary);
+}
+
+.frame-modal__hero h3 {
+  margin: 8px 0 10px;
+  color: var(--text-primary);
+  font-size: 25px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.frame-modal__badges {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.structure-card {
-  display: grid;
-  gap: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 14px;
-}
-
-.structure-card > div {
-  display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
-.structure-card .material-symbols-outlined {
-  color: var(--accent-strong);
-  font-size: 20px;
+.frame-modal__badges span,
+.frame-modal__badges strong {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 900;
 }
 
-.structure-card ul {
-  display: grid;
-  gap: 7px;
-  margin: 0;
-  padding-left: 18px;
-  color: var(--muted-text);
+.frame-modal__badges span {
+  background: var(--color-primary-50);
+  color: var(--accent-strong);
+}
+
+.frame-modal__badges strong {
+  background: color-mix(in srgb, var(--success-color) 13%, var(--panel-color));
+  color: var(--success-color);
+}
+
+.history-link {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  cursor: pointer;
   font-size: 13px;
+  font-weight: 900;
+}
+
+.history-link {
+  background: var(--panel-color);
+  color: var(--text-primary);
+}
+
+.frame-modal__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+}
+
+.frame-modal__main,
+.frame-modal__aside {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.frame-detail-panel,
+.modal-side-panel {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--panel-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.frame-detail-panel {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.frame-detail-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.frame-detail-panel__head > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.frame-detail-panel__head span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-50);
+  color: var(--accent-strong);
+  font-size: 18px;
+}
+
+.frame-detail-panel__head span.danger {
+  background: color-mix(in srgb, var(--danger-color, #ef4444) 10%, var(--panel-color));
+  color: var(--danger-color, #ef4444);
+}
+
+.frame-detail-panel__head h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.frame-detail-panel__head p {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.required-item-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.required-item-grid span {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 0 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.required-item-grid i {
+  color: var(--accent-strong);
+  font-size: 18px;
+  font-style: normal;
+}
+
+.phrase-section {
+  display: grid;
+  gap: 8px;
+}
+
+.phrase-section > strong {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.phrase-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.phrase-list span {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.phrase-list--danger span {
+  border: 1px solid color-mix(in srgb, var(--danger-color, #ef4444) 30%, var(--border-color));
+  background: color-mix(in srgb, var(--danger-color, #ef4444) 9%, var(--panel-color));
+  color: var(--danger-color, #ef4444);
+}
+
+.phrase-list--success span {
+  border: 1px solid color-mix(in srgb, var(--success-color) 30%, var(--border-color));
+  background: color-mix(in srgb, var(--success-color) 10%, var(--panel-color));
+  color: var(--success-color);
+}
+
+.tone-guide-copy {
+  margin: 0;
+  border-left: 3px solid var(--accent-color);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: color-mix(in srgb, var(--accent-color) 5%, var(--panel-muted));
+  padding: 14px 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.approval-step-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.approval-step-list li {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 0 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.approval-step-list span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.modal-side-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.performance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.performance-grid div {
+  display: grid;
+  min-height: 62px;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 8px;
+  text-align: center;
+}
+
+.performance-grid strong {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.performance-grid strong.success {
+  color: var(--success-color);
+  font-style: normal;
+}
+
+.performance-grid span {
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.history-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-list li {
+  display: grid;
+  gap: 5px;
+  border-bottom: 1px solid var(--border-color);
+  padding: 10px 0;
+}
+
+.history-list strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.history-list span,
+.history-empty {
+  color: var(--muted-text);
+  font-size: 12px;
   line-height: 1.45;
 }
 
+.history-list em {
+  color: var(--success-color);
+  font-style: normal;
+  font-weight: 900;
+}
+
+.history-empty {
+  margin: 0;
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+  padding: 12px;
+}
+
+.history-link {
+  min-height: 30px;
+  border: 0;
+  color: var(--accent-strong);
+}
+
+.score-meter {
+  display: grid;
+  min-height: 92px;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent-color) 8%, var(--panel-muted));
+  color: var(--accent-strong);
+  text-align: center;
+}
+
+.score-meter strong {
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.score-meter span {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 @media (max-width: 1180px) {
-  .frames-layout,
-  .detail-grid,
-  .structure-card-grid {
+  .frames-layout {
     grid-template-columns: 1fr;
+  }
+
+  .frame-modal__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .frame-modal__aside {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 780px) {
   .frames-hero,
   .library-head,
-  .summary-top {
+  .frame-modal__hero {
     flex-direction: column;
   }
 
-  .hero-actions,
   .zone-filter {
     justify-content: flex-start;
     width: 100%;
   }
 
-  .zone-card-grid,
-  .review-metric,
-  .review-metric ol {
+  .frame-modal-backdrop {
+    padding: 10px;
+  }
+
+  .frame-modal {
+    padding: 14px;
+  }
+
+  .frame-modal__aside,
+  .required-item-grid {
     grid-template-columns: 1fr;
+  }
+
+  .frame-detail-panel {
+    padding: 16px;
+  }
+
+  .frame-detail-panel__head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .library-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .library-filters {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .zone-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .standard-frame-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .standard-frame-card footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .standard-frame-card footer span + span {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .standard-frame-card footer time {
+    margin-left: 0;
   }
 }
 </style>
