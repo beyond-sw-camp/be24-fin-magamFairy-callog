@@ -37,8 +37,6 @@ public class EvaluationService {
     private final BenefitRepository benefitRepository;
     private final CampaignRepository campaignRepository;
     private final RestClient restClient;
-    private final OrganizationRepository organizationRepository;
-    private final UserRepository userRepository;
 
     @Value("${custom.n8n.webhook-url}${custom.n8n.evaluation-endpoint}")
     String n8nWebhookUrl;
