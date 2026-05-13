@@ -39,7 +39,7 @@ admin:
   password: ${ADMIN_PASSWORD}
 spring:
   application:
-    name: callog
+    name: callog-dev
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
     url: ${DB_URL}
