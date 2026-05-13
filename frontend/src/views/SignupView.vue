@@ -16,6 +16,10 @@ const form = reactive({
 const isSubmitting = ref(false)
 const errorMessage = ref('')
 const createdAccount = ref(null)
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const organizationTextPattern = /^[\p{L}\p{N}\s().,&+\-_/·]+$/u
+const personNamePattern = /^[\p{L}\s.\-·]+$/u
+const phonePattern = /^01[016789]\d{7,8}$/
 
 function resolveErrorMessage(error) {
   return (
@@ -27,17 +31,64 @@ function resolveErrorMessage(error) {
 }
 
 function validateForm() {
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const companyError = validateStructuredText(form.companyName, '회사명', 2, 60, organizationTextPattern)
+  if (companyError) return companyError
 
-  if (!form.companyName.trim() || !form.department.trim() || !form.name.trim() || !form.email.trim()) {
-    return '회사명, 부서/팀명, 담당자명, 이메일을 모두 입력해 주세요.'
+  const departmentError = validateStructuredText(form.department, '부서/팀명', 2, 40, organizationTextPattern)
+  if (departmentError) return departmentError
+
+  const nameError = validateStructuredText(form.name, '담당자명', 2, 30, personNamePattern, false)
+  if (nameError) return nameError
+
+  if (!form.email.trim()) {
+    return '업무 이메일을 입력해 주세요.'
   }
 
-  if (!emailPattern.test(form.email.trim())) {
+  if (!emailPattern.test(form.email.trim()) || form.email.trim().length > 254) {
     return '올바른 이메일 형식으로 입력해 주세요.'
   }
 
+  const phoneDigits = form.phone.replace(/\D/g, '')
+  if (phoneDigits && !phonePattern.test(phoneDigits)) {
+    return '연락처는 010-1234-5678 형식의 휴대폰 번호로 입력해 주세요.'
+  }
+
   return ''
+}
+
+function validateStructuredText(value, label, min, max, pattern, allowDigitOnly = true) {
+  const normalized = value.trim()
+  if (!normalized) {
+    return `${label}을(를) 입력해 주세요.`
+  }
+
+  if (normalized.length < min || normalized.length > max) {
+    return `${label}은(는) ${min}자 이상 ${max}자 이하로 입력해 주세요.`
+  }
+
+  const hasLetter = /\p{L}/u.test(normalized)
+  const hasDigit = /\p{N}/u.test(normalized)
+  if (!hasLetter && (!allowDigitOnly || !hasDigit)) {
+    return `${label}에는 한글, 영문${allowDigitOnly ? ' 또는 숫자' : ''}를 포함해 주세요.`
+  }
+
+  if (!pattern.test(normalized)) {
+    return `${label}에 사용할 수 없는 문자가 포함되어 있습니다.`
+  }
+
+  return ''
+}
+
+function formatPhone(digits) {
+  if (digits.length <= 3) return digits
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+}
+
+function handlePhoneInput(event) {
+  const digits = event.target.value.replace(/\D/g, '').slice(0, 11)
+  form.phone = formatPhone(digits)
 }
 
 async function handleSignup() {
@@ -127,6 +178,8 @@ function goToLogin() {
                   v-model.trim="form.companyName"
                   type="text"
                   autocomplete="organization"
+                  maxlength="60"
+                  required
                   placeholder="예: 스타브랜드 코리아"
                 />
               </label>
@@ -137,6 +190,8 @@ function goToLogin() {
                   v-model.trim="form.department"
                   type="text"
                   autocomplete="organization-title"
+                  maxlength="40"
+                  required
                   placeholder="예: 영업팀"
                 />
               </label>
@@ -147,6 +202,8 @@ function goToLogin() {
                   v-model.trim="form.name"
                   type="text"
                   autocomplete="name"
+                  maxlength="30"
+                  required
                   placeholder="예: 홍길동"
                 />
               </label>
@@ -157,6 +214,8 @@ function goToLogin() {
                   v-model.trim="form.email"
                   type="email"
                   autocomplete="email"
+                  maxlength="254"
+                  required
                   placeholder="partner@company.com"
                 />
               </label>
@@ -166,7 +225,10 @@ function goToLogin() {
                 <input
                   v-model.trim="form.phone"
                   type="tel"
+                  inputmode="numeric"
                   autocomplete="tel"
+                  maxlength="13"
+                  @input="handlePhoneInput"
                   placeholder="010-0000-0000"
                 />
               </label>

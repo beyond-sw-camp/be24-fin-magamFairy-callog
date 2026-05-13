@@ -154,7 +154,7 @@ const profileCardStyle = computed(() => ({
 const appMenuItems = computed(() => [
   {
     key: 'provisioning',
-    label: '인사관리',
+    label: '사용자관리',
     kind: 'route',
     to: { name: 'user-provisioning' },
     creatorOnly: true,
