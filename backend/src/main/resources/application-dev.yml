@@ -105,3 +105,7 @@ management:
     tracing:
       endpoint: ${JAEGER_URL}
       transport: http
+  management:
+    opentelemetry:
+      resource-attributes:
+        env: "test"
