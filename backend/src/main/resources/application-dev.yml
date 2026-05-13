@@ -1,4 +1,3 @@
-server:
   port: 8080
   error:
     whitelabel:
@@ -39,7 +38,7 @@ admin:
   password: ${ADMIN_PASSWORD}
 spring:
   application:
-    name: callog
+    name: callog-dev
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
     url: ${DB_URL}
@@ -105,7 +104,3 @@ management:
     tracing:
       endpoint: ${JAEGER_URL}
       transport: http
-  management:
-    opentelemetry:
-      resource-attributes:
-        env: "test"
