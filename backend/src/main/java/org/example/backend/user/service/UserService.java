@@ -25,6 +25,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 @RequiredArgsConstructor
 @Service
@@ -36,6 +37,16 @@ public class UserService implements UserDetailsService {
     private static final String PASSWORD_CHARACTERS =
             "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$";
     private static final int TEMPORARY_PASSWORD_LENGTH = 10;
+    private static final Pattern EMAIL_PATTERN = Pattern.compile(
+            "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern ORGANIZATION_TEXT_PATTERN =
+            Pattern.compile("^[\\p{L}\\p{N}\\s().,&+\\-_/·]+$");
+    private static final Pattern PERSON_NAME_PATTERN =
+            Pattern.compile("^[\\p{L}\\s.\\-·]+$");
+    private static final Pattern PHONE_PATTERN =
+            Pattern.compile("^01[016789]\\d{7,8}$");
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -52,8 +63,8 @@ public class UserService implements UserDetailsService {
 
         String creatorRole = resolveCreatorRole(authentication);
         String targetRole = resolveCreatableRole(dto.role(), creatorRole);
-        String name = requireText(dto.name(), "name");
-        String email = normalizeOptional(dto.email());
+        String name = requirePersonName(dto.name());
+        String email = normalizeOptionalEmail(dto.email());
 
         String companyName;
         String department;
@@ -61,24 +72,24 @@ public class UserService implements UserDetailsService {
 
         if (GENERAL_MANAGER_ROLE.equals(creatorRole) || MANAGER_ROLE.equals(creatorRole)) {
             User creator = resolveAuthenticatedUser(authentication);
-            companyName = creator.getCompanyName() != null
-                    ? creator.getCompanyName()
-                    : requireText(dto.companyName(), "companyName");
-            department = MANAGER_ROLE.equals(creatorRole) && creator.getDepartment() != null
-                    ? creator.getDepartment()
-                    : requireText(dto.department(), "department");
+            companyName = normalizeOptional(creator.getCompanyName()) != null
+                    ? normalizeOptional(creator.getCompanyName())
+                    : requireCompanyName(dto.companyName());
+            department = MANAGER_ROLE.equals(creatorRole) && normalizeOptional(creator.getDepartment()) != null
+                    ? normalizeOptional(creator.getDepartment())
+                    : requireDepartment(dto.department());
             userOrganization = creator.getOrganization();
             if (userOrganization == null) {
                 userOrganization = organizationService.ensureAffiliateOrganization(companyName);
             }
         } else {
-            companyName = requireText(dto.companyName(), "companyName");
-            department = requireText(dto.department(), "department");
+            companyName = requireCompanyName(dto.companyName());
+            department = requireDepartment(dto.department());
             userOrganization = organizationService.ensureAffiliateOrganization(companyName);
         }
 
         if (GENERAL_MANAGER_ROLE.equals(targetRole) && userOrganization != null
-                && userOrganization.getGeneralManager() != null) {
+                && isActiveUser(userOrganization.getGeneralManager())) {
             throw new IllegalArgumentException("이미 해당 조직에 General Manager가 존재합니다.");
         }
 
@@ -118,10 +129,11 @@ public class UserService implements UserDetailsService {
             throw new IllegalArgumentException("request body is required.");
         }
 
-        String companyName = requireText(dto.companyName(), "companyName");
-        String department = requireText(dto.department(), "department");
-        String name = requireText(dto.name(), "name");
-        String email = requireText(dto.email(), "email");
+        String companyName = requireCompanyName(dto.companyName());
+        String department = requireDepartment(dto.department());
+        String name = requirePersonName(dto.name());
+        String email = requireEmail(dto.email());
+        validateOptionalPhone(dto.phone());
 
         if (userRepository.existsByEmail(email)) {
             throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_EMAIL);
@@ -278,6 +290,13 @@ public class UserService implements UserDetailsService {
 
         target.setEnable(false);
         target.setAccountStatus(UserAccountStatus.INACTIVE);
+        Organization organization = target.getOrganization();
+        if (organization != null
+                && organization.getGeneralManager() != null
+                && target.getIdx() != null
+                && target.getIdx().equals(organization.getGeneralManager().getIdx())) {
+            organization.setGeneralManager(null);
+        }
         refreshTokenRepository.deleteByUserId(target.getId());
 
         return UserDto.DeleteUserRes.from(target);
@@ -549,6 +568,89 @@ public class UserService implements UserDetailsService {
             throw new IllegalArgumentException(fieldName + " is required.");
         }
         return normalized;
+    }
+
+    private String requireCompanyName(String value) {
+        return requireStructuredText(value, "회사명", 2, 60, ORGANIZATION_TEXT_PATTERN, true);
+    }
+
+    private String requireDepartment(String value) {
+        return requireStructuredText(value, "부서명", 2, 40, ORGANIZATION_TEXT_PATTERN, true);
+    }
+
+    private String requirePersonName(String value) {
+        String name = requireStructuredText(value, "이름", 2, 30, PERSON_NAME_PATTERN, false);
+        if (!name.chars().anyMatch(Character::isLetter)) {
+            throw new IllegalArgumentException("이름에는 한글 또는 영문을 포함해 주세요.");
+        }
+        return name;
+    }
+
+    private String requireStructuredText(
+            String value,
+            String fieldName,
+            int minLength,
+            int maxLength,
+            Pattern allowedPattern,
+            boolean allowDigitOnly
+    ) {
+        String normalized = requireText(value, fieldName);
+        if (normalized.length() < minLength || normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "은(는) " + minLength + "자 이상 " + maxLength + "자 이하로 입력해 주세요.");
+        }
+
+        boolean hasLetter = normalized.chars().anyMatch(Character::isLetter);
+        boolean hasDigit = normalized.chars().anyMatch(Character::isDigit);
+        if (!hasLetter && (!allowDigitOnly || !hasDigit)) {
+            throw new IllegalArgumentException(fieldName + "에는 한글, 영문 또는 숫자를 포함해 주세요.");
+        }
+
+        if (!allowedPattern.matcher(normalized).matches()) {
+            throw new IllegalArgumentException(fieldName + "에 사용할 수 없는 문자가 포함되어 있습니다.");
+        }
+
+        return normalized;
+    }
+
+    private String requireEmail(String value) {
+        String email = requireText(value, "이메일").toLowerCase(Locale.ROOT);
+        validateEmail(email);
+        return email;
+    }
+
+    private String normalizeOptionalEmail(String value) {
+        String email = normalizeOptional(value);
+        if (email == null) {
+            return null;
+        }
+
+        email = email.toLowerCase(Locale.ROOT);
+        validateEmail(email);
+        return email;
+    }
+
+    private void validateEmail(String email) {
+        if (email.length() > 254 || !EMAIL_PATTERN.matcher(email).matches()) {
+            throw new IllegalArgumentException("올바른 이메일 형식으로 입력해 주세요.");
+        }
+    }
+
+    private void validateOptionalPhone(String value) {
+        String phone = normalizeOptional(value);
+        if (phone == null) {
+            return;
+        }
+
+        String digits = phone.replaceAll("[\\s-]", "");
+        if (!PHONE_PATTERN.matcher(digits).matches()) {
+            throw new IllegalArgumentException("연락처는 010-1234-5678 형식의 휴대폰 번호로 입력해 주세요.");
+        }
+    }
+
+    private boolean isActiveUser(User user) {
+        return user != null
+                && Boolean.TRUE.equals(user.getEnable())
+                && UserAccountStatus.ACTIVE.equals(user.getAccountStatus());
     }
 
     private String normalizeOptional(String value) {

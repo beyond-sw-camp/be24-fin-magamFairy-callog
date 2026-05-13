@@ -79,9 +79,8 @@ custom:
     webhook-url: ${N8N_URL}
     evaluation-endpoint: ${EVALUATION_ENDPOINT}
     check-endpoint: ${CHECK_ENDPOINT}
-    ad-check-url: ${N8N_AD_CHECK_URL}
   ocr:
-    url: ${OCR_SERVICE_URL:http://localhost:8000/ocr}
+    url: ${OCR_SERVICE_URL}
 
 management:
   endpoints:

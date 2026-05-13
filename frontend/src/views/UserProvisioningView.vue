@@ -26,6 +26,9 @@ const status = reactive({
   listError: '',
   actionError: '',
 })
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const organizationTextPattern = /^[\p{L}\p{N}\s().,&+\-_/·]+$/u
+const personNamePattern = /^[\p{L}\s.\-·]+$/u
 
 const resultModal = reactive({
   open: false,
@@ -212,6 +215,47 @@ function resolveErrorMessage(error, fallback) {
   return error?.response?.data?.message ?? error?.message ?? fallback
 }
 
+function validateStructuredText(value, label, min, max, pattern, allowDigitOnly = true) {
+  const normalized = value.trim()
+  if (!normalized) {
+    return `${label}을(를) 입력해 주세요.`
+  }
+
+  if (normalized.length < min || normalized.length > max) {
+    return `${label}은(는) ${min}자 이상 ${max}자 이하로 입력해 주세요.`
+  }
+
+  const hasLetter = /\p{L}/u.test(normalized)
+  const hasDigit = /\p{N}/u.test(normalized)
+  if (!hasLetter && (!allowDigitOnly || !hasDigit)) {
+    return `${label}에는 한글, 영문${allowDigitOnly ? ' 또는 숫자' : ''}를 포함해 주세요.`
+  }
+
+  if (!pattern.test(normalized)) {
+    return `${label}에 사용할 수 없는 문자가 포함되어 있습니다.`
+  }
+
+  return ''
+}
+
+function validateCreateForm() {
+  const companyError = validateStructuredText(createForm.companyName, '회사명', 2, 60, organizationTextPattern)
+  if (companyError) return companyError
+
+  const departmentError = validateStructuredText(createForm.department, '부서명', 2, 40, organizationTextPattern)
+  if (departmentError) return departmentError
+
+  const nameError = validateStructuredText(createForm.name, '이름', 2, 30, personNamePattern, false)
+  if (nameError) return nameError
+
+  const email = createForm.email.trim()
+  if (email && (!emailPattern.test(email) || email.length > 254)) {
+    return '올바른 이메일 형식으로 입력해 주세요.'
+  }
+
+  return ''
+}
+
 function normalizeMemberRole(role) {
   if (!role) return ''
   return role.startsWith('ROLE_') ? role : `ROLE_${role}`
@@ -287,8 +331,9 @@ async function handleCreateUser() {
   ensureAllowedRole()
 
   if (status.createLoading) return
-  if (!createForm.companyName.trim() || !createForm.department.trim() || !createForm.name.trim()) {
-    status.createError = '회사명, 부서명, 이름을 입력해 주세요.'
+
+  status.createError = validateCreateForm()
+  if (status.createError) {
     return
   }
 
@@ -609,25 +654,25 @@ async function copyResult() {
               <div v-if="authStore.isGeneralManager || authStore.isManager" class="hr-fixed">
                 {{ createForm.companyName || '-' }}
               </div>
-              <input v-else v-model.trim="createForm.companyName" type="text" placeholder="예: CALLOG" />
+              <input v-else v-model.trim="createForm.companyName" type="text" maxlength="60" required placeholder="예: CALLOG" />
             </label>
 
             <label class="hr-field">
               <span>부서명</span>
               <div v-if="authStore.isManager" class="hr-fixed">{{ createForm.department || '-' }}</div>
-              <input v-else v-model.trim="createForm.department" type="text" placeholder="예: 마케팅팀" />
+              <input v-else v-model.trim="createForm.department" type="text" maxlength="40" required placeholder="예: 마케팅팀" />
             </label>
           </div>
 
           <div class="hr-grid">
             <label class="hr-field">
               <span>이름</span>
-              <input v-model.trim="createForm.name" type="text" placeholder="예: 홍길동" />
+              <input v-model.trim="createForm.name" type="text" maxlength="30" required placeholder="예: 홍길동" />
             </label>
 
             <label class="hr-field">
               <span>이메일</span>
-              <input v-model.trim="createForm.email" type="email" placeholder="user@company.com" />
+              <input v-model.trim="createForm.email" type="email" maxlength="254" placeholder="user@company.com" />
             </label>
           </div>
 
