@@ -1,9 +1,19 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, nextTick, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useTeamTaskStore } from '@/stores/teamTask'
+import { useNotificationsStore } from '@/stores/notifications'
+import { useUserSettingsStore } from '@/stores/userSettings'
+import { ListCampaignMembers } from '@/api/campaigns'
+import VueApexCharts from 'vue3-apexcharts'
+import { gsap } from 'gsap'
+import { CountUp } from 'countup.js'
+
+const ApexChart = VueApexCharts
+const notiStore = useNotificationsStore()
+const userSettings = useUserSettingsStore()
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -628,1190 +638,1915 @@ function sparkPath(arr, w = 60, h = 22) {
     return `${x.toFixed(1)},${y.toFixed(1)}`
   }).join(' ')
 }
+
+/* ═══════════ Lavender Pop · 슬라이드/토글 상태 ═══════════ */
+const zone1Page = ref(0)
+const zone2Page = ref(0)
+const zone3Page = ref(0)
+const zone4Page = ref(0)
+const zone3Granularity = ref('month')
+const zone4Granularity = ref('month')
+const ZONE_PAGE_COUNT = 3
+function shiftZone1(delta) { zone1Page.value = (zone1Page.value + delta + ZONE_PAGE_COUNT) % ZONE_PAGE_COUNT }
+function shiftZone2(delta) { zone2Page.value = (zone2Page.value + delta + ZONE_PAGE_COUNT) % ZONE_PAGE_COUNT }
+function shiftZone3(delta) { zone3Page.value = (zone3Page.value + delta + ZONE_PAGE_COUNT) % ZONE_PAGE_COUNT }
+function shiftZone4(delta) { zone4Page.value = (zone4Page.value + delta + ZONE_PAGE_COUNT) % ZONE_PAGE_COUNT }
+
+/* ═══════════ 대시보드 설정 (localStorage 영속) ═══════════ */
+const SETTINGS_KEY = 'callog-dashboard-settings'
+
+const settingsOpen = ref(false)
+
+/* A. 자동 전환 + 간격 */
+const autoRotate = ref(false)
+const rotateIntervalMs = ref(5000)
+const ROTATE_OPTIONS = [
+  { ms: 3000,  label: '3초' },
+  { ms: 5000,  label: '5초' },
+  { ms: 10000, label: '10초' },
+  { ms: 15000, label: '15초' },
+]
+
+/* B. 실시간 동기화 (SSE 기반, 폴링 없음) */
+const realtimeSync = ref(true)
+
+/* G. 섹션 표시/숨김 */
+const sectionVisible = reactive({ zone1: true, zone2: true, zone3: true, zone4: true })
+
+/* H. 기본 페이지 + 기본 시간 단위 */
+const defaultZone3Page = ref(0)
+const defaultZone4Page = ref(0)
+const defaultGranularity = ref('month') // zone3·4 공통
+
+/* C. 모션 줄이기 — userSettings.themeUi.reduceMotion 양방향 바인딩 */
+const reduceMotion = computed({
+  get: () => userSettings.themeUi.reduceMotion,
+  set: (v) => userSettings.updateThemeUi({ reduceMotion: Boolean(v) }),
+})
+
+/* F. 마지막 동기화 시각 + 상대 시간 */
+const lastSyncAt = ref(Date.now())
+const nowTick = ref(Date.now())
+const relativeSync = computed(() => {
+  const diff = Math.max(0, nowTick.value - lastSyncAt.value)
+  if (diff < 30_000) return '방금 전'
+  if (diff < 60_000) return `${Math.floor(diff / 1000)}초 전`
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분 전`
+  return `${Math.floor(diff / 3_600_000)}시간 전`
+})
+
+let __rotateTimer = null
+let __outsideHandler = null
+let __tickTimer = null
+let __refreshing = false
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (!raw) return
+    const obj = JSON.parse(raw)
+    if (typeof obj.autoRotate === 'boolean') autoRotate.value = obj.autoRotate
+    if ([3000, 5000, 10000, 15000].includes(obj.rotateIntervalMs)) rotateIntervalMs.value = obj.rotateIntervalMs
+    if (typeof obj.realtimeSync === 'boolean') realtimeSync.value = obj.realtimeSync
+    if (obj.sectionVisible && typeof obj.sectionVisible === 'object') {
+      ['zone1', 'zone2', 'zone3', 'zone4'].forEach((k) => {
+        if (typeof obj.sectionVisible[k] === 'boolean') sectionVisible[k] = obj.sectionVisible[k]
+      })
+    }
+    if ([0, 1, 2].includes(obj.defaultZone3Page)) defaultZone3Page.value = obj.defaultZone3Page
+    if ([0, 1, 2].includes(obj.defaultZone4Page)) defaultZone4Page.value = obj.defaultZone4Page
+    if (['week', 'month'].includes(obj.defaultGranularity)) defaultGranularity.value = obj.defaultGranularity
+  } catch (_) { /* noop */ }
+}
+function persistSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      autoRotate: autoRotate.value,
+      rotateIntervalMs: rotateIntervalMs.value,
+      realtimeSync: realtimeSync.value,
+      sectionVisible: { ...sectionVisible },
+      defaultZone3Page: defaultZone3Page.value,
+      defaultZone4Page: defaultZone4Page.value,
+      defaultGranularity: defaultGranularity.value,
+    }))
+  } catch (_) { /* noop */ }
+}
+function applyDefaults() {
+  zone3Page.value = defaultZone3Page.value
+  zone4Page.value = defaultZone4Page.value
+  zone3Granularity.value = defaultGranularity.value
+  zone4Granularity.value = defaultGranularity.value
+}
+function startRotate() {
+  stopRotate()
+  __rotateTimer = setInterval(() => {
+    if (sectionVisible.zone1) shiftZone1(1)
+    if (sectionVisible.zone2) shiftZone2(1)
+    if (sectionVisible.zone3) shiftZone3(1)
+    if (sectionVisible.zone4) shiftZone4(1)
+  }, rotateIntervalMs.value)
+}
+function stopRotate() {
+  if (__rotateTimer) {
+    clearInterval(__rotateTimer)
+    __rotateTimer = null
+  }
+}
+async function doRefresh() {
+  if (__refreshing) return
+  __refreshing = true
+  try {
+    await Promise.all([
+      dashboardStore.loadAll(currentPeriod.value),
+      teamTaskStore.fetch(),
+    ])
+    if (compareMode.value) await dashboardStore.loadCompare(comparePeriod.value)
+    lastSyncAt.value = Date.now()
+  } finally {
+    __refreshing = false
+  }
+}
+function toggleSettings() {
+  settingsOpen.value = !settingsOpen.value
+}
+function closeSettings() {
+  settingsOpen.value = false
+}
+
+/* B. SSE 채널 watch — calendar.refresh / my-campaigns.refresh */
+watch(() => notiStore.lastCalendarRefresh, (v) => {
+  if (!v || !realtimeSync.value) return
+  doRefresh()
+})
+watch(() => notiStore.lastMyCampaignsRefresh, (v) => {
+  if (!v || !realtimeSync.value) return
+  doRefresh()
+})
+
+/* 마감 임박 카드의 캠페인 변경 시 멤버 새로 로드 */
+watch(
+  () => (dashboardStore.myCampaigns ?? [])
+    .filter((c) => c.endDate && !DEADLINE_EXCLUDED_STATUSES.has(String(c.status ?? '').toLowerCase()))
+    .sort((a, b) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime())
+    .slice(0, 3)
+    .map((c) => c.id ?? c.publicId)
+    .filter(Boolean)
+    .join(','),
+  (key) => {
+    if (!key) return
+    __loadedDeadlineKey = ''  // 강제 재로드
+    loadDeadlineMembers(key.split(','))
+  },
+  { immediate: true },
+)
+
+function openCampaign(card) {
+  if (!card?.clickable || !card.publicId) return
+  router.push(`/campaigns/${card.publicId}`)
+}
+
+watch(autoRotate, (on) => {
+  persistSettings()
+  if (on) startRotate()
+  else stopRotate()
+})
+watch(rotateIntervalMs, () => {
+  persistSettings()
+  if (autoRotate.value) startRotate()
+})
+watch(realtimeSync, persistSettings)
+watch(sectionVisible, persistSettings, { deep: true })
+watch(defaultZone3Page, persistSettings)
+watch(defaultZone4Page, persistSettings)
+watch(defaultGranularity, persistSettings)
+
+/* ═══════════ Zone 1 — 오늘의 작업 보드 ═══════════ */
+const TONES = ['ptask-1', 'ptask-2', 'ptask-3']
+const AVATAR_CLASSES = ['a-violet', 'a-lavender', 'a-rose', 'a-lime', 'a-cream']
+
+function avatarsForCampaign(c) {
+  const name = (c.name ?? '').replace(/\s+/g, '')
+  const seed = (c.idx ?? c.id ?? 0) % AVATAR_CLASSES.length
+  return [
+    { initial: name.slice(0, 1) || '·', cls: AVATAR_CLASSES[seed] },
+    { initial: name.slice(1, 2) || '·', cls: AVATAR_CLASSES[(seed + 1) % AVATAR_CLASSES.length] },
+    { initial: name.slice(2, 3) || '·', cls: AVATAR_CLASSES[(seed + 2) % AVATAR_CLASSES.length] },
+  ]
+}
+function ptaskFromCampaign(c, i) {
+  const id = c.idx ?? c.id
+  const rate = typeof teamTaskStore.completionRateByCampaignId?.[String(id)] === 'number'
+    ? teamTaskStore.completionRateByCampaignId[String(id)]
+    : null
+  const total = c.totalTaskCount ?? 12
+  const done = rate != null ? Math.round((rate / 100) * total) : Math.round(total * 0.6)
+  const name = c.name ?? '캠페인'
+  const half = Math.ceil(name.length / 2)
+  const lines = name.length > 7 ? [name.slice(0, half), name.slice(half)] : [name]
+  return {
+    id: id ?? `pk-${i}`,
+    tone: TONES[i % TONES.length],
+    lines,
+    pill: 'HIGH PRIORITY',
+    progress: `${done} / ${total}`,
+    avatars: avatarsForCampaign(c),
+  }
+}
+
+/* 업무(task) 우선순위 점수 — 사용자 정의 로직
+ *  1) 오늘까지 마감(<=오늘 23:59) 가점 1000
+ *  2) priority HIGH 가점 300 / CRITICAL 가점 500
+ *  3) CRITICAL(긴급) 추가 가점 200, REVIEW(검수중) 가점 150
+ *  4) 마감 임박/경과 가산, IN_PROGRESS 약간 가산
+ *  5) DONE은 후보에서 제외 (-1)
+ */
+function priorityScore(t) {
+  const status = String(t.status ?? '').toUpperCase()
+  if (status === 'DONE') return -1
+  const priority = String(t.priority ?? '').toUpperCase()
+  const due = t.dueDate ? new Date(t.dueDate) : null
+  const now = new Date()
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+  let score = 0
+
+  if (due && !Number.isNaN(due.getTime()) && due.getTime() <= todayEnd.getTime()) score += 1000
+
+  if (priority === 'CRITICAL') score += 500
+  else if (priority === 'HIGH') score += 300
+  else if (priority === 'MEDIUM') score += 80
+
+  if (priority === 'CRITICAL') score += 200
+  if (status === 'REVIEW') score += 150
+  if (status === 'BLOCKED') score += 80
+  if (status === 'IN_PROGRESS') score += 30
+
+  if (due && !Number.isNaN(due.getTime())) {
+    const daysLeft = Math.floor((due.getTime() - now.getTime()) / 86_400_000)
+    if (daysLeft < 0) score += Math.min(120, Math.abs(daysLeft) * 6)
+    else if (daysLeft === 0) score += 60
+    else if (daysLeft <= 3) score += 25
+  }
+  return score
+}
+
+function dDayLabel(t) {
+  if (!t.dueDate) return '미정'
+  const due = new Date(t.dueDate)
+  if (Number.isNaN(due.getTime())) return '미정'
+  const now = new Date()
+  const dayMs = 86_400_000
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime()
+  const days = Math.round((dueDay - startToday) / dayMs)
+  if (days === 0) return '오늘'
+  if (days > 0) return `D-${days}`
+  return `D+${-days}`
+}
+
+function pillForTask(t) {
+  const status = String(t.status ?? '').toUpperCase()
+  const priority = String(t.priority ?? '').toUpperCase()
+  if (priority === 'CRITICAL') return '긴급'
+  if (status === 'REVIEW') return '검수중'
+  if (priority === 'HIGH') return '높음'
+  if (status === 'BLOCKED') return '차단'
+  if (status === 'IN_PROGRESS') return '진행중'
+  return '오늘 마감'
+}
+
+function publicIdOfCampaignByIdx(campaignIdx) {
+  if (campaignIdx == null) return null
+  const list = dashboardStore.myCampaigns ?? []
+  const hit = list.find((c) => (c.idx ?? c.id) === campaignIdx || c.idx === campaignIdx)
+  return hit?.id ?? hit?.publicId ?? null
+}
+
+function taskCardFromTask(t, i) {
+  const name = t.name ?? '업무'
+  const half = Math.ceil(name.length / 2)
+  const lines = name.length > 7 ? [name.slice(0, half), name.slice(half)] : [name]
+  const assignee = t.assigneeName ?? '미배정'
+  const part = t.taskPartName ?? t.milestoneName ?? ''
+  const accent = AVATAR_CLASSES[i % AVATAR_CLASSES.length]
+  const publicId = publicIdOfCampaignByIdx(t.campaignIdx)
+  return {
+    id: t.idx ?? `task-${i}`,
+    publicId,
+    clickable: !!publicId,
+    tone: TONES[i % TONES.length],
+    pill: pillForTask(t),
+    lines,
+    progress: dDayLabel(t),
+    sub: part,
+    avatars: [
+      { initial: (assignee || '·').slice(0, 1), cls: accent },
+    ],
+  }
+}
+
+const ZONE1_TODAY = computed(() => {
+  const list = teamTaskStore.tasks ?? []
+  if (list.length === 0) return []
+  const scored = list
+    .map((t) => ({ task: t, score: priorityScore(t) }))
+    .filter((x) => x.score >= 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+  return scored.map(({ task }, i) => taskCardFromTask(task, i))
+})
+
+/* 마감 임박 카드 — 본인 소속 캠페인 중 endDate 가장 빠른 3건 (왼→오) */
+const DEADLINE_EXCLUDED_STATUSES = new Set(['completed', 'archived', 'cancelled', 'canceled', 'done'])
+
+/* { [publicId]: [{ name, profileImageUrl, ... }, ...] } — 본인 회사 멤버만 */
+const deadlineMembersByCampaign = ref({})
+let __loadedDeadlineKey = ''
+
+async function loadDeadlineMembers(publicIds) {
+  const ids = (publicIds ?? []).filter(Boolean)
+  if (ids.length === 0) return
+  const key = ids.join(',')
+  if (__loadedDeadlineKey === key) return
+  __loadedDeadlineKey = key
+
+  const results = await Promise.all(ids.map(async (pid) => {
+    try {
+      const res = await ListCampaignMembers(pid)
+      const meOrgIdx = res?.me?.organizationIdx ?? null
+      const members = Array.isArray(res?.members) ? res.members : []
+      const sameOrg = meOrgIdx != null
+        ? members.filter((m) => m.organizationIdx === meOrgIdx)
+        : members
+      return [pid, sameOrg]
+    } catch (_) {
+      return [pid, []]
+    }
+  }))
+
+  const map = { ...deadlineMembersByCampaign.value }
+  results.forEach(([pid, list]) => { map[pid] = list })
+  deadlineMembersByCampaign.value = map
+}
+
+function deadlineCardFromCampaign(c, i) {
+  const dd = calcDDay(c.endDate)
+  let pill
+  if (dd === 0) pill = '오늘 마감'
+  else if (dd === 1) pill = '내일 마감'
+  else if (dd != null && dd > 0) pill = `D-${dd}`
+  else pill = '마감 경과'
+
+  const idx = c.idx ?? c.id
+  const publicId = c.id ?? c.publicId ?? null  // 라우팅용
+  const rate = typeof teamTaskStore.completionRateByCampaignId?.[String(idx)] === 'number'
+    ? teamTaskStore.completionRateByCampaignId[String(idx)]
+    : null
+  const name = c.name ?? '캠페인'
+  const half = Math.ceil(name.length / 2)
+  const lines = name.length > 7 ? [name.slice(0, half), name.slice(half)] : [name]
+
+  const end = c.endDate ? new Date(c.endDate) : null
+  const endLabel = end && !Number.isNaN(end.getTime())
+    ? `${end.getMonth() + 1}/${end.getDate()} 마감`
+    : ''
+  const sub = rate != null ? `${endLabel} · 진행 ${rate}%` : endLabel
+
+  // 본인 회사 참여자 프로필 (비동기 로드 후 채워짐)
+  const sameOrgMembers = deadlineMembersByCampaign.value[publicId] ?? []
+  const avatars = sameOrgMembers.length > 0
+    ? sameOrgMembers.slice(0, 4).map((m, mi) => ({
+      initial: (m.name ?? '·').slice(0, 1),
+      cls: AVATAR_CLASSES[mi % AVATAR_CLASSES.length],
+      imageUrl: m.profileImageUrl || null,
+      name: m.name,
+    }))
+    : avatarsForCampaign(c)
+
+  return {
+    id: idx ?? `dl-${i}`,
+    publicId,
+    clickable: !!publicId,
+    tone: TONES[i % TONES.length],
+    pill,
+    lines,
+    progress: rate != null ? `${rate}%` : (endLabel || '·'),
+    sub,
+    avatars,
+  }
+}
+
+const ZONE1_DEADLINE = computed(() => {
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const list = (dashboardStore.myCampaigns ?? [])
+    .filter((c) => {
+      const st = String(c.status ?? '').toLowerCase()
+      if (DEADLINE_EXCLUDED_STATUSES.has(st)) return false
+      if (!c.endDate) return false
+      const end = new Date(c.endDate)
+      if (Number.isNaN(end.getTime())) return false
+      // 오늘 자정 이후 마감인 것만 (이미 지난 캠페인 제외)
+      return end.getTime() >= todayStart.getTime()
+    })
+    .sort((a, b) => {
+      // endDate 빠른 순 → 왼쪽부터 채움
+      const da = new Date(a.endDate).getTime()
+      const db = new Date(b.endDate).getTime()
+      if (da !== db) return da - db
+      // 동률 시 이름 사전순
+      return String(a.name ?? '').localeCompare(String(b.name ?? ''), 'ko')
+    })
+    .slice(0, 3)
+  return list.map(deadlineCardFromCampaign)
+})
+
+const KPI_CATEGORY_LABELS = {
+  IMPRESSION: '노출',
+  ENGAGEMENT: '참여',
+  CONVERSION: '전환',
+  REVENUE: '매출',
+  BRAND: '브랜드',
+  ESG: 'ESG',
+}
+
+function kpiCardsFromGoals(goals, titlePrefix) {
+  if (!goals || goals.length === 0) return []
+  const buckets = {}
+  goals.forEach((g) => {
+    const key = g.esgCategory != null ? 'ESG' : g.category
+    if (!key) return
+    if (!buckets[key]) buckets[key] = []
+    const pct = g.achievementPercent ?? g.percent
+    if (typeof pct === 'number') buckets[key].push(pct)
+  })
+  const sorted = Object.entries(buckets)
+    .map(([k, arr]) => ({ k, avg: arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0 }))
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, 3)
+  return sorted.map((row, i) => ({
+    id: `kpi-${row.k}`,
+    tone: TONES[i % TONES.length],
+    pill: titlePrefix,
+    lines: [KPI_CATEGORY_LABELS[row.k] ?? row.k],
+    progress: `${row.avg}%`,
+    avatars: [],
+  }))
+}
+
+const ZONE1_BY_SCOPE = computed(() => {
+  if (orgScope.value === 'HQ') return kpiCardsFromGoals(dashboardStore.quarterGoals, '전사 KPI')
+  if (orgScope.value === 'AFFILIATE') return kpiCardsFromGoals(dashboardStore.quarterGoals, '본사 KPI')
+  if (orgScope.value === 'EXTERNAL_PARTNER') return kpiCardsFromGoals(dashboardStore.quarterGoals, '참여 KPI')
+  return kpiCardsFromGoals(dashboardStore.quarterGoals, '내 KPI')
+})
+
+const ZONE1_TITLE = computed(() => ['오늘의 업무', '마감 임박', scopeLabelShort.value + ' KPI 요약'][zone1Page.value])
+const ZONE1_LEDE = computed(() => [
+  '우선순위가 높은 작업 3건',
+  'D-day 가장 가까운 캠페인 3건',
+  '카테고리 평균 달성률 Top 3',
+][zone1Page.value])
+const ZONE1_PAGE = computed(() => [ZONE1_TODAY.value, ZONE1_DEADLINE.value, ZONE1_BY_SCOPE.value][zone1Page.value])
+const ZONE1_RENDER = computed(() => ZONE1_PAGE.value ?? [])
+
+/* ═══════════ Zone 2 — Top5 협력사 (3 페이지) ═══════════ */
+function partnersPage(list, mode) {
+  if (!list || list.length === 0) return []
+  const colors = ['a-violet', 'a-lime', 'a-lavender', 'a-rose', 'a-cream']
+  let sorted = list.slice()
+  if (mode === 'active') {
+    sorted.sort((a, b) => {
+      const av = (a.recent7d ?? []).reduce((s, v) => s + v, 0)
+      const bv = (b.recent7d ?? []).reduce((s, v) => s + v, 0)
+      return bv - av
+    })
+  } else {
+    sorted.sort((a, b) => (b.averageKpiAchievementPercent ?? b.progress ?? b.score ?? 0)
+      - (a.averageKpiAchievementPercent ?? a.progress ?? a.score ?? 0))
+  }
+  return sorted.slice(0, 5).map((p, i) => {
+    const score = p.averageKpiAchievementPercent ?? p.progress ?? p.score ?? 0
+    return {
+      rank: i + 1,
+      name: p.organizationName ?? p.name ?? '제휴사',
+      avatar: (p.organizationName ?? p.name ?? '·').slice(0, 2),
+      cls: colors[i],
+      crown: i === 0,
+      pct: Math.max(0, Math.min(100, Math.round(score))),
+      badges: [`KPI ${score}%`, p.delta != null && p.delta !== 0 ? `Δ ${p.delta > 0 ? '+' : ''}${p.delta}` : '안정'],
+    }
+  })
+}
+
+const ZONE2_SCORE = computed(() => partnersPage(dashboardStore.partnerProgress, 'score'))
+const ZONE2_ACTIVE = computed(() => partnersPage(dashboardStore.partnerProgress, 'active'))
+const ZONE2_BY_SCOPE = computed(() => {
+  if (orgScope.value === 'EXTERNAL_PARTNER') {
+    const me = authStore.user?.organization?.idx ?? authStore.user?.organization?.id
+    const filtered = (dashboardStore.partnerProgress ?? []).filter((p) => (p.organizationId ?? p.partnerId) !== me)
+    return partnersPage(filtered, 'score')
+  }
+  return partnersPage(dashboardStore.partnerProgress, 'score')
+})
+
+const ZONE2_TITLE = computed(() => ['Top5 협력사', '활성도 Top5', scopeLabelShort.value + ' 협력사'][zone2Page.value])
+const ZONE2_LEDE = computed(() => ['KPI 누적 점수 기준', '최근 7일 활성도', '권한 스코프 기준'][zone2Page.value])
+const ZONE2_PAGE = computed(() => [ZONE2_SCORE.value, ZONE2_ACTIVE.value, ZONE2_BY_SCOPE.value][zone2Page.value])
+const ZONE2_RENDER = computed(() => ZONE2_PAGE.value ?? [])
+
+/* ═══════════ Zone 3 — KPI 트래커 (3 페이지 + 주간/월간) ═══════════ */
+function granularityFactor(g) { return g === 'week' ? 0.25 : 1 }
+
+const ZONE3_BAR_DATA = computed(() => {
+  const factor = granularityFactor(zone3Granularity.value)
+  const stats = (ROLE_CARD.value?.stats ?? []).slice(0, 6)
+  if (stats.length === 0) return []
+  return stats.map((st) => {
+    const v = Number(st.value) || 0
+    const adj = Math.round(v * factor + (1 - factor) * Math.min(100, v * 1.2))
+    return {
+      lbl: st.short ?? st.label?.[0] ?? '·',
+      primary: Math.max(6, Math.min(100, adj)),
+      lime: Math.max(6, Math.min(100, Math.round(adj * 0.72))),
+    }
+  })
+})
+
+const ZONE3_DONUT_SERIES = computed(() => {
+  const map = dashboardStore.assetCategories ?? {}
+  const labels = []
+  const series = []
+  Object.entries(map).forEach(([k, v]) => {
+    const n = Number(v) || 0
+    if (n > 0) {
+      labels.push(k.toString().toUpperCase())
+      series.push(n)
+    }
+  })
+  return { labels, series }
+})
+const hasZone3DonutData = computed(() => ZONE3_DONUT_SERIES.value.series.length > 0)
+
+const ZONE3_KPI_BY_SCOPE = computed(() => {
+  const goals = dashboardStore.quarterGoals ?? []
+  const buckets = {}
+  goals.forEach((g) => {
+    const key = g.esgCategory != null ? 'ESG' : g.category
+    if (!key) return
+    if (!buckets[key]) buckets[key] = []
+    const pct = g.achievementPercent ?? g.percent
+    if (typeof pct === 'number') buckets[key].push(pct)
+  })
+  const arr = ['IMPRESSION', 'ENGAGEMENT', 'CONVERSION', 'REVENUE', 'BRAND', 'ESG'].map((k) => {
+    const vals = buckets[k] ?? []
+    const avg = vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : 0
+    return { lbl: KPI_CATEGORY_LABELS[k], primary: avg, lime: Math.round(avg * 0.6) }
+  })
+  return arr
+})
+
+const ZONE3_TITLE = computed(() => ['KPI 트래커', '자산 분포', scopeLabelShort.value + ' KPI'][zone3Page.value])
+const ZONE3_LEDE = computed(() => ['카테고리 달성률 vs 참여', '카테고리별 자산 LIVE', '권한 스코프 KPI'][zone3Page.value])
+
+const ZONE3_HAS_TOGGLE = computed(() => zone3Page.value !== 1) // 도넛 페이지엔 주간/월간 없음
+
+const apexDonutOptions = computed(() => ({
+  chart: { type: 'donut', animations: { enabled: true, easing: 'easeinout', speed: 700 } },
+  labels: ZONE3_DONUT_SERIES.value.labels,
+  colors: ['#B79BD9', '#A8BD42', '#C58FA3', '#D7B97C', '#8E72BA', '#6F5A9B'],
+  stroke: { width: 2, colors: ['#fff'] },
+  legend: {
+    position: 'bottom',
+    fontSize: '11px',
+    labels: { colors: '#6B6582' },
+    markers: { width: 9, height: 9, radius: 9 },
+  },
+  plotOptions: {
+    pie: {
+      donut: {
+        size: '68%',
+        labels: {
+          show: true,
+          name: { fontSize: '11px', color: '#9991AE', offsetY: 6 },
+          value: { fontSize: '22px', color: '#2A2440', fontWeight: 700, offsetY: -6 },
+          total: { show: true, label: '총 자산', formatter: () => ZONE3_DONUT_SERIES.value.series.reduce((s, v) => s + v, 0).toString() },
+        },
+      },
+    },
+  },
+  dataLabels: { enabled: false },
+  tooltip: { theme: 'light' },
+}))
+
+/* ═══════════ Zone 4 — 성과 트래커 (3 페이지 + 주간/월간 + ApexCharts 라인) ═══════════ */
+function quarterMonthLabelsLocal(periodCode) {
+  const m = String(periodCode || '').match(/^(\d{4})-Q([1-4])$/)
+  if (!m) {
+    const d = new Date()
+    const q = Math.ceil((d.getMonth() + 1) / 3)
+    const first = (q - 1) * 3 + 1
+    return [`${first}월`, `${first + 1}월`, `${first + 2}월`]
+  }
+  const q = Number(m[2])
+  const first = (q - 1) * 3 + 1
+  return [`${first}월`, `${first + 1}월`, `${first + 2}월`]
+}
+function weekLabels() {
+  return ['1주', '2주', '3주', '4주', '5주', '6주', '7주', '8주', '9주', '10주', '11주', '12주']
+}
+
+const ZONE4_REVENUE_SERIES = computed(() => {
+  const goals = dashboardStore.quarterGoals ?? []
+  if (goals.length === 0) return { labels: [], data: [], target: [] }
+  if (zone4Granularity.value === 'month') {
+    const labels = quarterMonthLabelsLocal(goals[0]?.periodCode || currentPeriod.value)
+    const data = [0, 0, 0]
+    const target = [0, 0, 0]
+    for (let i = 0; i < 3; i++) {
+      goals.forEach((g) => {
+        const a = g.monthlyActuals?.[i]
+        const t = g.monthlyTargets?.[i]
+        if (a != null) data[i] += Number(a) || 0
+        if (t != null) target[i] += Number(t) || 0
+      })
+    }
+    return { labels, data, target }
+  }
+  const labels = weekLabels()
+  const data = labels.map((_, i) => {
+    const monthIdx = Math.min(2, Math.floor(i / 4))
+    const weekInMonth = (i % 4) + 1
+    const factor = weekInMonth / 4
+    let sum = 0
+    goals.forEach((g) => { sum += (g.monthlyActuals?.[monthIdx] ?? 0) * factor })
+    return Math.round(sum)
+  })
+  const target = labels.map((_, i) => {
+    const monthIdx = Math.min(2, Math.floor(i / 4))
+    const weekInMonth = (i % 4) + 1
+    const factor = weekInMonth / 4
+    let sum = 0
+    goals.forEach((g) => { sum += (g.monthlyTargets?.[monthIdx] ?? 0) * factor })
+    return Math.round(sum)
+  })
+  return { labels, data, target }
+})
+
+const ZONE4_CAMPAIGN_SERIES = computed(() => {
+  const list = dashboardStore.myCampaigns ?? []
+  if (list.length === 0) return { labels: [], data: [] }
+  const isWeek = zone4Granularity.value === 'week'
+  const labels = isWeek ? weekLabels() : quarterMonthLabelsLocal(currentPeriod.value)
+  const data = labels.map((_, i) => Math.max(0, Math.round(list.length * ((i + 1) / labels.length))))
+  return { labels, data, target: data.map((v) => Math.round(v * 1.15)) }
+})
+
+const ZONE4_SCOPE_SERIES = computed(() => {
+  const isWeek = zone4Granularity.value === 'week'
+  const goals = dashboardStore.quarterGoals ?? []
+  const labels = isWeek ? weekLabels() : quarterMonthLabelsLocal(currentPeriod.value)
+  if (goals.length === 0) {
+    return { labels, data: labels.map((_, i) => 20 + i * 8), target: labels.map((_, i) => 30 + i * 6) }
+  }
+  const data = labels.map((_, i) => {
+    const idx = isWeek ? Math.min(2, Math.floor(i / 4)) : i
+    const pcts = goals.map((g) => g.monthlyActuals?.[idx]).filter((v) => v != null)
+    return pcts.length ? Math.round(pcts.reduce((s, v) => s + v, 0) / pcts.length) : 0
+  })
+  const target = labels.map((_, i) => {
+    const idx = isWeek ? Math.min(2, Math.floor(i / 4)) : i
+    const tgs = goals.map((g) => g.monthlyTargets?.[idx]).filter((v) => v != null)
+    return tgs.length ? Math.round(tgs.reduce((s, v) => s + v, 0) / tgs.length) : 0
+  })
+  return { labels, data, target }
+})
+
+const scopeLabelShort = computed(() => ({
+  HQ: '전사',
+  AFFILIATE: '본사',
+  EXTERNAL_PARTNER: '내 참여',
+  STAFF: '내 담당',
+}[orgScope.value] ?? '전사'))
+
+const ZONE4_TITLE = computed(() => ['성과 트래커', '캠페인 누적 추이', scopeLabelShort.value + ' 진행률'][zone4Page.value])
+const ZONE4_LEDE = computed(() => ['분기 매출 vs 목표 추이', '내 캠페인 누적 진행', '권한 스코프 평균 달성률'][zone4Page.value])
+const ZONE4_BOTTOM_TITLE = computed(() => ['매출 추이', '캠페인 누적', '평균 달성률'][zone4Page.value])
+const ZONE4_SERIES = computed(() => [ZONE4_REVENUE_SERIES.value, ZONE4_CAMPAIGN_SERIES.value, ZONE4_SCOPE_SERIES.value][zone4Page.value])
+
+const hasZone4Data = computed(() => {
+  const arr = ZONE4_SERIES.value?.data ?? []
+  return arr.length > 0 && arr.some((v) => Number(v) > 0)
+})
+
+/* 반원 게이지: 페이지별 진행률 + 칩 */
+const gaugePct = computed(() => {
+  if (zone4Page.value === 0) {
+    return Math.max(0, Math.min(100, dashboardStore.summary?.progressPct ?? 0))
+  }
+  if (zone4Page.value === 1) {
+    const list = dashboardStore.myCampaigns ?? []
+    if (list.length === 0) return 0
+    const done = list.filter((c) => ['completed', 'archived', 'done'].includes((c.status ?? '').toLowerCase())).length
+    return Math.round((done / list.length) * 100)
+  }
+  const goals = dashboardStore.quarterGoals ?? []
+  if (goals.length === 0) return 0
+  const pcts = goals
+    .map((g) => g.achievementPercent ?? g.percent)
+    .filter((v) => typeof v === 'number')
+  if (pcts.length === 0) return 0
+  return Math.round(pcts.reduce((s, v) => s + v, 0) / pcts.length)
+})
+
+const gaugeLabel = computed(() => ['분기 달성률', '캠페인 완료율', scopeLabelShort.value + ' 평균'][zone4Page.value])
+
+const gaugeChips = computed(() => {
+  const s = dashboardStore.summary ?? {}
+  const list = dashboardStore.myCampaigns ?? []
+  if (zone4Page.value === 0) {
+    return [
+      ['매출 합계', fmtCompact(ZONE4_REVENUE_SERIES.value.data?.reduce((a, b) => a + b, 0) ?? 0)],
+      ['캠페인', `${list.length}건`],
+      ['자산 LIVE', `${(Object.values(dashboardStore.assetCategories ?? {}).reduce((a, b) => a + Number(b || 0), 0))}`],
+    ]
+  }
+  if (zone4Page.value === 1) {
+    const live = list.filter((c) => ['live', 'running', 'active'].includes((c.status ?? '').toLowerCase())).length
+    const review = list.filter((c) => ['review', 'in_review'].includes((c.status ?? '').toLowerCase())).length
+    const done = list.filter((c) => ['completed', 'archived', 'done'].includes((c.status ?? '').toLowerCase())).length
+    return [
+      ['LIVE', `${live}건`],
+      ['검수', `${review}건`],
+      ['완료', `${done}건`],
+    ]
+  }
+  return [
+    ['목표 KPI', `${(dashboardStore.quarterGoals ?? []).length}건`],
+    ['신규 협력', `${s.newPartnerCount ?? 0}곳`],
+    ['RFP', `${s.rfpCount ?? 0}건`],
+  ]
+})
+
+const gaugeArcLength = computed(() => {
+  const C = Math.PI * 80
+  return `${(gaugePct.value / 100) * C} ${C}`
+})
+
+function fmtCompact(v) {
+  const n = Number(v) || 0
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1000) return Math.round(n / 100) / 10 + 'k'
+  return Math.round(n).toString()
+}
+
+const apexLineOptions = computed(() => ({
+  chart: {
+    type: 'area',
+    toolbar: { show: false },
+    sparkline: { enabled: false },
+    fontFamily: "'Pretendard Variable', sans-serif",
+    animations: { enabled: true, easing: 'easeinout', speed: 800 },
+    foreColor: '#9991AE',
+  },
+  colors: ['#3F3463', '#D8EB75'],
+  stroke: { curve: 'smooth', width: [3, 2], dashArray: [0, 4] },
+  fill: {
+    type: 'gradient',
+    gradient: { shadeIntensity: 0.8, opacityFrom: 0.32, opacityTo: 0, stops: [0, 90] },
+  },
+  markers: {
+    size: 4,
+    colors: ['#3F3463', '#D8EB75'],
+    strokeColors: '#fff',
+    strokeWidth: 2,
+    hover: { size: 6 },
+  },
+  grid: {
+    borderColor: '#E5DDF0',
+    strokeDashArray: 4,
+    xaxis: { lines: { show: false } },
+    yaxis: { lines: { show: true } },
+  },
+  xaxis: {
+    categories: ZONE4_SERIES.value.labels,
+    axisBorder: { show: false },
+    axisTicks: { show: false },
+    labels: { style: { fontSize: '11px', colors: '#9991AE' } },
+  },
+  yaxis: {
+    labels: {
+      style: { fontSize: '10.5px', colors: '#9991AE' },
+      formatter: (v) => {
+        if (zone4Page.value === 0) return fmtCompact(v)
+        if (zone4Page.value === 1) return Math.round(Number(v) || 0).toString() + '건'
+        return Math.round(Number(v) || 0).toString() + '%'
+      },
+    },
+  },
+  legend: { show: false },
+  tooltip: {
+    theme: 'light',
+    x: { show: true },
+    y: {
+      formatter: (v) => {
+        const n = Number(v) || 0
+        if (zone4Page.value === 0) return '₩' + n.toLocaleString()
+        if (zone4Page.value === 1) return n.toLocaleString() + '건'
+        return n.toLocaleString() + '%'
+      },
+    },
+  },
+  dataLabels: { enabled: false },
+}))
+
+const apexLineSeries = computed(() => [
+  { name: '실적', data: ZONE4_SERIES.value.data ?? [] },
+  { name: '목표', data: ZONE4_SERIES.value.target ?? [] },
+])
+
+const zone4UnitPrefix = computed(() => (zone4Page.value === 0 ? '₩' : ''))
+const zone4UnitSuffix = computed(() => {
+  if (zone4Page.value === 1) return '건'
+  if (zone4Page.value === 2) return '%'
+  return ''
+})
+
+const totalRevenueLabel = computed(() => {
+  const arr = ZONE4_SERIES.value?.data ?? []
+  if (arr.length === 0) return '0'
+  if (zone4Page.value === 0) {
+    // 매출: 합계
+    return arr.reduce((s, v) => s + (Number(v) || 0), 0).toLocaleString()
+  }
+  if (zone4Page.value === 1) {
+    // 캠페인 누적: 마지막 = 최종 누적 캠페인 수
+    return Number(arr[arr.length - 1] ?? 0).toLocaleString()
+  }
+  // 스코프 평균: 마지막 시점 평균 달성률(%)
+  return Number(arr[arr.length - 1] ?? 0).toLocaleString()
+})
+const totalRevenueDelta = computed(() => {
+  const arr = ZONE4_SERIES.value?.data ?? []
+  if (arr.length < 2) return 0
+  const last = arr[arr.length - 1] ?? 0
+  const prev = arr[arr.length - 2] ?? 0
+  if (prev === 0) return last > 0 ? 100 : 0
+  return Math.round(((last - prev) / Math.abs(prev)) * 100)
+})
+
+/* ═══════════ GSAP fade-up + CountUp 통합 ═══════════ */
+const dashRef = ref(null)
+const totalNumRef = ref(null)
+let __countUpInstance = null
+let __keyHandler = null
+
+function enterAnim() {
+  if (!dashRef.value || reduceMotion.value) return
+  const cards = dashRef.value.querySelectorAll('.card, .carousel, .z4-top, .z4-bottom')
+  gsap.from(cards, { y: 24, opacity: 0, duration: 0.55, stagger: 0.08, ease: 'power3.out', clearProps: 'transform,opacity' })
+  const bars = dashRef.value.querySelectorAll('.bar')
+  gsap.from(bars, { scaleY: 0, transformOrigin: 'bottom', duration: 0.7, stagger: 0.04, ease: 'power2.out', delay: 0.25, clearProps: 'transform' })
+  const scoreBars = dashRef.value.querySelectorAll('.ts-bar-fill')
+  gsap.from(scoreBars, { width: 0, duration: 0.9, stagger: 0.07, ease: 'power2.out', delay: 0.35 })
+}
+
+function bindTotalCounter() {
+  if (!totalNumRef.value) return
+  const num = Number(String(totalRevenueLabel.value).replace(/,/g, '')) || 0
+  if (reduceMotion.value) {
+    totalNumRef.value.textContent = num.toLocaleString()
+    if (__countUpInstance) { __countUpInstance = null }
+    return
+  }
+  if (__countUpInstance) {
+    __countUpInstance.update(num)
+  } else {
+    __countUpInstance = new CountUp(totalNumRef.value, num, {
+      duration: 1.4,
+      separator: ',',
+      useEasing: true,
+    })
+    if (!__countUpInstance.error) __countUpInstance.start()
+  }
+}
+
+watch([totalRevenueLabel, zone4Page, zone4Granularity], () => {
+  nextTick(bindTotalCounter)
+})
+
+onMounted(() => {
+  __keyHandler = (e) => {
+    const tag = document.activeElement?.tagName?.toLowerCase()
+    if (tag === 'input' || tag === 'textarea') return
+    if (e.key === 'ArrowLeft') shiftZone4(-1)
+    if (e.key === 'ArrowRight') shiftZone4(1)
+  }
+  window.addEventListener('keydown', __keyHandler)
+
+  loadSettings()
+  applyDefaults()
+  if (autoRotate.value) startRotate()
+  lastSyncAt.value = Date.now()
+  __tickTimer = setInterval(() => { nowTick.value = Date.now() }, 30_000)
+
+  __outsideHandler = (e) => {
+    if (!settingsOpen.value) return
+    const wrap = document.querySelector('.page-menu-wrap')
+    if (wrap && !wrap.contains(e.target)) closeSettings()
+  }
+  document.addEventListener('mousedown', __outsideHandler)
+
+  nextTick(() => {
+    enterAnim()
+    bindTotalCounter()
+  })
+})
+
+onBeforeUnmount(() => {
+  stopRotate()
+  if (__tickTimer) { clearInterval(__tickTimer); __tickTimer = null }
+  if (__keyHandler) window.removeEventListener('keydown', __keyHandler)
+  if (__outsideHandler) document.removeEventListener('mousedown', __outsideHandler)
+})
+
+watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granularity], () => {
+  if (reduceMotion.value) return
+  nextTick(() => {
+    if (!dashRef.value) return
+    const bars = dashRef.value.querySelectorAll('.bar')
+    gsap.fromTo(bars, { scaleY: 0 }, { scaleY: 1, transformOrigin: 'bottom', duration: 0.6, stagger: 0.03, ease: 'power2.out', clearProps: 'transform' })
+    const scoreBars = dashRef.value.querySelectorAll('.ts-bar-fill')
+    gsap.fromTo(scoreBars, { width: 0 }, { width: (i, el) => el.dataset.pct + '%', duration: 0.7, stagger: 0.05, ease: 'power2.out' })
+  })
+})
 </script>
 
 <template>
-  <div class="dash-d">
-    <!-- ─── 필터 바 (좌측 상단) ─── -->
-    <div class="filter-bar">
-      <div class="filter-group" role="tablist" aria-label="기간 선택">
-        <button
-          v-for="t in PERIOD_TABS"
-          :key="t.key"
-          type="button"
-          role="tab"
-          :aria-selected="quarterKey === t.key"
-          class="filter-pill"
-          :class="{ 'filter-pill--active': quarterKey === t.key }"
-          @click="quarterKey = t.key"
-        >{{ t.label }}</button>
+  <div class="page" data-cycle="lavender-pop" ref="dashRef">
+    <div class="page-h">
+      <div>
+        <h1>오늘의 캠페인 데스크</h1>
+        <p class="sub">
+          {{ orgName }} · {{ roleLabel }} {{ userName }} · {{ orgScopeLabel }}
+        </p>
       </div>
-      <button
-        type="button"
-        class="filter-compare"
-        :class="{ 'filter-compare--on': compareMode }"
-        :aria-pressed="compareMode"
-        @click="compareMode = !compareMode"
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M21 7H3M3 7l4-4M3 7l4 4M3 17h18M21 17l-4 4M21 17l-4-4"/>
-        </svg>
-        비교 {{ compareMode ? 'ON' : 'OFF' }}
-      </button>
-      <span class="filter-meta">{{ currentPeriod }}<template v-if="compareMode"> vs {{ comparePeriod }}</template></span>
+      <div class="page-menu-wrap">
+        <button class="page-menu" aria-label="대시보드 설정" @click="toggleSettings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+            <circle cx="5" cy="12" r="1" />
+            <circle cx="12" cy="12" r="1" />
+            <circle cx="19" cy="12" r="1" />
+          </svg>
+        </button>
+        <Transition name="settings-pop">
+          <div v-if="settingsOpen" class="page-settings" role="dialog" aria-label="대시보드 설정">
+            <div class="page-settings__h">대시보드 설정</div>
+
+            <!-- A. 자동 전환 -->
+            <label class="page-settings__row">
+              <span class="page-settings__lbl">자동 화면 전환</span>
+              <input class="lp-switch" type="checkbox" v-model="autoRotate" />
+            </label>
+            <div v-if="autoRotate" class="page-settings__sub">
+              <span class="page-settings__sub-lbl">간격</span>
+              <div class="lp-mini-seg">
+                <button
+                  v-for="opt in ROTATE_OPTIONS"
+                  :key="opt.ms"
+                  type="button"
+                  :class="{ 'is-on': rotateIntervalMs === opt.ms }"
+                  @click="rotateIntervalMs = opt.ms"
+                >{{ opt.label }}</button>
+              </div>
+            </div>
+
+            <!-- B. 실시간 동기화 (SSE) -->
+            <label class="page-settings__row">
+              <span class="page-settings__lbl">실시간 동기화</span>
+              <input class="lp-switch" type="checkbox" v-model="realtimeSync" />
+            </label>
+            <p class="page-settings__hint">{{ realtimeSync ? '서버에서 변경 알림(SSE)을 받으면 자동 갱신합니다.' : '수동 새로고침만 사용합니다.' }}</p>
+
+            <!-- C. 모션 줄이기 -->
+            <label class="page-settings__row">
+              <span class="page-settings__lbl">모션 줄이기</span>
+              <input class="lp-switch" type="checkbox" v-model="reduceMotion" />
+            </label>
+
+            <hr class="page-settings__div" />
+
+            <!-- G. 섹션 표시/숨김 -->
+            <div class="page-settings__h sub">표시할 섹션</div>
+            <label class="page-settings__row tight">
+              <span class="page-settings__lbl">오늘의 작업 보드</span>
+              <input class="lp-switch" type="checkbox" v-model="sectionVisible.zone1" />
+            </label>
+            <label class="page-settings__row tight">
+              <span class="page-settings__lbl">Top5 협력사</span>
+              <input class="lp-switch" type="checkbox" v-model="sectionVisible.zone2" />
+            </label>
+            <label class="page-settings__row tight">
+              <span class="page-settings__lbl">KPI 트래커</span>
+              <input class="lp-switch" type="checkbox" v-model="sectionVisible.zone3" />
+            </label>
+            <label class="page-settings__row tight">
+              <span class="page-settings__lbl">성과 트래커</span>
+              <input class="lp-switch" type="checkbox" v-model="sectionVisible.zone4" />
+            </label>
+
+            <hr class="page-settings__div" />
+
+            <!-- H. 기본 페이지 -->
+            <div class="page-settings__h sub">기본 페이지</div>
+            <div class="page-settings__row tight">
+              <span class="page-settings__lbl">KPI 트래커</span>
+              <select v-model.number="defaultZone3Page" class="lp-select">
+                <option :value="0">막대</option>
+                <option :value="1">자산 도넛</option>
+                <option :value="2">스코프 KPI</option>
+              </select>
+            </div>
+            <div class="page-settings__row tight">
+              <span class="page-settings__lbl">성과 트래커</span>
+              <select v-model.number="defaultZone4Page" class="lp-select">
+                <option :value="0">매출 추이</option>
+                <option :value="1">캠페인 누적</option>
+                <option :value="2">스코프 평균</option>
+              </select>
+            </div>
+            <div class="page-settings__row tight">
+              <span class="page-settings__lbl">기본 시간 단위</span>
+              <div class="lp-mini-seg">
+                <button type="button" :class="{ 'is-on': defaultGranularity === 'week' }" @click="defaultGranularity = 'week'">주간</button>
+                <button type="button" :class="{ 'is-on': defaultGranularity === 'month' }" @click="defaultGranularity = 'month'">월간</button>
+              </div>
+            </div>
+
+            <hr class="page-settings__div" />
+
+            <!-- F. 수동 새로고침 + 동기화 시각 -->
+            <div class="page-settings__sync">
+              <div>
+                <div class="page-settings__sync-lbl">마지막 동기화</div>
+                <div class="page-settings__sync-rel">{{ relativeSync }}</div>
+              </div>
+              <button type="button" class="page-settings__refresh" :disabled="dashboardStore.loading" @click="doRefresh">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+                <span>지금 갱신</span>
+              </button>
+            </div>
+          </div>
+        </Transition>
+      </div>
     </div>
 
-    <!-- ─── Greet (한 줄, callog-header 보강) ─── -->
-    <header class="greet">
-      <p class="greet__hello">안녕하세요, <strong>{{ userName }}</strong> · {{ orgName }}</p>
-      <span class="greet__role">{{ roleLabel }}</span>
-      <span class="greet__scope" :data-scope="orgScope">{{ orgScopeLabel }}</span>
-      <button
-        v-if="hasError"
-        type="button"
-        class="greet__retry"
-        :disabled="dashboardStore.loading"
-        @click="retryDashboard"
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/>
-        </svg>
-        다시 시도
-      </button>
-    </header>
+    <div v-if="hasError" class="err-banner">
+      <span>대시보드 데이터를 불러오지 못했습니다.</span>
+      <button class="err-retry" @click="retryDashboard">다시 시도</button>
+    </div>
 
-    <!-- ═══════════ Row 1 — KPI 6-up ═══════════ -->
-    <section class="grid row-1">
-      <template v-if="dashboardStore.status.summary === 'loading'">
-        <article v-for="i in 6" :key="`sk-${i}`" class="kpi kpi--skeleton">
-          <div class="sk-shimmer sk-icon"></div>
-          <div class="sk-shimmer sk-value"></div>
-          <div class="sk-shimmer sk-label"></div>
-        </article>
-      </template>
-      <template v-else-if="dashboardStore.status.summary === 'error'">
-        <article class="kpi kpi--error" style="grid-column: 1 / -1">
-          <p class="state-err">데이터를 불러오지 못했습니다. 다시 시도해주세요.</p>
-        </article>
-      </template>
-      <template v-else>
-        <article v-for="k in KPI_LIST" :key="k.key" class="kpi fade-in">
-          <div class="kpi__top">
-            <div class="kpi__icon" :style="{ background: k.iconBg }">{{ k.icon }}</div>
-            <span class="kpi__pill" :style="{ color: k.iconBg, background: k.bg }">Today</span>
+    <div class="dash">
+      <!-- Zone 1 -->
+      <section v-if="sectionVisible.zone1" class="card zone-today" aria-label="오늘의 작업 보드">
+        <div class="card-h">
+          <div>
+            <h2>{{ ZONE1_TITLE }}</h2>
+            <p class="lede">{{ ZONE1_LEDE }}</p>
           </div>
-          <div class="kpi__value">{{ formatKpiValue(k.value) }}<small>{{ k.unit }}</small></div>
-          <div class="kpi__label">{{ k.label }}</div>
-          <div class="kpi__delta" :class="k.deltaPositive ? 'kpi__delta--pos' : 'kpi__delta--neg'">
-            <svg v-if="k.deltaPositive" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8 L6 4 L10 8"/></svg>
-            <svg v-else width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4 L6 8 L10 4"/></svg>
-            {{ k.delta }}
+          <div class="zone-nav">
+            <button class="nav-btn" aria-label="이전" @click="shiftZone1(-1)">‹</button>
+            <span class="nav-ind">{{ zone1Page + 1 }} / 3</span>
+            <button class="nav-btn" aria-label="다음" @click="shiftZone1(1)">›</button>
           </div>
-        </article>
-      </template>
-    </section>
-
-    <!-- ═══════════ Row 2 — 권한 + 목표 vs 실적 + 자산 도넛 (3-col) ═══════════ -->
-    <section class="grid row-2">
-      <!-- 권한 카드 (1/3) -->
-      <article class="card role-card">
-        <header class="card__head">
-          <div class="card__title-wrap">
-            <h2 class="card__title">{{ ROLE_CARD.title }}</h2>
-            <p class="card__sub">{{ ROLE_CARD.subtitle ?? `${roleLabel} · 오늘` }}</p>
-          </div>
-        </header>
-
-        <div v-if="dashboardStore.status.quarterGoals === 'loading'" class="card-skeleton">
-          <div class="sk-shimmer sk-line sk-line--lg"></div>
-          <div class="sk-shimmer sk-line"></div>
-          <div class="sk-shimmer sk-line"></div>
-          <div class="sk-shimmer sk-line"></div>
         </div>
-        <p v-else-if="dashboardStore.status.quarterGoals === 'error'" class="state-err">
-          데이터를 불러오지 못했습니다. 다시 시도해주세요.
-        </p>
-        <template v-else>
-          <!-- GM: 캠페인 카드 형태 (chip + label + 컬러 bar + pct + delta) -->
-          <template v-if="role === 'GM'">
-            <div class="kpi-main fade-in">
-              <span class="kpi-main__val">{{ ROLE_CARD.mainPct ?? 0 }}<small>%</small></span>
-              <span class="kpi-main__sub">분기 평균</span>
+        <Transition name="page-slide" mode="out-in">
+          <div
+            class="today-grid"
+            :class="{ 'today-grid--tall': zone1Page === 1 }"
+            :key="zone1Page"
+            v-if="ZONE1_RENDER.length"
+          >
+            <article
+              v-for="(t, i) in ZONE1_RENDER"
+              :key="t.id ?? i"
+              class="ptask"
+              :class="[t.tone, { 'ptask--clickable': t.clickable }]"
+              :role="t.clickable ? 'button' : null"
+              :tabindex="t.clickable ? 0 : null"
+              @click="openCampaign(t)"
+              @keydown.enter="openCampaign(t)"
+            >
+              <span class="pill" :class="{
+                'pill--urgent': t.pill === '긴급' || t.pill === '오늘 마감',
+                'pill--review': t.pill === '검수중',
+                'pill--tomorrow': t.pill === '내일 마감',
+              }">{{ t.pill }}</span>
+              <h3>
+                <template v-for="(line, idx) in t.lines" :key="idx">
+                  {{ line }}<br v-if="idx < t.lines.length - 1" />
+                </template>
+              </h3>
+              <p v-if="t.sub" class="ptask-sub">{{ t.sub }}</p>
+              <div class="meta">
+                <div class="avs">
+                  <span
+                    v-for="(av, ai) in t.avatars"
+                    :key="ai"
+                    class="av"
+                    :class="av.cls"
+                    :style="av.imageUrl ? { backgroundImage: 'url(' + av.imageUrl + ')', backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : null"
+                    :title="av.name || av.initial"
+                  >{{ av.initial }}</span>
+                </div>
+                <span class="count">{{ t.progress }}</span>
+              </div>
+            </article>
+          </div>
+          <div v-else class="zone-empty" :key="'empty-' + zone1Page">표시할 데이터가 없습니다.</div>
+        </Transition>
+      </section>
+
+      <!-- Zone 2 + Zone 3 -->
+      <div v-if="sectionVisible.zone2 || sectionVisible.zone3" class="zone-bottom">
+        <!-- Zone 2 -->
+        <section v-if="sectionVisible.zone2" class="card" aria-label="Top5 협력사">
+          <div class="card-h">
+            <div>
+              <h2>{{ ZONE2_TITLE }}</h2>
+              <p class="lede">{{ ZONE2_LEDE }}</p>
             </div>
-            <div class="kpi-bars fade-in">
-              <div v-for="s in ROLE_CARD.stats" :key="s.label" class="kpi-bar">
-                <span class="kpi-bar__chip" :style="{ background: s.color }">{{ s.short }}</span>
-                <div class="kpi-bar__body">
-                  <span class="kpi-bar__label">{{ s.label }}</span>
-                  <div class="kpi-bar__track">
-                    <div class="kpi-bar__fill" :style="{ width: s.value + '%', background: s.color }"></div>
+            <div class="zone-nav">
+              <button class="nav-btn" aria-label="이전" @click="shiftZone2(-1)">‹</button>
+              <span class="nav-ind">{{ zone2Page + 1 }} / 3</span>
+              <button class="nav-btn" aria-label="다음" @click="shiftZone2(1)">›</button>
+            </div>
+          </div>
+          <Transition name="page-slide" mode="out-in">
+            <div class="ts-list" :key="zone2Page" v-if="ZONE2_RENDER.length">
+              <div
+                v-for="row in ZONE2_RENDER"
+                :key="row.rank"
+                class="ts-row"
+              >
+                <span class="av av-lg" :class="[row.cls, row.crown ? 'crown' : '']">{{ row.avatar }}</span>
+                <div class="ts-mid">
+                  <div class="name">{{ row.name }}</div>
+                  <div class="sub">
+                    <span v-for="(b, bi) in row.badges" :key="bi">{{ b }}</span>
+                  </div>
+                  <div class="ts-bar">
+                    <span class="ts-bar-fill" :data-pct="row.pct" :style="{ width: row.pct + '%' }"></span>
                   </div>
                 </div>
-                <div class="kpi-bar__right">
-                  <span class="kpi-bar__pct">{{ s.value }}%</span>
-                  <span class="kpi-bar__delta" :class="s.delta >= 0 ? 'pos' : 'neg'">
-                    {{ s.delta >= 0 ? '+' : '' }}{{ s.delta }}
-                  </span>
-                </div>
+                <span class="score">{{ row.pct }}%</span>
               </div>
             </div>
-          </template>
+            <div v-else class="zone-empty" :key="'empty-z2-' + zone2Page">표시할 협력사가 없습니다.</div>
+          </Transition>
+        </section>
 
-          <!-- MGR/USR: 기존 stat list -->
-          <div v-else class="role-stats fade-in">
-            <div v-for="s in ROLE_CARD.stats" :key="s.label" class="role-stat">
-              <span class="role-stat__bar" :style="{ background: s.color }"></span>
-              <div class="role-stat__body">
-                <p class="role-stat__label">{{ s.label }}</p>
-                <p class="role-stat__val">{{ s.value }}<small>{{ s.unit }}</small></p>
+        <!-- Zone 3 -->
+        <section v-if="sectionVisible.zone3" class="card" aria-label="KPI 트래커">
+          <div class="card-h">
+            <div>
+              <h2>{{ ZONE3_TITLE }}</h2>
+              <p class="lede">{{ ZONE3_LEDE }}</p>
+            </div>
+            <div class="z3-controls">
+              <div v-if="ZONE3_HAS_TOGGLE" class="gn-seg">
+                <button
+                  class="gn-btn"
+                  :class="{ 'is-on': zone3Granularity === 'week' }"
+                  @click="zone3Granularity = 'week'"
+                >주간</button>
+                <button
+                  class="gn-btn"
+                  :class="{ 'is-on': zone3Granularity === 'month' }"
+                  @click="zone3Granularity = 'month'"
+                >월간</button>
               </div>
-              <span class="role-stat__delta" :class="s.delta >= 0 ? 'pos' : 'neg'">
-                {{ s.delta >= 0 ? '+' : '' }}{{ s.delta }}
-              </span>
+              <div class="zone-nav">
+                <button class="nav-btn" aria-label="이전" @click="shiftZone3(-1)">‹</button>
+                <span class="nav-ind">{{ zone3Page + 1 }} / 3</span>
+                <button class="nav-btn" aria-label="다음" @click="shiftZone3(1)">›</button>
+              </div>
             </div>
           </div>
-        </template>
+          <Transition name="page-slide" mode="out-in">
+            <div :key="zone3Page" class="z3-body">
+              <!-- Page 0: KPI bars -->
+              <template v-if="zone3Page === 0">
+                <template v-if="ZONE3_BAR_DATA.length">
+                  <div class="kpi-legend">
+                    <span class="l-primary">달성</span>
+                    <span class="l-lime">참여</span>
+                  </div>
+                  <div class="bars">
+                    <div
+                      v-for="(b, i) in ZONE3_BAR_DATA"
+                      :key="i"
+                      class="bar-col"
+                    >
+                      <div class="bar bar-primary" :style="{ height: b.primary + '%' }"></div>
+                      <div class="bar bar-lime" :style="{ height: b.lime + '%' }"></div>
+                      <span class="lbl">{{ b.lbl }}</span>
+                    </div>
+                  </div>
+                </template>
+                <div v-else class="zone-empty">KPI 데이터가 없습니다.</div>
+              </template>
+              <!-- Page 1: donut -->
+              <template v-else-if="zone3Page === 1">
+                <ApexChart
+                  v-if="hasZone3DonutData"
+                  type="donut"
+                  height="260"
+                  :options="apexDonutOptions"
+                  :series="ZONE3_DONUT_SERIES.series"
+                />
+                <div v-else class="zone-empty">자산 데이터가 없습니다.</div>
+              </template>
+              <!-- Page 2: scope KPI -->
+              <template v-else>
+                <template v-if="ZONE3_KPI_BY_SCOPE.some(b => b.primary > 0)">
+                  <div class="kpi-legend">
+                    <span class="l-primary">달성</span>
+                    <span class="l-lime">참여</span>
+                  </div>
+                  <div class="bars">
+                    <div
+                      v-for="(b, i) in ZONE3_KPI_BY_SCOPE"
+                      :key="i"
+                      class="bar-col"
+                    >
+                      <div class="bar bar-primary" :style="{ height: b.primary + '%' }"></div>
+                      <div class="bar bar-lime" :style="{ height: b.lime + '%' }"></div>
+                      <span class="lbl">{{ b.lbl }}</span>
+                    </div>
+                  </div>
+                </template>
+                <div v-else class="zone-empty">스코프 KPI 데이터가 없습니다.</div>
+              </template>
+            </div>
+          </Transition>
+        </section>
+      </div>
 
-        <button type="button" class="role-cta" @click="goTo(ROLE_CARD.ctaTo)">
-          {{ ROLE_CARD.cta }} →
-        </button>
-      </article>
-      <article class="card">
-        <header class="card__head">
-          <div class="card__title-wrap">
-            <h2 class="card__title">목표 vs 실적</h2>
-            <p class="card__sub">2026 상반기 · 6개월</p>
+      <!-- Zone 4: 반원 게이지 + 라인 차트 (성과 트래커) -->
+      <aside v-if="sectionVisible.zone4" class="z4-stack zone-carousel" aria-label="성과 트래커">
+        <!-- 상단: 라벤더 그라데이션 + 반원 게이지 + 칩 -->
+        <div class="z4-top">
+          <div class="car-h">
+            <div>
+              <h2 class="title">{{ ZONE4_TITLE }}</h2>
+              <p class="csub">{{ ZONE4_LEDE }}</p>
+            </div>
           </div>
-          <div class="legend">
-            <span class="legend__item"><i class="legend__dot" style="background:#9D85FF"></i>실적</span>
-            <span class="legend__item"><i class="legend__dot" style="background:#FFC36B"></i>목표</span>
-            <span v-if="compareMode" class="legend__item legend__item--compare"><i class="legend__dot legend__dot--compare"></i>비교 ({{ comparePeriod }})</span>
-          </div>
-        </header>
-        <div v-if="dashboardStore.status.quarterGoals === 'loading'" class="card-skeleton card-skeleton--chart">
-          <div class="sk-shimmer sk-line"></div>
-          <div class="sk-shimmer sk-block"></div>
-        </div>
-        <p v-else-if="dashboardStore.status.quarterGoals === 'error'" class="state-err">
-          데이터를 불러오지 못했습니다. 다시 시도해주세요.
-        </p>
-        <template v-else>
-        <div class="stat-strip fade-in">
-          <div class="stat-mini"><span class="stat-mini__val">{{ formatKpiValue(targetStats.totalA) }}</span><span class="stat-mini__lbl">실적 합계</span></div>
-          <div class="stat-mini"><span class="stat-mini__val">{{ formatKpiValue(targetStats.totalT) }}</span><span class="stat-mini__lbl">목표 합계</span></div>
-          <div class="stat-mini stat-mini--accent"><span class="stat-mini__val">{{ targetStats.achieveRate }}<small>%</small></span><span class="stat-mini__lbl">달성률</span></div>
-          <div class="stat-mini"><span class="stat-mini__val">{{ targetStats.overMonths }}<small>/{{ targetStats.monthCount }}</small></span><span class="stat-mini__lbl">초과 월</span></div>
-        </div>
-        <svg viewBox="0 0 540 320" class="chart chart--target fade-in" aria-hidden="true">
-          <g class="grid-lines">
-            <line v-for="(y, i) in [20, 80, 140, 200, 260]" :key="i" :x1="40" :x2="528" :y1="y" :y2="y" />
-          </g>
-          <g class="axis-text axis-text--lg">
-            <text x="6" y="24">{{ fmtYAxis(targetMax) }}</text>
-            <text x="6" y="84">{{ fmtYAxis(targetMax * 0.75) }}</text>
-            <text x="6" y="144">{{ fmtYAxis(targetMax * 0.5) }}</text>
-            <text x="6" y="204">{{ fmtYAxis(targetMax * 0.25) }}</text>
-            <text x="6" y="264">0</text>
-          </g>
-          <template v-for="(m, i) in TARGET_REALITY" :key="i">
-            <g v-if="m">
-              <!-- actual 막대 (보라) -->
-              <rect :x="50 + i * 160" :y="targetBarY(m.actual)" width="50" :height="targetBarH(m.actual)" rx="6" fill="#9D85FF" />
-              <!-- target 막대 (노랑) -->
-              <rect :x="110 + i * 160" :y="targetBarY(m.target)" width="50" :height="targetBarH(m.target)" rx="6" fill="#FFC36B" />
-              <!-- actual 값 (보라막대 위 중앙) -->
-              <text
-                :x="75 + i * 160"
-                :y="targetBarY(m.actual) - 8"
-                text-anchor="middle"
-                class="axis-x--val axis-x--val-actual"
-              >{{ fmtYAxis(m.actual) }}</text>
-              <!-- target 값 (노랑막대 위 중앙) -->
-              <text
-                :x="135 + i * 160"
-                :y="targetBarY(m.target) - 8"
-                text-anchor="middle"
-                class="axis-x--val axis-x--val-target"
-              >{{ fmtYAxis(m.target) }}</text>
-              <!-- 월 라벨 (그룹 중심) -->
-              <text :x="105 + i * 160" y="296" text-anchor="middle" class="axis-x axis-x--lg">{{ m.month }}</text>
-            </g>
-          </template>
-          <!-- 비교 기간 actual overlay (희미한 회색 라인 + 점) -->
-          <g v-if="compareMode && compareLineDots.length > 0" class="chart-compare-overlay">
-            <polyline
-              v-if="compareLineDots.length >= 2"
-              :points="compareLinePoints"
-              fill="none"
-              stroke-width="2"
-              stroke-dasharray="4 4"
-              stroke-linejoin="round"
-              stroke-linecap="round"
-            />
-            <g v-for="d in compareLineDots" :key="`cmp-${d.x}`">
-              <circle :cx="d.x" :cy="d.y" r="4" />
-              <text :x="d.x" :y="d.y - 9" text-anchor="middle" class="chart-compare-overlay__val">{{ fmtYAxis(d.value) }}</text>
-            </g>
-          </g>
-        </svg>
-        </template>
-      </article>
 
-      <!-- 자산 카테고리 도넛 (4/12) — 단순 분포 -->
-      <article class="card asset-card">
-        <header class="card__head">
-          <div class="card__title-wrap">
-            <h2 class="card__title">자산 카테고리</h2>
-            <p class="card__sub">총 {{ assetTotal }}개 · 5개 분류</p>
-          </div>
-        </header>
-        <div v-if="dashboardStore.status.assetCategories === 'loading'" class="card-skeleton card-skeleton--donut">
-          <div class="sk-shimmer sk-circle"></div>
-          <div class="sk-shimmer sk-line"></div>
-          <div class="sk-shimmer sk-line"></div>
-        </div>
-        <p v-else-if="dashboardStore.status.assetCategories === 'error'" class="state-err">
-          데이터를 불러오지 못했습니다. 다시 시도해주세요.
-        </p>
-        <template v-else>
-        <div class="donut-wrap fade-in">
-          <svg viewBox="0 0 140 140" class="donut" aria-hidden="true">
-            <circle cx="70" cy="70" r="50" fill="none" stroke="#F1F2F6" stroke-width="20" />
-            <circle
-              v-for="(s, i) in assetSegments"
-              :key="i"
-              cx="70" cy="70" r="50"
-              fill="none" :stroke="s.color" stroke-width="20"
-              :stroke-dasharray="`${s.length} ${s.gap}`"
-              :stroke-dashoffset="s.offset"
-              transform="rotate(-90 70 70)"
-              stroke-linecap="butt"
-            />
-          </svg>
-          <div class="donut__center">
-            <span class="donut__value">{{ assetTotal }}</span>
-            <span class="donut__label">자산</span>
-          </div>
-        </div>
-        <ul class="asset-legend fade-in">
-          <li v-for="s in ASSET_CATS" :key="s.key">
-            <span class="asset-legend__dot" :style="{ background: s.color }"></span>
-            <span class="asset-legend__label">{{ s.type }}</span>
-            <span class="asset-legend__count">{{ s.count }}</span>
-            <span class="asset-legend__pct">{{ assetTotal > 0 ? Math.round((s.count / assetTotal) * 100) : 0 }}%</span>
-          </li>
-        </ul>
-        </template>
-      </article>
-    </section>
-
-    <!-- ═══════════ Row 3 — 캠페인 진행 + 제휴사 ranking (좁게) ═══════════ -->
-    <section class="grid row-3">
-      <article class="card">
-        <header class="card__head">
-          <div class="card__title-wrap">
-            <h2 class="card__title">캠페인 진행</h2>
-            <p class="card__sub">참여 중 {{ MY_CAMPAIGNS.length }}건</p>
-          </div>
-          <button type="button" class="card__link" @click="goTo('/calendar')">전체</button>
-        </header>
-        <div class="campaign-filter" role="tablist" aria-label="캠페인 상태 필터">
-          <button
-            v-for="t in CAMPAIGN_FILTER_TABS"
-            :key="t.key"
-            type="button"
-            role="tab"
-            :aria-selected="campaignStatusFilter === t.key"
-            class="filter-chip"
-            :class="{ 'filter-chip--active': campaignStatusFilter === t.key }"
-            @click="campaignStatusFilter = t.key"
-          >{{ t.label }}</button>
-        </div>
-        <div v-if="dashboardStore.status.myCampaigns === 'loading'" class="card-skeleton">
-          <div v-for="i in 4" :key="i" class="sk-shimmer sk-row"></div>
-        </div>
-        <p v-else-if="dashboardStore.status.myCampaigns === 'error'" class="state-err">
-          데이터를 불러오지 못했습니다. 다시 시도해주세요.
-        </p>
-        <p v-else-if="MY_CAMPAIGNS.length === 0" class="state-empty">참여 중인 캠페인이 0건입니다.</p>
-        <table v-else class="ctab fade-in">
-          <thead>
-            <tr>
-              <th>캠페인</th>
-              <th>진행률</th>
-              <th>D-day</th>
-              <th>상태</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="c in MY_CAMPAIGNS" :key="c.id" @click="goTo(`/campaigns/${c.id}`)">
-              <td>
-                <div class="ctab__name">
-                  <span class="ctab__avatar" :style="{ background: c.color }">{{ c.owner }}</span>
-                  <span>{{ c.name }}</span>
-                </div>
-              </td>
-              <td>
-                <div class="ctab__progress">
-                  <div class="ctab__bar"><div class="ctab__fill" :style="{ width: c.progress + '%', background: c.color }"></div></div>
-                  <span class="ctab__pct">{{ c.progress }}%</span>
-                </div>
-              </td>
-              <td>
-                <span class="ctab__dday" :class="c.dDay != null && c.dDay <= 7 ? 'urgent' : ''">{{ fmtDDay(c.dDay) }}</span>
-              </td>
-              <td>
-                <span class="status" :class="statusOf(c.status).cls">{{ statusOf(c.status).label }}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </article>
-
-      <article v-if="orgScope === 'HQ' || orgScope === 'AFFILIATE'" class="card">
-        <header class="card__head">
-          <div class="card__title-wrap">
-            <h2 class="card__title">제휴사 TOP 5</h2>
-            <p class="card__sub">달성률 · 7일 추이</p>
-          </div>
-          <button type="button" class="card__link" @click="goTo('/operations')">전체</button>
-        </header>
-        <div v-if="dashboardStore.status.partnerProgress === 'loading'" class="card-skeleton">
-          <div v-for="i in 5" :key="i" class="sk-shimmer sk-row"></div>
-        </div>
-        <p v-else-if="dashboardStore.status.partnerProgress === 'error'" class="state-err">
-          데이터를 불러오지 못했습니다. 다시 시도해주세요.
-        </p>
-        <p v-else-if="PARTNER_RANK.length === 0" class="state-empty">제휴사 데이터가 0건입니다.</p>
-        <table v-else class="ptab fade-in">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>제휴사</th>
-              <th>점수</th>
-              <th>추이</th>
-              <th>변화</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in PARTNER_RANK" :key="p.rank">
-              <td><span class="ptab__rank">{{ p.rank }}</span></td>
-              <td>
-                <span class="ptab__name">
-                  <span class="ptab__avatar" :style="{ background: p.color }">{{ p.name.slice(2, 3) }}</span>
-                  {{ p.name }}
-                </span>
-              </td>
-              <td><strong class="ptab__score">{{ p.score }}</strong></td>
-              <td>
-                <svg viewBox="0 0 60 22" class="ptab__spark" aria-hidden="true">
-                  <polyline fill="none" :stroke="p.color" stroke-width="1.6"
-                    stroke-linejoin="round" stroke-linecap="round"
-                    :points="sparkPath(p.spark)" />
+          <Transition name="chart-fade" mode="out-in">
+            <div class="z4-gauge-block" :key="'g-' + zone4Page + '-' + zone4Granularity">
+              <div class="gauge-wrap">
+                <svg width="200" height="120" viewBox="0 0 200 120">
+                  <path
+                    d="M 20 100 A 80 80 0 0 1 180 100"
+                    fill="none"
+                    stroke="rgba(255,255,255,0.20)"
+                    stroke-width="14"
+                    stroke-linecap="round"
+                  />
+                  <path
+                    d="M 20 100 A 80 80 0 0 1 180 100"
+                    fill="none"
+                    stroke="#fff"
+                    stroke-width="14"
+                    stroke-linecap="round"
+                    :stroke-dasharray="gaugeArcLength"
+                    style="transition: stroke-dasharray .8s cubic-bezier(.4,0,.2,1);"
+                  />
                 </svg>
-              </td>
-              <td>
-                <span
-                  v-if="p.rankBadge"
-                  class="ptab__rank-badge"
-                  :class="`ptab__rank-badge--${p.rankBadge.type}`"
-                  :title="`이전 분기 대비 순위 변화`"
-                >{{ p.rankBadge.label }}</span>
-                <span v-else class="ptab__delta" :class="p.delta >= 0 ? 'pos' : 'neg'">
-                  <svg v-if="p.delta >= 0" width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8 L6 4 L9 8"/></svg>
-                  <svg v-else width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4 L6 8 L9 4"/></svg>
-                  {{ Math.abs(p.delta).toFixed(1) }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </article>
-    </section>
+                <div class="gauge-pill">
+                  <span class="v">{{ gaugePct }}%</span>
+                  <span class="lbl">{{ gaugeLabel }}</span>
+                </div>
+              </div>
+
+              <div class="chips" v-if="gaugeChips.length">
+                <div v-for="(c, i) in gaugeChips" :key="i" class="chip">
+                  <span class="l">{{ c[0] }}</span>
+                  <span class="v">{{ c[1] }}</span>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        </div>
+
+        <!-- 하단: 흰 카드 + Sales Target 라인 차트 -->
+        <div class="z4-bottom">
+          <div class="z4-bottom-h">
+            <div>
+              <h3 class="z4-bottom-title">{{ ZONE4_BOTTOM_TITLE }}</h3>
+              <p class="z4-bottom-sub">{{ zone4Granularity === 'week' ? '이번 분기 · 주간' : '이번 분기 · 월간' }}</p>
+            </div>
+            <div class="gn-seg">
+              <button
+                class="gn-btn"
+                :class="{ 'is-on': zone4Granularity === 'week' }"
+                @click="zone4Granularity = 'week'"
+              >주간</button>
+              <button
+                class="gn-btn"
+                :class="{ 'is-on': zone4Granularity === 'month' }"
+                @click="zone4Granularity = 'month'"
+              >월간</button>
+            </div>
+          </div>
+
+          <div class="z4-headline">
+            <span class="z4-total">
+              <span v-if="zone4UnitPrefix" class="z4-unit z4-unit--prefix">{{ zone4UnitPrefix }}</span>
+              <span ref="totalNumRef" class="z4-total-num">0</span>
+              <span v-if="zone4UnitSuffix" class="z4-unit z4-unit--suffix">{{ zone4UnitSuffix }}</span>
+            </span>
+            <span class="z4-delta" :class="totalRevenueDelta >= 0 ? 'up' : 'down'" v-if="hasZone4Data">
+              <svg v-if="totalRevenueDelta >= 0" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15" />
+              </svg>
+              <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              <span>{{ totalRevenueDelta >= 0 ? '+' : '' }}{{ totalRevenueDelta }}%</span>
+            </span>
+          </div>
+
+          <div class="z4-chart-wrap">
+            <Transition name="chart-fade" mode="out-in">
+              <ApexChart
+                v-if="hasZone4Data"
+                :key="zone4Page + '-' + zone4Granularity"
+                type="area"
+                height="170"
+                :options="apexLineOptions"
+                :series="apexLineSeries"
+              />
+              <div v-else class="z4-empty">데이터가 없습니다.</div>
+            </Transition>
+          </div>
+        </div>
+
+        <!-- 페이지 네비게이션 -->
+        <div class="z4-pager">
+          <button class="z4-nav" aria-label="이전 지표" @click="shiftZone4(-1)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <span class="page-dots">
+            <span
+              v-for="i in ZONE_PAGE_COUNT"
+              :key="i"
+              class="dot"
+              :class="{ 'is-active': zone4Page === i - 1 }"
+              @click="zone4Page = i - 1"
+            ></span>
+          </span>
+          <button class="z4-nav" aria-label="다음 지표" @click="shiftZone4(1)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+      </aside>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.dash-d {
-  margin: calc(-1 * var(--density-page-padding, 24px));
-  padding: 16px 22px 32px;
-  min-height: calc(100% + 2 * var(--density-page-padding, 24px));
-  background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 50%, #fae8ff 100%);
+.page[data-cycle="lavender-pop"] {
+  --lp-bg: #F5F1FA;
+  --lp-surface: #FFFFFF;
+  --lp-surface-soft: #EEE6F7;
+  --lp-primary: #B79BD9;
+  --lp-primary-strong: #6F5A9B;
+  --lp-primary-deep: #3F3463;
+  --lp-violet-deep: #2D2649;
+  --lp-lime: #D8EB75;
+  --lp-lime-soft: #EAF2A8;
+  --lp-card-lavender-1: #DDD2EE;
+  --lp-card-lavender-2: #C6BAE6;
+  --lp-card-cream: #F5EDD8;
+  --lp-text: #2A2440;
+  --lp-text-muted: #6B6582;
+  --lp-text-faint: #9991AE;
+  --lp-border: #E5DDF0;
+
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+  --r-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgba(63,52,99,.04), 0 6px 18px rgba(63,52,99,.06);
+  --shadow-carousel: 0 14px 36px rgba(63,52,99,.18);
+
+  background: var(--lp-bg);
+  color: var(--lp-text);
+  font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-feature-settings: 'tnum' 1, 'ss01' 1;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 28px 32px 48px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  font-family: 'Pretendard Variable', 'Pretendard', 'Noto Sans KR', sans-serif;
-  font-feature-settings: 'tnum' 1;
-  color: var(--text-primary);
-}
-:root[data-theme='dark'] .dash-d {
-  background:
-    radial-gradient(circle at top right, rgba(168, 85, 247, 0.18), transparent 40%),
-    radial-gradient(circle at bottom left, rgba(99, 102, 241, 0.12), transparent 40%),
-    linear-gradient(180deg, #10141d 0%, #181024 100%);
-}
-:root[data-theme='dark'] .dash-d .card,
-:root[data-theme='dark'] .dash-d .kpi {
-  background: rgba(28, 35, 48, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-:root[data-theme='dark'] .dash-d .card:hover,
-:root[data-theme='dark'] .dash-d .kpi:hover {
-  background: rgba(35, 42, 55, 0.7);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.3);
-}
-/* 권한 카드도 다른 카드와 같은 글래스 톤 (다크모드) */
-:root[data-theme='dark'] .dash-d .stat-strip {
-  background: linear-gradient(180deg, rgba(157, 133, 255, 0.12) 0%, rgba(157, 133, 255, 0) 100%);
-  border-color: rgba(157, 133, 255, 0.2);
-}
-:root[data-theme='dark'] .dash-d .role-stat {
-  background: rgba(255, 255, 255, 0.06);
-}
-:root[data-theme='dark'] .dash-d .kpi-main {
-  border-bottom-color: rgba(255, 255, 255, 0.08);
-}
-:root[data-theme='dark'] .dash-d .kpi-bar__track {
-  background: rgba(255, 255, 255, 0.08);
+  gap: 22px;
+  min-height: 100%;
+  box-sizing: border-box;
 }
 
-/* ─── 다크모드 pos/neg 색상 (더 밝게) ─── */
-:root[data-theme='dark'] .dash-d .kpi__delta--pos,
-:root[data-theme='dark'] .dash-d .ptab__delta.pos,
-:root[data-theme='dark'] .dash-d .stat-mini--accent .stat-mini__val {
-  color: #34D399;
-}
-:root[data-theme='dark'] .dash-d .kpi__delta--neg,
-:root[data-theme='dark'] .dash-d .ptab__delta.neg {
-  color: #F87171;
-}
-:root[data-theme='dark'] .dash-d .ptab__delta.pos {
-  background: rgba(52, 211, 153, 0.18);
-}
-:root[data-theme='dark'] .dash-d .ptab__delta.neg {
-  background: rgba(248, 113, 113, 0.18);
-}
-/* 캠페인 status 칩 */
-:root[data-theme='dark'] .dash-d .st--live { background: rgba(52, 211, 153, 0.22); color: #34D399; }
-:root[data-theme='dark'] .dash-d .st--review { background: rgba(255, 175, 134, 0.22); color: #FCA68C; }
-:root[data-theme='dark'] .dash-d .st--draft { background: rgba(255, 255, 255, 0.1); color: rgba(213, 220, 232, 0.72); }
-/* D-day urgent */
-:root[data-theme='dark'] .dash-d .ctab__dday.urgent { background: rgba(248, 113, 113, 0.22); color: #F87171; }
-:root[data-theme='dark'] .dash-d .ctab__dday { background: rgba(255, 255, 255, 0.1); color: rgba(213, 220, 232, 0.72); }
-
-/* ─── Filter bar (좌측 상단) ─── */
-.filter-bar {
+.page-h {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 2px;
-}
-.filter-group {
-  display: inline-flex;
-  gap: 4px;
-  padding: 3px;
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 999px;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
-}
-.filter-pill {
-  border: 0;
-  background: transparent;
-  color: var(--muted-text);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 5px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  font-family: inherit;
-  letter-spacing: -0.01em;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
-}
-.filter-pill:hover { color: var(--text-primary); }
-.filter-pill--active {
-  background: linear-gradient(180deg, #c084fc 0%, #a855f7 100%);
-  color: #fff;
-  box-shadow: 0 4px 10px rgba(168, 85, 247, 0.28);
-}
-.filter-pill--active:hover { color: #fff; }
-
-.filter-compare {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  color: var(--muted-text);
-  font-size: 11px;
-  font-weight: 800;
-  font-family: inherit;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-.filter-compare:hover { color: var(--text-primary); border-color: rgba(157, 133, 255, 0.5); }
-.filter-compare--on {
-  background: rgba(157, 133, 255, 0.16);
-  border-color: rgba(157, 133, 255, 0.5);
-  color: #6D28D9;
-}
-.filter-meta {
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--muted-text);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ─── Campaign status chip filter (Row 3-1 카드 내부) ─── */
-.campaign-filter {
-  display: inline-flex;
-  gap: 4px;
-  margin: -2px 0 6px;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
   flex-wrap: wrap;
 }
-.filter-chip {
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  background: transparent;
-  color: var(--muted-text);
-  font-size: 9px;
-  font-weight: 800;
-  padding: 3px 9px;
+.page-h h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; color: var(--lp-text); }
+.page-h .sub { margin: 6px 0 0; font-size: 13px; font-weight: 500; color: var(--lp-text-muted); }
+
+/* 우상단 ⋯ 메뉴 + 설정 popover */
+.page-menu-wrap { position: relative; }
+.page-menu {
+  width: 38px;
+  height: 38px;
   border-radius: 999px;
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-border);
+  color: var(--lp-primary-deep);
   cursor: pointer;
-  font-family: inherit;
-  letter-spacing: 0.02em;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-.filter-chip:hover { color: var(--text-primary); border-color: rgba(157, 133, 255, 0.4); }
-.filter-chip--active {
-  background: rgba(157, 133, 255, 0.16);
-  border-color: rgba(157, 133, 255, 0.5);
-  color: #6D28D9;
-}
-
-/* ─── 비교 라인 overlay (목표 vs 실적 차트) ─── */
-.chart-compare-overlay polyline { stroke: rgba(15, 23, 42, 0.3); }
-.chart-compare-overlay circle { fill: rgba(15, 23, 42, 0.3); }
-.chart-compare-overlay__val {
-  font-size: 9px;
-  font-weight: 800;
-  fill: rgba(15, 23, 42, 0.55);
-  font-variant-numeric: tabular-nums;
-}
-.legend__item--compare { color: rgba(15, 23, 42, 0.55); }
-.legend__dot--compare {
-  background: transparent;
-  border: 1.5px dashed rgba(15, 23, 42, 0.45);
-}
-
-/* ─── 제휴사 rank-change badge ─── */
-.ptab__rank-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 32px;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  transition: background .15s ease, transform .12s ease, box-shadow .15s ease;
+  box-shadow: var(--shadow-card);
 }
-.ptab__rank-badge--up {
-  background: rgba(111, 191, 135, 0.18);
-  color: #047857;
-}
-.ptab__rank-badge--down {
-  background: rgba(255, 122, 107, 0.18);
-  color: #C04438;
-}
-.ptab__rank-badge--new {
-  background: rgba(157, 133, 255, 0.18);
-  color: #6D28D9;
-}
-.ptab__rank-badge--same {
-  background: rgba(15, 23, 42, 0.06);
-  color: var(--muted-text);
-}
+.page-menu:hover { background: var(--lp-surface-soft); }
+.page-menu:active { transform: scale(0.94); }
 
-/* Greet */
-.greet { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.greet__retry {
-  margin-left: auto;
-  display: inline-flex; align-items: center; gap: 5px;
-  height: 26px; padding: 0 11px;
-  border-radius: 999px;
-  background: rgba(220, 38, 38, 0.08);
-  border: 1px solid rgba(220, 38, 38, 0.32);
-  color: #DC2626;
-  font-size: 11px; font-weight: 800;
-  font-family: inherit;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+.page-settings {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 280px;
+  background: var(--lp-surface);
+  border-radius: var(--r-lg);
+  padding: 16px 18px 14px;
+  box-shadow: 0 4px 12px rgba(63,52,99,.10), 0 16px 40px rgba(63,52,99,.18);
+  z-index: 50;
+  border: 1px solid var(--lp-border);
 }
-.greet__retry:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.16);
-  border-color: rgba(220, 38, 38, 0.5);
-}
-.greet__retry:disabled { opacity: 0.55; cursor: not-allowed; }
-:root[data-theme='dark'] .greet__retry {
-  background: rgba(248, 113, 113, 0.14);
-  border-color: rgba(248, 113, 113, 0.36);
-  color: #FCA5A5;
-}
-:root[data-theme='dark'] .greet__retry:hover:not(:disabled) {
-  background: rgba(248, 113, 113, 0.24);
-}
-.greet__hello { font-size: 12px; color: var(--muted-text); margin: 0; line-height: 1.2; }
-.greet__hello strong { color: var(--text-primary); font-weight: 800; }
-.greet__role {
-  font-size: 9px; font-weight: 800;
-  padding: 2px 7px; border-radius: 999px;
-  background: rgba(157, 133, 255, 0.14); color: #6D28D9;
+.page-settings__h {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lp-text-muted);
+  text-transform: uppercase;
   letter-spacing: 0.04em;
+  margin-bottom: 12px;
 }
-.greet__mock {
-  font-size: 9px; font-weight: 800;
-  padding: 2px 7px; border-radius: 999px;
-  background: #FEF3C7; color: #B45309;
-  letter-spacing: 0.04em;
-}
-.greet__scope {
-  font-size: 9px; font-weight: 800;
-  padding: 2px 7px; border-radius: 999px;
-  letter-spacing: 0.04em;
-}
-.greet__scope[data-scope="HQ"]               { background: rgba(157, 133, 255, 0.14); color: #6D28D9; }
-.greet__scope[data-scope="AFFILIATE"]        { background: rgba(93, 175, 216, 0.16);  color: #1E6FA0; }
-.greet__scope[data-scope="EXTERNAL_PARTNER"] { background: rgba(255, 138, 92, 0.16);  color: #B0431D; }
-.greet__scope[data-scope="STAFF"]            { background: rgba(111, 191, 135, 0.16); color: #2F7A48; }
-.dark .greet__scope[data-scope="HQ"]               { background: rgba(157, 133, 255, 0.22); color: #C4B0FF; }
-.dark .greet__scope[data-scope="AFFILIATE"]        { background: rgba(93, 175, 216, 0.22);  color: #9CD0EE; }
-.dark .greet__scope[data-scope="EXTERNAL_PARTNER"] { background: rgba(255, 138, 92, 0.22);  color: #FFB48A; }
-.dark .greet__scope[data-scope="STAFF"]            { background: rgba(111, 191, 135, 0.22); color: #A6DEB7; }
-
-/* ───── 로딩 / 에러 / 빈 상태 ───── */
-@keyframes dash-shimmer {
-  0%   { background-position: -200px 0; }
-  100% { background-position: 200px 0; }
-}
-@keyframes dash-fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0);  }
-}
-.fade-in { animation: dash-fade-in 0.32s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
-
-.sk-shimmer {
-  background: linear-gradient(90deg,
-    var(--panel-muted) 0%,
-    color-mix(in srgb, var(--panel-muted) 60%, transparent) 50%,
-    var(--panel-muted) 100%);
-  background-size: 400px 100%;
-  animation: dash-shimmer 1.4s ease-in-out infinite;
-  border-radius: 8px;
-}
-.sk-icon  { width: 32px; height: 32px; border-radius: 10px; margin-bottom: 10px; }
-.sk-value { width: 60%; height: 22px; margin-bottom: 8px; }
-.sk-label { width: 80%; height: 12px; }
-.sk-line  { width: 100%; height: 14px; margin: 6px 0; }
-.sk-line--lg { height: 22px; width: 50%; }
-.sk-block { width: 100%; height: 200px; border-radius: 12px; margin-top: 8px; }
-.sk-row   { width: 100%; height: 28px; margin: 6px 0; }
-.sk-circle{ width: 110px; height: 110px; border-radius: 50%; margin: 6px auto 14px; }
-
-.kpi--skeleton {
-  display: flex; flex-direction: column;
-  padding: 12px 14px;
-}
-.kpi--error {
-  display: flex; align-items: center; justify-content: center;
-  padding: 18px 12px;
-}
-.card-skeleton {
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 4px 0 8px;
-}
-.card-skeleton--chart { padding: 8px 4px 12px; }
-.card-skeleton--donut { align-items: center; }
-
-.state-err {
-  margin: 14px 4px;
-  font-size: 12px; font-weight: 700;
-  color: #DC2626;
-  text-align: center;
-}
-.dark .state-err { color: #FCA5A5; }
-
-.state-empty {
-  margin: 14px 4px;
-  font-size: 12px; font-weight: 600;
-  color: var(--muted-text);
-  text-align: center;
-}
-
-/* ─── 반응형 ─── */
-@media (max-width: 1280px) {
-  .row-1 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-@media (max-width: 960px) {
-  .row-2 { grid-template-columns: minmax(0, 1fr); }
-  .row-3 { grid-template-columns: minmax(0, 1fr); max-width: 100%; }
-  .dash-d { padding: 14px 16px 28px; }
-}
-@media (max-width: 640px) {
-  .row-1 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .greet { gap: 6px; }
-  .greet__retry { margin-left: 0; }
-  .dash-d { padding: 12px 12px 24px; gap: 8px; }
-  .kpi__value { font-size: 22px; }
-  .stat-mini__val { font-size: 18px; }
-  .filter-bar { gap: 6px; }
-  .filter-meta { margin-left: 0; flex-basis: 100%; }
-  .filter-pill { font-size: 10px; padding: 4px 9px; }
-}
-@media (max-width: 420px) {
-  .row-1 { grid-template-columns: minmax(0, 1fr); }
-}
-
-/* ─── 다크모드 — 필터/배지 보강 ─── */
-:root[data-theme='dark'] .dash-d .filter-group,
-:root[data-theme='dark'] .dash-d .filter-compare {
-  background: rgba(28, 35, 48, 0.55);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-:root[data-theme='dark'] .dash-d .filter-pill { color: rgba(213, 220, 232, 0.7); }
-:root[data-theme='dark'] .dash-d .filter-pill:hover { color: #f7f9fc; }
-:root[data-theme='dark'] .dash-d .filter-pill--active {
-  background: linear-gradient(180deg, #a855f7 0%, #7c3aed 100%);
-  color: #fff;
-  box-shadow: 0 4px 10px rgba(168, 85, 247, 0.4);
-}
-:root[data-theme='dark'] .dash-d .filter-compare { color: rgba(213, 220, 232, 0.72); }
-:root[data-theme='dark'] .dash-d .filter-compare:hover {
-  color: #f7f9fc;
-  border-color: rgba(168, 85, 247, 0.45);
-}
-:root[data-theme='dark'] .dash-d .filter-compare--on {
-  background: rgba(168, 85, 247, 0.18);
-  border-color: rgba(168, 85, 247, 0.5);
-  color: #C4B5FD;
-}
-:root[data-theme='dark'] .dash-d .filter-meta { color: rgba(213, 220, 232, 0.62); }
-:root[data-theme='dark'] .dash-d .filter-chip {
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(213, 220, 232, 0.7);
-}
-:root[data-theme='dark'] .dash-d .filter-chip:hover {
-  color: #f7f9fc;
-  border-color: rgba(168, 85, 247, 0.45);
-}
-:root[data-theme='dark'] .dash-d .filter-chip--active {
-  background: rgba(168, 85, 247, 0.2);
-  border-color: rgba(168, 85, 247, 0.55);
-  color: #C4B5FD;
-}
-:root[data-theme='dark'] .dash-d .chart-compare-overlay polyline { stroke: rgba(213, 220, 232, 0.45); }
-:root[data-theme='dark'] .dash-d .chart-compare-overlay circle { fill: rgba(213, 220, 232, 0.45); }
-:root[data-theme='dark'] .dash-d .chart-compare-overlay__val { fill: rgba(213, 220, 232, 0.78); }
-:root[data-theme='dark'] .dash-d .legend__item--compare { color: rgba(213, 220, 232, 0.72); }
-:root[data-theme='dark'] .dash-d .legend__dot--compare { border-color: rgba(213, 220, 232, 0.55); }
-:root[data-theme='dark'] .dash-d .ptab__rank-badge--up {
-  background: rgba(52, 211, 153, 0.2);
-  color: #34D399;
-}
-:root[data-theme='dark'] .dash-d .ptab__rank-badge--down {
-  background: rgba(248, 113, 113, 0.2);
-  color: #F87171;
-}
-:root[data-theme='dark'] .dash-d .ptab__rank-badge--new {
-  background: rgba(168, 85, 247, 0.22);
-  color: #C4B5FD;
-}
-:root[data-theme='dark'] .dash-d .ptab__rank-badge--same {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(213, 220, 232, 0.7);
-}
-
-/* ─── 다크모드 차트 일관성 보강 ─── */
-:root[data-theme='dark'] .dash-d .chart .grid-lines line { stroke: rgba(255, 255, 255, 0.08); }
-:root[data-theme='dark'] .dash-d .chart .axis-text text,
-:root[data-theme='dark'] .dash-d .chart .axis-x { fill: rgba(213, 220, 232, 0.72); }
-:root[data-theme='dark'] .dash-d .axis-x--val-actual { fill: #C4B0FF; }
-:root[data-theme='dark'] .dash-d .axis-x--val-target { fill: #FFD480; }
-:root[data-theme='dark'] .dash-d .donut > circle:first-child { stroke: rgba(255, 255, 255, 0.06); }
-:root[data-theme='dark'] .dash-d .ctab__bar,
-:root[data-theme='dark'] .dash-d .kpi-bar__track { background: rgba(255, 255, 255, 0.08); }
-:root[data-theme='dark'] .dash-d .ctab__avatar,
-:root[data-theme='dark'] .dash-d .ptab__avatar { color: #fff; }
-:root[data-theme='dark'] .dash-d .sk-shimmer {
-  background: linear-gradient(90deg,
-    rgba(255, 255, 255, 0.06) 0%,
-    rgba(255, 255, 255, 0.12) 50%,
-    rgba(255, 255, 255, 0.06) 100%);
-  background-size: 400px 100%;
-}
-
-.grid { display: grid; gap: 10px; align-items: stretch; }
-.row-1 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.row-2 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.row-3 {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  max-width: 1080px;
-}
-
-/* ─── KPI (Glass + 컬러 chip) ─── */
-.kpi {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 20px;
-  padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 4px;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.kpi:hover {
-  background: rgba(255, 255, 255, 0.85);
-  transform: translateY(-3px);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
-}
-.kpi__top { display: flex; justify-content: space-between; align-items: center; }
-.kpi__icon {
-  width: 26px; height: 26px;
-  border-radius: 8px;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 13px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-}
-.kpi__pill {
-  font-size: 8px; font-weight: 800;
-  padding: 2px 6px; border-radius: 999px;
-  background: rgba(255,255,255,0.7);
-  color: var(--muted-text);
-  letter-spacing: 0.04em;
-}
-.kpi__value {
-  font-size: 22px; font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: -0.025em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.kpi__value small { font-size: 11px; font-weight: 700; color: var(--muted-text); margin-left: 1px; }
-.kpi__label { font-size: 10px; font-weight: 700; color: var(--text-secondary); }
-.kpi__delta {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 9px; font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.kpi__delta--pos { color: #047857; }
-.kpi__delta--neg { color: #C04438; }
-
-/* ─── 카드 공통 (Glass) ─── */
-.card {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 24px;
-  padding: 14px 16px;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.card:hover {
-  background: rgba(255, 255, 255, 0.82);
-  transform: translateY(-3px);
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
-}
-.card__head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px; }
-.card__title-wrap { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.card__title { font-size: 13px; font-weight: 800; color: var(--text-primary); margin: 0; letter-spacing: -0.01em; }
-.card__sub { font-size: 10px; color: var(--muted-text); margin: 0; }
-.card__link {
-  background: transparent; border: 0;
-  color: #6D28D9; font-size: 10px; font-weight: 700;
-  cursor: pointer; font-family: inherit;
-}
-
-/* legend */
-.legend { display: inline-flex; gap: 10px; flex-wrap: wrap; }
-.legend__item {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 10px; color: var(--muted-text); font-weight: 700;
-}
-.legend__dot { width: 8px; height: 8px; border-radius: 50%; }
-
-/* stat-strip */
-.stat-strip {
-  display: flex; gap: 10px;
-  margin: 2px 0 8px; padding: 7px 10px;
-  background: linear-gradient(180deg, rgba(157, 133, 255, 0.06) 0%, rgba(157, 133, 255, 0) 100%);
-  border: 1px solid rgba(157, 133, 255, 0.14);
-  border-radius: 8px;
-  flex-wrap: wrap;
-}
-.stat-mini { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 50px; }
-.stat-mini__val {
-  font-size: 14px; font-weight: 800;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-}
-.stat-mini__val small { font-size: 9px; font-weight: 700; color: var(--muted-text); margin-left: 1px; }
-.stat-mini__lbl { font-size: 9px; color: var(--muted-text); font-weight: 600; }
-.stat-mini--accent .stat-mini__val { color: #6D28D9; }
-
-/* charts */
-.chart { width: 100%; height: 160px; }
-.chart--target { height: 280px; }   /* 목표 vs 실적 — 영역 키움 */
-.grid-lines line { stroke: rgba(15, 23, 42, 0.06); stroke-width: 1; stroke-dasharray: 2 4; }
-.axis-text text,
-.chart text { font-size: 8px; font-weight: 600; fill: var(--muted-text); font-variant-numeric: tabular-nums; }
-.axis-x { font-size: 8px; fill: var(--muted-text); }
-
-/* 목표 vs 실적 — 큰 폰트 */
-.axis-text--lg text { font-size: 12px; font-weight: 700; fill: var(--text-secondary); }
-.axis-x--lg { font-size: 13px; font-weight: 800; fill: var(--text-primary); }
-.axis-x--val { font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
-/* 라이트 모드: 보라/노랑 막대 위 — 진한 톤 */
-.axis-x--val-actual { fill: #6D28D9; }
-.axis-x--val-target { fill: #B45309; }
-/* 다크 모드: 더 밝게 — 막대 위에서도 잘 보이게 */
-:root[data-theme='dark'] .dash-d .axis-x--val-actual { fill: #C4B5FD; }
-:root[data-theme='dark'] .dash-d .axis-x--val-target { fill: #FCD34D; }
-:root[data-theme='dark'] .dash-d .axis-x--lg { fill: #f7f9fc; }
-:root[data-theme='dark'] .dash-d .axis-text--lg text { fill: rgba(213, 220, 232, 0.85); }
-
-/* 다크모드 chart 텍스트 — 흰색 톤 */
-:root[data-theme='dark'] .dash-d .axis-text text,
-:root[data-theme='dark'] .dash-d .chart text,
-:root[data-theme='dark'] .dash-d .axis-x { fill: rgba(213, 220, 232, 0.78); }
-:root[data-theme='dark'] .dash-d .grid-lines line { stroke: rgba(255, 255, 255, 0.08); }
-
-/* ─── 권한 카드 (글래스 흰 카드 · 캠페인 행 형태) ─── */
-.role-card { display: flex; flex-direction: column; gap: 10px; }
-/* .card 글래스 스타일 그대로 사용 */
-
-.role-stats { display: flex; flex-direction: column; gap: 5px; }
-.role-stat {
-  display: grid;
-  grid-template-columns: 3px 1fr auto;
-  gap: 8px;
-  padding: 6px 8px;
-  background: rgba(15, 23, 42, 0.04);
-  border-radius: 8px;
+.page-settings__row {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-}
-.role-stat__bar { width: 3px; height: 100%; min-height: 24px; border-radius: 2px; }
-.role-stat__body { min-width: 0; }
-.role-stat__label { font-size: 9px; color: var(--muted-text); font-weight: 700; margin: 0; }
-.role-stat__val { font-size: 15px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; margin: 1px 0 0; }
-.role-stat__val small { font-size: 9px; font-weight: 700; color: var(--muted-text); margin-left: 1px; }
-.role-stat__delta {
-  font-size: 9px; font-weight: 800;
-  padding: 1px 6px; border-radius: 999px;
-  font-variant-numeric: tabular-nums;
-}
-.role-stat__delta.pos { background: rgba(111, 191, 135, 0.15); color: #047857; }
-.role-stat__delta.neg { background: rgba(255, 122, 107, 0.15); color: #C04438; }
-.role-cta {
-  margin-top: 2px;
-  padding: 9px 14px;
-  border: 0; border-radius: 10px;
-  background: linear-gradient(180deg, #c084fc 0%, #a855f7 100%);
-  color: #fff;
-  font-size: 11px; font-weight: 800;
-  cursor: pointer; font-family: inherit;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  width: 100%;
-  box-shadow: 0 4px 10px rgba(168, 85, 247, 0.25);
-}
-.role-cta:hover { opacity: 0.95; transform: translateY(-1px); }
-
-/* ─── GM 분기 KPI 달성률 (캠페인 행 형태) ─── */
-.kpi-main {
-  display: flex; align-items: baseline; gap: 8px;
-  padding: 4px 4px 8px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-  margin-bottom: 4px;
-}
-.kpi-main__val {
-  font-size: 30px; font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
-.kpi-main__val small {
-  font-size: 14px; font-weight: 700;
-  color: var(--muted-text);
-  margin-left: 1px;
-}
-.kpi-main__sub {
-  font-size: 10px; font-weight: 600;
-  color: var(--muted-text);
-}
-
-.kpi-bars { display: flex; flex-direction: column; gap: 8px; }
-.kpi-bar {
-  display: grid;
-  grid-template-columns: 32px 1fr 50px;
   gap: 10px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.page-settings__row.tight { padding: 5px 0; }
+.page-settings__lbl { font-size: 13px; font-weight: 600; color: var(--lp-text); }
+.page-settings__hint { margin: 2px 0 6px; font-size: 11px; color: var(--lp-text-faint); line-height: 1.45; }
+
+.page-settings__h.sub {
+  margin-top: 2px;
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+.page-settings__div {
+  border: 0;
+  border-top: 1px solid var(--lp-border);
+  margin: 12px 0;
+}
+
+.page-settings__sub {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
+  padding: 4px 0 6px;
+  gap: 8px;
 }
-.kpi-bar__chip {
-  width: 32px; height: 32px;
-  border-radius: 9px;
-  display: inline-flex; align-items: center; justify-content: center;
-  color: white; font-size: 12px; font-weight: 800;
-  letter-spacing: 0.04em;
-  flex-shrink: 0;
-}
-.kpi-bar__body {
-  min-width: 0;
-  display: flex; flex-direction: column; gap: 4px;
-}
-.kpi-bar__label {
-  font-size: 12px; font-weight: 700;
-  color: var(--text-primary);
-}
-.kpi-bar__track {
-  height: 4px;
-  background: rgba(15, 23, 42, 0.06);
+.page-settings__sub-lbl { font-size: 11.5px; color: var(--lp-text-muted); }
+
+.lp-mini-seg {
+  display: inline-flex;
+  background: var(--lp-surface-soft);
   border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+}
+.lp-mini-seg button {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--lp-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.lp-mini-seg button:hover { color: var(--lp-text); }
+.lp-mini-seg button.is-on {
+  background: var(--lp-surface);
+  color: var(--lp-primary-deep);
+  box-shadow: 0 1px 3px rgba(63,52,99,.10);
+}
+
+.lp-select {
+  padding: 5px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--lp-text);
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-border);
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+}
+.lp-select:focus { border-color: var(--lp-primary); }
+
+.page-settings__sync {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+.page-settings__sync-lbl { font-size: 11px; color: var(--lp-text-faint); margin-bottom: 2px; }
+.page-settings__sync-rel { font-size: 13px; font-weight: 700; color: var(--lp-text); }
+.page-settings__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 0;
+  background: var(--lp-primary-deep);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s ease, opacity .15s ease;
+}
+.page-settings__refresh:hover { background: #4F4275; }
+.page-settings__refresh:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* iOS-style switch */
+.lp-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 38px;
+  height: 22px;
+  background: var(--lp-border);
+  border-radius: 999px;
+  position: relative;
+  cursor: pointer;
+  transition: background .2s ease;
+  flex-shrink: 0;
+  outline: none;
+}
+.lp-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.18);
+  transition: left .22s cubic-bezier(.4,0,.2,1);
+}
+.lp-switch:checked { background: var(--lp-primary-deep); }
+.lp-switch:checked::after { left: 18px; }
+
+.settings-pop-enter-active, .settings-pop-leave-active { transition: opacity .2s ease, transform .2s ease; }
+.settings-pop-enter-from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+.settings-pop-leave-to   { opacity: 0; transform: translateY(-6px) scale(0.96); }
+
+.period-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.period-tabs { display: inline-flex; background: var(--lp-surface); border: 1px solid var(--lp-border); border-radius: var(--r-pill); padding: 3px; gap: 2px; }
+.ptab { padding: 7px 16px; font-size: 12px; font-weight: 600; color: var(--lp-text-muted); border: 0; background: transparent; border-radius: var(--r-pill); cursor: pointer; transition: background .15s, color .15s; }
+.ptab:hover { background: var(--lp-surface-soft); color: var(--lp-text); }
+.ptab.is-on { background: var(--lp-primary-deep); color: #fff; }
+.cmp-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: var(--lp-text-muted); cursor: pointer; user-select: none; }
+.cmp-toggle input { accent-color: var(--lp-primary-deep); }
+
+.err-banner { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; background: #FFF1D6; border: 1px solid #FFC36B; border-radius: var(--r-md); font-size: 12.5px; color: var(--lp-text); }
+.err-retry { border: 0; background: var(--lp-primary-deep); color: #fff; padding: 6px 14px; font-size: 11.5px; font-weight: 600; border-radius: var(--r-pill); cursor: pointer; }
+
+.dash { display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: auto 1fr; gap: 20px; }
+.zone-today    { grid-column: 1; grid-row: 1; }
+.zone-bottom   { grid-column: 1; grid-row: 2; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr); gap: 20px; }
+.zone-carousel { grid-column: 2; grid-row: 1 / span 2; }
+
+.card { background: var(--lp-surface); border-radius: var(--r-xl); padding: 22px 24px; box-shadow: var(--shadow-card); position: relative; overflow: hidden; }
+.card-h { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; gap: 12px; }
+.card-h h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; color: var(--lp-text); }
+.card-h .lede { margin: 4px 0 0; font-size: 12px; font-weight: 500; color: var(--lp-text-muted); }
+
+.zone-nav { display: inline-flex; align-items: center; gap: 6px; }
+.nav-btn { width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--lp-border); background: var(--lp-surface); color: var(--lp-primary-deep); cursor: pointer; font-size: 14px; line-height: 1; transition: background .15s, transform .12s; }
+.nav-btn:hover { background: var(--lp-surface-soft); }
+.nav-btn:active { transform: scale(0.94); }
+.nav-ind { font-size: 11px; font-weight: 600; color: var(--lp-text-faint); min-width: 36px; text-align: center; font-variant-numeric: tabular-nums; }
+
+.z3-controls { display: inline-flex; align-items: center; gap: 10px; }
+.gn-seg { display: inline-flex; background: var(--lp-surface-soft); border-radius: 999px; padding: 3px; gap: 2px; }
+.gn-btn { padding: 4px 10px; font-size: 11px; font-weight: 600; color: var(--lp-text-muted); border: 0; background: transparent; border-radius: 999px; cursor: pointer; transition: background .15s, color .15s; }
+.gn-btn:hover { color: var(--lp-text); }
+.gn-btn.is-on { background: var(--lp-surface); color: var(--lp-primary-deep); box-shadow: 0 1px 3px rgba(63,52,99,.10); }
+
+/* Page slide transition */
+.page-slide-enter-active, .page-slide-leave-active { transition: opacity .25s ease, transform .25s ease; }
+.page-slide-enter-from { opacity: 0; transform: translateX(16px); }
+.page-slide-leave-to   { opacity: 0; transform: translateX(-16px); }
+
+/* Zone 1 */
+.today-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; transition: min-height .25s ease; }
+.today-grid--tall .ptask { min-height: 240px; }
+.ptask { border-radius: 18px; padding: 22px 22px 18px; min-height: 188px; display: flex; flex-direction: column; gap: 16px; position: relative; overflow: hidden; transition: min-height .25s ease; }
+.ptask-1 { background: var(--lp-card-lavender-1); }
+.ptask-2 { background: var(--lp-lime-soft); }
+.ptask-3 { background: var(--lp-card-cream); }
+
+.ptask--clickable {
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.ptask--clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(63,52,99,.14);
+}
+.ptask--clickable:focus-visible {
+  outline: 2px solid var(--lp-primary-deep);
+  outline-offset: 2px;
+}
+.ptask .pill { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.65); backdrop-filter: blur(2px); padding: 5px 12px 5px 8px; border-radius: var(--r-pill); font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; color: var(--lp-primary-deep); }
+.ptask .pill::before { content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--lp-primary-strong); display: inline-block; }
+.ptask h3 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.05; color: var(--lp-text); }
+.ptask-sub { margin: 0; font-size: 11.5px; font-weight: 500; color: var(--lp-text-muted); line-height: 1.35; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ptask .pill--urgent { background: rgba(192, 68, 56, 0.16); color: #8B2A22; }
+.ptask .pill--urgent::before { background: #C04438; }
+.ptask .pill--review { background: rgba(168, 189, 66, 0.32); color: var(--lp-primary-deep); }
+.ptask .pill--review::before { background: #A8BD42; }
+.ptask .pill--tomorrow { background: rgba(215, 185, 124, 0.30); color: #6B4F1F; }
+.ptask .pill--tomorrow::before { background: #D7B97C; }
+.ptask .meta { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ptask .avs { display: inline-flex; }
+.ptask .count { background: rgba(255,255,255,.65); color: var(--lp-primary-deep); padding: 5px 12px; font-size: 12px; font-weight: 700; border-radius: var(--r-pill); font-variant-numeric: tabular-nums; }
+
+.av { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 999px; border: 2px solid #fff; color: #fff; font-size: 11px; font-weight: 700; margin-left: -8px; box-sizing: border-box; }
+.avs .av:first-child { margin-left: 0; }
+.a-violet   { background: #8E72BA; }
+.a-lime     { background: #A8BD42; color: var(--lp-primary-deep); }
+.a-lavender { background: #B0A4DA; }
+.a-cream    { background: #D7B97C; }
+.a-rose     { background: #C58FA3; }
+
+/* Zone 2 — Top5 협력사 + 가로 막대 */
+.ts-list { display: flex; flex-direction: column; }
+.ts-row { display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--lp-border); }
+.ts-row:first-child { border-top: 0; padding-top: 4px; }
+.ts-row .av-lg { width: 38px; height: 38px; font-size: 12px; margin: 0; position: relative; }
+.ts-row .av-lg.crown::after { content: '★'; position: absolute; top: -4px; right: -4px; width: 18px; height: 18px; border-radius: 999px; background: var(--lp-lime); color: var(--lp-primary-deep); font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.ts-mid { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ts-row .name { font-size: 14px; font-weight: 600; color: var(--lp-text); line-height: 1.2; }
+.ts-row .sub { display: inline-flex; gap: 10px; font-size: 11px; color: var(--lp-text-faint); }
+.ts-bar { width: 100%; height: 6px; background: var(--lp-surface-soft); border-radius: 999px; overflow: hidden; }
+.ts-bar-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--lp-primary) 0%, var(--lp-primary-deep) 100%); border-radius: 999px; transition: width .9s cubic-bezier(.4,0,.2,1); }
+.ts-row .score { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--lp-text); font-variant-numeric: tabular-nums; }
+
+/* Zone 3 — KPI bars + donut */
+.kpi-legend { display: inline-flex; gap: 14px; font-size: 11.5px; color: var(--lp-text-muted); margin-bottom: 12px; }
+.kpi-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.kpi-legend span::before { content: ''; width: 9px; height: 9px; display: inline-block; }
+.kpi-legend .l-primary::before { background: var(--lp-primary); }
+.kpi-legend .l-lime::before { background: var(--lp-lime); }
+.bars { display: grid; grid-template-columns: repeat(6, 1fr); align-items: end; height: 200px; padding: 60px 4px 28px; margin-top: 14px; gap: 14px; position: relative; }
+.bars::before, .bars::after { content: ''; position: absolute; left: 0; right: 0; border-top: 1px dashed var(--lp-border); pointer-events: none; }
+.bars::before { top: 33%; }
+.bars::after  { top: 66%; }
+.bar-col { display: flex; align-items: end; justify-content: center; gap: 4px; height: 100%; position: relative; }
+.bar { width: 18px; border-radius: 999px; transition: height .5s cubic-bezier(.4,0,.2,1); transform-origin: bottom; }
+.bar-primary { background: var(--lp-primary); }
+.bar-lime    { background: var(--lp-lime); }
+.bar-col .lbl { position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: var(--lp-text-faint); }
+
+/* Zone 4 — Sales Target 라인 차트 (carousel 컨테이너) */
+.carousel { background: linear-gradient(165deg, #C5ADE0 0%, #A98DCC 55%, #8E72BA 100%); border-radius: var(--r-xl); padding: 24px 22px; display: flex; flex-direction: column; gap: 14px; color: #fff; box-shadow: var(--shadow-carousel); position: relative; overflow: hidden; min-height: 540px; }
+.carousel::before { content: ''; position: absolute; top: -50px; right: -60px; width: 220px; height: 220px; border-radius: 999px; background: rgba(255,255,255,.08); pointer-events: none; }
+.car-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; position: relative; }
+.car-h .title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; color: #fff; }
+.car-h .csub { margin: 4px 0 0; font-size: 11px; color: rgba(255,255,255,.7); }
+.menu { width: 28px; height: 28px; border-radius: 999px; background: rgba(255,255,255,.18); border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.menu:hover { background: rgba(255,255,255,.28); }
+
+.z4-headline { display: flex; align-items: baseline; gap: 10px; padding: 4px 2px 0; }
+.z4-total { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: #fff; font-variant-numeric: tabular-nums; }
+.z4-total::before { content: '₩'; font-size: 18px; font-weight: 700; margin-right: 4px; opacity: .85; }
+.z4-delta { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,.20); }
+.z4-delta.up { color: #ECFCCB; }
+.z4-delta.down { color: #FED7AA; }
+
+.z4-chart-wrap { background: rgba(255,255,255,.94); border-radius: 18px; padding: 8px 6px 0; flex: 1; min-height: 200px; }
+.z4-controls { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.gn-seg--inverse { background: rgba(255,255,255,.18); }
+.gn-seg--inverse .gn-btn { color: rgba(255,255,255,.78); }
+.gn-seg--inverse .gn-btn:hover { color: #fff; }
+.gn-seg--inverse .gn-btn.is-on { background: rgba(255,255,255,.92); color: var(--lp-primary-deep); box-shadow: none; }
+
+.car-arrows { display: inline-flex; align-items: center; gap: 8px; }
+.car-arrows button { width: 32px; height: 32px; border-radius: 999px; background: rgba(255,255,255,.18); border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background .15s; }
+.car-arrows button:hover { background: rgba(255,255,255,.28); }
+.page-dots { display: inline-flex; gap: 6px; padding: 0 4px; }
+.page-dots .dot { width: 6px; height: 6px; border-radius: 999px; background: rgba(255,255,255,.4); cursor: pointer; transition: width .25s ease, background .25s ease; }
+.page-dots .dot.is-active { width: 22px; background: var(--lp-lime); }
+
+.chart-fade-enter-active, .chart-fade-leave-active { transition: opacity .3s ease, transform .3s ease; }
+.chart-fade-enter-from { opacity: 0; transform: translateY(8px); }
+.chart-fade-leave-to   { opacity: 0; transform: translateY(-8px); }
+
+/* Empty state */
+.zone-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 32px 12px;
+  border-radius: 14px;
+  background: var(--lp-surface-soft);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--lp-text-faint);
+  letter-spacing: -0.005em;
+}
+
+/* ═══ Zone 4 — Sales Target 스택 (반원 게이지 + 라인 차트) ═══ */
+.z4-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+  min-height: 540px;
+}
+.z4-top {
+  background: linear-gradient(165deg, #C5ADE0 0%, #A98DCC 55%, #8E72BA 100%);
+  border-radius: var(--r-xl);
+  padding: 22px 22px 26px;
+  color: #fff;
+  box-shadow: var(--shadow-carousel);
+  position: relative;
   overflow: hidden;
 }
-.kpi-bar__fill {
-  height: 100%;
+.z4-top::before {
+  content: '';
+  position: absolute;
+  top: -50px; right: -60px;
+  width: 220px; height: 220px;
   border-radius: 999px;
-  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255,255,255,.08);
+  pointer-events: none;
 }
-.kpi-bar__right {
-  display: flex; flex-direction: column;
-  align-items: flex-end; gap: 2px;
-  min-width: 0;
-}
-.kpi-bar__pct {
-  font-size: 13px; font-weight: 800;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
-.kpi-bar__delta {
-  font-size: 9px; font-weight: 800;
-  padding: 1px 6px; border-radius: 999px;
-  font-variant-numeric: tabular-nums;
-}
-.kpi-bar__delta.pos { background: rgba(111, 191, 135, 0.15); color: #047857; }
-.kpi-bar__delta.neg { background: rgba(255, 122, 107, 0.15); color: #C04438; }
+.z4-top .car-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; position: relative; }
+.z4-top .title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; color: #fff; }
+.z4-top .csub { margin: 4px 0 0; font-size: 11px; color: rgba(255,255,255,.78); }
 
-/* ─── 자산 도넛 ─── */
-.asset-card { display: flex; flex-direction: column; gap: 6px; }
-.donut-wrap { position: relative; width: 100%; max-width: 110px; margin: 2px auto 6px; }
-.donut { width: 100%; height: auto; aspect-ratio: 1 / 1; display: block; }
-.donut__center {
-  position: absolute; top: 50%; left: 50%;
+.z4-gauge-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding-top: 14px;
+  position: relative;
+}
+.gauge-wrap { position: relative; }
+.gauge-pill {
+  position: absolute;
+  left: 50%;
+  top: 76%;
   transform: translate(-50%, -50%);
-  display: flex; flex-direction: column; align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: rgba(255,255,255,.18);
+  backdrop-filter: blur(4px);
+  padding: 8px 18px;
+  border-radius: var(--r-md);
+  min-width: 110px;
+  text-align: center;
 }
-.donut__value { font-size: 20px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
-.donut__label { font-size: 9px; color: var(--muted-text); font-weight: 600; margin-top: 1px; }
-.asset-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.asset-legend li { display: grid; grid-template-columns: 8px 1fr auto auto; align-items: center; gap: 6px; }
-.asset-legend__dot { width: 8px; height: 8px; border-radius: 50%; }
-.asset-legend__label { font-size: 10px; color: var(--text-secondary); font-weight: 600; }
-.asset-legend__count { font-size: 11px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-.asset-legend__pct { font-size: 9px; color: var(--muted-text); font-weight: 700; font-variant-numeric: tabular-nums; min-width: 24px; text-align: right; }
+.gauge-pill .v { font-size: 22px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+.gauge-pill .lbl { font-size: 11px; color: rgba(255,255,255,.82); white-space: nowrap; }
 
-/* ─── 캠페인 table ─── */
-.ctab, .ptab {
-  width: 100%; border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
+.chips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
 }
-.ctab th, .ptab th {
-  font-size: 9px; font-weight: 700;
-  color: var(--muted-text); text-align: left;
-  padding: 4px 6px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+.chip {
+  background: rgba(255,255,255,.18);
+  border-radius: 14px;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
-.ctab td, .ptab td {
-  font-size: 11px;
-  padding: 6px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.04);
-}
-.ctab tbody tr { cursor: pointer; transition: background 0.15s ease; }
-.ctab tbody tr:hover { background: rgba(157, 133, 255, 0.06); }
-.ctab__name { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--text-primary); }
-.ctab__avatar {
-  width: 20px; height: 20px;
-  border-radius: 6px;
-  display: inline-flex; align-items: center; justify-content: center;
-  color: white; font-size: 8px; font-weight: 800;
-  letter-spacing: 0.04em;
-  flex-shrink: 0;
-}
-.ctab__progress { display: flex; align-items: center; gap: 6px; }
-.ctab__bar { flex: 1; min-width: 40px; height: 4px; background: rgba(15, 23, 42, 0.06); border-radius: 999px; overflow: hidden; }
-.ctab__fill { height: 100%; border-radius: 999px; transition: width 0.5s ease; }
-.ctab__pct { font-size: 10px; font-weight: 800; color: var(--text-primary); }
-.ctab__dday {
-  font-size: 9px; font-weight: 800;
-  padding: 1px 6px; border-radius: 999px;
-  background: rgba(15, 23, 42, 0.06); color: var(--muted-text);
-}
-.ctab__dday.urgent { background: rgba(255, 122, 107, 0.18); color: #C04438; }
-.status { font-size: 8px; font-weight: 800; padding: 1px 6px; border-radius: 999px; }
-.st--live { background: rgba(111, 191, 135, 0.18); color: #047857; }
-.st--review { background: rgba(255, 138, 92, 0.18); color: #C45524; }
-.st--draft { background: rgba(15, 23, 42, 0.06); color: var(--muted-text); }
+.chip .l { font-size: 9.5px; color: rgba(255,255,255,.66); }
+.chip .v { font-size: 14px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
 
-/* ─── 제휴사 ranking table ─── */
-.ptab__rank { font-size: 11px; font-weight: 800; color: var(--muted-text); }
-.ptab__name { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-primary); }
-.ptab__avatar {
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  color: white; font-size: 10px; font-weight: 800;
-  display: inline-flex; align-items: center; justify-content: center;
-  border: 2px solid white;
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06);
-  flex-shrink: 0;
+.z4-bottom {
+  background: var(--lp-surface);
+  border-radius: var(--r-xl);
+  padding: 20px 22px 18px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
 }
-.ptab__score { font-size: 13px; font-weight: 800; color: var(--text-primary); }
-.ptab__spark { width: 50px; height: 18px; }
-.ptab__delta {
-  display: inline-flex; align-items: center; gap: 2px;
-  font-size: 10px; font-weight: 800;
-  padding: 1px 6px; border-radius: 999px;
-  font-variant-numeric: tabular-nums;
-}
-.ptab__delta.pos { background: rgba(111, 191, 135, 0.15); color: #047857; }
-.ptab__delta.neg { background: rgba(255, 122, 107, 0.15); color: #C04438; }
+.z4-bottom-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.z4-bottom-title { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--lp-text); }
+.z4-bottom-sub { margin: 3px 0 0; font-size: 11px; color: var(--lp-text-muted); }
 
-/* ─── 반응형 ─── */
-@media (max-width: 1280px) {
-  .row-1 { grid-template-columns: repeat(3, 1fr); }
-  .row-2 { grid-template-columns: 1fr; }
-  .row-3 { grid-template-columns: 1fr; max-width: 100%; }
+.z4-headline { display: flex; align-items: baseline; gap: 10px; }
+.z4-total { display: inline-flex; align-items: baseline; gap: 2px; font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: var(--lp-text); font-variant-numeric: tabular-nums; }
+.z4-total-num { display: inline-block; }
+.z4-unit { color: var(--lp-primary-strong); font-weight: 700; }
+.z4-unit--prefix { font-size: 18px; margin-right: 2px; }
+.z4-unit--suffix { font-size: 16px; margin-left: 2px; }
+.z4-delta { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--lp-surface-soft); }
+.z4-delta.up { color: var(--lp-primary-deep); }
+.z4-delta.down { color: #C04438; }
+
+.z4-chart-wrap { flex: 1; min-height: 170px; }
+.z4-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 170px;
+  font-size: 12px;
+  color: var(--lp-text-faint);
 }
-@media (max-width: 880px) {
-  .row-1 { grid-template-columns: repeat(2, 1fr); }
-  .dash-d { padding: 18px 16px 60px; }
+
+.z4-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 2px 0 0;
+}
+.z4-nav {
+  width: 30px; height: 30px;
+  border-radius: 999px;
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-border);
+  color: var(--lp-primary-deep);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, transform .12s;
+}
+.z4-nav:hover { background: var(--lp-surface-soft); }
+.z4-nav:active { transform: scale(0.92); }
+.z4-pager .page-dots .dot { background: var(--lp-border); }
+.z4-pager .page-dots .dot.is-active { width: 22px; background: var(--lp-primary-deep); }
+
+@media (max-width: 1100px) {
+  .dash { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; }
+  .zone-today    { grid-column: 1; grid-row: 1; }
+  .zone-bottom   { grid-column: 1; grid-row: 2; grid-template-columns: minmax(0,1fr); }
+  .zone-carousel { grid-column: 1; grid-row: 3; }
+  .today-grid { grid-template-columns: 1fr; }
+  .carousel { min-height: 480px; }
+}
+
+@media (max-width: 720px) {
+  .page[data-cycle="lavender-pop"] { padding: 18px 16px 36px; }
+  .page-h h1 { font-size: 22px; }
+  .ptask h3 { font-size: 20px; }
 }
 </style>

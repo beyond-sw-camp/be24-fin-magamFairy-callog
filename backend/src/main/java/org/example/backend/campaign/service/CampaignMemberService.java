@@ -45,6 +45,7 @@ public class CampaignMemberService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final org.example.backend.notification.service.NotificationSseService sseService;
+    private final org.example.backend.userInfo.service.UserProfileService userProfileService;
 
     public List<CampaignMemberDto.ParticipantRes> listParticipants(Long campaignId) {
         return participantRepository.findAllByCampaignIdx(campaignId).stream()
@@ -61,7 +62,7 @@ public class CampaignMemberService {
 
         List<CampaignMember> all = memberRepository.findAllByCampaignIdx(campaignId);
         List<CampaignMemberDto.Res> resList = filterVisibleMembers(all, meMember, caller).stream()
-                .map(CampaignMemberDto.Res::from)
+                .map(m -> CampaignMemberDto.Res.from(m, userProfileService.getProfileImageUrl(m.getUser())))
                 .toList();
 
         Long pmOrganizationIdx = participantRepository
@@ -71,7 +72,7 @@ public class CampaignMemberService {
 
         return CampaignMemberDto.ListRes.builder()
                 .members(resList)
-                .me(CampaignMemberDto.Res.from(meMember))
+                .me(CampaignMemberDto.Res.from(meMember, userProfileService.getProfileImageUrl(meMember.getUser())))
                 .organizationIsPm(isPmOrganization(campaignId, caller))
                 .pmOrganizationIdx(pmOrganizationIdx)
                 .build();
@@ -433,6 +434,9 @@ public class CampaignMemberService {
                     .organization(inviteeOrganization)
                     .campaignRole(CampaignRole.PARTNER)
                     .build());
+
+            // 초대받은 조직(외부 협력사)이 새로 캠페인에 합류 → 조직명을 Campaign.partners 에 자동 추가
+            campaign.addPartnerIfAbsent(inviteeOrganization.getName());
         }
 
         int joinedCount;
@@ -599,6 +603,7 @@ public class CampaignMemberService {
                 .globalRole(user.getRole())
                 .organizationIdx(organization != null ? organization.getIdx() : null)
                 .organizationName(organization != null ? organization.getName() : null)
+                .profileImageUrl(userProfileService.getProfileImageUrl(user))
                 .build();
     }
 

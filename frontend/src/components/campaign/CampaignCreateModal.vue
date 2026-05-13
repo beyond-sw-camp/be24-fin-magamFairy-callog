@@ -1,6 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { campaignLabels, campaignModalText } from '@/constants/campaignText'
+import { fetchColleaguesRequest } from '@/authApi'
 import KpiContributionPicker from '@/components/campaign/KpiContributionPicker.vue'
 
 const props = defineProps({
@@ -32,16 +33,24 @@ function createEmptyForm() {
     campaignMethods: [],
     startDate: '',
     endDate: '',
-    partnerInput: '',
     maxCost: '',
     minRevenue: '',
-    ownerName: '',
-    ownerEmail: '',
     goals: '',
-    mainMessage: '',
     color: '',
     icon: '🎯',
   }
+}
+
+const ROLE_LABELS = {
+  ROLE_ADMIN: '관리자',
+  ROLE_GENERAL_MANAGER: '총괄 매니저',
+  ROLE_MANAGER: '매니저',
+  ROLE_USER: '담당자',
+}
+
+function formatRole(role) {
+  if (!role) return '담당자'
+  return ROLE_LABELS[role] ?? role.replace(/^ROLE_/, '')
 }
 
 // 백엔드 CampaignService.CAMPAIGN_PALETTE와 동일한 20색
@@ -108,7 +117,12 @@ const campaignIconOptions = [
 ]
 
 const form = reactive(createEmptyForm())
-const partners = ref([])
+const selectedMembers = ref([])
+const memberCandidates = ref([])
+const membersLoaded = ref(false)
+const membersLoading = ref(false)
+const membersError = ref('')
+const memberSearch = ref('')
 const expandedPickers = reactive({
   goal: false,
   method: false,
@@ -145,7 +159,17 @@ const campaignMethodSummary = computed(() =>
   form.campaignMethods.length ? form.campaignMethods.join(', ') : '선택 안 함',
 )
 const isStep2Valid = computed(() => Boolean(form.startDate) && Boolean(form.endDate))
-const isStep3Valid = computed(() => form.ownerName.trim().length > 0 && form.ownerEmail.trim().length > 0)
+const isStep3Valid = computed(() => true)
+
+const filteredMembers = computed(() => {
+  const q = memberSearch.value.trim().toLowerCase()
+  if (!q) return memberCandidates.value
+  return memberCandidates.value.filter((m) =>
+    (m.name || '').toLowerCase().includes(q)
+    || (m.email || '').toLowerCase().includes(q)
+    || (m.department || '').toLowerCase().includes(q),
+  )
+})
 const isStep4Valid = computed(() =>
   // 기여 KPI는 선택 사항이지만, 매핑된 KPI는 모두 committedValue > 0 이어야 함
   contributions.value.every((c) => Number(c.committedValue) > 0),
@@ -164,8 +188,8 @@ function isStepDone(step) {
 
 const stepDescriptors = [
   { num: 1, label: '자산 & 목표' },
-  { num: 2, label: '조건 & 파트너' },
-  { num: 3, label: '재무 & 담당자' },
+  { num: 2, label: '방식 & 일정' },
+  { num: 3, label: '재무 & 팀원' },
   { num: 4, label: '기여 KPI' }
 ]
 
@@ -178,22 +202,20 @@ function hydrateForm(values) {
   nextForm.startDate = source.startDate ?? ''
   nextForm.endDate = source.endDate ?? ''
   nextForm.goals = source.goals ?? ''
-  nextForm.mainMessage = source.mainMessage ?? ''
   nextForm.assetName = source.assetName ?? ''
   nextForm.assetDescription = source.assetDescription ?? ''
   nextForm.primaryGoal = source.primaryGoal ?? nextForm.primaryGoal
   nextForm.campaignMethods = Array.isArray(source.campaignMethods) ? [...source.campaignMethods] : []
   nextForm.maxCost = source.maxCost ?? ''
   nextForm.minRevenue = source.minRevenue ?? ''
-  nextForm.ownerName = source.ownerName ?? ''
-  nextForm.ownerEmail = source.ownerEmail ?? ''
   nextForm.color = source.color ?? ''
   nextForm.icon = source.icon ?? '🎯'
   Object.assign(form, nextForm)
-  partners.value = Array.isArray(source.partners) ? [...source.partners] : []
+  selectedMembers.value = Array.isArray(source.members) ? [...source.members] : []
   contributions.value = Array.isArray(source.contributions) ? [...source.contributions] : []
   expandedPickers.goal = false
   expandedPickers.method = false
+  memberSearch.value = ''
 }
 
 watch(
@@ -209,24 +231,44 @@ watch(
   { immediate: true, deep: true },
 )
 
-function addPartner() {
-  const next = form.partnerInput.trim()
-  if (!next || partners.value.includes(next)) {
-    form.partnerInput = ''
-    return
-  }
-  partners.value.push(next)
-  form.partnerInput = ''
-}
-function removePartner(partner) {
-  partners.value = partners.value.filter((item) => item !== partner)
-}
-function handlePartnerKeydown(event) {
-  if (event.key === 'Enter') {
-    event.preventDefault()
-    addPartner()
+async function loadTeamCandidates() {
+  membersLoading.value = true
+  membersError.value = ''
+  try {
+    const users = await fetchColleaguesRequest()
+    memberCandidates.value = Array.isArray(users) ? users : []
+    membersLoaded.value = true
+  } catch (err) {
+    membersError.value = err?.message ?? '팀원 목록을 불러오지 못했습니다.'
+    memberCandidates.value = []
+  } finally {
+    membersLoading.value = false
   }
 }
+
+function isMemberSelected(user) {
+  return selectedMembers.value.some((m) => m.idx === user.idx)
+}
+
+function toggleMember(user) {
+  if (isMemberSelected(user)) {
+    selectedMembers.value = selectedMembers.value.filter((m) => m.idx !== user.idx)
+  } else {
+    selectedMembers.value.push({
+      idx: user.idx,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      profileImageUrl: user.profileImageUrl ?? null,
+    })
+  }
+}
+
+watch(currentStep, (step) => {
+  if (step === 3 && !membersLoaded.value && !membersLoading.value) {
+    loadTeamCandidates()
+  }
+})
 
 function toggleListValue(key, value) {
   const list = form[key]
@@ -251,10 +293,8 @@ function goPrev() {
 
 function submitForm() {
   if (!canSubmit.value) return
-  const submittedPartners = [
-    ...partners.value,
-    form.partnerInput.trim(),
-  ].filter(Boolean)
+
+  const ownerUserIdxs = selectedMembers.value.map((m) => m.idx).filter((v) => v != null)
 
   emit('submit', {
     name: form.name,
@@ -262,17 +302,14 @@ function submitForm() {
     tags: tagList.value,
     startDate: form.startDate,
     endDate: form.endDate,
-    partners: [...new Set(submittedPartners)],
     goals: form.goals,
-    mainMessage: form.mainMessage,
     assetName: form.assetName,
     assetDescription: form.assetDescription,
     primaryGoal: resolvedPrimaryGoal.value,
     campaignMethods: [...form.campaignMethods],
     maxCost: form.maxCost,
     minRevenue: form.minRevenue,
-    ownerName: form.ownerName,
-    ownerEmail: form.ownerEmail,
+    ownerUserIdxs,
     color: form.color,
     contributions: contributions.value.map((c) => ({
       targetOrgKpiId: c.targetOrgKpiId,
@@ -463,10 +500,10 @@ function avatarInitial(value) {
             </div>
           </div>
 
-          <!-- Step 2: 조건 & 파트너 -->
+          <!-- Step 2: 방식 & 일정 -->
           <div v-if="currentStep === 2">
-            <div class="step-section-title">어떻게 진행하고 누구와 맞출까요?</div>
-            <div class="step-section-desc">캠페인 방식, 기간, 선호 파트너 업종을 선택합니다.</div>
+            <div class="step-section-title">어떻게 진행하고 언제 운영할까요?</div>
+            <div class="step-section-desc">캠페인 방식과 운영 기간을 선택합니다.</div>
 
             <div class="field-row">
               <label class="lbl"><span>캠페인 방식 <em>다중 선택</em></span></label>
@@ -507,42 +544,12 @@ function avatarInitial(value) {
               </div>
             </div>
 
-            <div class="field-row">
-              <label class="lbl"><span>파트너 초대</span></label>
-              <div class="input-wrap-add">
-                <input
-                  v-model="form.partnerInput"
-                  class="fld"
-                  placeholder="파트너명 또는 담당자를 추가하세요"
-                  @keydown="handlePartnerKeydown"
-                />
-                <button type="button" class="btn btn--primary" @click="addPartner">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  <span> 추가</span>
-                </button>
-              </div>
-              <div v-if="partners.length" class="pill-row" style="margin-top: 10px;">
-                <span v-for="partner in partners" :key="partner" class="chip">
-                  <span class="avatar" style="width: 18px; height: 18px; font-size: 10px; margin-right: 4px;">
-                    <span>{{ avatarInitial(partner) }}</span>
-                  </span>
-                  <span>{{ partner }}</span>
-                  <button type="button" class="chip__x" :aria-label="`${partner} 제거`" @click="removePartner(partner)">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </span>
-              </div>
-            </div>
           </div>
 
-          <!-- Step 3: 재무 & 담당자 -->
+          <!-- Step 3: 재무 & 팀원 -->
           <div v-if="currentStep === 3">
-            <div class="step-section-title">재무 기준과 담당자를 남겨주세요</div>
-            <div class="step-section-desc">선택 기준과 실무 연락처를 저장해 추천과 후속 협업에 활용합니다.</div>
+            <div class="step-section-title">재무 기준과 함께할 팀원을 정해주세요</div>
+            <div class="step-section-desc">선택 기준을 기록하고 같은 회사 팀원을 캠페인 멤버로 자동 등록합니다.</div>
 
             <div class="field-row field-grid-2">
               <div>
@@ -572,23 +579,63 @@ function avatarInitial(value) {
             </div>
 
             <div class="field-row">
-              <label class="lbl"><span>{{ campaignLabels.mainMessage }}</span></label>
-              <textarea
-                v-model="form.mainMessage"
-                rows="3"
-                class="fld fld--text"
-                placeholder="협력사와 고객에게 전달할 핵심 메시지를 입력하세요"
-              />
-            </div>
+              <label class="lbl">
+                <span>팀원 추가 <em>다중 선택 · 선택 안 해도 진행 가능</em></span>
+              </label>
 
-            <div class="field-row field-grid-2">
-              <div>
-                <label class="lbl"><span>담당자 이름 <em class="required-star">*</em></span></label>
-                <input v-model="form.ownerName" type="text" class="fld" placeholder="예: 김OO" />
+              <input
+                v-model="memberSearch"
+                type="text"
+                class="fld member-search"
+                placeholder="이름·이메일·부서로 검색"
+              />
+
+              <div class="member-list" role="listbox" aria-label="팀원 후보 목록">
+                <div v-if="membersLoading" class="member-list__loading">
+                  <span class="member-spinner" aria-hidden="true"></span>
+                  <span>팀원 목록을 불러오는 중...</span>
+                </div>
+                <div v-else-if="membersError" class="member-list__empty">
+                  {{ membersError }}
+                  <button type="button" class="member-list__retry" @click="loadTeamCandidates">다시 시도</button>
+                </div>
+                <div v-else-if="!memberCandidates.length" class="member-list__empty">
+                  같은 회사 소속 팀원이 없습니다.
+                </div>
+                <div v-else-if="!filteredMembers.length" class="member-list__empty">
+                  검색 결과가 없습니다.
+                </div>
+                <button
+                  v-for="user in filteredMembers"
+                  v-else
+                  :key="user.idx"
+                  type="button"
+                  class="member-item"
+                  :class="{ selected: isMemberSelected(user) }"
+                  :aria-pressed="isMemberSelected(user)"
+                  @click="toggleMember(user)"
+                >
+                  <span class="member-item__left">
+                    <span class="member-item__avatar" aria-hidden="true">
+                      <img v-if="user.profileImageUrl" :src="user.profileImageUrl" alt="" />
+                      <span v-else>{{ avatarInitial(user.name) }}</span>
+                    </span>
+                    <span class="member-item__name">{{ user.name }}</span>
+                  </span>
+                  <span class="member-item__right">
+                    <span class="member-item__role">{{ formatRole(user.role) }}</span>
+                    <span class="member-item__email">{{ user.email }}</span>
+                  </span>
+                  <span class="member-item__check" v-if="isMemberSelected(user)" aria-hidden="true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </span>
+                </button>
               </div>
-              <div>
-                <label class="lbl"><span>담당자 이메일 <em class="required-star">*</em></span></label>
-                <input v-model="form.ownerEmail" type="email" class="fld" placeholder="name@example.com" />
+
+              <div class="member-summary">
+                <span>{{ selectedMembers.length }}명 선택됨</span>
               </div>
             </div>
           </div>
@@ -775,10 +822,11 @@ function avatarInitial(value) {
 }
 
 .step-section-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 4px;
+  font-size: 22px;
+  font-weight: 800;
+  color: #7C3AED;
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
 }
 /* ── step1 좌/우 레이아웃 + 색상 picker ───── */
 .step1-grid {
@@ -916,30 +964,31 @@ function avatarInitial(value) {
 }
 .lbl {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 .lbl em {
   font-style: normal;
   font-weight: 500;
+  font-size: 13px;
   color: var(--muted-text);
   margin-left: 4px;
 }
 
 .lbl .required-star {
   color: var(--color-primary-600, #8b5cf6);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 900;
   margin-left: 3px;
 }
 
 .fld {
   width: 100%;
-  height: 40px;
-  padding: 0 12px;
-  font-size: 13px;
+  height: 46px;
+  padding: 0 14px;
+  font-size: 14px;
   color: var(--text-primary);
   background: var(--control-color);
   border: 1px solid var(--border-color);
@@ -949,9 +998,9 @@ function avatarInitial(value) {
 }
 .fld--text {
   height: auto;
-  padding: 10px 12px;
+  padding: 12px 14px;
   resize: vertical;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .fld:focus {
   outline: none;
@@ -963,7 +1012,7 @@ function avatarInitial(value) {
 .picker-toggle {
   display: flex;
   width: 100%;
-  min-height: 44px;
+  min-height: 46px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -971,7 +1020,7 @@ function avatarInitial(value) {
   border-radius: var(--radius-md);
   background: var(--control-color);
   color: var(--text-primary);
-  padding: 0 12px;
+  padding: 0 14px;
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -988,7 +1037,7 @@ function avatarInitial(value) {
 
 .picker-toggle span {
   overflow: hidden;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1182,9 +1231,9 @@ function avatarInitial(value) {
 }
 
 .money-field b {
-  padding-right: 12px;
+  padding-right: 14px;
   color: var(--muted-text);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -1193,6 +1242,159 @@ function avatarInitial(value) {
   gap: 8px;
 }
 .input-wrap-add .fld { flex: 1; }
+
+/* 팀원 추가 inline 리스트 */
+.member-search { margin-bottom: 10px; }
+
+.member-list {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-color);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.member-list__loading,
+.member-list__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 16px;
+  color: var(--muted-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.member-list__retry {
+  margin-left: 6px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 10px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.member-list__retry:hover {
+  background: var(--panel-muted);
+  border-color: #7C3AED;
+}
+
+.member-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid color-mix(in srgb, #7C3AED 25%, transparent);
+  border-top-color: #7C3AED;
+  border-radius: 999px;
+  animation: memberSpin 0.7s linear infinite;
+}
+@keyframes memberSpin {
+  to { transform: rotate(360deg); }
+}
+
+.member-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+  background: transparent;
+  color: var(--text-primary);
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+.member-item:last-child { border-bottom: 0; }
+.member-item:hover { background: var(--panel-muted); }
+.member-item.selected {
+  background: color-mix(in srgb, #7C3AED 10%, var(--panel-color));
+}
+
+.member-item__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.member-item__avatar {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #7C3AED 14%, var(--panel-color));
+  color: #6d28d9;
+  font-size: 13px;
+  font-weight: 800;
+  overflow: hidden;
+}
+.member-item__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.member-item__name {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-item__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  min-width: 0;
+}
+.member-item__role {
+  font-size: 11px;
+  font-weight: 800;
+  color: #6d28d9;
+  background: color-mix(in srgb, #7C3AED 12%, transparent);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.member-item__email {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.member-item__check {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #7C3AED;
+  color: #fff;
+}
+
+.member-summary {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted-text);
+  text-align: right;
+}
 
 /* chips / pills */
 .pill-row {

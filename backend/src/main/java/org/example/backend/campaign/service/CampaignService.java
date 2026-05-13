@@ -154,15 +154,12 @@ public class CampaignService {
                 .endDate(dto.endDate())
                 .partners(normalizeList(dto.partners()))
                 .goals(normalizeText(dto.goals()))
-                .mainMessage(normalizeText(dto.mainMessage()))
                 .assetName(normalizeText(dto.assetName()))
                 .assetDescription(normalizeText(dto.assetDescription()))
                 .primaryGoal(normalizeText(dto.primaryGoal()))
                 .campaignMethods(normalizeList(dto.campaignMethods()))
                 .maxCost(normalizeText(dto.maxCost()))
                 .minRevenue(normalizeText(dto.minRevenue()))
-                .ownerName(normalizeText(dto.ownerName()))
-                .ownerEmail(normalizeText(dto.ownerEmail()))
                 .status("draft")
                 .initials(createInitials(name))
                 .icon(normalizeIcon(dto.icon()))
@@ -187,6 +184,25 @@ public class CampaignService {
                 .joinedAt(LocalDateTime.now())
                 .build();
         memberRepository.save(ownerMember);
+
+        // 모달에서 선택한 팀원(ownerUserIdxs) — 본인 제외하고 MANAGER로 자동 등록
+        if (dto.ownerUserIdxs() != null && !dto.ownerUserIdxs().isEmpty()) {
+            for (Long candidateIdx : dto.ownerUserIdxs()) {
+                if (candidateIdx == null || candidateIdx.equals(owner.getIdx())) continue;
+                User candidate = userRepository.findById(candidateIdx).orElse(null);
+                if (candidate == null) continue;
+                boolean alreadyMember = memberRepository
+                        .findByCampaignIdxAndUserIdx(saved.getIdx(), candidate.getIdx())
+                        .isPresent();
+                if (alreadyMember) continue;
+                memberRepository.save(CampaignMember.builder()
+                        .campaign(saved)
+                        .user(candidate)
+                        .campaignRole(CampaignMemberRole.MANAGER)
+                        .joinedAt(LocalDateTime.now())
+                        .build());
+            }
+        }
 
         // KPI cascade: 캠페인 생성 시 상위 OrganizationKpi에 contribution 등록 (옵션)
         if (dto.contributions() != null && !dto.contributions().isEmpty()) {
@@ -226,15 +242,12 @@ public class CampaignService {
                 dto.endDate() == null ? campaign.getEndDate() : dto.endDate(),
                 normalizeListOrCurrent(dto.partners(), campaign.getPartners()),
                 normalizeTextOrCurrent(dto.goals(), campaign.getGoals()),
-                normalizeTextOrCurrent(dto.mainMessage(), campaign.getMainMessage()),
                 normalizeTextOrCurrent(dto.assetName(), campaign.getAssetName()),
                 normalizeTextOrCurrent(dto.assetDescription(), campaign.getAssetDescription()),
                 normalizeTextOrCurrent(dto.primaryGoal(), campaign.getPrimaryGoal()),
                 normalizeListOrCurrent(dto.campaignMethods(), campaign.getCampaignMethods()),
                 normalizeTextOrCurrent(dto.maxCost(), campaign.getMaxCost()),
                 normalizeTextOrCurrent(dto.minRevenue(), campaign.getMinRevenue()),
-                normalizeTextOrCurrent(dto.ownerName(), campaign.getOwnerName()),
-                normalizeTextOrCurrent(dto.ownerEmail(), campaign.getOwnerEmail()),
                 createInitials(name),
                 normalizeIcon(dto.icon()),
                 normalizeColor(dto.color())

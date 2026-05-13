@@ -92,3 +92,8 @@ export async function fetchManageableUsersRequest() {
   const response = await api.get('/auth/manage/users')
   return unwrapResponse(response)
 }
+
+export async function fetchColleaguesRequest() {
+  const response = await api.get('/auth/users/colleagues')
+  return unwrapResponse(response)
+}
