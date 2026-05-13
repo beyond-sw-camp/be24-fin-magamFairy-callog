@@ -11,6 +11,12 @@ function unwrapResponse(response) {
   return payload.data ?? payload
 }
 
+export const getBenefitsFromCampaignIdx = async (campaignIdx) =>{
+  return unwrapResponse(
+    await api.get(`/matching/benefit/${campaignIdx}`)
+  )
+}
+
 export const ListBenefits = async () => {
   return unwrapResponse(
     await api.get('/matching/benefit/list', {
@@ -26,5 +32,6 @@ export const addBenefit = async (body) => {
 
 export default {
   ListBenefits,
-  addBenefit
+  addBenefit,
+  getBenefitsFromCampaignIdx
 }
