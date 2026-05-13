@@ -90,3 +90,18 @@ management:
   endpoint:
     health:
       show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    #    enabled: false
+    sampling:
+      probability: 1.0   # 모든 요청에 대한 데이터를 수집하겠다.
+  otlp:
+    tracing:
+      endpoint: ${JAEGER_URL}
+      transport: http
