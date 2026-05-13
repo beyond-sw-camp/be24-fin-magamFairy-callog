@@ -22,7 +22,7 @@ public class BenefitController {
     private final BenefitService benefitService;
 
     @GetMapping("/benefit/{campaignIdx}")
-    public ResponseEntity getBenefit(@PathVariable Long campaignIdx) {
+    public ResponseEntity getBenefit(@PathVariable String campaignIdx) {
         try {
             List<MatchingDto.BenefitRes> dto = benefitService.getBenefit(campaignIdx);
             return ResponseEntity.status(HttpStatus.OK)

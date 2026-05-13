@@ -1,10 +1,14 @@
 server:
-  port: 8080
+  port: 443
   error:
     whitelabel:
       enabled: false  # 기본 whitelabel 에러 페이지 비활성화
     path: /error
-
+  ssl:
+    enabled: true
+    key-store: "classpath:keystore.p12"
+    key-store-type: "PKCS12"
+    key-store-password: gkrwnantjdna
 jdbc:
   datasource:
     proxy:
@@ -79,8 +83,9 @@ custom:
     webhook-url: ${N8N_URL}
     evaluation-endpoint: ${EVALUATION_ENDPOINT}
     check-endpoint: ${CHECK_ENDPOINT}
+    ad-check-url: ${N8N_AD_CHECK_URL}
   ocr:
-    url: ${OCR_SERVICE_URL}
+    url: ${OCR_SERVICE_URL:http://localhost:8000/ocr}
 
 management:
   endpoints:
