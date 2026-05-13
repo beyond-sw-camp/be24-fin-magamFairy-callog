@@ -783,22 +783,9 @@ watch(() => notiStore.lastMyCampaignsRefresh, (v) => {
   doRefresh()
 })
 
-/* 마감 임박 카드의 캠페인 변경 시 멤버 새로 로드 */
-watch(
-  () => (dashboardStore.myCampaigns ?? [])
-    .filter((c) => c.endDate && !DEADLINE_EXCLUDED_STATUSES.has(String(c.status ?? '').toLowerCase()))
-    .sort((a, b) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime())
-    .slice(0, 3)
-    .map((c) => c.id ?? c.publicId)
-    .filter(Boolean)
-    .join(','),
-  (key) => {
-    if (!key) return
-    __loadedDeadlineKey = ''  // 강제 재로드
-    loadDeadlineMembers(key.split(','))
-  },
-  { immediate: true },
-)
+/* 마감 임박 캠페인 status 필터 — 여러 곳에서 사용 (TDZ 회피 차원에서 위에 선언) */
+const DEADLINE_EXCLUDED_STATUSES = new Set(['completed', 'archived', 'cancelled', 'canceled', 'done'])
+/* 마감 임박 멤버 watch 는 loadDeadlineMembers 정의 후에 등록 (아래쪽 참조) */
 
 function openCampaign(card) {
   if (!card?.clickable || !card.publicId) return
@@ -956,7 +943,7 @@ const ZONE1_TODAY = computed(() => {
 })
 
 /* 마감 임박 카드 — 본인 소속 캠페인 중 endDate 가장 빠른 3건 (왼→오) */
-const DEADLINE_EXCLUDED_STATUSES = new Set(['completed', 'archived', 'cancelled', 'canceled', 'done'])
+/* DEADLINE_EXCLUDED_STATUSES 는 watch 위(TDZ 회피)로 이동했음 */
 
 /* { [publicId]: [{ name, profileImageUrl, ... }, ...] } — 본인 회사 멤버만 */
 const deadlineMembersByCampaign = ref({})
@@ -987,6 +974,23 @@ async function loadDeadlineMembers(publicIds) {
   results.forEach(([pid, list]) => { map[pid] = list })
   deadlineMembersByCampaign.value = map
 }
+
+/* 마감 임박 캠페인 변경 시 본인 회사 멤버 로드 — loadDeadlineMembers 선언 후에 등록 (TDZ 회피) */
+watch(
+  () => (dashboardStore.myCampaigns ?? [])
+    .filter((c) => c.endDate && !DEADLINE_EXCLUDED_STATUSES.has(String(c.status ?? '').toLowerCase()))
+    .sort((a, b) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime())
+    .slice(0, 3)
+    .map((c) => c.id ?? c.publicId)
+    .filter(Boolean)
+    .join(','),
+  (key) => {
+    if (!key) return
+    __loadedDeadlineKey = ''
+    loadDeadlineMembers(key.split(','))
+  },
+  { immediate: true },
+)
 
 function deadlineCardFromCampaign(c, i) {
   const dd = calcDDay(c.endDate)
@@ -1069,29 +1073,108 @@ const KPI_CATEGORY_LABELS = {
   ESG: 'ESG',
 }
 
+function fmtCompactByUnit(value, unit) {
+  const n = Number(value) || 0
+  if (unit === '원') {
+    if (n >= 100_000_000) return '₩' + (n / 100_000_000).toFixed(1) + '억'
+    if (n >= 10_000) return '₩' + Math.round(n / 1000) / 10 + '만'
+    if (n >= 1000) return '₩' + Math.round(n / 100) / 10 + 'k'
+    return '₩' + n.toLocaleString()
+  }
+  let suffix = unit || ''
+  let display
+  if (n >= 1_000_000) display = (n / 1_000_000).toFixed(1) + 'M'
+  else if (n >= 1000) display = (n / 1000).toFixed(1) + 'k'
+  else display = n.toLocaleString()
+  return suffix ? `${display}${suffix === '%' ? '' : ''}${suffix}` : display
+}
+
 function kpiCardsFromGoals(goals, titlePrefix) {
   if (!goals || goals.length === 0) return []
+  // 카테고리 그룹핑: 단위, actualValue 합계, 달성률 평균, monthlyActuals 합
   const buckets = {}
   goals.forEach((g) => {
     const key = g.esgCategory != null ? 'ESG' : g.category
     if (!key) return
-    if (!buckets[key]) buckets[key] = []
+    if (!buckets[key]) buckets[key] = { pcts: [], actuals: 0, unit: g.unit || '', monthly: [0, 0, 0] }
     const pct = g.achievementPercent ?? g.percent
-    if (typeof pct === 'number') buckets[key].push(pct)
+    if (typeof pct === 'number') buckets[key].pcts.push(pct)
+    const actual = Number(g.actualValue) || 0
+    buckets[key].actuals += actual
+    if (!buckets[key].unit && g.unit) buckets[key].unit = g.unit
+    const monthly = Array.isArray(g.monthlyActuals) ? g.monthlyActuals : []
+    for (let i = 0; i < 3; i++) {
+      const v = Number(monthly[i]) || 0
+      buckets[key].monthly[i] += v
+    }
   })
-  const sorted = Object.entries(buckets)
-    .map(([k, arr]) => ({ k, avg: arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0 }))
-    .sort((a, b) => b.avg - a.avg)
-    .slice(0, 3)
-  return sorted.map((row, i) => ({
-    id: `kpi-${row.k}`,
-    tone: TONES[i % TONES.length],
-    pill: titlePrefix,
-    lines: [KPI_CATEGORY_LABELS[row.k] ?? row.k],
-    progress: `${row.avg}%`,
-    avatars: [],
+
+  const rows = Object.entries(buckets).map(([k, b]) => ({
+    key: k,
+    avg: b.pcts.length ? Math.round(b.pcts.reduce((s, v) => s + v, 0) / b.pcts.length) : 0,
+    actual: b.actuals,
+    monthly: b.monthly,
+    unit: b.unit || (k === 'IMPRESSION' ? '회' : (k === 'REVENUE' ? '원' : (k === 'ENGAGEMENT' || k === 'CONVERSION' ? '%' : '점'))),
   }))
+
+  if (rows.length === 0) return []
+
+  // 전 카테고리 평균 달성률 — 기준선
+  const globalAvg = Math.round(rows.reduce((s, r) => s + r.avg, 0) / rows.length)
+
+  // 달성률 내림차순 상위 3개
+  const top = rows.sort((a, b) => b.avg - a.avg).slice(0, 3)
+
+  return top.map((r, i) => {
+    const delta = r.avg - globalAvg
+    const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat'
+    const valueLabel = r.unit === '%'
+      ? `${r.avg}%`
+      : fmtCompactByUnit(r.actual, r.unit)
+    // 스파크라인 — 월별 추이가 모두 0이면 점진적 0~avg fallback
+    let spark = (r.monthly ?? []).filter((v) => Number.isFinite(v))
+    if (spark.length === 0 || spark.every((v) => v === 0)) {
+      spark = [Math.round(r.avg * 0.6), Math.round(r.avg * 0.85), r.avg]
+    }
+    return {
+      id: `kpi-${r.key}`,
+      tone: TONES[i % TONES.length],
+      pill: titlePrefix,
+      catName: KPI_CATEGORY_LABELS[r.key] ?? r.key,
+      lines: [KPI_CATEGORY_LABELS[r.key] ?? r.key],
+      valueLabel,
+      direction,
+      delta,
+      avg: r.avg,
+      spark,
+      sparkOptions: buildSparklineOptions(direction),
+      sparkSeries: [{ name: KPI_CATEGORY_LABELS[r.key] ?? r.key, data: spark }],
+      kind: 'kpi-summary',
+      avatars: [],
+    }
+  })
 }
+
+function buildSparklineOptions(direction) {
+  const color = direction === 'up' ? '#4F7A2E' : direction === 'down' ? '#8B2A22' : '#6F5A9B'
+  return {
+    chart: {
+      type: 'area',
+      sparkline: { enabled: true },
+      animations: { enabled: true, easing: 'easeinout', speed: 600 },
+    },
+    colors: [color],
+    stroke: { curve: 'smooth', width: 2 },
+    fill: {
+      type: 'gradient',
+      gradient: { shadeIntensity: 0.7, opacityFrom: 0.32, opacityTo: 0, stops: [0, 100] },
+    },
+    markers: { size: 0 },
+    tooltip: { enabled: false },
+    dataLabels: { enabled: false },
+  }
+}
+
 
 const ZONE1_BY_SCOPE = computed(() => {
   if (orgScope.value === 'HQ') return kpiCardsFromGoals(dashboardStore.quarterGoals, '전사 KPI')
@@ -1217,9 +1300,13 @@ const apexDonutOptions = computed(() => ({
   stroke: { width: 2, colors: ['#fff'] },
   legend: {
     position: 'bottom',
+    horizontalAlign: 'center',
     fontSize: '11px',
+    fontWeight: 500,
     labels: { colors: '#6B6582' },
     markers: { width: 9, height: 9, radius: 9 },
+    itemMargin: { horizontal: 6, vertical: 2 },
+    offsetY: 4,
   },
   plotOptions: {
     pie: {
@@ -1227,9 +1314,16 @@ const apexDonutOptions = computed(() => ({
         size: '68%',
         labels: {
           show: true,
-          name: { fontSize: '11px', color: '#9991AE', offsetY: 6 },
-          value: { fontSize: '22px', color: '#2A2440', fontWeight: 700, offsetY: -6 },
-          total: { show: true, label: '총 자산', formatter: () => ZONE3_DONUT_SERIES.value.series.reduce((s, v) => s + v, 0).toString() },
+          name: { fontSize: '11px', color: '#9991AE', offsetY: 18 },
+          value: { fontSize: '24px', color: '#2A2440', fontWeight: 700, offsetY: -14 },
+          total: {
+            show: true,
+            label: '총 자산',
+            color: '#9991AE',
+            fontSize: '11px',
+            fontWeight: 500,
+            formatter: () => ZONE3_DONUT_SERIES.value.series.reduce((s, v) => s + v, 0).toString(),
+          },
         },
       },
     },
@@ -1464,6 +1558,41 @@ const apexLineSeries = computed(() => [
   { name: '목표', data: ZONE4_SERIES.value.target ?? [] },
 ])
 
+/* Zone 3 KPI 트래커 — 캠페인 누적 라인 차트 (월별) */
+const zone3LineOptions = computed(() => ({
+  chart: {
+    type: 'area',
+    toolbar: { show: false },
+    sparkline: { enabled: false },
+    fontFamily: "'Pretendard Variable', sans-serif",
+    animations: { enabled: true, easing: 'easeinout', speed: 700 },
+    foreColor: '#9991AE',
+  },
+  colors: ['#6F5A9B', '#D8EB75'],
+  stroke: { curve: 'smooth', width: [2.5, 2], dashArray: [0, 3] },
+  fill: {
+    type: 'gradient',
+    gradient: { shadeIntensity: 0.7, opacityFrom: 0.22, opacityTo: 0, stops: [0, 90] },
+  },
+  markers: { size: 3, colors: ['#6F5A9B', '#D8EB75'], strokeColors: '#fff', strokeWidth: 1.5 },
+  grid: { borderColor: '#E5DDF0', strokeDashArray: 4, xaxis: { lines: { show: false } } },
+  xaxis: {
+    categories: ZONE4_CAMPAIGN_SERIES.value.labels ?? [],
+    axisBorder: { show: false },
+    axisTicks: { show: false },
+    labels: { style: { fontSize: '10px', colors: '#9991AE' } },
+  },
+  yaxis: { show: false },
+  legend: { show: false },
+  tooltip: { theme: 'light', y: { formatter: (v) => `${v}건` } },
+  dataLabels: { enabled: false },
+}))
+const zone3LineSeries = computed(() => [
+  { name: '캠페인 누적', data: ZONE4_CAMPAIGN_SERIES.value.data ?? [] },
+  { name: '목표', data: ZONE4_CAMPAIGN_SERIES.value.target ?? [] },
+])
+const hasZone3LineData = computed(() => (ZONE4_CAMPAIGN_SERIES.value.data ?? []).some((v) => Number(v) > 0))
+
 const zone4UnitPrefix = computed(() => (zone4Page.value === 0 ? '₩' : ''))
 const zone4UnitSuffix = computed(() => {
   if (zone4Page.value === 1) return '건'
@@ -1503,11 +1632,29 @@ let __keyHandler = null
 function enterAnim() {
   if (!dashRef.value || reduceMotion.value) return
   const cards = dashRef.value.querySelectorAll('.card, .carousel, .z4-top, .z4-bottom')
-  gsap.from(cards, { y: 24, opacity: 0, duration: 0.55, stagger: 0.08, ease: 'power3.out', clearProps: 'transform,opacity' })
+  if (cards.length) {
+    gsap.fromTo(
+      cards,
+      { y: 14 },
+      { y: 0, duration: 0.45, stagger: 0.06, ease: 'power3.out', clearProps: 'transform' },
+    )
+  }
   const bars = dashRef.value.querySelectorAll('.bar')
-  gsap.from(bars, { scaleY: 0, transformOrigin: 'bottom', duration: 0.7, stagger: 0.04, ease: 'power2.out', delay: 0.25, clearProps: 'transform' })
+  if (bars.length) {
+    gsap.fromTo(
+      bars,
+      { scaleY: 0 },
+      { scaleY: 1, transformOrigin: 'bottom', duration: 0.6, stagger: 0.04, ease: 'power2.out', delay: 0.15, clearProps: 'transform' },
+    )
+  }
   const scoreBars = dashRef.value.querySelectorAll('.ts-bar-fill')
-  gsap.from(scoreBars, { width: 0, duration: 0.9, stagger: 0.07, ease: 'power2.out', delay: 0.35 })
+  if (scoreBars.length) {
+    gsap.fromTo(
+      scoreBars,
+      { width: 0 },
+      { width: (i, el) => (el.dataset.pct ?? 0) + '%', duration: 0.8, stagger: 0.06, ease: 'power2.out', delay: 0.2 },
+    )
+  }
 }
 
 function bindTotalCounter() {
@@ -1559,6 +1706,10 @@ onMounted(() => {
   nextTick(() => {
     enterAnim()
     bindTotalCounter()
+    // vue3-apexcharts: navigate 진입 시 일부 컨테이너 width 측정 실패 → resize 트리거로 redraw
+    setTimeout(() => {
+      try { window.dispatchEvent(new Event('resize')) } catch (_) { /* noop */ }
+    }, 80)
   })
 })
 
@@ -1569,16 +1720,37 @@ onBeforeUnmount(() => {
   if (__outsideHandler) document.removeEventListener('mousedown', __outsideHandler)
 })
 
-watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granularity], () => {
+/* Zone 2 (Top5 협력사) 페이지 변경 시 — 가로 막대만 다시 그림 */
+watch(zone2Page, () => {
+  if (reduceMotion.value) return
+  nextTick(() => {
+    if (!dashRef.value) return
+    const scoreBars = dashRef.value.querySelectorAll('.ts-bar-fill')
+    if (!scoreBars.length) return
+    gsap.fromTo(
+      scoreBars,
+      { width: 0 },
+      { width: (i, el) => (el.dataset.pct ?? 0) + '%', duration: 0.7, stagger: 0.05, ease: 'power2.out' },
+    )
+  })
+})
+
+/* Zone 3 (KPI 트래커) 페이지/주간-월간 변경 시 — 수직 막대만 다시 그림 */
+watch([zone3Page, zone3Granularity], () => {
   if (reduceMotion.value) return
   nextTick(() => {
     if (!dashRef.value) return
     const bars = dashRef.value.querySelectorAll('.bar')
-    gsap.fromTo(bars, { scaleY: 0 }, { scaleY: 1, transformOrigin: 'bottom', duration: 0.6, stagger: 0.03, ease: 'power2.out', clearProps: 'transform' })
-    const scoreBars = dashRef.value.querySelectorAll('.ts-bar-fill')
-    gsap.fromTo(scoreBars, { width: 0 }, { width: (i, el) => el.dataset.pct + '%', duration: 0.7, stagger: 0.05, ease: 'power2.out' })
+    if (!bars.length) return
+    gsap.fromTo(
+      bars,
+      { scaleY: 0 },
+      { scaleY: 1, transformOrigin: 'bottom', duration: 0.6, stagger: 0.03, ease: 'power2.out', clearProps: 'transform' },
+    )
   })
 })
+
+/* Zone 1, Zone 4 — ApexCharts/Vue Transition 자체 애니메이션 사용 (별도 GSAP 불필요) */
 </script>
 
 <template>
@@ -1744,25 +1916,51 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
                 'pill--review': t.pill === '검수중',
                 'pill--tomorrow': t.pill === '내일 마감',
               }">{{ t.pill }}</span>
-              <h3>
-                <template v-for="(line, idx) in t.lines" :key="idx">
-                  {{ line }}<br v-if="idx < t.lines.length - 1" />
-                </template>
-              </h3>
-              <p v-if="t.sub" class="ptask-sub">{{ t.sub }}</p>
-              <div class="meta">
-                <div class="avs">
-                  <span
-                    v-for="(av, ai) in t.avatars"
-                    :key="ai"
-                    class="av"
-                    :class="av.cls"
-                    :style="av.imageUrl ? { backgroundImage: 'url(' + av.imageUrl + ')', backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : null"
-                    :title="av.name || av.initial"
-                  >{{ av.initial }}</span>
+
+              <!-- KPI 요약 카드 (Zone 1 page 3) -->
+              <template v-if="t.kind === 'kpi-summary'">
+                <h3 class="kpi-title-row">
+                  <span class="kpi-cat">{{ t.catName }}</span>
+                  <span class="kpi-num" :class="'kpi-num--' + t.direction">{{ t.valueLabel }}</span>
+                </h3>
+                <p class="kpi-delta" :class="'kpi-delta--' + t.direction">
+                  <span v-if="t.direction === 'up'">▲</span>
+                  <span v-else-if="t.direction === 'down'">▼</span>
+                  <span v-else>—</span>
+                  평균 대비 {{ t.delta > 0 ? '+' : '' }}{{ t.delta }}%p
+                </p>
+                <div class="kpi-spark">
+                  <ApexChart
+                    type="area"
+                    height="100%"
+                    :options="t.sparkOptions"
+                    :series="t.sparkSeries"
+                  />
                 </div>
-                <span class="count">{{ t.progress }}</span>
-              </div>
+              </template>
+
+              <!-- 일반 작업 카드 -->
+              <template v-else>
+                <h3>
+                  <template v-for="(line, idx) in t.lines" :key="idx">
+                    {{ line }}<br v-if="idx < t.lines.length - 1" />
+                  </template>
+                </h3>
+                <p v-if="t.sub" class="ptask-sub">{{ t.sub }}</p>
+                <div class="meta">
+                  <div class="avs">
+                    <span
+                      v-for="(av, ai) in t.avatars"
+                      :key="ai"
+                      class="av"
+                      :class="av.cls"
+                      :style="av.imageUrl ? { backgroundImage: 'url(' + av.imageUrl + ')', backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : null"
+                      :title="av.name || av.initial"
+                    >{{ av.initial }}</span>
+                  </div>
+                  <span class="count">{{ t.progress }}</span>
+                </div>
+              </template>
             </article>
           </div>
           <div v-else class="zone-empty" :key="'empty-' + zone1Page">표시할 데이터가 없습니다.</div>
@@ -1837,14 +2035,14 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
           </div>
           <Transition name="page-slide" mode="out-in">
             <div :key="zone3Page" class="z3-body">
-              <!-- Page 0: KPI bars -->
+              <!-- Page 0: KPI bars (카드 끝까지 확장) -->
               <template v-if="zone3Page === 0">
                 <template v-if="ZONE3_BAR_DATA.length">
                   <div class="kpi-legend">
                     <span class="l-primary">달성</span>
                     <span class="l-lime">참여</span>
                   </div>
-                  <div class="bars">
+                  <div class="bars bars--tall">
                     <div
                       v-for="(b, i) in ZONE3_BAR_DATA"
                       :key="i"
@@ -1863,20 +2061,20 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
                 <ApexChart
                   v-if="hasZone3DonutData"
                   type="donut"
-                  height="260"
+                  height="250"
                   :options="apexDonutOptions"
                   :series="ZONE3_DONUT_SERIES.series"
                 />
                 <div v-else class="zone-empty">자산 데이터가 없습니다.</div>
               </template>
-              <!-- Page 2: scope KPI -->
+              <!-- Page 2: scope KPI (카드 끝까지 확장) -->
               <template v-else>
                 <template v-if="ZONE3_KPI_BY_SCOPE.some(b => b.primary > 0)">
                   <div class="kpi-legend">
                     <span class="l-primary">달성</span>
                     <span class="l-lime">참여</span>
                   </div>
-                  <div class="bars">
+                  <div class="bars bars--tall">
                     <div
                       v-for="(b, i) in ZONE3_KPI_BY_SCOPE"
                       :key="i"
@@ -1987,7 +2185,7 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
                 v-if="hasZone4Data"
                 :key="zone4Page + '-' + zone4Granularity"
                 type="area"
-                height="170"
+                height="100%"
                 :options="apexLineOptions"
                 :series="apexLineSeries"
               />
@@ -2054,14 +2252,15 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
   color: var(--lp-text);
   font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-feature-settings: 'tnum' 1, 'ss01' 1;
-  width: 100%;
+  /* DefaultLayout 의 .callog-content padding(24px) 무시하고 viewport 끝까지 꽉 채움 */
+  margin: calc(-1 * var(--density-page-padding, 24px));
+  width: calc(100% + 2 * var(--density-page-padding, 24px));
+  min-height: calc(100% + 2 * var(--density-page-padding, 24px));
   max-width: none;
-  margin: 0;
-  padding: 28px 32px 48px;
+  padding: 20px 24px 24px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  min-height: 100%;
+  gap: 16px;
   box-sizing: border-box;
 }
 
@@ -2254,7 +2453,14 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
 .err-banner { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; background: #FFF1D6; border: 1px solid #FFC36B; border-radius: var(--r-md); font-size: 12.5px; color: var(--lp-text); }
 .err-retry { border: 0; background: var(--lp-primary-deep); color: #fff; padding: 6px 14px; font-size: 11.5px; font-weight: 600; border-radius: var(--r-pill); cursor: pointer; }
 
-.dash { display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: auto 1fr; gap: 20px; }
+.dash {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  /* row 1 = Zone 1 카드 (280) / row 2 = Zone 2-3 카드 (380) — 페이지 전환에도 grid 행 변동 0 */
+  /* Zone 1 row + Zone 2/3 row 살짝 키움. Zone 4(span 2) = 320+420+gap = 760 */
+  grid-template-rows: 320px 420px;
+  gap: 20px;
+}
 .zone-today    { grid-column: 1; grid-row: 1; }
 .zone-bottom   { grid-column: 1; grid-row: 2; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr); gap: 20px; }
 .zone-carousel { grid-column: 2; grid-row: 1 / span 2; }
@@ -2282,9 +2488,25 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
 .page-slide-leave-to   { opacity: 0; transform: translateX(-16px); }
 
 /* Zone 1 */
-.today-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; transition: min-height .25s ease; }
-.today-grid--tall .ptask { min-height: 240px; }
-.ptask { border-radius: 18px; padding: 22px 22px 18px; min-height: 188px; display: flex; flex-direction: column; gap: 16px; position: relative; overflow: hidden; transition: min-height .25s ease; }
+.today-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 320px;   /* Zone 1 row 살짝 키움 */
+  gap: 14px;
+}
+.ptask {
+  border-radius: 18px;
+  padding: 20px 22px 16px;
+  height: 320px;
+  min-height: 200px;
+  max-height: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
 .ptask-1 { background: var(--lp-card-lavender-1); }
 .ptask-2 { background: var(--lp-lime-soft); }
 .ptask-3 { background: var(--lp-card-cream); }
@@ -2305,6 +2527,62 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
 .ptask .pill::before { content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--lp-primary-strong); display: inline-block; }
 .ptask h3 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.05; color: var(--lp-text); }
 .ptask-sub { margin: 0; font-size: 11.5px; font-weight: 500; color: var(--lp-text-muted); line-height: 1.35; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* KPI 요약 카드 (Zone 1 page 3) */
+.kpi-title-row {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.kpi-cat {
+  font-size: 22px;
+  color: var(--lp-text);
+}
+.kpi-num {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+/* 라벤더 팝 톤 — 디자인 적합 */
+.kpi-num--up   { color: #4F7A2E; }   /* 라임 톤 → 어두운 올리브-그린 (가독성) */
+.kpi-num--down { color: #8B2A22; }   /* 코랄 톤 → 깊은 와인-레드 */
+.kpi-num--flat { color: var(--lp-text); }
+
+.kpi-delta {
+  margin: -2px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-delta--up   { color: #5A8C36; }   /* 더 부드러운 그린 */
+.kpi-delta--down { color: #A8443B; }   /* 더 부드러운 레드 */
+.kpi-delta--flat { color: var(--lp-text-muted); }
+
+/* KPI 요약 카드 — 미니 라인 차트(sparkline) 영역 — 카드 남은 공간 모두 차지 */
+.kpi-spark {
+  margin-left: -8px;
+  margin-right: -8px;
+  margin-bottom: -10px;
+  margin-top: 4px;
+  pointer-events: none;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.kpi-spark > :deep(.apexcharts-canvas),
+.kpi-spark > :deep(.vue-apexcharts) {
+  width: 100% !important;
+  height: 100% !important;
+  flex: 1;
+}
+
 .ptask .pill--urgent { background: rgba(192, 68, 56, 0.16); color: #8B2A22; }
 .ptask .pill--urgent::before { background: #C04438; }
 .ptask .pill--review { background: rgba(168, 189, 66, 0.32); color: var(--lp-primary-deep); }
@@ -2342,7 +2620,17 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
 .kpi-legend span::before { content: ''; width: 9px; height: 9px; display: inline-block; }
 .kpi-legend .l-primary::before { background: var(--lp-primary); }
 .kpi-legend .l-lime::before { background: var(--lp-lime); }
-.bars { display: grid; grid-template-columns: repeat(6, 1fr); align-items: end; height: 200px; padding: 60px 4px 28px; margin-top: 14px; gap: 14px; position: relative; }
+.bars { display: grid; grid-template-columns: repeat(6, 1fr); align-items: end; height: 240px; padding: 50px 4px 28px; margin-top: 14px; gap: 14px; position: relative; flex: 1; }
+.bars--tall { height: auto; min-height: 240px; flex: 1; padding: 50px 4px 32px; margin-top: 8px; }
+
+/* Zone 3 body — row 2 (420px) - 카드 헤더(~60) + padding(~44) 빼고 영역 채움 */
+.z3-body {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.z3-body > .zone-empty { flex: 1; min-height: 280px; }
 .bars::before, .bars::after { content: ''; position: absolute; left: 0; right: 0; border-top: 1px dashed var(--lp-border); pointer-events: none; }
 .bars::before { top: 33%; }
 .bars::after  { top: 66%; }
@@ -2362,8 +2650,7 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
 .menu:hover { background: rgba(255,255,255,.28); }
 
 .z4-headline { display: flex; align-items: baseline; gap: 10px; padding: 4px 2px 0; }
-.z4-total { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: #fff; font-variant-numeric: tabular-nums; }
-.z4-total::before { content: '₩'; font-size: 18px; font-weight: 700; margin-right: 4px; opacity: .85; }
+/* 첫 번째 .z4-total 정의는 사용 안 함 (아래 inline-flex 정의 우선) — ::before 의 고정 ₩ 도 제거 */
 .z4-delta { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,.20); }
 .z4-delta.up { color: #ECFCCB; }
 .z4-delta.down { color: #FED7AA; }
@@ -2386,13 +2673,14 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
 .chart-fade-enter-from { opacity: 0; transform: translateY(8px); }
 .chart-fade-leave-to   { opacity: 0; transform: translateY(-8px); }
 
-/* Empty state */
+/* Empty state — 데이터 없어도 카드 크기 유지 */
 .zone-empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 160px;
-  padding: 32px 12px;
+  min-height: 200px;
+  max-height: 300px;
+  padding: 24px 12px;
   border-radius: 14px;
   background: var(--lp-surface-soft);
   font-size: 12.5px;
@@ -2400,23 +2688,40 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
   color: var(--lp-text-faint);
   letter-spacing: -0.005em;
 }
+.z3-body .zone-empty { min-height: 280px; flex: 1; }
+/* Zone 1 빈 상태 — 카드 row(320px) 와 동일 크기 */
+.today-grid > .zone-empty {
+  grid-column: 1 / -1;
+  height: 320px;
+  min-height: 320px;
+  max-height: 320px;
+}
 
 /* ═══ Zone 4 — Sales Target 스택 (반원 게이지 + 라인 차트) ═══ */
 .z4-stack {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   position: relative;
-  min-height: 540px;
+  /* row 1(320) + row 2(420) + gap(20) = 760 */
+  height: 100%;
+  min-height: 0;
 }
 .z4-top {
   background: linear-gradient(165deg, #C5ADE0 0%, #A98DCC 55%, #8E72BA 100%);
   border-radius: var(--r-xl);
-  padding: 22px 22px 26px;
+  padding: 18px 20px 20px;
   color: #fff;
   box-shadow: var(--shadow-carousel);
   position: relative;
   overflow: hidden;
+  /* Zone 1 카드(320)와 동일 → 파란선 위치에 맞춤 */
+  height: 320px;
+  min-height: 320px;
+  max-height: 320px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 .z4-top::before {
   content: '';
@@ -2435,8 +2740,8 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
-  padding-top: 14px;
+  gap: 12px;
+  padding-top: 8px;
   position: relative;
 }
 .gauge-wrap { position: relative; }
@@ -2480,11 +2785,11 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
 .z4-bottom {
   background: var(--lp-surface);
   border-radius: var(--r-xl);
-  padding: 20px 22px 18px;
+  padding: 16px 18px 14px;
   box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
 }
 .z4-bottom-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
@@ -2501,12 +2806,14 @@ watch([zone1Page, zone2Page, zone3Page, zone4Page, zone3Granularity, zone4Granul
 .z4-delta.up { color: var(--lp-primary-deep); }
 .z4-delta.down { color: #C04438; }
 
-.z4-chart-wrap { flex: 1; min-height: 170px; }
+.z4-chart-wrap { flex: 1; min-height: 130px; display: flex; flex-direction: column; }
+.z4-chart-wrap > :deep(.apexcharts-canvas) { flex: 1; }
 .z4-empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 170px;
+  flex: 1;
+  min-height: 130px;
   font-size: 12px;
   color: var(--lp-text-faint);
 }

@@ -5,6 +5,8 @@ import MainCalendar from '@/components/overview/MainCalendar.vue'
 import MainTable from '@/components/overview/MainTable.vue'
 import MainTimeline from '@/components/overview/MainTimeline.vue'
 import WeekCalendar from '@/components/overview/WeekCalendar.vue'
+import LavenderWeekCalendar from '@/components/overview/LavenderWeekCalendar.vue'
+import LavenderCalendarSidebar from '@/components/overview/LavenderCalendarSidebar.vue'
 import AgendaCalendar from '@/components/overview/AgendaCalendar.vue'
 import EventDetailPanel from '@/components/overview/EventDetailPanel.vue'
 import DayEventsModal from '@/components/overview/DayEventsModal.vue'
@@ -58,7 +60,7 @@ const isDark = computed(() => store.theme === 'dark')
 
 /* ─── 뷰 / 검색 / 필터 (URL 쿼리에서 초기값 복원) ─── */
 const searchQuery = ref(readQueryString('q'))
-const currentView = ref(readQueryString('view', 'calendar'))
+const currentView = ref(readQueryString('view', 'week'))
 const anchorDate = ref(readQueryString('date') ? new Date(readQueryString('date')) : new Date())
 const filter = ref({ mineOnly: readQueryString('mine') === '1' })
 
@@ -94,7 +96,7 @@ function fmtIsoDate(d) {
 }
 watch([currentView, anchorDate, searchQuery, () => filter.value.mineOnly], () => {
   const q = {}
-  if (currentView.value && currentView.value !== 'calendar') q.view = currentView.value
+  if (currentView.value && currentView.value !== 'week') q.view = currentView.value
   const dStr = fmtIsoDate(anchorDate.value)
   if (dStr) q.date = dStr
   if (searchQuery.value) q.q = searchQuery.value
@@ -513,10 +515,31 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="overview lp-cycle" data-cycle="lavender-pop" :class="{ 'overview--dark': isDark }">
+  <div class="overview lp-cycle" data-cycle="lavender-pop" :class="{ 'overview--dark': isDark, 'overview--lp-week': currentView === 'week' }">
+
+    <!-- Lavender Pop Week Mode -->
+    <div v-if="currentView === 'week'" class="overview__lp-shell">
+      <LavenderCalendarSidebar
+        :anchor-date="anchorDate"
+        :tasks="teamTaskStore.tasks"
+        :deadlines="intros"
+        :milestones="milestones"
+        @update:anchor-date="anchorDate = $event"
+        @event-click="onEventClick"
+        @task-toggle="() => {}"
+      />
+      <LavenderWeekCalendar
+        :events-data="filteredEvents"
+        :anchor-date="anchorDate"
+        :current-view="currentView"
+        @update:anchor-date="anchorDate = $event"
+        @update:current-view="currentView = $event"
+        @event-click="onEventClick"
+      />
+    </div>
 
     <!-- Header -->
-    <header class="overview__header">
+    <header v-show="currentView !== 'week'" class="overview__header">
       <div class="overview__title-wrap">
         <h2 class="overview__title">캘린더</h2>
       </div>
@@ -557,7 +580,7 @@ onUnmounted(() => {
     </header>
 
     <!-- Body -->
-    <div class="overview__body">
+    <div v-show="currentView !== 'week'" class="overview__body">
       <!-- Main view -->
       <main class="overview__main">
         <!-- 로딩 스켈레톤 (초기 로드) -->
@@ -827,6 +850,34 @@ onUnmounted(() => {
   min-width: 0;
   overflow: hidden;
 }
+
+/* === Lavender Pop Week Mode === */
+.overview__lp-shell {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 20px;
+  padding: 20px 24px 24px;
+  background: var(--lp-bg, #F5F1FA);
+  height: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+}
+.overview__lp-shell > :deep(.lp-sidebar) {
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - 60px);
+}
+@media (max-width: 980px) {
+  .overview__lp-shell {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+  .overview__lp-shell > :deep(.lp-sidebar) {
+    position: static;
+    max-height: none;
+  }
+}
+.overview--lp-week { overflow: hidden; }
 
 /* === View Transition === */
 .view-fade-enter-active,
