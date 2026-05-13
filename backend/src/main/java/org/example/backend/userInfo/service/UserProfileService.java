@@ -62,6 +62,18 @@ public class UserProfileService {
         return toResponse(getOrCreateProfile(userId));
     }
 
+    @Transactional(readOnly = true)
+    public String getProfileImageUrl(User user) {
+        if (user == null || user.getIdx() == null) {
+            return null;
+        }
+
+        return userProfileRepository.findByUserIdx(user.getIdx())
+                .map(UserProfile::getProfileImageKey)
+                .map(profileImageStorageService::createViewUrl)
+                .orElse(null);
+    }
+
     @Transactional
     public UserProfileDto.Res updateMyProfile(String userId, UserProfileDto.UpdateReq dto) {
         if (dto == null) {
