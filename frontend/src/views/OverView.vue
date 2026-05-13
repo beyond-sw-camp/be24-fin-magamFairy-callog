@@ -65,8 +65,8 @@ const anchorDate = ref(readQueryString('date') ? new Date(readQueryString('date'
 const filter = ref({ mineOnly: readQueryString('mine') === '1' })
 
 const viewOptions = [
-  { id: 'calendar', name: '월간',     icon: 'calendar_month' },
   { id: 'week',     name: '주간',     icon: 'view_week' },
+  { id: 'calendar', name: '월간',     icon: 'calendar_month' },
   { id: 'agenda',   name: '아젠다',   icon: 'view_agenda' },
   { id: 'timeline', name: '타임라인', icon: 'timeline' },
   { id: 'table',    name: '테이블',   icon: 'table_rows' },
@@ -263,6 +263,21 @@ const dayModal = ref({ date: '', events: [] })
 const quickAdd = ref({ date: '', position: { x: 0, y: 0 } })
 
 function onEventClick(ev) {
+  if (ev?.__action === 'add-task') {
+    const todayIso = isoOf(new Date())
+    const x = window.innerWidth / 2
+    const y = window.innerHeight / 2
+    const popoverW = 280
+    const popoverH = 140
+    quickAdd.value = {
+      date: todayIso,
+      position: {
+        x: Math.max(8, x - popoverW / 2),
+        y: Math.max(8, Math.min(y, window.innerHeight - popoverH - 16)),
+      },
+    }
+    return
+  }
   selectedEvent.value = ev
 }
 function onDayClick({ date, event: mouseEvt }) {
@@ -517,8 +532,36 @@ onUnmounted(() => {
 <template>
   <div class="overview lp-cycle" data-cycle="lavender-pop" :class="{ 'overview--dark': isDark, 'overview--lp-week': currentView === 'week' }">
 
-    <!-- Lavender Pop Week Mode -->
-    <div v-if="currentView === 'week'" class="overview__lp-shell">
+    <!-- ═══ Top section — view switcher (visible in all modes) ═══ -->
+    <div class="overview__top">
+      <div class="overview__top-tabs">
+        <button
+          v-for="v in viewOptions"
+          :key="v.id"
+          class="overview__top-tab"
+          :class="{ 'is-on': currentView === v.id }"
+          @click="currentView = v.id"
+        >
+          <span class="material-symbols-outlined">{{ v.icon }}</span>
+          {{ v.name }}
+        </button>
+      </div>
+      <div class="overview__top-actions">
+        <div class="overview__search">
+          <span class="material-symbols-outlined">search</span>
+          <input
+            ref="searchInputRef"
+            v-model="searchQuery"
+            type="text"
+            placeholder="검색... (/)"
+            class="overview__search-input"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Unified Lavender Pop Shell for all views -->
+    <div class="overview__lp-shell">
       <LavenderCalendarSidebar
         :anchor-date="anchorDate"
         :tasks="teamTaskStore.tasks"
@@ -528,74 +571,9 @@ onUnmounted(() => {
         @event-click="onEventClick"
         @task-toggle="() => {}"
       />
-      <LavenderWeekCalendar
-        :events-data="filteredEvents"
-        :anchor-date="anchorDate"
-        :current-view="currentView"
-        @update:anchor-date="anchorDate = $event"
-        @update:current-view="currentView = $event"
-        @event-click="onEventClick"
-      />
-    </div>
-
-    <!-- Header -->
-    <header v-show="currentView !== 'week'" class="overview__header">
-      <div class="overview__title-wrap">
-        <h2 class="overview__title">캘린더</h2>
-      </div>
-
-      <div class="overview__view-tabs">
-        <template v-for="(v, i) in viewOptions" :key="v.id">
-          <button
-            class="overview__view-btn"
-            :class="{ 'overview__view-btn--active': currentView === v.id }"
-            @click="currentView = v.id"
-          >
-            <span class="material-symbols-outlined">{{ v.icon }}</span>
-            {{ v.name }}
-          </button>
-          <span v-if="i < viewOptions.length - 1" class="overview__view-sep" />
-        </template>
-      </div>
-
-      <div class="overview__controls">
-        <CalendarFilterChips :filter="filter" @update:filter="filter = $event" />
-        <div class="overview__search">
-          <span class="material-symbols-outlined">search</span>
-          <input
-            ref="searchInputRef"
-            v-model="searchQuery"
-            type="text"
-            placeholder="검색... (단축키 /)"
-            class="overview__search-input"
-          />
-        </div>
-        <button class="overview__icon-btn" title="단축키 (?)" @click="cheatOpen = true">
-          <span class="material-symbols-outlined">keyboard</span>
-        </button>
-        <button class="overview__icon-btn" title="명령 팔레트 (⌘K)" @click="cmdkOpen = true">
-          <span class="material-symbols-outlined">bolt</span>
-        </button>
-      </div>
-    </header>
-
-    <!-- Body -->
-    <div v-show="currentView !== 'week'" class="overview__body">
-      <!-- Main view -->
-      <main class="overview__main">
-        <!-- 로딩 스켈레톤 (초기 로드) -->
-        <div v-if="loading && !campaigns.length" class="overview__skeleton" aria-busy="true">
-          <div class="overview__skel-bar overview__skel-bar--head"></div>
-          <div class="overview__skel-grid">
-            <div v-for="i in 7" :key="i" class="overview__skel-cell"></div>
-          </div>
-          <div class="overview__skel-grid">
-            <div v-for="i in 35" :key="`g${i}`" class="overview__skel-cell overview__skel-cell--day"></div>
-          </div>
-        </div>
-
-        <!-- 에러 상태 -->
-        <div v-else-if="loadError && !campaigns.length" class="overview__empty overview__empty--error">
+      <main class="overview__lp-main">
+        <!-- 에러 상태 (로드 실패 시에만) -->
+        <div v-if="loadError && !campaigns.length" class="overview__empty overview__empty--error">
           <span class="material-symbols-outlined">error_outline</span>
           <p>{{ loadError }}</p>
           <button class="overview__retry" @click="loadAll">
@@ -604,19 +582,19 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- 빈 데이터 상태 -->
-        <div v-else-if="!loading && !filteredEvents.length" class="overview__empty">
-          <span class="material-symbols-outlined">{{ formattedEvents.length ? 'filter_alt' : 'event_busy' }}</span>
-          <p v-if="!formattedEvents.length">아직 등록된 일정이 없습니다.</p>
-          <p v-else>현재 필터에 맞는 일정이 없습니다.</p>
-          <button v-if="formattedEvents.length" class="overview__retry" @click="resetFilters">
-            필터 초기화
-          </button>
-        </div>
-
         <transition v-else name="view-fade" mode="out-in">
+          <LavenderWeekCalendar
+            v-if="currentView === 'week'"
+            key="week"
+            :events-data="filteredEvents"
+            :anchor-date="anchorDate"
+            :current-view="currentView"
+            @update:anchor-date="anchorDate = $event"
+            @update:current-view="currentView = $event"
+            @event-click="onEventClick"
+          />
           <MainCalendar
-            v-if="currentView === 'calendar'"
+            v-else-if="currentView === 'calendar'"
             key="calendar"
             :events-data="filteredEvents"
             :anchor-date="anchorDate"
@@ -626,18 +604,11 @@ onUnmounted(() => {
             @event-drop="onEventDrop"
             @update:anchor-date="anchorDate = $event"
           />
-          <WeekCalendar
-            v-else-if="currentView === 'week'"
-            key="week"
-            :events-data="filteredEvents"
-            :anchor-date="anchorDate"
-            @event-click="onEventClick"
-            @update:anchor-date="anchorDate = $event"
-          />
           <AgendaCalendar
             v-else-if="currentView === 'agenda'"
             key="agenda"
             :events-data="filteredEvents"
+            :anchor-date="anchorDate"
             @event-click="onEventClick"
           />
           <MainTimeline
@@ -652,17 +623,6 @@ onUnmounted(() => {
           />
         </transition>
       </main>
-
-      <!-- Sidebar (오른쪽) -->
-      <CalendarSidebar
-        v-if="!isMobile"
-        :current-date="anchorDate"
-        :events="formattedEvents"
-        :toggles="toggles"
-        @update:current-date="anchorDate = $event"
-        @update:toggles="toggles = $event"
-        @event-click="onEventClick"
-      />
     </div>
 
     <!-- Overlays -->
@@ -696,35 +656,72 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* ═══════════ Lavender Pop tokens (scope to .overview) ═══════════ */
-.overview.lp-cycle {
-  --lp-bg: #F5F1FA;
-  --lp-surface: #FFFFFF;
-  --lp-surface-soft: #EEE6F7;
-  --lp-primary: #B79BD9;
-  --lp-primary-strong: #6F5A9B;
-  --lp-primary-deep: #3F3463;
-  --lp-violet-deep: #2D2649;
-  --lp-lime: #D8EB75;
-  --lp-lime-soft: #EAF2A8;
-  --lp-card-lavender-1: #DDD2EE;
-  --lp-card-lavender-2: #C6BAE6;
-  --lp-card-cream: #F5EDD8;
-  --lp-text: #2A2440;
-  --lp-text-muted: #6B6582;
-  --lp-text-faint: #9991AE;
-  --lp-border: #E5DDF0;
-}
+/* --lp-* tokens cascade globally from :root (base.css). Themed via [data-theme]. */
 
-/* === Layout === */
+/* === Layout (full-bleed in DefaultLayout) === */
 .overview {
   display: flex;
   flex-direction: column;
-  height: 100%;
   background: var(--lp-bg);
   color: var(--lp-text);
   font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-feature-settings: 'tnum' 1, 'ss01' 1;
+  height: 100%;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* === Top section — universal view switcher === */
+.overview__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 24px;
+  background: var(--lp-surface);
+  border-bottom: 1px solid var(--lp-border);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: 0;
+}
+.overview__top-tabs {
+  display: inline-flex;
+  background: var(--lp-surface-soft);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+}
+.overview__top-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--lp-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+.overview__top-tab .material-symbols-outlined { font-size: 16px; }
+.overview__top-tab:hover { color: var(--lp-text); }
+.overview__top-tab.is-on {
+  background: var(--lp-surface);
+  color: var(--lp-primary-deep);
+  box-shadow: 0 1px 3px rgba(63,52,99,.12);
+}
+.overview__top-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* === Header === */
@@ -851,21 +848,31 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* === Lavender Pop Week Mode === */
+/* === Lavender Pop Shell (used for ALL views) === */
 .overview__lp-shell {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   gap: 20px;
   padding: 20px 24px 24px;
   background: var(--lp-bg, #F5F1FA);
-  height: 100%;
-  box-sizing: border-box;
+  flex: 1;
   min-height: 0;
+  box-sizing: border-box;
 }
 .overview__lp-shell > :deep(.lp-sidebar) {
   position: sticky;
   top: 0;
   max-height: calc(100vh - 60px);
+}
+.overview__lp-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.overview__lp-main > * {
+  flex: 1;
+  min-height: 0;
 }
 @media (max-width: 980px) {
   .overview__lp-shell {
@@ -934,7 +941,7 @@ onUnmounted(() => {
   gap: 5px;
   padding: 8px 18px;
   border: 0;
-  background: var(--lp-primary-deep);
+  background: var(--lp-button-bg);
   color: #fff;
   border-radius: 999px;
   font-size: 12px;
@@ -942,7 +949,7 @@ onUnmounted(() => {
   cursor: pointer;
   transition: background 0.15s;
 }
-.overview__retry:hover { background: #4F4275; }
+.overview__retry:hover { background: var(--lp-button-bg-hover); }
 .overview__retry .material-symbols-outlined { font-size: 16px; color: inherit; }
 
 /* === Color palette for events (lavender pop) === */
@@ -961,5 +968,13 @@ onUnmounted(() => {
 @media (max-width: 720px) {
   .overview__view-tabs { order: 3; width: 100%; }
   .overview__controls { width: 100%; }
+}
+</style>
+
+<!-- Global rule: when this Calendar view is active, strip DefaultLayout's padding -->
+<style>
+.callog-content:has(> .overview.lp-cycle) {
+  padding: 0 !important;
+  overflow: hidden !important;
 }
 </style>

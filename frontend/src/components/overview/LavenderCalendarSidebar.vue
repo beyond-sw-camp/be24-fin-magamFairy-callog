@@ -30,11 +30,12 @@ function shiftMonth(delta) {
 }
 
 const miniDays = computed(() => {
+  /* Sunday-first grid (Korean convention) */
   const m = viewedMonth.value
   const year = m.getFullYear()
   const month = m.getMonth()
-  const firstWeekday = new Date(year, month, 1).getDay()
-  const startOffset = firstWeekday === 0 ? -6 : 1 - firstWeekday
+  const firstWeekday = new Date(year, month, 1).getDay()  // 0(Sun) ~ 6(Sat)
+  const startOffset = -firstWeekday
   const startDay = new Date(year, month, 1 + startOffset)
   const arr = []
   for (let i = 0; i < 42; i++) {
@@ -50,16 +51,17 @@ const miniDays = computed(() => {
 })
 
 function startOfWeek(d) {
+  /* Sunday-first week start (matches Korean calendar convention) */
   const date = new Date(d)
   const day = date.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  date.setDate(date.getDate() + diff)
+  date.setDate(date.getDate() - day)
   date.setHours(0, 0, 0, 0)
   return date
 }
 
 const weekStartTs = computed(() => startOfWeek(props.anchorDate).getTime())
-const weekEndTs = computed(() => weekStartTs.value + 6 * 24 * 60 * 60 * 1000)
+/* Full 7 days (Sun ~ Sat). Previously 6 days excluded Saturday. */
+const weekEndTs = computed(() => weekStartTs.value + 7 * 24 * 60 * 60 * 1000)
 
 function isInCurrentWeek(d) {
   const t = new Date(d).setHours(0, 0, 0, 0)
@@ -153,13 +155,13 @@ function onItemClick(item) {
         </span>
       </div>
       <div class="lp-mini-grid">
-        <span class="lp-mini-dow">M</span>
-        <span class="lp-mini-dow">T</span>
-        <span class="lp-mini-dow">W</span>
-        <span class="lp-mini-dow">T</span>
-        <span class="lp-mini-dow">F</span>
-        <span class="lp-mini-dow">S</span>
-        <span class="lp-mini-dow">S</span>
+        <span class="lp-mini-dow is-sun">일</span>
+        <span class="lp-mini-dow">월</span>
+        <span class="lp-mini-dow">화</span>
+        <span class="lp-mini-dow">수</span>
+        <span class="lp-mini-dow">목</span>
+        <span class="lp-mini-dow">금</span>
+        <span class="lp-mini-dow is-sat">토</span>
         <button
           v-for="(d, i) in miniDays"
           :key="i"
@@ -169,16 +171,18 @@ function onItemClick(item) {
             'off': !d.inMonth,
             'in-view': d.inMonth && isInCurrentWeek(d.date),
             'is-today': isMiniToday(d.date),
+            'is-sat': d.date.getDay() === 6,
+            'is-sun': d.date.getDay() === 0,
           }"
           @click="selectDay(d.date)"
         >{{ d.day }}</button>
       </div>
     </div>
 
-    <!-- My Calendar -->
+    <!-- 내 캘린더 -->
     <div class="lp-panel">
       <div class="lp-panel-h">
-        <strong>My Calendar</strong>
+        <strong>내 캘린더</strong>
         <button class="lp-panel-action">체크리스트</button>
       </div>
       <div v-if="myTasks.length === 0" class="lp-panel-empty">표시할 업무가 없습니다.</div>
@@ -199,11 +203,11 @@ function onItemClick(item) {
       </label>
     </div>
 
-    <!-- Other Calendar -->
+    <!-- 기타 캘린더 -->
     <div class="lp-panel">
       <div class="lp-panel-h">
-        <strong>Other Calendar</strong>
-        <button class="lp-panel-action">+ Add Task</button>
+        <strong>기타 캘린더</strong>
+        <button class="lp-panel-action">+ 추가</button>
       </div>
       <div v-if="otherItems.length === 0" class="lp-panel-empty">표시할 일정이 없습니다.</div>
       <div
@@ -221,16 +225,8 @@ function onItemClick(item) {
 
 <style scoped>
 .lp-sidebar {
-  --lp-violet-bg: #3F3463;
-  --lp-violet-deep: #2D2649;
-  --lp-violet-line: #564A7D;
-  --lp-text-on-violet: #ECE5F8;
-  --lp-text-on-violet-faint: #A89BC4;
-  --lp-primary: #B79BD9;
-  --lp-primary-deep: #3F3463;
-  --lp-lime: #D8EB75;
-  --lp-card-lavender-1: #DDD2EE;
-
+  /* All --lp-* tokens (violet-bg, violet-deep, violet-line, text-on-violet, primary, lime, etc.)
+     cascade from :root in base.css and adapt to [data-theme]. */
   background: var(--lp-violet-bg);
   border-radius: 22px;
   padding: 20px 18px;
@@ -306,10 +302,22 @@ function onItemClick(item) {
 .lp-mini-day:hover { background: rgba(255,255,255,.08); }
 .lp-mini-day.off { color: rgba(236,229,248,.35); }
 .lp-mini-day.in-view { background: rgba(184,155,217,.22); color: #fff; }
+
+/* Weekend tones — modern, soft enough to read on dark violet bg */
+.lp-mini-dow.is-sun, .lp-mini-day.is-sun { color: #FF8FA3; }
+.lp-mini-dow.is-sat, .lp-mini-day.is-sat { color: #8FB5FF; }
+/* Dimmed weekend (out-of-month) */
+.lp-mini-day.is-sun.off { color: rgba(255,143,163,.40); }
+.lp-mini-day.is-sat.off { color: rgba(143,181,255,.40); }
+
 .lp-mini-day.is-today {
   background: var(--lp-lime);
   color: var(--lp-primary-deep);
   font-weight: 700;
+}
+/* Today overrides weekend color */
+.lp-mini-day.is-today.is-sun, .lp-mini-day.is-today.is-sat {
+  color: var(--lp-primary-deep);
 }
 
 /* 패널 (My / Other Calendar) */
