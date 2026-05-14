@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { createFrame } from '@/api/frames'
 import { usePlannerStore } from '@/stores/planner'
 
 const plannerStore = usePlannerStore()
@@ -9,6 +10,9 @@ const t = {
   title: '\uCEA0\uD398\uC778 \uD504\uB808\uC784 \uB77C\uC774\uBE0C\uB7EC\uB9AC',
   desc: '\uBCF8\uC0AC, \uD611\uB825\uC0AC, \uB300\uD589\uC0AC\uAC00 \uAC19\uC740 \uAE30\uC900\uC73C\uB85C \uCEA0\uD398\uC778 \uBB38\uC11C\uB97C \uC791\uC131\uD558\uACE0 \uAC80\uC218\uD558\uB294 \uC2E4\uD589 \uAD6C\uC870\uC785\uB2C8\uB2E4.',
   all: '\uC804\uCCB4',
+  newFrame: '새 프레임',
+  createFrame: '프레임 생성',
+  cancel: '취소',
   standardZone: '\uD45C\uC900 \uD504\uB808\uC784\uC874',
   referenceZone: '\uB808\uD37C\uB7F0\uC2A4 \uAE30\uBC18 \uD504\uB808\uC784\uC874',
   draftZone: '\uAC80\uD1A0 \uC911 \uD504\uB808\uC784\uC874',
@@ -27,12 +31,6 @@ const t = {
   review: '\uAC80\uC218 \uB2E8\uACC4',
   approver: '\uC2B9\uC778 \uAD8C\uD55C',
   reuse: '\uC7AC\uC0AC\uC6A9 \uAE30\uC900',
-  judge: 'AI \uD310\uC0AC',
-  judgeDesc: '\uBB38\uC11C\uB97C \uC62C\uB9AC\uBA74 \uC120\uD0DD\uD55C \uD504\uB808\uC784\uC758 \uD544\uC218 \uD56D\uBAA9, \uD1A4\uC564\uB9E4\uB108, \uAE08\uC9C0\uC5B4, \uC81C\uCD9C \uADDC\uACA9\uC744 \uAE30\uC900\uC73C\uB85C \uC801\uD569\uC131\uC744 \uD310\uC815\uD569\uB2C8\uB2E4.',
-  upload: '\uBB38\uC11C \uC5C5\uB85C\uB4DC',
-  waiting: '\uAC80\uD1A0 \uB300\uAE30',
-  pass: '\uC801\uD569',
-  caution: '\uBCF4\uC644 \uD544\uC694',
   apply: '\uCEA0\uD398\uC778\uC5D0 \uC801\uC6A9',
   makeStandard: '\uD45C\uC900\uC73C\uB85C \uC2B9\uACA9',
   createFromReference: '\uB808\uD37C\uB7F0\uC2A4\uC5D0\uC11C \uC0DD\uC131',
@@ -125,10 +123,8 @@ const frames = [
   },
 ]
 
-const selectedFrameId = ref(frames[0].id)
 const selectedCampaignType = ref('전체 캠페인 방식')
 const selectedLibrarySort = ref('점수 높은순')
-const uploadedFileName = ref('')
 
 const frameCatalog = {
   frames: [
@@ -228,21 +224,27 @@ const frameSourceMap = {
   channel_app_exposure: 'banner-standard',
 }
 
-const libraryFrames = frameCatalog.frames.map((frame) => ({
+const baseLibraryFrames = frameCatalog.frames.map((frame) => ({
   ...frame,
   sourceFrameId: frameSourceMap[frame.id] ?? frames[0].id,
 }))
 
-const selectedLibraryFrameId = ref(libraryFrames[0].id)
+const customLibraryFrames = ref([])
+const libraryFrames = computed(() => [...baseLibraryFrames, ...customLibraryFrames.value])
+const selectedLibraryFrameId = ref(baseLibraryFrames[0].id)
 const selectedModalFrameId = ref('')
+const isCreateFrameModalOpen = ref(false)
+const isCreatingFrame = ref(false)
+const createFrameError = ref('')
+const newFrameForm = ref(createEmptyFrameForm())
 const campaignTypeOptions = computed(() => [
   '전체 캠페인 방식',
-  ...new Set(libraryFrames.map((frame) => frame.category)),
+  ...new Set(libraryFrames.value.map((frame) => frame.category)),
 ])
 const librarySortOptions = ['점수 높은순', '사용 많은순', '통과율 높은순']
 
 const filteredLibraryFrames = computed(() => {
-  const result = libraryFrames.filter((frame) =>
+  const result = libraryFrames.value.filter((frame) =>
     selectedCampaignType.value === '전체 캠페인 방식' || frame.category === selectedCampaignType.value,
   )
 
@@ -257,8 +259,7 @@ const filteredLibraryFrames = computed(() => {
   return [...result].sort((a, b) => b.score - a.score)
 })
 
-const selectedFrame = computed(() => frames.find((frame) => frame.id === selectedFrameId.value) ?? frames[0])
-const modalFrame = computed(() => libraryFrames.find((frame) => frame.id === selectedModalFrameId.value) ?? null)
+const modalFrame = computed(() => libraryFrames.value.find((frame) => frame.id === selectedModalFrameId.value) ?? null)
 const modalFrameCampaignHistory = computed(() => {
   if (!modalFrame.value) return []
 
@@ -278,25 +279,109 @@ const modalUsageCount = computed(() => {
   return modalFrame.value.performance.usage_count + modalFrameCampaignHistory.value.length
 })
 
-const judgeItems = computed(() => [
-  { label: t.required, result: selectedFrame.value.score >= 80 ? t.pass : t.caution },
-  { label: t.tone, result: selectedFrame.value.score >= 70 ? t.pass : t.caution },
-  { label: t.banned, result: selectedFrame.value.banned.length ? t.caution : t.pass },
-  { label: t.channel, result: selectedFrame.value.channel.length >= 3 ? t.pass : t.caution },
-])
-
-function updateFile(event) {
-  uploadedFileName.value = event.target.files?.[0]?.name ?? ''
-}
-
 function openFrameModal(frame) {
   selectedLibraryFrameId.value = frame.id
-  selectedFrameId.value = frame.sourceFrameId
   selectedModalFrameId.value = frame.id
 }
 
 function closeFrameModal() {
   selectedModalFrameId.value = ''
+}
+
+function openCreateFrameModal() {
+  createFrameError.value = ''
+  newFrameForm.value = createEmptyFrameForm()
+  isCreateFrameModalOpen.value = true
+}
+
+function closeCreateFrameModal() {
+  if (isCreatingFrame.value) return
+  isCreateFrameModalOpen.value = false
+  createFrameError.value = ''
+}
+
+async function submitNewFrame() {
+  if (isCreatingFrame.value) return
+
+  createFrameError.value = ''
+  isCreatingFrame.value = true
+
+  try {
+    const createdFrame = await createFrame(buildCreateFramePayload())
+    const libraryFrame = toLibraryFrame(createdFrame)
+    customLibraryFrames.value = [libraryFrame, ...customLibraryFrames.value]
+    selectedCampaignType.value = '전체 캠페인 방식'
+    selectedLibraryFrameId.value = libraryFrame.id
+    selectedModalFrameId.value = libraryFrame.id
+    isCreateFrameModalOpen.value = false
+  } catch (error) {
+    createFrameError.value = error?.message ?? '프레임 생성에 실패했습니다.'
+  } finally {
+    isCreatingFrame.value = false
+  }
+}
+
+function createEmptyFrameForm() {
+  return {
+    title: '',
+    category: '',
+    overview: '',
+    requiredFields: '',
+    bannedExpressions: '',
+    recommendedExpressions: '',
+    toneGuide: '',
+    approvalProcess: '',
+  }
+}
+
+function buildCreateFramePayload() {
+  const title = newFrameForm.value.title.trim()
+  const category = newFrameForm.value.category.trim() || '공통'
+
+  return {
+    category,
+    version: 'v1.0',
+    title,
+    score: 0,
+    status: 'draft',
+    overview: newFrameForm.value.overview.trim(),
+    required_fields: splitFrameInput(newFrameForm.value.requiredFields),
+    banned_expressions: splitFrameInput(newFrameForm.value.bannedExpressions),
+    recommended_expressions: splitFrameInput(newFrameForm.value.recommendedExpressions),
+    tone_guide: newFrameForm.value.toneGuide.trim(),
+    approval_process: splitFrameInput(newFrameForm.value.approvalProcess),
+    performance: {
+      usage_count: 0,
+      pass_rate: 0,
+      avg_revisions: 0,
+    },
+  }
+}
+
+function splitFrameInput(value) {
+  return value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function toLibraryFrame(frame) {
+  const performance = frame.performance ?? {}
+
+  return {
+    ...frame,
+    required_fields: frame.required_fields ?? frame.requiredFields ?? [],
+    banned_expressions: frame.banned_expressions ?? frame.bannedExpressions ?? [],
+    recommended_expressions: frame.recommended_expressions ?? frame.recommendedExpressions ?? [],
+    tone_guide: frame.tone_guide ?? frame.toneGuide ?? '',
+    approval_process: frame.approval_process ?? frame.approvalProcess ?? [],
+    performance: {
+      usage_count: performance.usage_count ?? performance.usageCount ?? 0,
+      pass_rate: performance.pass_rate ?? performance.passRate ?? 0,
+      avg_revisions: performance.avg_revisions ?? performance.avgRevisions ?? 0,
+    },
+    sourceFrameId: frameSourceMap[frame.id] ?? frames[0].id,
+  }
 }
 
 function formatHistoryDate(value) {
@@ -318,6 +403,12 @@ function formatHistoryDate(value) {
         <p class="section-eyebrow">{{ t.eyebrow }}</p>
         <h2>{{ t.title }}</h2>
         <span>{{ t.desc }}</span>
+      </div>
+      <div class="hero-actions">
+        <button type="button" class="primary-action" @click="openCreateFrameModal">
+          <span class="material-symbols-outlined">add</span>
+          {{ t.newFrame }}
+        </button>
       </div>
     </header>
 
@@ -363,39 +454,8 @@ function formatHistoryDate(value) {
               <span>점수 <strong>{{ frame.score }}</strong></span>
             </footer>
           </button>
-
         </div>
       </main>
-
-      <aside class="judge-panel">
-        <div class="judge-head">
-          <span class="material-symbols-outlined">gavel</span>
-          <div>
-            <p class="section-eyebrow">{{ t.judge }}</p>
-            <h3>{{ t.judge }}</h3>
-          </div>
-        </div>
-        <p class="judge-desc">{{ t.judgeDesc }}</p>
-
-        <label class="upload-box">
-          <input type="file" @change="updateFile" />
-          <span class="material-symbols-outlined">upload_file</span>
-          <strong>{{ uploadedFileName || t.upload }}</strong>
-          <small>{{ selectedFrame.name }}</small>
-        </label>
-
-        <div class="judge-score">
-          <span>{{ uploadedFileName ? t.caution : t.waiting }}</span>
-          <strong>{{ uploadedFileName ? selectedFrame.score : '--' }}</strong>
-        </div>
-
-        <dl class="judge-checks">
-          <div v-for="item in judgeItems" :key="item.label">
-            <dt>{{ item.label }}</dt>
-            <dd :class="{ caution: item.result === t.caution }">{{ uploadedFileName ? item.result : t.waiting }}</dd>
-          </div>
-        </dl>
-      </aside>
     </section>
 
     <div v-if="modalFrame" class="frame-modal-backdrop" @click.self="closeFrameModal">
@@ -440,7 +500,7 @@ function formatHistoryDate(value) {
                   <span class="material-symbols-outlined danger">block</span>
                   <h4>금지 · 권장 표현</h4>
                 </div>
-                <p>AI 판사가 자동 감지</p>
+                <p>검수 룰 기준</p>
               </div>
               <div class="phrase-section">
                 <strong>금지 표현</strong>
@@ -532,6 +592,67 @@ function formatHistoryDate(value) {
         </div>
       </section>
     </div>
+
+    <div v-if="isCreateFrameModalOpen" class="frame-modal-backdrop" @click.self="closeCreateFrameModal">
+      <section class="frame-modal frame-modal--create" role="dialog" aria-modal="true" aria-label="새 프레임 생성">
+        <header class="create-frame-head">
+          <div>
+            <p class="section-eyebrow">FRAME CREATE</p>
+            <h3>{{ t.createFrame }}</h3>
+          </div>
+          <button type="button" class="icon-action" :disabled="isCreatingFrame" @click="closeCreateFrameModal">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </header>
+
+        <form class="create-frame-form" @submit.prevent="submitNewFrame">
+          <label>
+            <span>프레임명</span>
+            <input v-model="newFrameForm.title" required placeholder="예: VIP 초청 알림톡 표준 프레임" />
+          </label>
+          <label>
+            <span>카테고리</span>
+            <input v-model="newFrameForm.category" placeholder="예: 쿠폰/할인" />
+          </label>
+          <label class="create-frame-form__wide">
+            <span>개요</span>
+            <textarea v-model="newFrameForm.overview" rows="3" placeholder="이 프레임이 검수할 기준을 간단히 적어주세요." />
+          </label>
+          <label>
+            <span>필수 입력 항목</span>
+            <textarea v-model="newFrameForm.requiredFields" rows="4" placeholder="줄바꿈 또는 쉼표로 입력" />
+          </label>
+          <label>
+            <span>금지 표현</span>
+            <textarea v-model="newFrameForm.bannedExpressions" rows="4" placeholder="줄바꿈 또는 쉼표로 입력" />
+          </label>
+          <label>
+            <span>권장 표현</span>
+            <textarea v-model="newFrameForm.recommendedExpressions" rows="4" placeholder="줄바꿈 또는 쉼표로 입력" />
+          </label>
+          <label>
+            <span>승인 프로세스</span>
+            <textarea v-model="newFrameForm.approvalProcess" rows="4" placeholder="PM사 담당자, 파트너사 담당자..." />
+          </label>
+          <label class="create-frame-form__wide">
+            <span>톤앤매너 가이드</span>
+            <textarea v-model="newFrameForm.toneGuide" rows="4" placeholder="문서 작성 시 유지해야 하는 톤과 표현 기준" />
+          </label>
+
+          <p v-if="createFrameError" class="form-error">{{ createFrameError }}</p>
+
+          <div class="create-frame-actions">
+            <button type="button" class="secondary-action" :disabled="isCreatingFrame" @click="closeCreateFrameModal">
+              {{ t.cancel }}
+            </button>
+            <button type="submit" class="primary-action" :disabled="isCreatingFrame">
+              <span class="material-symbols-outlined">add</span>
+              {{ isCreatingFrame ? '생성 중' : t.createFrame }}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
   </section>
 </template>
 
@@ -547,8 +668,7 @@ function formatHistoryDate(value) {
 }
 
 .frames-hero,
-.library-column,
-.judge-panel {
+.library-column {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   background: var(--panel-color);
@@ -563,9 +683,54 @@ function formatHistoryDate(value) {
   padding: 14px 16px;
 }
 
+.hero-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.primary-action,
+.secondary-action,
+.icon-action {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.primary-action {
+  border-color: transparent;
+  background: var(--accent-color);
+  color: #fff;
+}
+
+.secondary-action,
+.icon-action {
+  background: var(--panel-color);
+  color: var(--text-primary);
+}
+
+.icon-action {
+  width: 38px;
+  padding: 0;
+}
+
+.primary-action:disabled,
+.secondary-action:disabled,
+.icon-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .frames-hero h2,
-.library-head h3,
-.judge-head h3 {
+.library-head h3 {
   margin: 4px 0 0;
   font-size: 22px;
   font-weight: 800;
@@ -574,9 +739,7 @@ function formatHistoryDate(value) {
 
 .frames-hero span:not(.material-symbols-outlined),
 .frame-card p,
-.zone-head p,
-.judge-desc,
-.upload-box small {
+.zone-head p {
   color: var(--muted-text);
   font-size: 13px;
   line-height: 1.55;
@@ -591,13 +754,12 @@ function formatHistoryDate(value) {
 
 .frames-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(286px, 18vw, 340px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: start;
 }
 
-.library-column,
-.judge-panel {
+.library-column {
   display: grid;
   gap: 10px;
   padding: 14px;
@@ -841,100 +1003,6 @@ function formatHistoryDate(value) {
   font-weight: 700;
 }
 
-.judge-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.judge-head > span {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: var(--color-primary-100);
-  color: var(--accent-strong);
-}
-
-.upload-box {
-  display: grid;
-  min-height: 132px;
-  place-items: center;
-  gap: 6px;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 16px;
-  text-align: center;
-  cursor: pointer;
-}
-
-.upload-box input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.upload-box .material-symbols-outlined {
-  color: var(--accent-strong);
-  font-size: 30px;
-}
-
-.judge-score {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-radius: var(--radius-md);
-  background: var(--color-primary-50);
-  padding: 12px;
-  color: var(--color-primary-800);
-}
-
-.judge-score span {
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.judge-score strong {
-  font-size: 28px;
-}
-
-.judge-checks {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-}
-
-.judge-checks div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 10px 12px;
-}
-
-.judge-checks dt {
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.judge-checks dd {
-  margin: 0;
-  color: var(--success-color);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.judge-checks dd.caution {
-  color: var(--warning-color);
-}
-
 .frame-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -956,6 +1024,81 @@ function formatHistoryDate(value) {
   background: var(--app-bg, var(--panel-muted));
   box-shadow: 0 28px 80px rgb(15 23 42 / 28%);
   padding: 22px;
+}
+
+.frame-modal--create {
+  width: min(760px, 100%);
+}
+
+.create-frame-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.create-frame-head h3 {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.create-frame-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.create-frame-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.create-frame-form label > span {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.create-frame-form input,
+.create-frame-form textarea {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-color);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+
+.create-frame-form textarea {
+  resize: vertical;
+}
+
+.create-frame-form__wide,
+.form-error,
+.create-frame-actions {
+  grid-column: 1 / -1;
+}
+
+.form-error {
+  margin: 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--danger-color, #ef4444) 10%, var(--panel-color));
+  color: var(--danger-color, #ef4444);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 10px 12px;
+}
+
+.create-frame-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .frame-modal__hero {
@@ -1353,12 +1496,24 @@ function formatHistoryDate(value) {
     width: 100%;
   }
 
+  .hero-actions {
+    width: 100%;
+  }
+
+  .hero-actions .primary-action {
+    width: 100%;
+  }
+
   .frame-modal-backdrop {
     padding: 10px;
   }
 
   .frame-modal {
     padding: 14px;
+  }
+
+  .create-frame-form {
+    grid-template-columns: 1fr;
   }
 
   .frame-modal__aside,
