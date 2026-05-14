@@ -29,23 +29,23 @@ function unwrapResponse(response) {
 }
 
 export const listFrames = async () => {
-  return unwrapResponse(await api.get('/frames'))
+  return unwrapResponse(await api.get('/frames/list'))
 }
 
 export const getFrame = async (frameId) => {
-  return unwrapResponse(await api.get(`/frames/${frameId}`))
+  return unwrapResponse(await api.get(`/frames/detail/${frameId}`))
 }
 
 export const createFrame = async (payload) => {
-  return unwrapResponse(await api.post('/frames', payload))
+  return unwrapResponse(await api.post('/frames/create', payload))
 }
 
 export const updateFrame = async (frameId, payload) => {
-  return unwrapResponse(await api.put(`/frames/${frameId}`, payload))
+  return unwrapResponse(await api.put(`/frames/update/${frameId}`, payload))
 }
 
 export const deleteFrame = async (frameId) => {
-  return unwrapResponse(await api.delete(`/frames/${frameId}`))
+  return unwrapResponse(await api.delete(`/frames/delete/${frameId}`))
 }
 
 /**
