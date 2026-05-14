@@ -20,9 +20,14 @@ public class CampaignMemberDto {
             String globalRole,
             CampaignMemberRole campaignRole,
             Long organizationIdx,
-            LocalDateTime joinedAt
+            LocalDateTime joinedAt,
+            String profileImageUrl
     ) {
         public static Res from(CampaignMember entity) {
+            return from(entity, null);
+        }
+
+        public static Res from(CampaignMember entity, String profileImageUrl) {
             User u = entity.getUser();
             return Res.builder()
                     .idx(entity.getIdx())
@@ -36,6 +41,7 @@ public class CampaignMemberDto {
                     .campaignRole(entity.getCampaignRole())
                     .organizationIdx(u.getOrganization() != null ? u.getOrganization().getIdx() : null)
                     .joinedAt(entity.getJoinedAt())
+                    .profileImageUrl(profileImageUrl)
                     .build();
         }
     }
@@ -135,7 +141,8 @@ public class CampaignMemberDto {
             String department,
             String globalRole,
             Long organizationIdx,
-            String organizationName
+            String organizationName,
+            String profileImageUrl
     ) {}
 
     @Builder

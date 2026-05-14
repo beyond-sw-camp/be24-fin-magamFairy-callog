@@ -61,111 +61,191 @@
 /* ─────────────────────────────────────────────────────── */
 
 :root {
-  --app-bg: var(--color-gray-50);
-  --panel-color: var(--color-gray-0);
-  --panel-muted: var(--color-gray-50);
-  --panel-subtle: #fbfcfe;
-  --header-color: var(--color-gray-0);
-  --sidebar-color: var(--color-gray-0);
-  --dropdown-color: var(--color-gray-0);
-  --control-color: var(--color-gray-50);
-  --control-focus-color: var(--color-gray-0);
-  --text-primary: var(--color-gray-900);
-  --text-secondary: var(--color-gray-700);
-  --muted-text: var(--color-gray-500);
-  --subtle-text: var(--color-gray-400);
-  --accent-color: var(--color-primary-500);
-  --accent-strong: var(--color-primary-600);
-  --accent-soft: var(--color-primary-50);
-  --success-color: #59c36d;
-  --warning-color: #f5b64e;
-  --danger-color: #df5f75;
-  --purple-color: #7c4dff;
-  --border-color: var(--color-gray-200);
-  --border-strong: var(--color-gray-300);
-  --nav-icon-color: var(--color-gray-400);
-  --nav-icon-hover-bg: var(--color-primary-50);
-  --nav-icon-hover-color: var(--color-primary-600);
-  --nav-icon-active-bg: var(--color-primary-100);
-  --nav-icon-active-color: var(--color-primary-600);
-  --badge-bg: var(--color-primary-100);
-  --badge-text: var(--color-primary-700);
-  --danger-surface: var(--color-danger-light);
-  --danger-text-strong: #DC2626;
-  --shadow-soft: 0 20px 55px rgba(19, 35, 68, 0.07);
-  --shadow-elevated: 0 32px 80px rgba(19, 35, 68, 0.15);
-  --surface-page: var(--app-bg);
-  --surface-card: var(--panel-color);
-  --surface-card-muted: var(--panel-muted);
-  --surface-card-subtle: var(--panel-subtle);
-  --surface-control: var(--control-color);
+  /* ─── Light theme: Pastel Tech + Vanilla (Lavender Pop) ─────────── */
+  --app-bg:                #F5EFE6;        /* vanilla */
+  --panel-color:           #FBF7F0;        /* surface (cream) */
+  --panel-muted:           #F0EBE2;        /* subtle hover */
+  --panel-subtle:          #F8F2EA;        /* deeper subtle */
+  --header-color:          #FBF7F0;
+  --sidebar-color:         #FBF7F0;
+  --dropdown-color:        #FBF7F0;
+  --control-color:         #F0EBE2;
+  --control-focus-color:   #FBF7F0;
+  --text-primary:          #2A2440;        /* deep lavender */
+  --text-secondary:        #4A4258;
+  --muted-text:            #6B6582;
+  --subtle-text:           #9991AE;
+  --accent-color:          #B79BD9;        /* lavender */
+  --accent-strong:         #6F5A9B;
+  --accent-soft:           #EEE6F7;
+  --success-color:         #59c36d;
+  --warning-color:         #f5b64e;
+  --danger-color:          #df5f75;
+  --purple-color:          #B79BD9;
+  --border-color:          #E5DDF0;
+  --border-strong:         #C6BAE6;
+  --nav-icon-color:        #9991AE;
+  --nav-icon-hover-bg:     #EEE6F7;
+  --nav-icon-hover-color:  #3F3463;
+  --nav-icon-active-bg:    #DDD2EE;
+  --nav-icon-active-color: #3F3463;
+  --badge-bg:              #DDD2EE;
+  --badge-text:            #3F3463;
+  --danger-surface:        var(--color-danger-light);
+  --danger-text-strong:    #DC2626;
+  --shadow-soft:           0 20px 55px rgba(63, 52, 99, 0.08);
+  --shadow-elevated:       0 32px 80px rgba(63, 52, 99, 0.16);
+
+  /* ─── Lavender Pop tokens (Pastel Tech + Vanilla) — globally available ─── */
+  --lp-bg:                 #F5EFE6;        /* vanilla */
+  --lp-surface:            #FBF7F0;
+  --lp-surface-soft:       #F0EBE2;
+  --lp-primary:            #B79BD9;
+  --lp-primary-strong:     #6F5A9B;
+  --lp-primary-deep:       #3F3463;
+  --lp-violet-deep:        #2D2649;
+  --lp-lime:               #D8EB75;
+  --lp-lime-soft:          #EAF2A8;
+  --lp-card-lavender-1:    #DDD2EE;
+  --lp-card-lavender-2:    #C6BAE6;
+  --lp-card-cream:         #F5EDD8;
+  --lp-card-peach:         #FFD4D1;        /* blush — Pastel Tech accent */
+  --lp-card-sage:          #D7EFDD;
+  --lp-text:               #2A2440;
+  --lp-text-muted:         #6B6582;
+  --lp-text-faint:         #9991AE;
+  --lp-border:             #E5DDF0;
+  /* Button surfaces — distinct from primary so light/dark can diverge cleanly */
+  --lp-button-bg:          #3F3463;        /* deep purple, white text on top */
+  --lp-button-bg-hover:    #4F4275;
+  --lp-button-text:        #FFFFFF;
+  /* Violet sidebar surfaces (dark-purple sidebar, even in light theme) */
+  --lp-violet-bg:          #3F3463;
+  --lp-violet-deep:        #2D2649;
+  --lp-violet-line:        #564A7D;
+  --lp-text-on-violet:     #ECE5F8;
+  --lp-text-on-violet-faint: #A89BC4;
+  /* Hero-card gradient (used by dashboard z4-top, marketing heroes) */
+  --lp-hero-gradient:      linear-gradient(165deg, #C5ADE0 0%, #A98DCC 55%, #8E72BA 100%);
+  --lp-hero-text:          #FFFFFF;
+
+  --surface-page:          var(--app-bg);
+  --surface-card:          var(--panel-color);
+  --surface-card-muted:    var(--panel-muted);
+  --surface-card-subtle:   var(--panel-subtle);
+  --surface-control:       var(--control-color);
   --surface-control-hover: var(--panel-muted);
   --surface-control-active: var(--accent-color);
-  --text-heading: var(--text-primary);
-  --text-body: var(--text-secondary);
-  --text-muted: var(--muted-text);
-  --line-soft: var(--border-color);
-  --line-strong: var(--border-strong);
-  --toggle-bg: #e2e8f0;
-  --toggle-bg-active: var(--success-color);
-  --toggle-thumb: #ffffff;
-  --density-page-padding: 24px;
-  --density-card-padding: 20px;
-  --density-pane-gap: 18px;
-  --density-control-height: 40px;
+  --text-heading:          var(--text-primary);
+  --text-body:             var(--text-secondary);
+  --text-muted:            var(--muted-text);
+  --line-soft:             var(--border-color);
+  --line-strong:           var(--border-strong);
+  --toggle-bg:             #E5DDF0;
+  --toggle-bg-active:      #B79BD9;
+  --toggle-thumb:          #ffffff;
+  --density-page-padding:  24px;
+  --density-card-padding:  20px;
+  --density-pane-gap:      18px;
+  --density-control-height:40px;
 }
 
 :root[data-theme='dark'] {
+  /* ─── Dark theme: Elevated Soft Dark + Midnight Aurora BG
+         (deep navy/violet base with partial cyan → pink → lime holographic accents) ─── */
   --app-bg:
-    radial-gradient(circle at top left, rgba(47, 128, 237, 0.18), transparent 30%),
-    linear-gradient(180deg, #10141d 0%, #0e121a 100%);
-  --panel-color: #161c27;
-  --panel-muted: #1c2330;
-  --panel-subtle: #202837;
-  --header-color: #161c27;
-  --sidebar-color: #111721;
-  --dropdown-color: #1c2330;
-  --control-color: #111721;
-  --control-focus-color: #161c27;
-  --text-primary: #f7f9fc;
-  --text-secondary: #d5dce8;
-  --muted-text: #8e9ab3;
-  --subtle-text: #6f7b92;
-  --accent-color: #5aa5ff;
-  --accent-strong: #2f80ed;
-  --accent-soft: rgba(90, 165, 255, 0.12);
-  --success-color: #5ccf87;
-  --warning-color: #ffc35a;
-  --danger-color: #ff758f;
-  --purple-color: #9a7cff;
-  --border-color: #273041;
-  --border-strong: #334057;
-  --nav-icon-color: #8e9ab3;
-  --nav-icon-hover-bg: rgba(139, 92, 246, 0.14);
-  --nav-icon-hover-color: #c4b5fd;
-  --nav-icon-active-bg: rgba(139, 92, 246, 0.22);
-  --nav-icon-active-color: #ddd6fe;
-  --badge-bg: rgba(139, 92, 246, 0.18);
-  --badge-text: #ddd6fe;
-  --danger-surface: rgba(239, 68, 68, 0.14);
-  --danger-text-strong: #ff8a9b;
-  --shadow-soft: 0 18px 50px rgba(0, 0, 0, 0.28);
-  --shadow-elevated: 0 32px 90px rgba(0, 0, 0, 0.45);
-  --surface-page: var(--app-bg);
-  --surface-card: var(--panel-color);
-  --surface-card-muted: var(--panel-muted);
-  --surface-card-subtle: var(--panel-subtle);
-  --surface-control: var(--control-color);
-  --surface-control-hover: #252d3c;
-  --surface-control-active: var(--success-color);
-  --text-heading: var(--text-primary);
-  --text-body: var(--text-secondary);
-  --text-muted: var(--muted-text);
-  --line-soft: var(--border-color);
-  --line-strong: var(--border-strong);
-  --toggle-bg: #3f3f56;
-  --toggle-bg-active: var(--success-color);
-  --toggle-thumb: #ffffff;
+    radial-gradient(ellipse 820px 620px at 12% 8%,  rgba(125, 211, 252, 0.14), transparent 55%),
+    radial-gradient(ellipse 720px 520px at 88% 92%, rgba(240, 171, 252, 0.12), transparent 55%),
+    radial-gradient(ellipse 600px 420px at 50% 55%, rgba(216, 235, 117, 0.07), transparent 60%),
+    #0E0D1F;
+  --panel-color:           #22222E;        /* surface */
+  --panel-muted:           #2E2E3D;        /* elevated */
+  --panel-subtle:          #2A2A38;
+  --header-color:          #22222E;
+  --sidebar-color:         #1A1A22;
+  --dropdown-color:        #2E2E3D;
+  --control-color:         #2E2E3D;
+  --control-focus-color:   #35354A;
+  --text-primary:          #E8E6F0;
+  --text-secondary:        #C5BFDB;
+  --muted-text:            #A89FC0;
+  --subtle-text:           #6E6586;
+  --accent-color:          #B79BD9;
+  --accent-strong:         #C6BAE6;
+  --accent-soft:           rgba(183, 155, 217, 0.16);
+  --success-color:         #5CCF87;
+  --warning-color:         #FFC35A;
+  --danger-color:          #FF758F;
+  --purple-color:          #B79BD9;
+  --border-color:          rgba(255, 255, 255, 0.08);
+  --border-strong:         rgba(255, 255, 255, 0.14);
+  --nav-icon-color:        #A89FC0;
+  --nav-icon-hover-bg:     rgba(183, 155, 217, 0.14);
+  --nav-icon-hover-color:  #C6BAE6;
+  --nav-icon-active-bg:    rgba(183, 155, 217, 0.22);
+  --nav-icon-active-color: #DDD2EE;
+  --badge-bg:              rgba(183, 155, 217, 0.22);
+  --badge-text:            #DDD2EE;
+  --danger-surface:        rgba(239, 68, 68, 0.14);
+  --danger-text-strong:    #FF8A9B;
+  --shadow-soft:           0 18px 50px rgba(0, 0, 0, 0.40);
+  --shadow-elevated:       0 32px 90px rgba(0, 0, 0, 0.55);
+
+  /* Lavender Pop tokens (Elevated Soft Dark + Midnight Aurora BG) */
+  --lp-bg:
+    radial-gradient(ellipse 820px 620px at 12% 8%,  rgba(125, 211, 252, 0.14), transparent 55%),
+    radial-gradient(ellipse 720px 520px at 88% 92%, rgba(240, 171, 252, 0.12), transparent 55%),
+    radial-gradient(ellipse 600px 420px at 50% 55%, rgba(216, 235, 117, 0.07), transparent 60%),
+    #0E0D1F;
+  --lp-surface:            #22222E;
+  --lp-surface-soft:       #2E2E3D;
+  --lp-primary:            #B79BD9;
+  --lp-primary-strong:     #C6BAE6;
+  --lp-primary-deep:       #E0D6F5;
+  --lp-violet-deep:        #F0E8FF;
+  --lp-lime:               #D8EB75;
+  --lp-lime-soft:          rgba(216, 235, 117, 0.16);
+  --lp-card-lavender-1:    rgba(183, 155, 217, 0.20);
+  --lp-card-lavender-2:    rgba(183, 155, 217, 0.32);
+  --lp-card-cream:         rgba(245, 237, 216, 0.20);
+  --lp-card-peach:         rgba(255, 212, 209, 0.18);
+  --lp-card-sage:          rgba(215, 239, 221, 0.20);
+  --lp-text:               #E8E6F0;
+  --lp-text-muted:         #A89FC0;
+  --lp-text-faint:         #6E6586;
+  --lp-border:             rgba(255, 255, 255, 0.08);
+  /* Button surfaces — dark navy-violet bg + lavender text (per user: lavender = main emphasis) */
+  --lp-button-bg:          #1A1530;
+  --lp-button-bg-hover:    #252040;
+  --lp-button-text:        #B79BD9;
+  /* Violet sidebar surfaces — adapt to elevated dark for theme cohesion */
+  --lp-violet-bg:          #1A1530;
+  --lp-violet-deep:        #0E0D1F;
+  --lp-violet-line:        rgba(255, 255, 255, 0.10);
+  --lp-text-on-violet:     #ECE5F8;
+  --lp-text-on-violet-faint: #A89BC4;
+  /* Hero-card gradient (dark variant) */
+  --lp-hero-gradient:      linear-gradient(165deg, #3F3463 0%, #2D2649 55%, #1A1530 100%);
+  --lp-hero-text:          #FFFFFF;
+
+  /* Iridescent gradient accent for hero / focus states (kept for reuse) */
+  --lp-aurora:             linear-gradient(90deg, #7DD3FC 0%, #F0ABFC 50%, #D8EB75 100%);
+
+  --surface-page:          var(--app-bg);
+  --surface-card:          var(--panel-color);
+  --surface-card-muted:    var(--panel-muted);
+  --surface-card-subtle:   var(--panel-subtle);
+  --surface-control:       var(--control-color);
+  --surface-control-hover: #353548;
+  --surface-control-active: var(--accent-color);
+  --text-heading:          var(--text-primary);
+  --text-body:             var(--text-secondary);
+  --text-muted:            var(--muted-text);
+  --line-soft:             var(--border-color);
+  --line-strong:           var(--border-strong);
+  --toggle-bg:             rgba(255, 255, 255, 0.16);
+  --toggle-bg-active:      #B79BD9;
+  --toggle-thumb:          #ffffff;
 }
 
 :root[data-density='compact'] {

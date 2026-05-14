@@ -207,17 +207,33 @@ function eventsOnDay(iso) {
 </script>
 
 <template>
-  <div class="main-cal" :class="{ 'main-cal--dark': isDark }">
+  <div class="main-cal lp-month" :class="{ 'main-cal--dark': isDark }">
 
-    <header class="main-cal__head">
-      <h1 class="main-cal__title">{{ currentYear }}년 {{ currentMonth }}월</h1>
-      <div class="main-cal__nav">
-        <button @click="prevMonth" class="main-cal__btn">지난 달</button>
-        <button @click="today" class="main-cal__btn main-cal__btn--primary">이번 달</button>
-        <button @click="nextMonth" class="main-cal__btn">다음 달</button>
+    <!-- ═══ Top header bar: range label + Today + nav arrows ═══ -->
+    <header class="main-cal__head lp-month-h">
+      <div class="lp-month-h__left">
+        <h1 class="main-cal__title lp-range-label">
+          {{ currentYear }}년 {{ currentMonth }}월
+        </h1>
+      </div>
+      <div class="main-cal__nav lp-month-h__right">
+        <button @click="today" class="main-cal__btn main-cal__btn--primary lp-today-btn">오늘</button>
+        <div class="lp-arrow-group">
+          <button @click="prevMonth" class="main-cal__btn lp-arrow" aria-label="이전 달">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <button @click="nextMonth" class="main-cal__btn lp-arrow" aria-label="다음 달">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
       </div>
     </header>
 
+    <!-- ═══ Weekday row: Sun → Sat, no border, faint caps ═══ -->
     <div class="main-cal__dow-row">
       <div
         v-for="(d, i) in daysOfWeek"
@@ -229,7 +245,7 @@ function eventsOnDay(iso) {
 
     <div class="main-cal__grid">
       <div v-for="(week, wi) in calendarWeeks" :key="wi" class="main-cal__week">
-        <!-- 셀 (배경 + 날짜 + 빈 영역 클릭) -->
+        <!-- 셀 (mini-card surface + 날짜 원 + 빈 영역 클릭) -->
         <div
           v-for="day in week.days"
           :key="day.date"
@@ -243,44 +259,46 @@ function eventsOnDay(iso) {
           @dragover="onCellDragOver(day.date, $event)"
           @drop="onCellDrop(day.date, $event)"
         >
-          <span
-            class="main-cal__date"
-            :class="{
-              'main-cal__date--today': isToday(day.date),
-              'main-cal__date--sun': day.dayOfWeek === 0 && day.isCurrentMonth,
-              'main-cal__date--sat': day.dayOfWeek === 6 && day.isCurrentMonth,
-              'main-cal__date--out': !day.isCurrentMonth,
-            }"
-          >{{ day.dayOfMonth }}</span>
-          <!-- + 버튼 (셀 우측 상단, hover 시 노출) -->
-          <button
-            v-if="day.isCurrentMonth"
-            type="button"
-            class="main-cal__add"
-            :title="`${day.date} 일정 추가`"
-            @click.stop="emit('day-click', { date: day.date, event: $event })"
-          >+</button>
+          <div class="main-cal__cell-head">
+            <span
+              class="main-cal__date"
+              :class="{
+                'main-cal__date--today': isToday(day.date),
+                'main-cal__date--sun': day.dayOfWeek === 0 && day.isCurrentMonth,
+                'main-cal__date--sat': day.dayOfWeek === 6 && day.isCurrentMonth,
+                'main-cal__date--out': !day.isCurrentMonth,
+              }"
+            >{{ day.dayOfMonth }}</span>
+            <!-- + 버튼 (셀 우측 상단, hover 시 노출) -->
+            <button
+              v-if="day.isCurrentMonth"
+              type="button"
+              class="main-cal__add"
+              :title="`${day.date} 일정 추가`"
+              @click.stop="emit('day-click', { date: day.date, event: $event })"
+            >+</button>
+          </div>
         </div>
 
-        <!-- 이벤트 막대 오버레이 -->
+        <!-- 이벤트 막대 오버레이 (multi-day = single bar spanning cells) -->
         <div class="main-cal__events">
           <div
             v-for="(ev, idx) in week.events"
             :key="ev.id"
             class="main-cal__event-row"
-            :style="{ top: (idx * 22) + 'px' }"
+            :style="{ top: (idx * 26) + 'px' }"
           >
             <div
               v-if="ev.isVisible"
               class="main-cal__event"
               :class="[ev.customColor ? '' : ev.colorClass, { 'main-cal__event--dragging': dragState?.event?.id === ev.id }]"
               :style="{
-                marginLeft: `calc(${(ev.startOffset / 7) * 100}% + 4px)`,
-                width: `calc(${(ev.span / 7) * 100}% - 8px)`,
+                marginLeft: `calc(${(ev.startOffset / 7) * 100}% + 6px)`,
+                width: `calc(${(ev.span / 7) * 100}% - 12px)`,
                 ...(ev.customColor ? {
-                  background: `color-mix(in srgb, ${ev.customColor} 14%, transparent)`,
-                  color: ev.customColor,
-                  borderColor: `color-mix(in srgb, ${ev.customColor} 32%, transparent)`,
+                  background: ev.customColor,
+                  color: '#2D2649',
+                  borderColor: 'transparent',
                 } : {}),
               }"
               draggable="true"
@@ -311,16 +329,16 @@ function eventsOnDay(iso) {
           </div>
         </div>
 
-        <!-- "+N개 더" 칩 (셀 하단) -->
+        <!-- "+N more" 칩 (셀 하단) -->
         <div class="main-cal__extras">
           <button
             v-for="(extra, di) in week.extraByDay"
             :key="di"
             v-show="extra > 0"
             class="main-cal__more"
-            :style="{ left: `calc(${(di / 7) * 100}% + 4px)`, width: `calc(${(1 / 7) * 100}% - 8px)` }"
+            :style="{ left: `calc(${(di / 7) * 100}% + 6px)`, width: `calc(${(1 / 7) * 100}% - 12px)` }"
             @click.stop="emit('more-click', { date: week.days[di].date, events: eventsOnDay(week.days[di].date) })"
-          >+{{ extra }}개 더</button>
+          >+{{ extra }} more</button>
         </div>
       </div>
     </div>
@@ -348,97 +366,163 @@ function eventsOnDay(iso) {
 
 <style scoped>
 .main-cal {
+  /* --lp-* tokens cascade from :root (base.css). */
+  --lp-card-lavender-3: #B0A4DA;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+  --r-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(63,52,99,.04), 0 6px 18px rgba(63,52,99,.06);
+
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--panel-color);
-  color: var(--text-primary);
+  box-sizing: border-box;
+  background: var(--lp-surface);
+  color: var(--lp-text);
   position: relative;
+  border-radius: 24px;
+  padding: 24px 26px 18px;
+  box-shadow: var(--shadow-card);
+  font-family: 'Pretendard Variable', 'Pretendard', -apple-system, sans-serif;
+  font-feature-settings: 'tnum' 1, 'ss01' 1;
 }
 
-/* Header */
+/* ═══ Top header bar: range label · Today · arrows ═══ */
 .main-cal__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 0 0 14px;
+  border-bottom: 0;
+  gap: 12px;
+  flex-wrap: wrap;
 }
-.main-cal__title { font-size: 18px; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
-.main-cal__nav { display: flex; gap: 6px; }
-.main-cal__btn {
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 650;
-  border: 1px solid var(--border-color);
-  background: var(--panel-color);
-  color: var(--text-primary);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.12s;
+.main-cal__title,
+.lp-range-label {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
+  color: var(--lp-primary-deep);
 }
-.main-cal__btn:hover { background: var(--panel-muted); }
-.main-cal__btn--primary {
-  background: var(--accent-color, #8B5CF6);
-  color: #fff;
-  border-color: var(--accent-color, #8B5CF6);
-}
-.main-cal__btn--primary:hover { background: #7C3AED; }
+.main-cal__nav { display: inline-flex; align-items: center; gap: 10px; }
 
-/* Day-of-week row */
+.lp-arrow-group { display: inline-flex; align-items: center; gap: 4px; }
+.main-cal__btn.lp-arrow {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-border);
+  color: var(--lp-primary-deep);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, border-color .15s;
+}
+.main-cal__btn.lp-arrow:hover {
+  background: var(--lp-surface-soft);
+  border-color: var(--lp-primary);
+}
+
+.main-cal__btn.main-cal__btn--primary.lp-today-btn {
+  background: var(--lp-button-bg);
+  color: #fff;
+  border: 0;
+  padding: 7px 18px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.main-cal__btn.main-cal__btn--primary.lp-today-btn:hover { background: var(--lp-button-bg-hover); }
+
+/* ═══ Day-of-week row: faint caps, no border ═══ */
 .main-cal__dow-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  border-bottom: 1px solid var(--border-color);
-  background: var(--panel-muted);
+  background: transparent;
+  border-bottom: 0;
+  margin-bottom: 6px;
 }
 .main-cal__dow-cell {
-  padding: 8px 0;
+  padding: 8px 0 6px;
   text-align: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted-text);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-right: 1px solid var(--border-color);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--lp-text-faint);
+  text-transform: capitalize;
+  letter-spacing: 0.04em;
+  border-right: 0;
 }
-.main-cal__dow-cell:last-child { border-right: none; }
-.main-cal__dow-cell--sun { color: #EF4444; }
-.main-cal__dow-cell--sat { color: #3B82F6; }
+.main-cal__dow-cell--sun { color: #C0837A; }
+.main-cal__dow-cell--sat { color: var(--lp-primary-strong); }
 
-/* Grid */
+/* ═══ Grid: 7×6 rounded mini-cards ═══ */
 .main-cal__grid {
   flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 4px;
   overflow: hidden;
 }
 .main-cal__week {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  border-bottom: 1px solid var(--border-color);
+  /* gap intentionally 0: event bars use % of week width and must align to columns */
+  gap: 0;
+  border-bottom: 0;
   position: relative;
   min-height: 0;
 }
+
 .main-cal__cell {
-  padding: 4px;
-  border-right: 1px solid var(--border-color);
-  transition: background 0.12s;
+  padding: 3px;
+  border: 0;
+  background: transparent;
   position: relative;
+  transition: background 0.18s;
+  overflow: hidden;
+  min-height: 96px;
 }
-.main-cal__cell:last-child { border-right: none; }
-.main-cal__cell:hover { background: color-mix(in srgb, var(--accent-color) 4%, transparent); }
-.main-cal__add {
+.main-cal__cell::before {
+  content: '';
   position: absolute;
-  top: 3px;
-  right: 4px;
-  width: 18px;
-  height: 18px;
-  border: none;
-  background: rgba(139, 92, 246, 0.14);
-  color: var(--accent-color, #8B5CF6);
-  border-radius: 50%;
+  inset: 3px;
+  border-radius: 14px;
+  background: var(--lp-surface);
+  box-shadow: inset 0 0 0 1px rgba(229, 221, 240, .55);
+  z-index: 0;
+  transition: box-shadow 0.18s ease, background 0.18s;
+}
+.main-cal__cell:hover::before {
+  box-shadow:
+    inset 0 0 0 1px rgba(229, 221, 240, .9),
+    0 6px 18px rgba(63,52,99,.10);
+}
+.main-cal__cell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 0;
+  position: relative;
+  z-index: 2;
+}
+.main-cal__add {
+  position: relative;
+  top: auto;
+  right: auto;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  background: color-mix(in srgb, var(--lp-primary) 22%, transparent);
+  color: var(--lp-primary-strong);
+  border-radius: 999px;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s, background 0.15s, transform 0.1s;
@@ -453,53 +537,71 @@ function eventsOnDay(iso) {
 }
 .main-cal__cell:hover .main-cal__add { opacity: 1; }
 .main-cal__add:hover {
-  background: var(--accent-color, #8B5CF6);
+  background: var(--lp-button-bg);
   color: #fff;
-  transform: scale(1.12);
-}
-.main-cal__cell--today {
-  background: color-mix(in srgb, var(--accent-color, #8B5CF6) 6%, transparent);
-  box-shadow: inset 2px 0 0 var(--accent-color, #8B5CF6);
-}
-.main-cal__cell--past { background: color-mix(in srgb, var(--panel-muted) 30%, transparent); }
-.main-cal__cell--past .main-cal__date { opacity: 0.55; }
-.main-cal__cell--out { background: var(--panel-muted); }
-.main-cal__cell--drag-over {
-  background: color-mix(in srgb, var(--accent-color, #8B5CF6) 12%, transparent) !important;
-  outline: 2px dashed var(--accent-color, #8B5CF6);
-  outline-offset: -2px;
+  transform: scale(1.10);
 }
 
+/* Today cell: lime soft gradient + accent disc */
+.main-cal__cell--today::before {
+  background:
+    radial-gradient(circle at 14px 14px, rgba(216,235,117,.55) 0, rgba(216,235,117,.18) 24px, transparent 70px),
+    linear-gradient(180deg, var(--lp-lime-soft) 0%, var(--lp-surface) 65%);
+  box-shadow: inset 0 0 0 1px rgba(216, 235, 117, .9);
+}
+
+/* Past / adjacent-month — keep concepts, photo-style treatment */
+.main-cal__cell--past .main-cal__date { opacity: 0.55; }
+.main-cal__cell--out::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(229, 221, 240, .28);
+}
+.main-cal__cell--out .main-cal__date { opacity: 0.45; }
+
+.main-cal__cell--drag-over::before {
+  background: color-mix(in srgb, var(--lp-primary) 14%, transparent);
+  box-shadow: inset 0 0 0 2px var(--lp-primary-strong);
+}
+
+/* Date number: 14px weight 700, deep purple; today = 28px filled circle */
 .main-cal__date {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--lp-primary-deep);
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
-}
-.main-cal__date--sun { color: #EF4444; }
-.main-cal__date--sat { color: #3B82F6; }
-.main-cal__date--out { color: var(--subtle-text); opacity: 0.5; }
-.main-cal__date--today {
-  background: var(--accent-color, #8B5CF6);
-  color: #fff !important;
-  font-weight: 800;
+  font-feature-settings: 'tnum' 1;
+  padding: 0;
   border-radius: 999px;
-  min-width: 22px;
+  width: auto;
   height: 22px;
+  min-width: 22px;
+  transition: background .2s, color .2s;
+}
+.main-cal__date--sun { color: #C0837A; }
+.main-cal__date--sat { color: var(--lp-primary-strong); }
+.main-cal__date--out { color: var(--lp-text-faint); }
+.main-cal__date--today {
+  background: var(--lp-button-bg);
+  color: #fff !important;
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(63, 52, 99, 0.20);
 }
 
-/* Events overlay */
+/* ═══ Events overlay (Linear/Notion-style multi-day bars) ═══ */
 .main-cal__events {
   position: absolute;
-  top: 28px;
+  top: 32px;
   left: 0;
   right: 0;
-  bottom: 18px;
+  bottom: 22px;
   pointer-events: none;
   overflow: hidden;
 }
@@ -507,36 +609,36 @@ function eventsOnDay(iso) {
   position: absolute;
   left: 0;
   right: 0;
-  height: 20px;
+  height: 22px;
 }
 .main-cal__event {
   display: block;
-  height: 20px;
-  padding: 0 8px;
-  font-size: 11.5px;
+  position: relative;
+  height: 22px;
+  padding: 4px 8px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 20px;
-  border-radius: 4px;
+  line-height: 14px;
+  border-radius: 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: auto;
   cursor: pointer;
-  background: rgba(139, 92, 246, 0.12);
-  color: #5B21B6;
-  border: 1px solid rgba(139, 92, 246, 0.2);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: transform 0.1s, box-shadow 0.15s;
-}
-.main-cal__event:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); }
-.main-cal__event-icon { font-size: 11px; margin-right: 3px; }
-.main-cal__event {
-  position: relative;
-  /* drag-drop 후 위치 전환 (margin-left/width 변경) 부드럽게 */
+  background: var(--lp-card-lavender-1);
+  color: var(--lp-violet-deep);
+  border: 0;
+  box-shadow: 0 1px 2px rgba(63,52,99,.05);
+  letter-spacing: -0.005em;
   transition: margin-left 0.2s cubic-bezier(0.16, 1, 0.3, 1),
               width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.1s, box-shadow 0.15s;
+              transform 0.12s, box-shadow 0.15s;
 }
+.main-cal__event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(63, 52, 99, 0.16);
+}
+.main-cal__event-icon { font-size: 11px; margin-right: 3px; }
 .main-cal__event--dragging { opacity: 0.45; }
 
 /* 양쪽 리사이즈 핸들 */
@@ -544,19 +646,27 @@ function eventsOnDay(iso) {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 5px;
+  width: 6px;
   cursor: ew-resize;
   background: transparent;
   z-index: 1;
 }
-.main-cal__event-handle--start { left: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
-.main-cal__event-handle--end   { right: 0; border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
-.main-cal__event-handle:hover { background: rgba(0, 0, 0, 0.18); }
+.main-cal__event-handle--start {
+  left: 0;
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+.main-cal__event-handle--end {
+  right: 0;
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+.main-cal__event-handle:hover { background: rgba(63, 52, 99, 0.22); }
 
 /* +N more */
 .main-cal__extras {
   position: absolute;
-  bottom: 2px;
+  bottom: 4px;
   left: 0;
   right: 0;
   height: 16px;
@@ -565,29 +675,33 @@ function eventsOnDay(iso) {
 .main-cal__more {
   position: absolute;
   height: 16px;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--accent-color, #8B5CF6);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--lp-primary-deep);
   background: transparent;
   border: none;
   cursor: pointer;
   pointer-events: auto;
-  border-radius: 3px;
+  border-radius: 6px;
   text-align: left;
   padding: 0 4px;
+  letter-spacing: 0.01em;
 }
-.main-cal__more:hover { background: color-mix(in srgb, var(--accent-color) 10%, transparent); }
+.main-cal__more:hover {
+  background: color-mix(in srgb, var(--lp-primary) 14%, transparent);
+  color: var(--lp-violet-deep);
+}
 
 /* Hover preview tooltip */
 .hover-tip {
   position: fixed;
   transform: translateX(-50%);
-  background: var(--panel-color);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--r-md);
   padding: 10px 12px;
   font-size: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  box-shadow: var(--shadow-card);
   z-index: 150;
   pointer-events: none;
   min-width: 200px;
@@ -596,7 +710,7 @@ function eventsOnDay(iso) {
 .hover-tip__title {
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--lp-text);
   margin-bottom: 6px;
 }
 .hover-tip__row {
@@ -604,11 +718,23 @@ function eventsOnDay(iso) {
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: var(--muted-text);
+  color: var(--lp-text-muted);
   padding: 1px 0;
 }
 .hover-tip__row .material-symbols-outlined { font-size: 13px; }
 
 .hover-fade-enter-active, .hover-fade-leave-active { transition: opacity 0.12s; }
 .hover-fade-enter-from, .hover-fade-leave-to { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .main-cal__cell, .main-cal__event { transition: none; }
+}
+
+@media (max-width: 720px) {
+  .main-cal { padding: 16px 14px 12px; border-radius: 18px; }
+  .main-cal__title, .lp-range-label { font-size: 15px; }
+  .main-cal__cell { min-height: 72px; border-radius: 12px; }
+  .main-cal__date { font-size: 12px; }
+  .main-cal__date--today { width: 24px; height: 24px; min-width: 24px; }
+}
 </style>

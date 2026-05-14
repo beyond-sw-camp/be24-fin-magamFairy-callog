@@ -1,11 +1,39 @@
 import os
+import logging
 import shutil
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from threading import Lock
 from typing import Any
+
+OCR_LANG = os.getenv("OCR_LANG", "korean")
+OCR_MAX_PDF_PAGES = int(os.getenv("OCR_MAX_PDF_PAGES", "10"))
+OCR_MAX_UPLOAD_MB = int(os.getenv("OCR_MAX_UPLOAD_MB", "20"))
+OCR_USE_GPU = os.getenv("OCR_USE_GPU", "false").lower() == "true"
+OCR_USE_ANGLE_CLS = os.getenv("OCR_USE_ANGLE_CLS", "false").lower() == "true"
+OCR_ENABLE_MKLDNN = os.getenv("OCR_ENABLE_MKLDNN", "false").lower() == "true"
+OCR_CPU_THREADS = int(os.getenv("OCR_CPU_THREADS", "1"))
+OCR_TEMP_ROOT = os.getenv("OCR_TEMP_ROOT", "").strip()
+OCR_PREPROCESS = os.getenv("OCR_PREPROCESS", "true").lower() == "true"
+OCR_TARGET_LONG_EDGE = int(os.getenv("OCR_TARGET_LONG_EDGE", "1600"))
+OCR_DET_LIMIT_SIDE_LEN = int(os.getenv("OCR_DET_LIMIT_SIDE_LEN", str(OCR_TARGET_LONG_EDGE)))
+OCR_CONTRAST = float(os.getenv("OCR_CONTRAST", "1.8"))
+OCR_SHARPNESS = float(os.getenv("OCR_SHARPNESS", "1.6"))
+OCR_SOFT_CONTRAST = float(os.getenv("OCR_SOFT_CONTRAST", "1.18"))
+OCR_SOFT_SHARPNESS = float(os.getenv("OCR_SOFT_SHARPNESS", "1.08"))
+OCR_MIN_SCORE = float(os.getenv("OCR_MIN_SCORE", "0.42"))
+OCR_RETRY_ATTEMPTS = int(os.getenv("OCR_RETRY_ATTEMPTS", "3"))
+PDF_RENDER_SCALE = float(os.getenv("OCR_PDF_RENDER_SCALE", "3"))
+
+os.environ["FLAGS_use_mkldnn"] = "1" if OCR_ENABLE_MKLDNN else "0"
+os.environ["OMP_NUM_THREADS"] = str(OCR_CPU_THREADS)
+os.environ["MKL_NUM_THREADS"] = str(OCR_CPU_THREADS)
+os.environ["OPENBLAS_NUM_THREADS"] = str(OCR_CPU_THREADS)
+os.environ["NUMEXPR_NUM_THREADS"] = str(OCR_CPU_THREADS)
 
 import fitz
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -14,23 +42,17 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-
-OCR_LANG = os.getenv("OCR_LANG", "korean")
-OCR_MAX_PDF_PAGES = int(os.getenv("OCR_MAX_PDF_PAGES", "10"))
-OCR_MAX_UPLOAD_MB = int(os.getenv("OCR_MAX_UPLOAD_MB", "20"))
-OCR_USE_GPU = os.getenv("OCR_USE_GPU", "false").lower() == "true"
-OCR_USE_ANGLE_CLS = os.getenv("OCR_USE_ANGLE_CLS", "false").lower() == "true"
-OCR_CPU_THREADS = int(os.getenv("OCR_CPU_THREADS", "8"))
-OCR_TEMP_ROOT = os.getenv("OCR_TEMP_ROOT", "").strip()
-OCR_PREPROCESS = os.getenv("OCR_PREPROCESS", "true").lower() == "true"
-OCR_TARGET_LONG_EDGE = int(os.getenv("OCR_TARGET_LONG_EDGE", "2400"))
-OCR_DET_LIMIT_SIDE_LEN = int(os.getenv("OCR_DET_LIMIT_SIDE_LEN", str(OCR_TARGET_LONG_EDGE)))
-OCR_CONTRAST = float(os.getenv("OCR_CONTRAST", "1.8"))
-OCR_SHARPNESS = float(os.getenv("OCR_SHARPNESS", "1.6"))
-OCR_SOFT_CONTRAST = float(os.getenv("OCR_SOFT_CONTRAST", "1.18"))
-OCR_SOFT_SHARPNESS = float(os.getenv("OCR_SOFT_SHARPNESS", "1.08"))
-OCR_MIN_SCORE = float(os.getenv("OCR_MIN_SCORE", "0.42"))
-PDF_RENDER_SCALE = float(os.getenv("OCR_PDF_RENDER_SCALE", "3"))
+logger = logging.getLogger("uvicorn.error")
+ocr_lock = Lock()
+TRANSIENT_OCR_ERROR_MARKERS = (
+    "could not execute a primitive",
+    "onednn",
+    "mkldnn",
+    "dnnl",
+    "resource exhausted",
+    "bad allocation",
+    "std::bad_alloc",
+)
 
 
 class OcrLine(BaseModel):
@@ -86,7 +108,7 @@ def get_ocr() -> PaddleOCR:
         use_angle_cls=OCR_USE_ANGLE_CLS,
         lang=OCR_LANG,
         use_gpu=OCR_USE_GPU,
-        enable_mkldnn=not OCR_USE_GPU,
+        enable_mkldnn=OCR_ENABLE_MKLDNN,
         cpu_threads=OCR_CPU_THREADS,
         det_limit_side_len=OCR_DET_LIMIT_SIDE_LEN,
         use_space_char=True,
@@ -97,6 +119,16 @@ def get_ocr() -> PaddleOCR:
 @app.on_event("startup")
 def warm_up_model() -> None:
     get_ocr()
+    logger.info(
+        "OCR model warmed up. lang=%s gpu=%s angle_cls=%s mkldnn=%s cpu_threads=%s target_long_edge=%s det_limit_side_len=%s",
+        OCR_LANG,
+        OCR_USE_GPU,
+        OCR_USE_ANGLE_CLS,
+        OCR_ENABLE_MKLDNN,
+        OCR_CPU_THREADS,
+        OCR_TARGET_LONG_EDGE,
+        OCR_DET_LIMIT_SIDE_LEN,
+    )
 
 
 @app.get("/health")
@@ -106,6 +138,8 @@ def health() -> dict[str, str]:
 
 @app.post("/ocr", response_model=OcrResponse)
 async def extract_text(file: UploadFile = File(...)) -> OcrResponse:
+    request_id = uuid.uuid4().hex[:8]
+    start_time = time.perf_counter()
     content = await file.read()
     max_bytes = OCR_MAX_UPLOAD_MB * 1024 * 1024
     if len(content) > max_bytes:
@@ -117,9 +151,30 @@ async def extract_text(file: UploadFile = File(...)) -> OcrResponse:
 
     temp_dir = _make_temp_dir()
     try:
+        logger.info(
+            "OCR request started. id=%s fileName=%s contentType=%s size=%s",
+            request_id,
+            file.filename,
+            file.content_type,
+            len(content),
+        )
         upload_path = temp_dir / f"upload{suffix}"
         upload_path.write_bytes(content)
-        return await run_in_threadpool(_extract_from_path, upload_path, file.content_type or "", temp_dir)
+        response = await run_in_threadpool(_extract_from_path, upload_path, file.content_type or "", temp_dir)
+        logger.info(
+            "OCR request completed. id=%s textLength=%s pageCount=%s elapsedMs=%s",
+            request_id,
+            len(response.text or ""),
+            response.pageCount,
+            int((time.perf_counter() - start_time) * 1000),
+        )
+        return response
+    except HTTPException:
+        logger.exception("OCR request failed. id=%s fileName=%s", request_id, file.filename)
+        raise
+    except Exception as exc:
+        logger.exception("OCR request crashed. id=%s fileName=%s", request_id, file.filename)
+        raise HTTPException(status_code=500, detail=f"OCR service internal error: {type(exc).__name__}: {exc}") from exc
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -160,6 +215,7 @@ def _make_temp_dir() -> Path:
 
 def _extract_from_pdf(path: Path, temp_dir: Path) -> OcrResponse:
     pages: list[list[OcrLine]] = []
+    page_errors: list[Exception] = []
 
     with fitz.open(path) as document:
         page_count = min(len(document), OCR_MAX_PDF_PAGES)
@@ -168,7 +224,21 @@ def _extract_from_pdf(path: Path, temp_dir: Path) -> OcrResponse:
             pixmap = page.get_pixmap(matrix=fitz.Matrix(PDF_RENDER_SCALE, PDF_RENDER_SCALE), alpha=False)
             image_path = temp_dir / f"page-{page_index + 1}.png"
             pixmap.save(image_path)
-            pages.append(_extract_from_image(image_path, temp_dir))
+            try:
+                pages.append(_extract_from_image(image_path, temp_dir))
+            except Exception as exc:
+                page_errors.append(exc)
+                logger.exception("OCR PDF page failed. path=%s page=%s", path, page_index + 1)
+                pages.append([])
+
+    if page_errors and not any(page for page in pages):
+        latest_error = page_errors[-1]
+        if isinstance(latest_error, HTTPException):
+            raise latest_error
+        raise HTTPException(
+            status_code=500,
+            detail=f"OCR engine failed: {type(latest_error).__name__}: {latest_error}",
+        )
 
     return _response_from_pages(pages)
 
@@ -176,19 +246,65 @@ def _extract_from_pdf(path: Path, temp_dir: Path) -> OcrResponse:
 def _extract_from_image(path: Path, temp_dir: Path) -> list[OcrLine]:
     candidates = _prepare_image_candidates(path, temp_dir)
     best: CandidateResult | None = None
+    errors: list[Exception] = []
 
     for candidate_path in candidates:
         try:
-            result = get_ocr().ocr(str(candidate_path), cls=OCR_USE_ANGLE_CLS)
+            result = _run_ocr(candidate_path)
             raw_items = _collect_raw_items(result)
             lines = _layout_lines(raw_items)
             score = _score_candidate(lines)
             if best is None or score > best.score:
                 best = CandidateResult(path=candidate_path, lines=lines, score=score)
-        except Exception:
+        except Exception as exc:
+            errors.append(exc)
+            logger.exception("OCR candidate failed. path=%s", candidate_path)
             continue
 
+    if best is None and errors:
+        latest_error = errors[-1]
+        raise HTTPException(
+            status_code=500,
+            detail=f"OCR engine failed: {type(latest_error).__name__}: {latest_error}",
+        )
+
+    if best is not None and not best.lines:
+        logger.warning("OCR completed but extracted no text. path=%s candidates=%s", path, len(candidates))
+
     return best.lines if best is not None else []
+
+
+def _run_ocr(path: Path) -> Any:
+    attempts = max(1, OCR_RETRY_ATTEMPTS)
+    latest_error: Exception | None = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            with ocr_lock:
+                return get_ocr().ocr(str(path), cls=OCR_USE_ANGLE_CLS)
+        except Exception as exc:
+            latest_error = exc
+            if not _is_transient_ocr_error(exc) or attempt >= attempts:
+                raise
+            logger.warning(
+                "OCR engine transient failure. resetting model and retrying attempt=%s/%s path=%s error=%s",
+                attempt,
+                attempts,
+                path,
+                exc,
+            )
+            with ocr_lock:
+                get_ocr.cache_clear()
+            time.sleep(0.35 * attempt)
+
+    if latest_error is not None:
+        raise latest_error
+    raise RuntimeError("OCR execution failed")
+
+
+def _is_transient_ocr_error(exc: Exception) -> bool:
+    message = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in message for marker in TRANSIENT_OCR_ERROR_MARKERS)
 
 
 def _prepare_image_candidates(path: Path, temp_dir: Path) -> list[Path]:
@@ -217,13 +333,17 @@ def _prepare_image_candidates(path: Path, temp_dir: Path) -> list[Path]:
 
             return [rgb_path, soft_path, high_path]
     except Exception:
+        logger.exception("OCR image preprocessing failed. path=%s", path)
         return [path]
 
 
 def _resize_for_ocr(image: Image.Image) -> Image.Image:
+    if OCR_TARGET_LONG_EDGE <= 0:
+        return image
+
     width, height = image.size
     longest_edge = max(width, height)
-    if longest_edge >= OCR_TARGET_LONG_EDGE:
+    if longest_edge == OCR_TARGET_LONG_EDGE:
         return image
 
     scale = OCR_TARGET_LONG_EDGE / longest_edge

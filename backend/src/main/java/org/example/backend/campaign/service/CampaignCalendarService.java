@@ -44,7 +44,6 @@ public class CampaignCalendarService {
                         c.startDate(),
                         c.endDate(),
                         c.status(),
-                        c.ownerName(),
                         c.color(),
                         c.icon(),
                         c.myCampaignRole() == null ? null : c.myCampaignRole().name(),
