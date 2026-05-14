@@ -42,26 +42,26 @@ public class CampaignService {
      * 호버 그라디언트(#xxxxxxdd / #xxxxxx66 알파 합성)와 어울리는 미디엄 채도/명도 위주.
      */
     private static final List<String> CAMPAIGN_PALETTE = List.of(
-            "#8B5CF6", // violet
-            "#EC4899", // pink
-            "#F59E0B", // amber
-            "#10B981", // emerald
-            "#3B82F6", // blue
-            "#EF4444", // red
-            "#06B6D4", // cyan
-            "#84CC16", // lime
-            "#F97316", // orange
-            "#14B8A6", // teal
-            "#6366F1", // indigo
-            "#A855F7", // purple
-            "#D946EF", // fuchsia
-            "#F43F5E", // rose
-            "#EAB308", // yellow
-            "#22C55E", // green
-            "#0EA5E9", // sky
-            "#FB7185", // rose-light
-            "#4F46E5", // indigo-deep
-            "#059669"  // emerald-deep
+            "#7C3AED", // 01 Electric Violet     — Tailwind violet-600, 2025 SaaS 표준
+            "#B68BD9", // 02 Iris Bloom          — WGSN 2026 Lavender
+            "#4F4878", // 03 Future Dusk         — WGSN/Coloro 2026 시즌 헤드
+            "#4A4E97", // 04 Aura Indigo         — WGSN 2026 Indigo-Violet
+            "#2740B2", // 05 Galactic Cobalt     — WGSN 2026 Deep Cobalt
+            "#0EA5E9", // 06 Sky Cobalt          — Tailwind sky-500
+            "#14B8A6", // 07 Mint Fresh          — Tailwind teal-500
+            "#BEF264", // 08 Cyber Lime          — 2025 Neo-Chartreuse
+            "#F59E0B", // 09 Honey Amber         — Tailwind amber-500
+            "#FFBE98", // 10 Peach Fuzz          — Pantone COY 2024
+            "#FF6B45", // 11 Lush Lava           — WGSN 2026 Vivid Orange-Red
+            "#FB7185", // 12 Coral Reef          — Tailwind rose-400
+            "#C5174D", // 13 Sour Cherry         — WGSN 2026 Bold Red
+            "#EC4899", // 14 Petal Pink          — Tailwind pink-500
+            "#A47864", // 15 Mocha Mousse        — Pantone COY 2025
+            "#2F5D3D", // 16 Forest Sage         — 2025–26 Sustainability
+            "#FCD34D", // 17 Buttercream         — 2025 Soft Yellow
+            "#67E8F9", // 18 Glacier Mint        — 2025 Cool Refresh Cyan
+            "#475569", // 19 Storm Slate         — Linear/Vercel 모던 뉴트럴
+            "#D946EF"  // 20 Hyperreal Magenta   — 2025 Y2K Vivid
     );
 
     private final CampaignRepository campaignRepository;

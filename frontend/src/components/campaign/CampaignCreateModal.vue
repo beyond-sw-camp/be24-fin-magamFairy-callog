@@ -53,12 +53,13 @@ function formatRole(role) {
   return ROLE_LABELS[role] ?? role.replace(/^ROLE_/, '')
 }
 
-// 백엔드 CampaignService.CAMPAIGN_PALETTE와 동일한 20색
+// 백엔드 CampaignService.CAMPAIGN_PALETTE와 동일한 20색 (2025–2026 트렌드 큐레이션)
+// WGSN/Coloro 2026 + Pantone COY + 2025 디지털 디자인 시스템에서 추출
 const CAMPAIGN_PALETTE = [
-  '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6',
-  '#EF4444', '#06B6D4', '#84CC16', '#F97316', '#14B8A6',
-  '#6366F1', '#A855F7', '#D946EF', '#F43F5E', '#EAB308',
-  '#22C55E', '#0EA5E9', '#FB7185', '#4F46E5', '#059669',
+  '#7C3AED', '#B68BD9', '#4F4878', '#4A4E97', '#2740B2', // 01–05 violet · lavender · dusk · indigo · cobalt
+  '#0EA5E9', '#14B8A6', '#BEF264', '#F59E0B', '#FFBE98', // 06–10 sky · mint · lime · amber · peach
+  '#FF6B45', '#FB7185', '#C5174D', '#EC4899', '#A47864', // 11–15 lava · coral · cherry · petal · mocha
+  '#2F5D3D', '#FCD34D', '#67E8F9', '#475569', '#D946EF', // 16–20 sage · buttercream · glacier · slate · magenta
 ]
 
 const goalOptions = [

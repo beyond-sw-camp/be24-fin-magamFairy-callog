@@ -5,12 +5,13 @@ const props = defineProps({
   eventsData: { type: Array, default: () => [] },
   anchorDate: { type: Date, required: true },
   currentView: { type: String, default: 'week' },
+  isDark: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:anchorDate', 'update:currentView', 'event-click', 'today'])
 
-const HOUR_HEIGHT = 80
-const HOUR_START = 7
-const HOUR_END = 19
+const HOUR_HEIGHT = 120
+const HOUR_START = 0
+const HOUR_END = 24
 const VISIBLE_HOURS = HOUR_END - HOUR_START
 
 function startOfWeek(d) {
@@ -45,7 +46,7 @@ onBeforeUnmount(() => {
 
 const hourLabels = computed(() => {
   const arr = []
-  for (let h = HOUR_START; h <= HOUR_END; h++) {
+  for (let h = HOUR_START; h < HOUR_END; h++) {
     const hour12 = h > 12 ? h - 12 : (h === 0 ? 12 : h)
     const ampm = h >= 12 ? 'PM' : 'AM'
     arr.push({ hour: h, label: `${hour12} ${ampm}` })
@@ -192,19 +193,79 @@ function gotoToday() {
   emit('today')
   nextTick(() => scrollToNow(true))
 }
-function setView(v) { emit('update:currentView', v) }
 
 const scrollRef = ref(null)
+const isTransitioning = ref(false)
+const transitionClass = ref('')
+let __wheelLock = false
+
 function scrollToNow(smooth = false) {
   if (!scrollRef.value) return
   const top = Math.max(0, nowY.value - scrollRef.value.clientHeight / 2)
   scrollRef.value.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' })
 }
 
+function onWheel(event) {
+  if (isTransitioning.value || __wheelLock) return
+  const el = scrollRef.value
+  if (!el) return
+
+  const atTop = el.scrollTop <= 0
+  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1
+
+  if (atTop && event.deltaY < 0) {
+    event.preventDefault()
+    __wheelLock = true
+    transitionToWeek(-1)
+  } else if (atBottom && event.deltaY > 0) {
+    event.preventDefault()
+    __wheelLock = true
+    transitionToWeek(1)
+  }
+}
+
+function transitionToWeek(delta) {
+  isTransitioning.value = true
+  transitionClass.value = delta > 0 ? 'is-leaving-up' : 'is-leaving-down'
+
+  setTimeout(() => {
+    const newDate = new Date(props.anchorDate)
+    newDate.setDate(newDate.getDate() + delta * 7)
+    emit('update:anchorDate', newDate)
+
+    nextTick(() => {
+      if (scrollRef.value) {
+        scrollRef.value.scrollTop = delta > 0 ? 0 : scrollRef.value.scrollHeight
+      }
+      transitionClass.value = delta > 0 ? 'is-entering-from-bottom' : 'is-entering-from-top'
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          transitionClass.value = ''
+        })
+      })
+      setTimeout(() => {
+        isTransitioning.value = false
+        __wheelLock = false
+      }, 360)
+    })
+  }, 260)
+}
+
 onMounted(() => {
-  nextTick(() => scrollToNow(false))
+  nextTick(() => {
+    scrollToNow(false)
+    if (scrollRef.value) {
+      scrollRef.value.addEventListener('wheel', onWheel, { passive: false })
+    }
+  })
+})
+onBeforeUnmount(() => {
+  if (scrollRef.value) {
+    scrollRef.value.removeEventListener('wheel', onWheel)
+  }
 })
 watch(() => props.anchorDate, () => {
+  if (isTransitioning.value) return
   nextTick(() => scrollToNow(false))
 })
 
@@ -216,7 +277,7 @@ function onEventClick(e) { emit('event-click', e) }
 </script>
 
 <template>
-  <main class="lp-week-main">
+  <main class="lp-week-main" :class="[transitionClass, { 'is-dark': isDark }]">
     <!-- Range nav + view toggle + Today -->
     <div class="lp-main-h">
       <div class="lp-range-nav">
@@ -233,11 +294,6 @@ function onEventClick(e) { emit('event-click', e) }
         </button>
       </div>
       <div class="lp-main-right">
-        <div class="lp-view-toggle">
-          <button :class="{ 'is-on': currentView === 'day' }" @click="setView('day')">일간</button>
-          <button :class="{ 'is-on': currentView === 'week' }" @click="setView('week')">주간</button>
-          <button :class="{ 'is-on': currentView === 'month' }" @click="setView('month')">월간</button>
-        </div>
         <button class="lp-today-btn" @click="gotoToday">Today</button>
       </div>
     </div>
@@ -434,7 +490,19 @@ function onEventClick(e) { emit('event-click', e) }
 }
 .lp-day-h:last-child { border-right: 0; }
 .lp-day-h.is-today {
-  background: linear-gradient(180deg, rgba(216,235,117,.22) 0%, transparent 100%);
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.32) 0%, rgba(124, 58, 237, 0.10) 100%);
+  position: relative;
+}
+.lp-day-h.is-today::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: -1.5px;
+  height: 3px;
+  background: linear-gradient(90deg, #A78BFA 0%, #7C3AED 50%, #A78BFA 100%);
+  border-radius: 2px;
+  box-shadow: 0 2px 10px rgba(124, 58, 237, 0.55);
 }
 .lp-day-num {
   font-size: 18px;
@@ -442,7 +510,7 @@ function onEventClick(e) { emit('event-click', e) }
   letter-spacing: -0.01em;
   color: var(--lp-text);
 }
-.lp-day-h.is-today .lp-day-num { color: var(--lp-primary-deep); }
+.lp-day-h.is-today .lp-day-num { color: #5B21B6; font-weight: 800; }
 .lp-day-dow {
   font-size: 10.5px;
   font-weight: 600;
@@ -450,7 +518,7 @@ function onEventClick(e) { emit('event-click', e) }
   letter-spacing: 0.04em;
   margin-top: 2px;
 }
-.lp-day-h.is-today .lp-day-dow { color: var(--lp-primary-strong); }
+.lp-day-h.is-today .lp-day-dow { color: #6D28D9; font-weight: 700; }
 
 /* Scroll body */
 .lp-week-body {
@@ -463,15 +531,48 @@ function onEventClick(e) { emit('event-click', e) }
   height: 100%;
   overflow-y: auto;
   position: relative;
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE/legacy Edge */
 }
-.lp-week-scroll::-webkit-scrollbar { width: 8px; }
-.lp-week-scroll::-webkit-scrollbar-thumb { background: var(--lp-border); border-radius: 999px; }
-.lp-week-scroll::-webkit-scrollbar-track { background: transparent; }
+.lp-week-scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 .lp-week-inner {
   position: relative;
   display: grid;
   grid-template-columns: 56px repeat(6, 1fr);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, opacity;
+}
+
+.lp-week-header {
+  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1), transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lp-week-main.is-leaving-up .lp-week-inner {
+  transform: translateY(-36px);
+  opacity: 0;
+}
+.lp-week-main.is-leaving-down .lp-week-inner {
+  transform: translateY(36px);
+  opacity: 0;
+}
+.lp-week-main.is-entering-from-bottom .lp-week-inner {
+  transform: translateY(36px);
+  opacity: 0;
+  transition: none;
+}
+.lp-week-main.is-entering-from-top .lp-week-inner {
+  transform: translateY(-36px);
+  opacity: 0;
+  transition: none;
+}
+
+.lp-week-main.is-leaving-up .lp-week-header,
+.lp-week-main.is-leaving-down .lp-week-header { opacity: 0.35; }
+.lp-week-main.is-entering-from-top .lp-week-header,
+.lp-week-main.is-entering-from-bottom .lp-week-header {
+  opacity: 0.35;
+  transition: none;
 }
 
 .lp-time-gutter {
@@ -494,7 +595,13 @@ function onEventClick(e) { emit('event-click', e) }
 }
 .lp-day-col:last-child { border-right: 0; }
 .lp-day-col.is-today {
-  background: linear-gradient(180deg, rgba(216,235,117,.06) 0%, transparent 60%);
+  background: linear-gradient(180deg,
+    rgba(124, 58, 237, 0.18) 0%,
+    rgba(139, 92, 246, 0.10) 35%,
+    rgba(167, 139, 250, 0.05) 100%);
+  box-shadow:
+    inset 2px 0 0 rgba(124, 58, 237, 0.55),
+    inset -2px 0 0 rgba(124, 58, 237, 0.55);
 }
 
 .lp-hour-line {
@@ -597,4 +704,122 @@ function onEventClick(e) { emit('event-click', e) }
   .lp-week-main { padding: 14px 16px 8px; border-radius: 16px; }
   .lp-range-label { font-size: 15px; }
 }
+
+/* ============================================ */
+/*  Dark Theme (2026 trend: deep dusk + violet) */
+/* ============================================ */
+.lp-week-main.is-dark {
+  --lp-bg: #0F0D1A;
+  --lp-surface: #16131F;
+  --lp-surface-soft: #221D32;
+  --lp-primary: #A78BFA;
+  --lp-primary-strong: #C4B5FD;
+  --lp-primary-deep: #E9D5FF;
+  --lp-lime: #C4DD66;
+  --lp-card-lavender-1: #2E2748;
+  --lp-card-lavender-2: #6B5BB5;
+  --lp-card-cream: #3A3122;
+  --lp-text: #ECE7F7;
+  --lp-text-muted: #A9A2C0;
+  --lp-text-faint: #6E687F;
+  --lp-border: #2A2440;
+  --lp-coral: #F87171;
+
+  background: var(--lp-surface);
+  box-shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.32);
+}
+
+/* Header chrome */
+.lp-week-main.is-dark .lp-arrow {
+  background: var(--lp-surface-soft);
+  color: var(--lp-primary-strong);
+}
+.lp-week-main.is-dark .lp-arrow:hover { background: #2E2748; }
+.lp-week-main.is-dark .lp-range-label { color: var(--lp-text); }
+.lp-week-main.is-dark .lp-view-toggle { background: var(--lp-surface-soft); }
+.lp-week-main.is-dark .lp-view-toggle button { color: var(--lp-text-muted); }
+.lp-week-main.is-dark .lp-view-toggle button:hover { color: var(--lp-text); }
+.lp-week-main.is-dark .lp-view-toggle button.is-on {
+  background: #2E2748;
+  color: var(--lp-primary-deep);
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
+.lp-week-main.is-dark .lp-today-btn {
+  background: #7C3AED;
+  color: #fff;
+}
+.lp-week-main.is-dark .lp-today-btn:hover { background: #8B5CF6; }
+
+/* Week grid */
+.lp-week-main.is-dark .lp-week-header { background: var(--lp-surface); }
+.lp-week-main.is-dark .lp-gmt { color: var(--lp-text-faint); }
+.lp-week-main.is-dark .lp-day-h { color: var(--lp-text); }
+.lp-week-main.is-dark .lp-day-num { color: var(--lp-text); }
+.lp-week-main.is-dark .lp-day-dow { color: var(--lp-text-faint); }
+.lp-week-main.is-dark .lp-hour-label { color: var(--lp-text-faint); }
+.lp-week-main.is-dark .lp-hour-line { border-top-color: rgba(167, 139, 250, 0.10); }
+.lp-week-main.is-dark .lp-time-gutter,
+.lp-week-main.is-dark .lp-day-col { border-right-color: rgba(167, 139, 250, 0.10); }
+
+/* Today highlight (dark) — brighter violet over dark canvas */
+.lp-week-main.is-dark .lp-day-h.is-today {
+  background: linear-gradient(180deg, rgba(167, 139, 250, 0.42) 0%, rgba(167, 139, 250, 0.12) 100%);
+}
+.lp-week-main.is-dark .lp-day-h.is-today::after {
+  background: linear-gradient(90deg, #C4B5FD 0%, #A78BFA 50%, #C4B5FD 100%);
+  box-shadow: 0 2px 14px rgba(167, 139, 250, 0.85);
+}
+.lp-week-main.is-dark .lp-day-h.is-today .lp-day-num { color: #F3E8FF; font-weight: 800; }
+.lp-week-main.is-dark .lp-day-h.is-today .lp-day-dow { color: #C4B5FD; font-weight: 700; }
+.lp-week-main.is-dark .lp-day-col.is-today {
+  background: linear-gradient(180deg,
+    rgba(167, 139, 250, 0.24) 0%,
+    rgba(167, 139, 250, 0.12) 40%,
+    rgba(167, 139, 250, 0.05) 100%);
+  box-shadow:
+    inset 2px 0 0 rgba(167, 139, 250, 0.75),
+    inset -2px 0 0 rgba(167, 139, 250, 0.75);
+}
+
+/* Scrollbar */
+.lp-week-main.is-dark .lp-week-scroll::-webkit-scrollbar-thumb {
+  background: rgba(167, 139, 250, 0.22);
+}
+.lp-week-main.is-dark .lp-week-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(167, 139, 250, 0.38);
+}
+
+/* Event blocks — re-tune for dark canvas */
+.lp-week-main.is-dark .evt-lime {
+  background: #B6D650;
+  color: #1A1A1F;
+}
+.lp-week-main.is-dark .evt-lime .lp-ev-time { color: #2E2A1A; }
+.lp-week-main.is-dark .evt-lavender {
+  background: #6B5BB5;
+  color: #fff;
+}
+.lp-week-main.is-dark .evt-lavender .lp-ev-time { color: rgba(255,255,255,.78); }
+.lp-week-main.is-dark .evt-lavender-soft {
+  background: #3A3160;
+  color: #E9D5FF;
+}
+.lp-week-main.is-dark .evt-lavender-soft .lp-ev-time { color: #C4B5FD; }
+.lp-week-main.is-dark .evt-cream {
+  background: #4A3F2B;
+  color: #F5EDD8;
+}
+.lp-week-main.is-dark .evt-cream .lp-ev-time { color: #D6C9A1; }
+.lp-week-main.is-dark .lp-ev:hover,
+.lp-week-main.is-dark .lp-ev:focus-visible {
+  box-shadow: 0 4px 16px rgba(0,0,0,.5), 0 0 0 1px rgba(167, 139, 250, 0.3);
+}
+.lp-week-main.is-dark .lp-ev.is-past::after {
+  background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(0,0,0,.32) 6px 8px);
+}
+
+/* Now line */
+.lp-week-main.is-dark .lp-now-line { border-top-color: #F87171; }
+.lp-week-main.is-dark .lp-now-tag { background: #F87171; color: #1A0F0F; }
+.lp-week-main.is-dark .lp-now-dot { background: #F87171; }
 </style>

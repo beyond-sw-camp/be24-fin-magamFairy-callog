@@ -207,22 +207,38 @@ const milestoneEvents = computed(() => milestones.value
   })))
 
 const taskEvents = computed(() => {
-  const myIdx = authStore.user?.idx
+  const campaignByIdx = new Map(campaigns.value.map(c => [c.idx, c]))
   return (teamTaskStore.tasks ?? [])
-    .filter(t => t.dueDate && (!myIdx || t.assignee?.idx === myIdx))
-    .map(t => ({
-      id: `tsk-${t.idx}`,
-      type: 'task',
-      title: `✅ ${t.name}`,
-      start: isoOf(t.dueDate),
-      end: isoOf(t.dueDate),
-      projectManager: t.assignee?.name ?? '',
-      colorClass: colorByType('task'),
-    }))
+    .filter(t => t.dueDate)
+    .map(t => {
+      const c = campaignByIdx.get(t.campaignIdx)
+      return {
+        id: `tsk-${t.idx}`,
+        type: 'task',
+        title: `✅ ${t.name}`,
+        // Task 엔티티에는 startDate가 없음 → dueDate 단일 시점 (시각 포함)
+        start: t.dueDate,
+        end: t.dueDate,
+        projectManager: t.assigneeName ?? '',
+        campaignId: c?.id ?? c?.idx ?? t.campaignIdx ?? null,
+        campaignIdx: t.campaignIdx,
+        campaignName: c?.title ?? c?.name ?? '',
+        customColor: c?.color || '#8B5CF6',
+        status: t.status,
+        priority: t.priority,
+        milestoneName: t.milestoneName,
+        taskPartName: t.taskPartName,
+        colorClass: colorByType('task'),
+      }
+    })
 })
 
+/*
+ * 캠페인 자체의 기간 바는 표시하지 않음 — 그 캠페인에 속한 Task들이 각자의
+ * dueDate 시점으로 바를 만든다 (사용자 요청: "캠페인 단위 말고 업무 단위").
+ * campaignEvents 는 색/이름 매핑용 메타데이터로만 사용되며 더 이상 렌더되지 않는다.
+ */
 const formattedEvents = computed(() => [
-  ...campaignEvents.value,
   ...deadlineEvents.value,
   ...milestoneEvents.value,
   ...taskEvents.value,
@@ -589,6 +605,7 @@ onUnmounted(() => {
             :events-data="filteredEvents"
             :anchor-date="anchorDate"
             :current-view="currentView"
+            :is-dark="isDark"
             @update:anchor-date="anchorDate = $event"
             @update:current-view="currentView = $event"
             @event-click="onEventClick"
