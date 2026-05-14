@@ -139,8 +139,6 @@ function normalizeCampaignExtraFields(source = {}, fallback = {}) {
     campaignMethods: asList(source.campaignMethods, fallback.campaignMethods || []),
     maxCost: asText(source.maxCost, fallback.maxCost),
     minRevenue: asText(source.minRevenue, fallback.minRevenue),
-    ownerName: asText(source.ownerName, fallback.ownerName),
-    ownerEmail: asText(source.ownerEmail, fallback.ownerEmail),
   }
 }
 
@@ -165,7 +163,6 @@ function normalizeCampaignRecord(source, fallback = {}) {
     period: merged.period || formatCampaignPeriod(startDate, endDate),
     partners: Array.isArray(merged.partners) ? merged.partners : [],
     goals: merged.goals?.trim?.() || '',
-    mainMessage: merged.mainMessage?.trim?.() || '',
     ...normalizeCampaignExtraFields(merged),
     status: merged.status || fallback.status || 'draft',
     initials: merged.initials || createCampaignInitials(name),
@@ -645,7 +642,6 @@ export const usePlannerStore = defineStore('planner', () => {
       period: formatCampaignPeriod(startDate, endDate),
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
-      mainMessage: payload.mainMessage?.trim() || '',
       contributions: Array.isArray(payload.contributions) ? [...payload.contributions] : [],
       ...normalizeCampaignExtraFields(payload),
       status: payload.status || 'draft',
@@ -688,7 +684,6 @@ export const usePlannerStore = defineStore('planner', () => {
       period: payload.period || formatCampaignPeriod(startDate, endDate),
       partners: Array.isArray(payload.partners) ? payload.partners : [],
       goals: payload.goals?.trim() || '',
-      mainMessage: payload.mainMessage?.trim() || '',
       contributions: Array.isArray(payload.contributions)
         ? [...payload.contributions]
         : (Array.isArray(currentCampaign.contributions) ? currentCampaign.contributions : []),

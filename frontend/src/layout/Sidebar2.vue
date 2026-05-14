@@ -881,19 +881,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- 메인 메시지 -->
-          <div v-if="hoveredCampaign.mainMessage" class="chp-row">
-            <div class="chp-icon chp-icon--rose">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m3 11 18-8-8 18-2-8-8-2z"/>
-              </svg>
-            </div>
-            <div class="chp-row__content">
-              <p class="chp-row__label">메인 메시지</p>
-              <p class="chp-row__text">{{ hoveredCampaign.mainMessage }}</p>
-            </div>
-          </div>
-
           <!-- 파트너 및 태그 -->
           <div v-if="hoveredCampaign.partners?.length || hoveredCampaign.tags?.length" class="chp-row">
             <div class="chp-icon chp-icon--emerald">

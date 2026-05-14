@@ -5,7 +5,6 @@ export const campaignLabels = {
   partners: '파트너',
   purpose: '목적',
   goals: '목표',
-  mainMessage: '핵심 메시지',
 }
 
 export const campaignStatusMeta = {
@@ -37,11 +36,8 @@ export const campaignModalText = {
   tagsPlaceholder: 'VIP, 호텔, SNS',
   startDate: '시작일',
   endDate: '종료일',
-  partnersPlaceholder: '파트너명 또는 담당자를 추가하세요',
-  addPartner: '추가',
   purposePlaceholder: '캠페인 목표와 운영 배경을 입력하세요',
   goalsPlaceholder: '리뷰 목표, 완료율, 산출 목표 등을 요약하세요',
-  mainMessagePlaceholder: '캠페인 전반에 일관되게 전달할 핵심 메시지를 입력하세요',
   hint: '저장한 캠페인은 워크스페이스에 바로 반영됩니다.',
   cancel: '취소',
 }
@@ -55,7 +51,6 @@ export const campaignSidebarText = {
   noPartners: '등록된 파트너 없음',
   emptyPurpose: '아직 목적이 입력되지 않았습니다.',
   emptyGoals: '아직 목표가 입력되지 않았습니다.',
-  emptyMainMessage: '아직 캠페인 메시지가 입력되지 않았습니다.',
   campaignActions: '캠페인 작업',
   editDescription: '개요, 기간, 파트너 정보를 수정합니다',
   reopenCampaign: '캠페인 재개',

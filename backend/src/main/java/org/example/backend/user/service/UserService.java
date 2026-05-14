@@ -227,6 +227,25 @@ public class UserService implements UserDetailsService {
                 .toList();
     }
 
+    /** 같은 회사(companyName) 의 active 동료. 본인 제외. role 무관 — 캠페인 팀원 후보용. */
+    @Transactional(readOnly = true)
+    public List<UserDto.ManageableUserRes> listColleagues(Authentication authentication) {
+        User actor = resolveAuthenticatedUser(authentication);
+        String companyName = actor.getCompanyName();
+        if (companyName == null || companyName.isBlank()) {
+            return List.of();
+        }
+        return userRepository.findAllByCompanyNameAndAccountStatus(companyName, UserAccountStatus.ACTIVE).stream()
+                .filter(user -> user.getIdx() != null && !user.getIdx().equals(actor.getIdx()))
+                .filter(user -> Boolean.TRUE.equals(user.getEnable()))
+                .sorted(Comparator
+                        .comparing((User user) -> sortableText(user.getDepartment()))
+                        .thenComparing(user -> sortableText(user.getName()))
+                        .thenComparing(user -> sortableText(user.getId())))
+                .map(user -> UserDto.ManageableUserRes.from(user, userProfileService.getProfileImageUrl(user)))
+                .toList();
+    }
+
     @Transactional
     public UserDto.ResetPasswordRes resetPassword(UserDto.ResetPasswordReq dto, Authentication authentication) {
         if (dto == null) {
