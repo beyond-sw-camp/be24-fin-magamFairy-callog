@@ -54,6 +54,24 @@ public class CampaignMemberController {
         return ResponseEntity.ok(BaseResponse.success(result));
     }
 
+    @GetMapping("/candidates/partner-organizations")
+    public ResponseEntity<?> partnerOrganizationCandidates(
+            @PathVariable String campaignId,
+            @AuthenticationPrincipal AuthUserDetails user) {
+        var result = memberService.listPartnerOrganizationCandidates(toIdx(campaignId), user.getId());
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
+    @PostMapping("/invitations/group")
+    public ResponseEntity<?> createGroupInvitation(
+            @PathVariable String campaignId,
+            @AuthenticationPrincipal AuthUserDetails user,
+            @RequestBody CampaignMemberDto.InvitePartnerGroupReq dto) {
+        CampaignMemberDto.InvitationRes result = memberService.invitePartnerGroup(
+                toIdx(campaignId), user.getId(), dto.organizationIdx());
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
     @PostMapping
     public ResponseEntity<?> addTeamMembers(
             @PathVariable String campaignId,

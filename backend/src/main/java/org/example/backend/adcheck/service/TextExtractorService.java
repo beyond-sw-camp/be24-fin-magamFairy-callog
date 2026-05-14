@@ -1,6 +1,7 @@
 package org.example.backend.adcheck.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -17,6 +18,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -26,6 +28,7 @@ import java.util.Locale;
 import java.util.Set;
 
 @Service
+@Slf4j
 public class TextExtractorService {
 
     private static final Set<String> IMAGE_EXTENSIONS = Set.of(
@@ -78,6 +81,8 @@ public class TextExtractorService {
     }
 
     private String extractViaOcr(byte[] bytes, String filename, String contentType) {
+        log.info("Calling OCR service. url={}, fileName={}, contentType={}, size={}", ocrUrl, filename, contentType, bytes.length);
+
         HttpHeaders fileHeaders = new HttpHeaders();
         fileHeaders.setContentType(resolveMediaType(contentType));
         fileHeaders.setContentDisposition(ContentDisposition.formData()
@@ -102,11 +107,20 @@ public class TextExtractorService {
                     .body(OcrResponse.class);
 
             if (response == null || !StringUtils.hasText(response.getText())) {
+                log.warn("OCR service returned empty text. url={}, fileName={}, pageCount={}",
+                        ocrUrl, filename, response == null ? null : response.getPageCount());
                 throw new RuntimeException("OCR result is empty.");
             }
 
+            log.info("OCR service response received. fileName={}, textLength={}, pageCount={}",
+                    filename, response.getText().length(), response.getPageCount());
             return response.getText();
+        } catch (RestClientResponseException e) {
+            log.error("OCR service returned error status. url={}, status={}, body={}",
+                    ocrUrl, e.getStatusCode(), e.getResponseBodyAsString(), e);
+            throw new RuntimeException("OCR service returned HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
         } catch (RestClientException e) {
+            log.error("OCR service request failed. url={}, fileName={}", ocrUrl, filename, e);
             throw new RuntimeException("OCR service is unavailable.", e);
         }
     }
@@ -146,6 +160,7 @@ public class TextExtractorService {
     @JsonIgnoreProperties(ignoreUnknown = true)
     private static class OcrResponse {
         private String text;
+        private Integer pageCount;
 
         public String getText() {
             return text;
@@ -153,6 +168,14 @@ public class TextExtractorService {
 
         public void setText(String text) {
             this.text = text;
+        }
+
+        public Integer getPageCount() {
+            return pageCount;
+        }
+
+        public void setPageCount(Integer pageCount) {
+            this.pageCount = pageCount;
         }
     }
 

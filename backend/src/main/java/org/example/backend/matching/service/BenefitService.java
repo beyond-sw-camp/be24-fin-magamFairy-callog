@@ -31,8 +31,13 @@ public class BenefitService {
     private final UserRepository userRepository;
     private final CampaignRepository campaignRepository;
 
-    public List<MatchingDto.BenefitRes> getBenefit(Long campaignIdx) {
+    public List<MatchingDto.BenefitRes> getBenefit(String publicId) {
+        Long campaignIdx = campaignRepository.findByPublicId(publicId)
+                .orElseThrow(() -> new EntityNotFoundException("해당 캠페인을 찾을 수 없습니다. publicId: " + publicId))
+                .getIdx();
+
         List<PartnerBenefits> benefits = benefitRepository.findAllByCampaignIdx(campaignIdx);
+
         if (benefits.isEmpty()) {
             throw new NoSuchElementException("해당 캠페인에 등록된 혜택이 존재하지 않습니다.");
         }

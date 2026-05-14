@@ -37,8 +37,6 @@ public class EvaluationService {
     private final BenefitRepository benefitRepository;
     private final CampaignRepository campaignRepository;
     private final RestClient restClient;
-    private final OrganizationRepository organizationRepository;
-    private final UserRepository userRepository;
 
     @Value("${custom.n8n.webhook-url}${custom.n8n.evaluation-endpoint}")
     String n8nWebhookUrl;
@@ -111,7 +109,11 @@ public class EvaluationService {
         evaluation.updateEval(evalEntity, category);
     }
 
-    public List<EvaluationDto.EvaluationRes> result(Long campaignIdx, AuthUserDetails user) {
+    public List<EvaluationDto.EvaluationRes> result(String publicId, AuthUserDetails user) {
+        Long campaignIdx = campaignRepository.findByPublicId(publicId)
+                .orElseThrow(() -> new EntityNotFoundException("해당 캠페인을 찾을 수 없습니다. publicId: " + publicId))
+                .getIdx();
+
        List<Evaluation> evaluations = evaluationRepository.findAllByCampaignIdx(campaignIdx);
 
        if (evaluations.isEmpty()) {

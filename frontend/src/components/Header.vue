@@ -7,6 +7,7 @@ import { useUserSettingsStore } from '@/stores/userSettings'
 import { useNotificationsStore } from '@/stores/notifications'
 import { getMyProfile } from '@/api/userProfiles/index.js'
 import { formatRelativeTime } from '@/utils/datechange.js'
+import { acceptCampaignInvitation, rejectCampaignInvitation } from '@/api/campaignMembers'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +21,72 @@ const unreadCount = computed(() => notificationStore.unreadCount)
 const notificationsOpen = ref(false)
 const notificationsButton = ref(null)
 const appsMenuOpen = ref(false)
+
+const inlineActionLoading = reactive({})
+const inlineActionError = ref('')
+
+function isCampaignInvitationActionable(item) {
+  return (
+    item?.referenceType === 'CAMPAIGN_INVITATION'
+    && item?.referenceId
+    && item?.referenceStatus === 'PENDING'
+  )
+}
+
+function isGroupCampaignInvitation(item) {
+  return isCampaignInvitationActionable(item) && Boolean(item?.groupPreview)
+}
+
+function getCampaignIdFromTargetUrl(item) {
+  const [, campaignId = ''] = String(item?.targetUrl ?? '').match(/^\/campaigns\/([^/?#]+)/) ?? []
+  return campaignId
+}
+
+function confirmInlineGroupAccept(item) {
+  const preview = item?.groupPreview
+  const orgName = preview?.organizationName ?? '협력사'
+  const count = preview?.members?.length ?? 0
+  return window.confirm(`${orgName} ${count}명이 캠페인에 합류합니다. 진행할까요?`)
+}
+
+function confirmInlineGroupReject() {
+  return window.confirm('이 그룹 초대를 거절합니다. 같은 조직 인원도 합류하지 않습니다. 계속할까요?')
+}
+
+async function respondInlineCampaignInvitation(item, action) {
+  if (!isCampaignInvitationActionable(item)) return
+
+  const campaignId = getCampaignIdFromTargetUrl(item)
+  if (!campaignId) {
+    inlineActionError.value = '캠페인 정보를 찾지 못했습니다.'
+    return
+  }
+
+  if (isGroupCampaignInvitation(item)) {
+    if (action === 'accept' && !confirmInlineGroupAccept(item)) return
+    if (action === 'reject' && !confirmInlineGroupReject()) return
+  }
+
+  inlineActionLoading[item.id] = action
+  inlineActionError.value = ''
+
+  try {
+    if (action === 'accept') {
+      const res = await acceptCampaignInvitation(campaignId, item.referenceId)
+      const joined = res?.data?.data?.joinedCount ?? 1
+      const isGroup = res?.data?.data?.type === 'GROUP'
+      window.alert(isGroup ? `그룹 초대를 수락했습니다. (${joined}명 합류)` : '초대를 수락했습니다.')
+    } else {
+      await rejectCampaignInvitation(campaignId, item.referenceId)
+    }
+    await notificationStore.loadNotifications({ count: 100 })
+  } catch (error) {
+    console.warn('Header inline invitation action failed.', error)
+    inlineActionError.value = '캠페인 초대 처리에 실패했습니다.'
+  } finally {
+    delete inlineActionLoading[item.id]
+  }
+}
 const appsMenuButton = ref(null)
 const profileCardOpen = ref(false)
 const profileCardButton = ref(null)
@@ -87,7 +154,7 @@ const profileCardStyle = computed(() => ({
 const appMenuItems = computed(() => [
   {
     key: 'provisioning',
-    label: '인사관리',
+    label: '사용자관리',
     kind: 'route',
     to: { name: 'user-provisioning' },
     creatorOnly: true,
@@ -505,11 +572,33 @@ onBeforeUnmount(() => {
                   >
                     <div class="callog-notif-item__top">
                       <p class="callog-notif-item__title">{{ item.title }}</p>
-                      <button type="button" class="callog-notif-item__btn">자세히 보기</button>
+                      <button type="button" class="callog-notif-item__btn" @click.stop="handleNotificationDetail(item)">자세히 보기</button>
                     </div>
                     <p class="callog-notif-item__meta">
                       {{ formatRelativeTime(item.created_at) }} · {{ item.message }}
                     </p>
+                    <div
+                      v-if="isCampaignInvitationActionable(item)"
+                      class="callog-notif-item__actions"
+                      @click.stop
+                    >
+                      <button
+                        type="button"
+                        class="callog-notif-item__action callog-notif-item__action--accept"
+                        :disabled="Boolean(inlineActionLoading[item.id])"
+                        @click.stop="respondInlineCampaignInvitation(item, 'accept')"
+                      >
+                        {{ inlineActionLoading[item.id] === 'accept' ? '승인 중' : '승인' }}
+                      </button>
+                      <button
+                        type="button"
+                        class="callog-notif-item__action callog-notif-item__action--reject"
+                        :disabled="Boolean(inlineActionLoading[item.id])"
+                        @click.stop="respondInlineCampaignInvitation(item, 'reject')"
+                      >
+                        {{ inlineActionLoading[item.id] === 'reject' ? '반려 중' : '반려' }}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div v-else class="callog-dropdown__empty">새로운 알림이 없습니다.</div>
@@ -606,11 +695,33 @@ onBeforeUnmount(() => {
             >
               <div class="callog-notif-item__top">
                 <p class="callog-notif-item__title">{{ item.title }}</p>
-                <button type="button" class="callog-notif-item__btn">자세히 보기</button>
+                <button type="button" class="callog-notif-item__btn" @click.stop="handleNotificationDetail(item)">자세히 보기</button>
               </div>
               <p class="callog-notif-item__meta">
                 {{ formatRelativeTime(item.created_at) }} · {{ item.message }}
               </p>
+              <div
+                v-if="isCampaignInvitationActionable(item)"
+                class="callog-notif-item__actions"
+                @click.stop
+              >
+                <button
+                  type="button"
+                  class="callog-notif-item__action callog-notif-item__action--accept"
+                  :disabled="Boolean(inlineActionLoading[item.id])"
+                  @click.stop="respondInlineCampaignInvitation(item, 'accept')"
+                >
+                  {{ inlineActionLoading[item.id] === 'accept' ? '승인 중' : '승인' }}
+                </button>
+                <button
+                  type="button"
+                  class="callog-notif-item__action callog-notif-item__action--reject"
+                  :disabled="Boolean(inlineActionLoading[item.id])"
+                  @click.stop="respondInlineCampaignInvitation(item, 'reject')"
+                >
+                  {{ inlineActionLoading[item.id] === 'reject' ? '반려 중' : '반려' }}
+                </button>
+              </div>
             </div>
           </div>
           <div v-else class="callog-dropdown__empty">새로운 알림이 없습니다.</div>
@@ -1210,6 +1321,14 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--subtle-text);
 }
+
+.callog-notif-item__actions { display: flex; gap: 6px; margin-top: 6px; }
+.callog-notif-item__action { padding: 4px 10px; font-size: 11px; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid var(--border-color); }
+.callog-notif-item__action:disabled { opacity: 0.5; cursor: not-allowed; }
+.callog-notif-item__action--accept { background: var(--color-primary-500); color: #fff; border-color: var(--color-primary-500); }
+.callog-notif-item__action--accept:hover:not(:disabled) { background: var(--color-primary-600); }
+.callog-notif-item__action--reject { background: var(--panel-color); color: var(--text-primary); }
+.callog-notif-item__action--reject:hover:not(:disabled) { background: var(--panel-muted); }
 
 .callog-appmenu-list {
   display: flex;

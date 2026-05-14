@@ -28,6 +28,11 @@ export const ListCampaign = async (params = {}) => {
   return unwrapResponse(await api.get('/campaigns', { params }))
 }
 
+/** 캘린더 일괄 조회 — { campaigns, deadlines, milestones } 한번에 반환 */
+export const ListCalendarEvents = async (params = {}) => {
+  return unwrapResponse(await api.get('/campaigns/calendar-events', { params }))
+}
+
 /* ───── 썸네일 (Phase 3) ───── */
 
 /** 1단계 — presigned PUT URL 발급. payload: { contentType, fileSize } */

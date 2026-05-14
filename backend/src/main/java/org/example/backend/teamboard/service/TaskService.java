@@ -7,6 +7,7 @@ import org.example.backend.campaign.model.CampaignParticipant;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.notification.service.NotificationService;
+import org.example.backend.notification.service.NotificationSseService;
 import org.example.backend.teamboard.model.MileStones;
 import org.example.backend.teamboard.model.Task;
 import org.example.backend.teamboard.model.TaskDto;
@@ -38,6 +39,7 @@ public class TaskService {
     private final CampaignParticipantRepository participantRepository;
     private final CampaignMemberRepository campaignMemberRepository;
     private final NotificationService notificationService;
+    private final NotificationSseService sseService;
 
     /** 메인 팀 보드 - 내가 참여한 캠페인의 Task */
     public List<TaskDto.ResList> listAll(Long userIdx) {
@@ -78,6 +80,7 @@ public class TaskService {
 
         Task saved = taskRepository.save(req.toEntity(participant, taskPart, milestone, assignee));
         notificationService.notifyTaskAssigned(saved, findActor(authUser));
+        sseService.broadcastCalendarRefresh(campaignIdx, "task");
         return TaskDto.ResTask.from(saved);
     }
 
@@ -143,15 +146,20 @@ public class TaskService {
         if (isGeneralUpdate && !isAssigneeChanged && !isStatusChanged) {
             notificationService.notifyTaskUpdated(task, actor, teamRecipients(task, actor));
         }
+        Long campaignIdxForSse = task.getTaskPart() != null && task.getTaskPart().getCampaign() != null
+                ? task.getTaskPart().getCampaign().getIdx() : null;
+        sseService.broadcastCalendarRefresh(campaignIdxForSse, "task");
         return TaskDto.ResTask.from(task);
     }
 
     @Transactional
     public void delete(Long taskIdx) {
-        if (!taskRepository.existsById(taskIdx)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "업무를 찾을 수 없습니다.");
-        }
+        Task task = taskRepository.findById(taskIdx)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "업무를 찾을 수 없습니다."));
+        Long campaignIdxForSse = task.getTaskPart() != null && task.getTaskPart().getCampaign() != null
+                ? task.getTaskPart().getCampaign().getIdx() : null;
         taskRepository.deleteById(taskIdx);
+        sseService.broadcastCalendarRefresh(campaignIdxForSse, "task");
     }
 
     private Task getTaskOrThrow(Long taskIdx) {

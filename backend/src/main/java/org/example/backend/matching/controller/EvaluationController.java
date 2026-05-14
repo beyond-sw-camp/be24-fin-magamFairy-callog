@@ -24,7 +24,7 @@ public class EvaluationController {
 
     @GetMapping("/evaluation/result")
     public ResponseEntity<BaseResponse> getEvaluation(@AuthenticationPrincipal AuthUserDetails user,
-                                                      @RequestParam Long campaignIdx) {
+                                                      @RequestParam String campaignIdx) {
         try {
             List<EvaluationDto.EvaluationRes> dto = evaluationService.result(campaignIdx, user);
             return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESS, dto));
