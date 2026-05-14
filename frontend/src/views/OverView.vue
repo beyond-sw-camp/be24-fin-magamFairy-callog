@@ -5,6 +5,8 @@ import MainCalendar from '@/components/overview/MainCalendar.vue'
 import MainTable from '@/components/overview/MainTable.vue'
 import MainTimeline from '@/components/overview/MainTimeline.vue'
 import WeekCalendar from '@/components/overview/WeekCalendar.vue'
+import LavenderWeekCalendar from '@/components/overview/LavenderWeekCalendar.vue'
+import LavenderCalendarSidebar from '@/components/overview/LavenderCalendarSidebar.vue'
 import AgendaCalendar from '@/components/overview/AgendaCalendar.vue'
 import EventDetailPanel from '@/components/overview/EventDetailPanel.vue'
 import DayEventsModal from '@/components/overview/DayEventsModal.vue'
@@ -58,13 +60,13 @@ const isDark = computed(() => store.theme === 'dark')
 
 /* ─── 뷰 / 검색 / 필터 (URL 쿼리에서 초기값 복원) ─── */
 const searchQuery = ref(readQueryString('q'))
-const currentView = ref(readQueryString('view', 'calendar'))
+const currentView = ref(readQueryString('view', 'week'))
 const anchorDate = ref(readQueryString('date') ? new Date(readQueryString('date')) : new Date())
 const filter = ref({ mineOnly: readQueryString('mine') === '1' })
 
 const viewOptions = [
-  { id: 'calendar', name: '월간',     icon: 'calendar_month' },
   { id: 'week',     name: '주간',     icon: 'view_week' },
+  { id: 'calendar', name: '월간',     icon: 'calendar_month' },
   { id: 'agenda',   name: '아젠다',   icon: 'view_agenda' },
   { id: 'timeline', name: '타임라인', icon: 'timeline' },
   { id: 'table',    name: '테이블',   icon: 'table_rows' },
@@ -94,7 +96,7 @@ function fmtIsoDate(d) {
 }
 watch([currentView, anchorDate, searchQuery, () => filter.value.mineOnly], () => {
   const q = {}
-  if (currentView.value && currentView.value !== 'calendar') q.view = currentView.value
+  if (currentView.value && currentView.value !== 'week') q.view = currentView.value
   const dStr = fmtIsoDate(anchorDate.value)
   if (dStr) q.date = dStr
   if (searchQuery.value) q.q = searchQuery.value
@@ -169,7 +171,7 @@ const campaignEvents = computed(() => campaigns.value
     type: 'campaign',
     title: c.title ?? c.name ?? '제목 없음',
     start: c.start, end: c.end,
-    projectManager: c.ownerName ?? c.projectManager,
+    projectManager: c.projectManager ?? '',
     campaignId: c.id ?? c.idx,
     myCampaignRole: c.myCampaignRole ?? null,
     organizationIsPm: c.organizationIsPm ?? false,
@@ -205,22 +207,38 @@ const milestoneEvents = computed(() => milestones.value
   })))
 
 const taskEvents = computed(() => {
-  const myIdx = authStore.user?.idx
+  const campaignByIdx = new Map(campaigns.value.map(c => [c.idx, c]))
   return (teamTaskStore.tasks ?? [])
-    .filter(t => t.dueDate && (!myIdx || t.assignee?.idx === myIdx))
-    .map(t => ({
-      id: `tsk-${t.idx}`,
-      type: 'task',
-      title: `✅ ${t.name}`,
-      start: isoOf(t.dueDate),
-      end: isoOf(t.dueDate),
-      projectManager: t.assignee?.name ?? '',
-      colorClass: colorByType('task'),
-    }))
+    .filter(t => t.dueDate)
+    .map(t => {
+      const c = campaignByIdx.get(t.campaignIdx)
+      return {
+        id: `tsk-${t.idx}`,
+        type: 'task',
+        title: `✅ ${t.name}`,
+        // Task 엔티티에는 startDate가 없음 → dueDate 단일 시점 (시각 포함)
+        start: t.dueDate,
+        end: t.dueDate,
+        projectManager: t.assigneeName ?? '',
+        campaignId: c?.id ?? c?.idx ?? t.campaignIdx ?? null,
+        campaignIdx: t.campaignIdx,
+        campaignName: c?.title ?? c?.name ?? '',
+        customColor: c?.color || '#8B5CF6',
+        status: t.status,
+        priority: t.priority,
+        milestoneName: t.milestoneName,
+        taskPartName: t.taskPartName,
+        colorClass: colorByType('task'),
+      }
+    })
 })
 
+/*
+ * 캠페인 자체의 기간 바는 표시하지 않음 — 그 캠페인에 속한 Task들이 각자의
+ * dueDate 시점으로 바를 만든다 (사용자 요청: "캠페인 단위 말고 업무 단위").
+ * campaignEvents 는 색/이름 매핑용 메타데이터로만 사용되며 더 이상 렌더되지 않는다.
+ */
 const formattedEvents = computed(() => [
-  ...campaignEvents.value,
   ...deadlineEvents.value,
   ...milestoneEvents.value,
   ...taskEvents.value,
@@ -230,20 +248,19 @@ const filteredEvents = computed(() => {
   let arr = formattedEvents.value
   // 사이드바 토글 — type별 ON/OFF
   arr = arr.filter(e => toggles.value[e.type] !== false)
-  // 내 캠페인만 — 현재 사용자가 ownerName인 항목 + 그 캠페인에 속한 마감/마일스톤
+  // 내 캠페인만 — myCampaignRole 이 GENERAL_MANAGER 인 캠페인 + 그 캠페인의 마감/마일스톤/task
   if (filter.value.mineOnly) {
     const myName = authStore.user?.name
-    if (!myName) { arr = [] }
-    else {
-      const myCampaignIds = new Set(
-        campaigns.value.filter(c => c.ownerName === myName).map(c => c.id)
-      )
-      arr = arr.filter(e =>
-        (e.type === 'campaign' && e.projectManager === myName) ||
-        (e.campaignId && myCampaignIds.has(e.campaignId)) ||
-        (e.type === 'task' && e.projectManager === myName)
-      )
-    }
+    const myCampaignIds = new Set(
+      campaigns.value
+        .filter(c => c.myCampaignRole === 'GENERAL_MANAGER')
+        .map(c => c.id ?? c.idx)
+    )
+    arr = arr.filter(e =>
+      (e.type === 'campaign' && myCampaignIds.has(e.campaignId)) ||
+      (e.campaignId && myCampaignIds.has(e.campaignId)) ||
+      (e.type === 'task' && myName && e.projectManager === myName)
+    )
   }
   // 검색
   const q = searchQuery.value.trim().toLowerCase()
@@ -262,6 +279,21 @@ const dayModal = ref({ date: '', events: [] })
 const quickAdd = ref({ date: '', position: { x: 0, y: 0 } })
 
 function onEventClick(ev) {
+  if (ev?.__action === 'add-task') {
+    const todayIso = isoOf(new Date())
+    const x = window.innerWidth / 2
+    const y = window.innerHeight / 2
+    const popoverW = 280
+    const popoverH = 140
+    quickAdd.value = {
+      date: todayIso,
+      position: {
+        x: Math.max(8, x - popoverW / 2),
+        y: Math.max(8, Math.min(y, window.innerHeight - popoverH - 16)),
+      },
+    }
+    return
+  }
   selectedEvent.value = ev
 }
 function onDayClick({ date, event: mouseEvt }) {
@@ -514,64 +546,50 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="overview" :class="{ 'overview--dark': isDark }">
+  <div class="overview lp-cycle" data-cycle="lavender-pop" :class="{ 'overview--dark': isDark, 'overview--lp-week': currentView === 'week' }">
 
-    <!-- Header -->
-    <header class="overview__header">
-      <h2 class="overview__title">캠페인 캘린더</h2>
-
-      <div class="overview__view-tabs">
-        <template v-for="(v, i) in viewOptions" :key="v.id">
-          <button
-            class="overview__view-btn"
-            :class="{ 'overview__view-btn--active': currentView === v.id }"
-            @click="currentView = v.id"
-          >
-            <span class="material-symbols-outlined">{{ v.icon }}</span>
-            {{ v.name }}
-          </button>
-          <span v-if="i < viewOptions.length - 1" class="overview__view-sep" />
-        </template>
+    <!-- ═══ Top section — view switcher (visible in all modes) ═══ -->
+    <div class="overview__top">
+      <div class="overview__top-tabs">
+        <button
+          v-for="v in viewOptions"
+          :key="v.id"
+          class="overview__top-tab"
+          :class="{ 'is-on': currentView === v.id }"
+          @click="currentView = v.id"
+        >
+          <span class="material-symbols-outlined">{{ v.icon }}</span>
+          {{ v.name }}
+        </button>
       </div>
-
-      <div class="overview__controls">
-        <CalendarFilterChips :filter="filter" @update:filter="filter = $event" />
+      <div class="overview__top-actions">
         <div class="overview__search">
           <span class="material-symbols-outlined">search</span>
           <input
             ref="searchInputRef"
             v-model="searchQuery"
             type="text"
-            placeholder="검색... (단축키 /)"
+            placeholder="검색... (/)"
             class="overview__search-input"
           />
         </div>
-        <button class="overview__icon-btn" title="단축키 (?)" @click="cheatOpen = true">
-          <span class="material-symbols-outlined">keyboard</span>
-        </button>
-        <button class="overview__icon-btn" title="명령 팔레트 (⌘K)" @click="cmdkOpen = true">
-          <span class="material-symbols-outlined">bolt</span>
-        </button>
       </div>
-    </header>
+    </div>
 
-    <!-- Body -->
-    <div class="overview__body">
-      <!-- Main view -->
-      <main class="overview__main">
-        <!-- 로딩 스켈레톤 (초기 로드) -->
-        <div v-if="loading && !campaigns.length" class="overview__skeleton" aria-busy="true">
-          <div class="overview__skel-bar overview__skel-bar--head"></div>
-          <div class="overview__skel-grid">
-            <div v-for="i in 7" :key="i" class="overview__skel-cell"></div>
-          </div>
-          <div class="overview__skel-grid">
-            <div v-for="i in 35" :key="`g${i}`" class="overview__skel-cell overview__skel-cell--day"></div>
-          </div>
-        </div>
-
-        <!-- 에러 상태 -->
-        <div v-else-if="loadError && !campaigns.length" class="overview__empty overview__empty--error">
+    <!-- Unified Lavender Pop Shell for all views -->
+    <div class="overview__lp-shell">
+      <LavenderCalendarSidebar
+        :anchor-date="anchorDate"
+        :tasks="teamTaskStore.tasks"
+        :deadlines="intros"
+        :milestones="milestones"
+        @update:anchor-date="anchorDate = $event"
+        @event-click="onEventClick"
+        @task-toggle="() => {}"
+      />
+      <main class="overview__lp-main">
+        <!-- 에러 상태 (로드 실패 시에만) -->
+        <div v-if="loadError && !campaigns.length" class="overview__empty overview__empty--error">
           <span class="material-symbols-outlined">error_outline</span>
           <p>{{ loadError }}</p>
           <button class="overview__retry" @click="loadAll">
@@ -580,19 +598,20 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- 빈 데이터 상태 -->
-        <div v-else-if="!loading && !filteredEvents.length" class="overview__empty">
-          <span class="material-symbols-outlined">{{ formattedEvents.length ? 'filter_alt' : 'event_busy' }}</span>
-          <p v-if="!formattedEvents.length">아직 등록된 일정이 없습니다.</p>
-          <p v-else>현재 필터에 맞는 일정이 없습니다.</p>
-          <button v-if="formattedEvents.length" class="overview__retry" @click="resetFilters">
-            필터 초기화
-          </button>
-        </div>
-
         <transition v-else name="view-fade" mode="out-in">
+          <LavenderWeekCalendar
+            v-if="currentView === 'week'"
+            key="week"
+            :events-data="filteredEvents"
+            :anchor-date="anchorDate"
+            :current-view="currentView"
+            :is-dark="isDark"
+            @update:anchor-date="anchorDate = $event"
+            @update:current-view="currentView = $event"
+            @event-click="onEventClick"
+          />
           <MainCalendar
-            v-if="currentView === 'calendar'"
+            v-else-if="currentView === 'calendar'"
             key="calendar"
             :events-data="filteredEvents"
             :anchor-date="anchorDate"
@@ -602,18 +621,11 @@ onUnmounted(() => {
             @event-drop="onEventDrop"
             @update:anchor-date="anchorDate = $event"
           />
-          <WeekCalendar
-            v-else-if="currentView === 'week'"
-            key="week"
-            :events-data="filteredEvents"
-            :anchor-date="anchorDate"
-            @event-click="onEventClick"
-            @update:anchor-date="anchorDate = $event"
-          />
           <AgendaCalendar
             v-else-if="currentView === 'agenda'"
             key="agenda"
             :events-data="filteredEvents"
+            :anchor-date="anchorDate"
             @event-click="onEventClick"
           />
           <MainTimeline
@@ -628,17 +640,6 @@ onUnmounted(() => {
           />
         </transition>
       </main>
-
-      <!-- Sidebar (오른쪽) -->
-      <CalendarSidebar
-        v-if="!isMobile"
-        :current-date="anchorDate"
-        :events="formattedEvents"
-        :toggles="toggles"
-        @update:current-date="anchorDate = $event"
-        @update:toggles="toggles = $event"
-        @event-click="onEventClick"
-      />
     </div>
 
     <!-- Overlays -->
@@ -672,13 +673,72 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* === Layout === */
+/* --lp-* tokens cascade globally from :root (base.css). Themed via [data-theme]. */
+
+/* === Layout (full-bleed in DefaultLayout) === */
 .overview {
   display: flex;
   flex-direction: column;
+  background: var(--lp-bg);
+  color: var(--lp-text);
+  font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-feature-settings: 'tnum' 1, 'ss01' 1;
   height: 100%;
-  background: var(--panel-color);
-  color: var(--text-primary);
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* === Top section — universal view switcher === */
+.overview__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 24px;
+  background: var(--lp-surface);
+  border-bottom: 1px solid var(--lp-border);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: 0;
+}
+.overview__top-tabs {
+  display: inline-flex;
+  background: var(--lp-surface-soft);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+}
+.overview__top-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--lp-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+.overview__top-tab .material-symbols-outlined { font-size: 16px; }
+.overview__top-tab:hover { color: var(--lp-text); }
+.overview__top-tab.is-on {
+  background: var(--lp-surface);
+  color: var(--lp-primary-deep);
+  box-shadow: 0 1px 3px rgba(63,52,99,.12);
+}
+.overview__top-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* === Header === */
@@ -686,55 +746,62 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--panel-color);
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--lp-border);
+  background: var(--lp-surface);
   position: sticky;
   top: 0;
   z-index: 20;
   flex-shrink: 0;
   flex-wrap: wrap;
 }
+.overview__title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
 .overview__title {
-  font-size: 17px;
-  font-weight: 750;
-  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--lp-text);
   white-space: nowrap;
   flex-shrink: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  margin: 0;
 }
+
 .overview__view-tabs {
   display: flex;
   align-items: center;
   gap: 2px;
-  background: var(--panel-muted);
+  background: var(--lp-surface-soft);
   padding: 3px;
   border-radius: 999px;
-  border: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 .overview__view-btn {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 12px;
+  padding: 6px 14px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 650;
-  color: var(--muted-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--lp-text-muted);
   cursor: pointer;
   transition: all 0.15s;
   border: none;
   background: none;
 }
 .overview__view-btn .material-symbols-outlined { font-size: 15px; }
-.overview__view-btn:hover { color: var(--text-primary); }
+.overview__view-btn:hover { color: var(--lp-text); }
 .overview__view-btn--active {
-  background: var(--panel-color);
-  color: var(--accent-color);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  background: var(--lp-surface);
+  color: var(--lp-primary-deep);
+  box-shadow: 0 1px 3px rgba(63, 52, 99, 0.10);
 }
-.overview__view-sep { width: 1px; height: 12px; background: var(--border-color); }
+.overview__view-sep { width: 1px; height: 12px; background: transparent; }
 
 .overview__controls {
   display: flex;
@@ -747,23 +814,23 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--control-color);
-  transition: border-color 0.15s;
+  padding: 7px 12px;
+  border: 1px solid var(--lp-border);
+  border-radius: 999px;
+  background: var(--lp-surface);
+  transition: border-color 0.15s, background 0.15s;
 }
-.overview__search:focus-within { border-color: var(--accent-color); }
-.overview__search .material-symbols-outlined { font-size: 14px; color: var(--subtle-text); flex-shrink: 0; }
+.overview__search:focus-within { border-color: var(--lp-primary-strong); background: var(--lp-surface-soft); }
+.overview__search .material-symbols-outlined { font-size: 14px; color: var(--lp-text-faint); flex-shrink: 0; }
 .overview__search-input {
   border: none;
   background: none;
   outline: none;
   font-size: 12.5px;
-  color: var(--text-primary);
+  color: var(--lp-text);
   width: 160px;
 }
-.overview__search-input::placeholder { color: var(--subtle-text); }
+.overview__search-input::placeholder { color: var(--lp-text-faint); }
 
 .overview__icon-btn {
   display: flex;
@@ -771,14 +838,18 @@ onUnmounted(() => {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background: var(--control-color);
-  color: var(--muted-text);
+  border-radius: 999px;
+  border: 1px solid var(--lp-border);
+  background: var(--lp-surface);
+  color: var(--lp-text-muted);
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-.overview__icon-btn:hover { color: var(--accent-color); border-color: var(--accent-color); }
+.overview__icon-btn:hover {
+  color: var(--lp-primary-deep);
+  border-color: var(--lp-primary);
+  background: var(--lp-surface-soft);
+}
 .overview__icon-btn .material-symbols-outlined { font-size: 16px; }
 
 /* === Body === */
@@ -794,6 +865,44 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+/* === Lavender Pop Shell (used for ALL views) === */
+.overview__lp-shell {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 20px;
+  padding: 20px 24px 24px;
+  background: var(--lp-bg, #F5F1FA);
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+}
+.overview__lp-shell > :deep(.lp-sidebar) {
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - 60px);
+}
+.overview__lp-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.overview__lp-main > * {
+  flex: 1;
+  min-height: 0;
+}
+@media (max-width: 980px) {
+  .overview__lp-shell {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+  .overview__lp-shell > :deep(.lp-sidebar) {
+    position: static;
+    max-height: none;
+  }
+}
+.overview--lp-week { overflow: hidden; }
+
 /* === View Transition === */
 .view-fade-enter-active,
 .view-fade-leave-active { transition: opacity 0.18s ease; }
@@ -807,7 +916,7 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 6px;
   height: 100%;
-  background: var(--panel-color);
+  background: var(--lp-bg);
 }
 .overview__skel-bar { height: 28px; border-radius: 6px; }
 .overview__skel-bar--head { width: 220px; margin-bottom: 14px; }
@@ -820,7 +929,7 @@ onUnmounted(() => {
 .overview__skel-cell--day { height: 60px; }
 .overview__skel-bar,
 .overview__skel-cell {
-  background: linear-gradient(90deg, var(--panel-muted) 0%, var(--border-color) 50%, var(--panel-muted) 100%);
+  background: linear-gradient(90deg, var(--lp-surface-soft) 0%, var(--lp-border) 50%, var(--lp-surface-soft) 100%);
   background-size: 200% 100%;
   animation: skel-shimmer 1.4s ease-in-out infinite;
 }
@@ -837,44 +946,52 @@ onUnmounted(() => {
   justify-content: center;
   height: 100%;
   gap: 12px;
-  color: var(--muted-text);
-  background: var(--panel-color);
+  color: var(--lp-text-muted);
+  background: var(--lp-bg);
 }
-.overview__empty .material-symbols-outlined { font-size: 48px; color: var(--subtle-text); }
+.overview__empty .material-symbols-outlined { font-size: 48px; color: var(--lp-text-faint); }
 .overview__empty p { font-size: 14px; margin: 0; }
-.overview__empty--error .material-symbols-outlined { color: #EF4444; }
+.overview__empty--error .material-symbols-outlined { color: #C04438; }
 .overview__retry {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 8px 16px;
-  border: 1px solid var(--border-color);
-  background: var(--panel-color);
-  color: var(--text-primary);
-  border-radius: 8px;
+  padding: 8px 18px;
+  border: 0;
+  background: var(--lp-button-bg);
+  color: #fff;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition: background 0.15s;
 }
-.overview__retry:hover { border-color: var(--accent-color, #8B5CF6); color: var(--accent-color, #8B5CF6); }
+.overview__retry:hover { background: var(--lp-button-bg-hover); }
 .overview__retry .material-symbols-outlined { font-size: 16px; color: inherit; }
 
-/* === Color palette for events === */
-:deep(.evt-violet)  { background: rgba(139, 92, 246, 0.12) !important; color: #5B21B6 !important; border-color: rgba(139, 92, 246, 0.25) !important; }
-:deep(.evt-fuchsia) { background: rgba(217, 70, 239, 0.12) !important; color: #86198F !important; border-color: rgba(217, 70, 239, 0.25) !important; }
-:deep(.evt-blue)    { background: rgba(59, 130, 246, 0.12) !important; color: #1E40AF !important; border-color: rgba(59, 130, 246, 0.25) !important; }
-:deep(.evt-emerald) { background: rgba(16, 185, 129, 0.12) !important; color: #047857 !important; border-color: rgba(16, 185, 129, 0.25) !important; }
-:deep(.evt-amber)   { background: rgba(245, 158, 11, 0.14) !important; color: #92400E !important; border-color: rgba(245, 158, 11, 0.3) !important; }
+/* === Color palette for events (lavender pop) === */
+:deep(.evt-violet)  { background: var(--lp-card-lavender-2) !important; color: var(--lp-primary-deep) !important; border-color: var(--lp-primary-strong) !important; }
+:deep(.evt-fuchsia) { background: var(--lp-card-lavender-1) !important; color: var(--lp-primary-deep) !important; border-color: var(--lp-primary) !important; }
+:deep(.evt-blue)    { background: var(--lp-card-lavender-1) !important; color: var(--lp-primary-deep) !important; border-color: var(--lp-primary) !important; }
+:deep(.evt-emerald) { background: var(--lp-lime) !important; color: var(--lp-primary-deep) !important; border-color: #A8BD42 !important; }
+:deep(.evt-amber)   { background: var(--lp-card-cream) !important; color: var(--lp-primary-deep) !important; border-color: #D7B97C !important; }
 
-:root[data-theme='dark'] :deep(.evt-violet)  { background: rgba(139, 92, 246, 0.22) !important; color: #DDD6FE !important; }
-:root[data-theme='dark'] :deep(.evt-fuchsia) { background: rgba(217, 70, 239, 0.22) !important; color: #F0ABFC !important; }
-:root[data-theme='dark'] :deep(.evt-blue)    { background: rgba(59, 130, 246, 0.22) !important; color: #BFDBFE !important; }
-:root[data-theme='dark'] :deep(.evt-emerald) { background: rgba(16, 185, 129, 0.22) !important; color: #6EE7B7 !important; }
-:root[data-theme='dark'] :deep(.evt-amber)   { background: rgba(245, 158, 11, 0.22) !important; color: #FCD34D !important; }
+:root[data-theme='dark'] :deep(.evt-violet)  { background: rgba(183, 155, 217, 0.30) !important; color: #ECE5F8 !important; }
+:root[data-theme='dark'] :deep(.evt-fuchsia) { background: rgba(221, 210, 238, 0.22) !important; color: #ECE5F8 !important; }
+:root[data-theme='dark'] :deep(.evt-blue)    { background: rgba(183, 155, 217, 0.22) !important; color: #ECE5F8 !important; }
+:root[data-theme='dark'] :deep(.evt-emerald) { background: rgba(216, 235, 117, 0.30) !important; color: #ECE5F8 !important; }
+:root[data-theme='dark'] :deep(.evt-amber)   { background: rgba(245, 237, 216, 0.20) !important; color: #ECE5F8 !important; }
 
 @media (max-width: 720px) {
   .overview__view-tabs { order: 3; width: 100%; }
   .overview__controls { width: 100%; }
+}
+</style>
+
+<!-- Global rule: when this Calendar view is active, strip DefaultLayout's padding -->
+<style>
+.callog-content:has(> .overview.lp-cycle) {
+  padding: 0 !important;
+  overflow: hidden !important;
 }
 </style>

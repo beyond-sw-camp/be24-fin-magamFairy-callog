@@ -76,7 +76,6 @@ public class CampaignExportService {
         appendRow(sb, "종료일", c.getEndDate() != null ? c.getEndDate().format(DATE_FMT) : "");
         appendRow(sb, "목적", nullSafe(c.getPurpose()));
         appendRow(sb, "목표", nullSafe(c.getGoals()));
-        appendRow(sb, "메인 메시지", nullSafe(c.getMainMessage()));
         appendRow(sb, "태그", c.getTags() != null ? String.join(", ", c.getTags()) : "");
         appendRow(sb, "파트너사", c.getPartners() != null ? String.join(", ", c.getPartners()) : "");
     }

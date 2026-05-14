@@ -73,9 +73,6 @@ public class Campaign extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String goals;
 
-    @Column(columnDefinition = "TEXT")
-    private String mainMessage;
-
     @Column(length = 160)
     private String assetName;
 
@@ -97,12 +94,6 @@ public class Campaign extends BaseEntity {
 
     @Column(length = 80)
     private String minRevenue;
-
-    @Column(length = 80)
-    private String ownerName;
-
-    @Column(length = 160)
-    private String ownerEmail;
 
     @Builder.Default
     @Column(nullable = false, length = 30)
@@ -159,15 +150,12 @@ public class Campaign extends BaseEntity {
             LocalDate endDate,
             List<String> partners,
             String goals,
-            String mainMessage,
             String assetName,
             String assetDescription,
             String primaryGoal,
             List<String> campaignMethods,
             String maxCost,
             String minRevenue,
-            String ownerName,
-            String ownerEmail,
             String initials,
             String icon,
             String color
@@ -181,7 +169,6 @@ public class Campaign extends BaseEntity {
         this.partners.clear();
         this.partners.addAll(partners);
         this.goals = goals;
-        this.mainMessage = mainMessage;
         this.assetName = assetName;
         this.assetDescription = assetDescription;
         this.primaryGoal = primaryGoal;
@@ -189,8 +176,6 @@ public class Campaign extends BaseEntity {
         this.campaignMethods.addAll(campaignMethods);
         this.maxCost = maxCost;
         this.minRevenue = minRevenue;
-        this.ownerName = ownerName;
-        this.ownerEmail = ownerEmail;
         this.initials = initials;
         this.icon = icon;
         this.color = color;
@@ -199,6 +184,18 @@ public class Campaign extends BaseEntity {
     public void updatePartners(List<String> partners) {
         this.partners.clear();
         this.partners.addAll(partners);
+    }
+
+    /**
+     * 협력사 조직이 초대 수락으로 캠페인에 합류했을 때 partners 목록에 추가.
+     * 빈 값/이미 존재하는 이름은 무시.
+     */
+    public void addPartnerIfAbsent(String partnerName) {
+        if (partnerName == null) return;
+        String trimmed = partnerName.trim();
+        if (trimmed.isEmpty()) return;
+        if (this.partners.contains(trimmed)) return;
+        this.partners.add(trimmed);
     }
 
     public void updateStatus(String status) {

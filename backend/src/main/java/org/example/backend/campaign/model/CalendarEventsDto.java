@@ -24,7 +24,6 @@ public class CalendarEventsDto {
             LocalDate startDate,
             LocalDate endDate,
             String status,
-            String ownerName,
             String color,
             String icon,
             String myCampaignRole,
