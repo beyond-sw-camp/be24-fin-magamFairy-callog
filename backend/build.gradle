@@ -27,6 +27,8 @@ dependencies {
 
     implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'  // Redis (Lettuce client) — @Cacheable + RefreshTokenRedisService
+    implementation 'org.springframework.boot:spring-boot-starter-cache'        // @Cacheable / @CacheEvict 인프라
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     compileOnly 'org.projectlombok:lombok'
