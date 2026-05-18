@@ -39,18 +39,19 @@ import java.util.Map;
 public class RedisConfig {
 
     /** 캐시별 TTL — 도메인 특성에 맞춰 차등. 운영 중 조정 시 여기만 만지면 됨. */
-    private static final Map<String, Duration> CACHE_TTL = Map.of(
-            CacheNames.DASHBOARD_SUMMARY,         Duration.ofMinutes(3),
-            CacheNames.DASHBOARD_QUARTER_GOALS,   Duration.ofMinutes(5),
-            CacheNames.DASHBOARD_PARTNER_PROGRESS,Duration.ofMinutes(3),
-            CacheNames.DASHBOARD_REVIEW_QUEUE,    Duration.ofMinutes(1),
-            CacheNames.DASHBOARD_BLOCKERS,        Duration.ofMinutes(2),
-            CacheNames.DASHBOARD_ASSET_CATEGORIES,Duration.ofMinutes(5),
-            CacheNames.DASHBOARD_KPI_CATEGORIES,  Duration.ofMinutes(5),
+    private static final Map<String, Duration> CACHE_TTL = Map.ofEntries(
+            Map.entry(CacheNames.DASHBOARD_PAGE,            Duration.ofMinutes(2)),  // ⚡ Fix A: 통합 응답 — 짧게 (사용자 변경 빨리 반영)
+            Map.entry(CacheNames.DASHBOARD_SUMMARY,         Duration.ofMinutes(3)),
+            Map.entry(CacheNames.DASHBOARD_QUARTER_GOALS,   Duration.ofMinutes(5)),
+            Map.entry(CacheNames.DASHBOARD_PARTNER_PROGRESS,Duration.ofMinutes(3)),
+            Map.entry(CacheNames.DASHBOARD_REVIEW_QUEUE,    Duration.ofMinutes(1)),
+            Map.entry(CacheNames.DASHBOARD_BLOCKERS,        Duration.ofMinutes(2)),
+            Map.entry(CacheNames.DASHBOARD_ASSET_CATEGORIES,Duration.ofMinutes(5)),
+            Map.entry(CacheNames.DASHBOARD_KPI_CATEGORIES,  Duration.ofMinutes(5)),
 
-            CacheNames.CAMPAIGN_MEMBER_ROLE,      Duration.ofMinutes(2),  // ★ 짧게, evict 보강
-            CacheNames.KPI_TEMPLATES,             Duration.ofHours(1),
-            CacheNames.NOTIFICATION_SETTING,      Duration.ofMinutes(30)
+            Map.entry(CacheNames.CAMPAIGN_MEMBER_ROLE,      Duration.ofMinutes(2)),  // ★ 짧게, evict 보강
+            Map.entry(CacheNames.KPI_TEMPLATES,             Duration.ofHours(1)),
+            Map.entry(CacheNames.NOTIFICATION_SETTING,      Duration.ofMinutes(30))
     );
 
     @Bean

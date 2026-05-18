@@ -75,10 +75,21 @@ public class DashboardAggregateService {
     private final KpiMonthlySnapshotRepository monthlySnapshotRepository;
     private final KpiDailySnapshotRepository dailySnapshotRepository;
 
-    // ── 0. Dashboard 페이지 통합 응답 (B4) ───────────────────
+    // ── 0. Dashboard 페이지 통합 응답 (B4 + Fix A) ───────────────────
     /**
-     * Dashboard 페이지 진입 시 5종 데이터를 한 번에 산출.
+     * Dashboard 페이지 진입 시 5종 데이터를 한 번에 산출 + 캐시.
+     *
+     * ⚡ Fix A: 메소드 자체에 @Cacheable.
+     *   - 이전: loadAll() 안에서 summary() / quarterGoals() 등 같은 클래스 호출 →
+     *     Spring AOP proxy 우회 → sub-method 의 @Cacheable 무시 → 캐시 효과 거의 없었음.
+     *   - 현재: 통합 응답 (DashboardPageDto) 자체를 단일 키로 Redis 에 적재.
+     *     cache hit 시 sub-method 진입조차 안 함 (5종 DB 쿼리 전부 skip).
+     *
+     * 캐시 키: "{callerIdx}:{periodCode}" — 사용자별 + 분기별 분리.
+     * Invalidation: 캠페인/KPI/Task 변경 시 @CacheEvict(DASHBOARD_PAGE, allEntries=true) 필요.
      */
+    @Cacheable(value = CacheNames.DASHBOARD_PAGE,
+            key = "#callerIdx + ':' + (#periodCode == null ? '' : #periodCode)")
     public org.example.backend.dashboard.dto.DashboardPageDto loadAll(Long callerIdx, String periodCode) {
         return new org.example.backend.dashboard.dto.DashboardPageDto(
                 summary(callerIdx),
