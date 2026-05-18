@@ -77,6 +77,7 @@ const store = usePlannerStore()
 const activeTab = ref('캠페인 오버뷰')
 const currentBoardView = ref('part')
 const metadataEditing = ref(false)
+const isSaving = ref(false)
 const heroCollapsed = ref(false)
 const exportModalOpen = ref(false)
 const authStore = useAuthStore()
@@ -157,28 +158,6 @@ const activeCampaign = computed(() => {
   return routeCampaign ?? store.activeCampaign
 })
 
-const campaignStatusLabel = computed(() => {
-  const labels = {
-    draft: '기획 중',
-    review: '검토 중',
-    in_review: '검토 중',
-    live: '진행중',
-    partner_done: '파트너 완료',
-    paused: '일시 중지',
-    completed: '완료',
-  }
-
-  return labels[activeCampaign.value?.status] ?? activeCampaign.value?.status ?? '진행중'
-})
-
-const partnerNames = computed(() => {
-  if (activeCampaign.value?.partners?.length) {
-    return activeCampaign.value.partners
-  }
-
-  return ['디자인 스튜디오 A', '미디어 랩 B', 'PR 에이전시 C']
-})
-
 /* ───── 캠페인 상태(status) 관리 ───── */
 const STATUS_OPTIONS = [
   { value: 'draft',       label: '초안',   desc: '아직 운영 시작 전. 비공개 작업 단계.',      tone: 'gray' },
@@ -188,9 +167,24 @@ const STATUS_OPTIONS = [
   { value: 'completed',   label: '완료',   desc: '캠페인 운영이 끝나 보관함으로 이동.',        tone: 'indigo' },
   { value: 'closed',      label: '종료',   desc: '캠페인이 최종 종료되었습니다.',              tone: 'slate' },
 ]
-const currentStatus = computed(() =>
-  String(activeCampaign.value?.status ?? 'draft').toLowerCase(),
-)
+
+const currentStatusMeta = computed(() => {
+  const status = String(activeCampaign.value?.status ?? 'draft').toLowerCase()
+  return STATUS_OPTIONS.find(o => o.value === status) ?? { label: status, tone: 'gray' }
+})
+
+const campaignStatusLabel = computed(() => currentStatusMeta.value.label)
+const campaignStatusTone  = computed(() => currentStatusMeta.value.tone)
+
+const partnerNames = computed(() => {
+  if (activeCampaign.value?.partners?.length) {
+    return activeCampaign.value.partners
+  }
+
+  return ['디자인 스튜디오 A', '미디어 랩 B', 'PR 에이전시 C']
+})
+
+const currentStatus = computed(() => currentStatusMeta.value.value)
 
 
 const statusColumns = [
@@ -607,6 +601,14 @@ async function addMilestone() {
   }
 }
 
+function formatSysDate(dt) {
+  if (!dt) return '-'
+  const d = new Date(dt)
+  if (Number.isNaN(d.getTime())) return '-'
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function formatTaskDueLabel(value) {
   const normalizedValue = String(value ?? '').trim()
 
@@ -777,6 +779,7 @@ async function saveMetadata() {
     color: metadataDraft.value.color || activeCampaign.value.color || null,
   }
 
+  isSaving.value = true
   try {
     const updated = await UpdateCampaign(campaignId, payload)
 
@@ -793,6 +796,7 @@ async function saveMetadata() {
     })
 
     metadataEditing.value = false
+    activeTab.value = '캠페인 오버뷰'
   } catch (error) {
     console.error('캠페인 메타데이터 저장 실패', error)
     const httpStatus = error?.response?.status
@@ -804,6 +808,8 @@ async function saveMetadata() {
     } else {
       alert('캠페인 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
     }
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -917,7 +923,7 @@ watch(
             ←
           </button>
           <h1>{{ activeCampaign?.name ?? '2024 글로벌 썸머 프로모션 캠페인' }}</h1>
-          <span class="status-chip status-chip--primary">
+          <span class="status-chip" :class="`status-chip--${campaignStatusTone}`">
             <i aria-hidden="true"></i>
             {{ campaignStatusLabel }}
           </span>
@@ -926,9 +932,21 @@ watch(
           <span>{{ activeCampaign?.period ?? '2024.06.01 - 2024.08.31' }}</span>
           <span>본사 관리자 (수정 가능)</span>
         </div>
+        <div class="campaign-hero__sub-actions">
+          <button type="button" class="btn btn--primary" @click="activeTab = 'metadata'; metadataEditing = true">
+            캠페인 편집
+          </button>
+        </div>
       </div>
 
       <div class="campaign-hero__actions">
+        <router-link
+          v-if="campaignId"
+          :to="{ name: 'campaign-intro', params: { campaignId } }"
+          class="btn btn--secondary"
+        >
+          캠페인 소개
+        </router-link>
         <button
           v-if="canExport"
           type="button"
@@ -938,18 +956,6 @@ watch(
         >
           내보내기
         </button>
-        <div class="campaign-hero__edit-stack">
-          <button type="button" class="btn btn--primary" @click="activeTab = 'metadata'; metadataEditing = true">
-            캠페인 편집
-          </button>
-          <router-link
-            v-if="campaignId"
-            :to="{ name: 'campaign-intro', params: { campaignId } }"
-            class="btn btn--secondary"
-          >
-            캠페인 소개
-          </router-link>
-        </div>
       </div>
     </header>
     </div>
@@ -1048,6 +1054,9 @@ watch(
             </div>
           </article>
 
+        </div>
+
+        <aside class="stack">
           <article class="panel">
             <div class="panel__header">
               <div>
@@ -1082,29 +1091,6 @@ watch(
             </div>
             <p v-if="!canEditMetadata" class="status-grid__note">상태를 변경하려면 PM 조직의 매니저/총괄 매니저 권한이 필요합니다.</p>
           </article>
-        </div>
-
-        <aside class="stack">
-          <article class="panel">
-            <div class="panel__header">
-              <div>
-                <span class="requirement-badge">협력사 목록</span>
-                <h2>참여 협력사</h2>
-              </div>
-            </div>
-
-            <div class="partner-list">
-              <div v-for="(partner, index) in partnerNames" :key="partner" class="partner-item">
-                <span class="partner-item__avatar">{{ partner.slice(0, 1) }}</span>
-                <div>
-                  <strong>{{ partner }}</strong>
-                  <small>{{ ['크리에이티브 제작', '퍼포먼스 마케팅', '보도자료 및 인플루언서'][index] ?? '협력 업무' }}</small>
-                </div>
-              </div>
-            </div>
-
-            <button type="button" class="dashed-button">협력사 추가</button>
-          </article>
 
           <article class="panel">
             <div class="panel__header">
@@ -1117,28 +1103,38 @@ watch(
             <dl class="meta-list">
               <div>
                 <dt>생성일자</dt>
-                <dd>2024.04.10 14:32</dd>
+                <dd>{{ formatSysDate(activeCampaign?.createdAt) }}</dd>
               </div>
               <div>
                 <dt>생성자</dt>
-                <dd>김본사 (마케팅팀)</dd>
+                <dd>{{ activeCampaign?.ownerName ?? activeCampaign?.ownerEmail ?? '-' }}</dd>
               </div>
               <div>
                 <dt>최근 수정</dt>
-                <dd>2024.05.18 09:15</dd>
+                <dd>{{ formatSysDate(activeCampaign?.updatedAt) }}</dd>
               </div>
               <div>
-                <dt>접근 권한</dt>
-                <dd>전체 읽기, 본사 수정</dd>
+                <dt>내 권한</dt>
+                <dd>{{
+                  !myCampaignRole
+                    ? '열람 전용'
+                    : myCampaignRole === 'GENERAL_MANAGER'
+                      ? '전체 관리'
+                      : myCampaignRole === 'MANAGER'
+                        ? '수정·관리'
+                        : '읽기·참여'
+                }}</dd>
               </div>
             </dl>
           </article>
 
           <div v-if="canEditMetadata" class="metadata-actions">
-            <button type="button" class="btn btn--secondary" @click="metadataEditing = !metadataEditing">
+            <button type="button" class="btn btn--secondary" :disabled="isSaving" @click="metadataEditing = !metadataEditing">
               {{ metadataEditing ? '수정 취소' : '메타데이터 수정' }}
             </button>
-            <button type="button" class="btn btn--primary" @click="saveMetadata">저장</button>
+            <button type="button" class="btn btn--primary" :disabled="isSaving" @click="saveMetadata">
+              {{ isSaving ? '저장 중…' : '저장' }}
+            </button>
           </div>
         </aside>
       </div>
@@ -1908,16 +1904,21 @@ watch(
   gap: 12px;
 }
 
-.campaign-hero__edit-stack {
+.campaign-hero__sub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.campaign-hero__actions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   align-items: stretch;
+  min-width: 120px;
 }
-.campaign-hero__edit-stack > .btn {
-  text-align: center;
-  justify-content: center;
-}
+
 
 .campaign-tabs {
   display: flex;
@@ -2057,6 +2058,9 @@ watch(
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 38px;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -2064,6 +2068,7 @@ watch(
   font-weight: 750;
   padding: 0 14px;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .btn--primary {
@@ -2114,6 +2119,20 @@ watch(
   background: var(--campaign-primary-surface);
   color: var(--campaign-primary-text);
 }
+
+/* 캠페인 상태 칩 tone 변형 */
+.status-chip--gray    { background: rgba(148,163,184,0.16); color: #475569; }
+.status-chip--emerald { background: rgba(16,185,129,0.16);  color: #047857; }
+.status-chip--blue    { background: rgba(59,130,246,0.16);  color: #1D4ED8; }
+.status-chip--amber   { background: rgba(245,158,11,0.16);  color: #B45309; }
+.status-chip--indigo  { background: rgba(99,102,241,0.16);  color: #4338CA; }
+.status-chip--slate   { background: rgba(100,116,139,0.16); color: #334155; }
+:root[data-theme='dark'] .status-chip--gray    { background: rgba(148,163,184,0.22); color: #CBD5E1; }
+:root[data-theme='dark'] .status-chip--emerald { background: rgba(16,185,129,0.22);  color: #6EE7B7; }
+:root[data-theme='dark'] .status-chip--blue    { background: rgba(59,130,246,0.22);  color: #93C5FD; }
+:root[data-theme='dark'] .status-chip--amber   { background: rgba(245,158,11,0.22);  color: #FCD34D; }
+:root[data-theme='dark'] .status-chip--indigo  { background: rgba(99,102,241,0.22);  color: #A5B4FC; }
+:root[data-theme='dark'] .status-chip--slate   { background: rgba(148,163,184,0.22); color: #CBD5E1; }
 
 /* ─── 캠페인 상태 변경 그리드 ─── */
 .status-grid {

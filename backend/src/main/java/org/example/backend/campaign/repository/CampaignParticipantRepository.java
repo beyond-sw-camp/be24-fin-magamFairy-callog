@@ -17,6 +17,9 @@ public interface CampaignParticipantRepository extends JpaRepository<CampaignPar
 
     List<CampaignParticipant> findAllByCampaignIdx(Long campaignIdx);
 
+    java.util.Optional<CampaignParticipant> findFirstByCampaignIdxAndCampaignRole(
+            Long campaignIdx, CampaignRole campaignRole);
+
     /**
      * 조직 기준으로 참여 캠페인 조회 — HQ 대시보드 "조직 전체" 토글용.
      * Campaign 자체는 단일 SELECT, 그 안의 partners/tags 는 Campaign 엔티티에 부여된

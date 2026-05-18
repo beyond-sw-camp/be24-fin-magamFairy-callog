@@ -6,6 +6,10 @@ export const getCampaignMembers = (campaignId) => api.get(base(campaignId))
 export const listCampaignParticipants = (campaignId) => api.get(`${base(campaignId)}/participants`)
 export const getTeamCandidates = (campaignId) => api.get(`${base(campaignId)}/candidates/team`)
 export const getPartnerGmCandidates = (campaignId) => api.get(`${base(campaignId)}/candidates/partner-gm`)
+export const getPartnerOrganizationCandidates = (campaignId) =>
+  api.get(`${base(campaignId)}/candidates/partner-organizations`)
+export const invitePartnerGroup = (campaignId, organizationIdx) =>
+  api.post(`${base(campaignId)}/invitations/group`, { organizationIdx })
 export const addTeamMembers = (campaignId, userIdxList) =>
   api.post(base(campaignId), { userIdxList })
 export const invitePartnerGm = (campaignId, userIdx) =>

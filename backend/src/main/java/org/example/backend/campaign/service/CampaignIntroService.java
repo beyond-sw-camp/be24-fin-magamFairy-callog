@@ -12,6 +12,7 @@ import org.example.backend.campaign.repository.CampaignIntroRepository;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.notification.service.NotificationSseService;
 import org.example.backend.organization.model.OrganizationType;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
@@ -31,8 +32,9 @@ public class CampaignIntroService {
     private final UserRepository userRepository;
     private final CampaignParticipantRepository participantRepository;
     private final CampaignMemberRepository memberRepository;
+    private final NotificationSseService sseService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public CampaignIntroDto.GetRes getIntro(Long campaignIdx, Long callerIdx) {
         Campaign campaign = campaignRepository.findById(campaignIdx)
                 .orElseThrow(() -> new EntityNotFoundException("캠페인을 찾을 수 없습니다. id=" + campaignIdx));
@@ -41,6 +43,13 @@ public class CampaignIntroService {
 
         boolean canEdit = canCallerEdit(callerIdx, campaignIdx);
         boolean internalViewer = isCallerInternal(callerIdx);
+
+        // 조회 수 증가 — 편집 권한 없는 외부 뷰어만 카운트 (PM 팀 자기 페이지 보는 건 제외)
+        if (intro != null && !canEdit) {
+            introRepository.incrementViewCount(intro.getIdx());
+            intro.recordView();
+        }
+
         // 담당자 = 캠페인 생성자(ownerLoginId의 user 계정)
         User ownerUser = campaign.getOwnerLoginId() == null ? null
                 : userRepository.findUserById(campaign.getOwnerLoginId()).orElse(null);
@@ -86,6 +95,8 @@ public class CampaignIntroService {
                     .build();
             introRepository.save(intro);
         }
+
+        sseService.broadcastCalendarRefresh(campaignIdx, "deadline");
     }
 
     /** PM 조직이고 캠페인 멤버 GM/MGR 인 경우만 편집 가능. */
