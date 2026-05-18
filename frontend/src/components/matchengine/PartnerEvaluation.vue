@@ -120,11 +120,11 @@ function adaptServerDataToCandidate(serverData, index = 0) {
   const getScore = (evalObj) => evalObj?.overallScore ?? 0;
   
   const scores = {
-    customerFit: getScore(serverData.customerEval),
-    revenue: getScore(serverData.revenueEval),
-    cost: getScore(serverData.costEval),
-    operation: getScore(serverData.operationEval),
-    brand: getScore(serverData.brandEval),
+    customerFit: getScore(serverData.evaluations.customer),
+    revenue: getScore(serverData.evaluations.revenue),
+    cost: getScore(serverData.evaluations.cost),
+    operation: getScore(serverData.evaluations.operation),
+    brand: getScore(serverData.evaluations.brand),
   };
 
   const finalScore = Math.round(

@@ -23,10 +23,9 @@ public class EvaluationController {
     private final EvaluationService evaluationService;
 
     @GetMapping("/evaluation/result")
-    public ResponseEntity<BaseResponse> getEvaluation(@AuthenticationPrincipal AuthUserDetails user,
-                                                      @RequestParam String campaignIdx) {
+    public ResponseEntity<BaseResponse> getEvaluation(@RequestParam String campaignIdx) {
         try {
-            List<EvaluationDto.EvaluationRes> dto = evaluationService.result(campaignIdx, user);
+            List<EvaluationDto.MongoEvaluationRes> dto = evaluationService.result(campaignIdx);
             return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESS, dto));
         }
         catch (Exception e){
