@@ -23,6 +23,14 @@ function unwrapResponse(response) {
   return payload.data
 }
 
+/**
+ * ⚡ B4: Dashboard 페이지 통합 호출.
+ */
+export const GetDashboardPage = async (period) => {
+  const params = period ? { period } : {}
+  return unwrapResponse(await api.get('/dashboard', { params }))
+}
+
 export const GetDashboardSummary = async (period) => {
   const params = period ? { period } : {}
   return unwrapResponse(await api.get('/dashboard/summary', { params }))
@@ -43,6 +51,7 @@ export const GetAssetCategories = async (period) => {
 }
 
 export default {
+  GetDashboardPage,
   GetDashboardSummary,
   GetQuarterGoals,
   GetPartnerProgress,
