@@ -4,247 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="00f6fb98-c998-401f-96dd-a1adfcd06bcd" name="Changes" comment="[B][F] 260514 Dev Update #1">
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/gradle.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/gradle.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules/callog.main.iml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Dockerfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/build.gradle" beforeDir="false" afterPath="$PROJECT_DIR$/backend/build.gradle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/settings.gradle" beforeDir="false" afterPath="$PROJECT_DIR$/backend/settings.gradle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/BackendApplication.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/controller/AdAnalysisBenchmarkController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/model/AdAnalysisBenchmarkDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/model/AdAnalysisDocument.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/model/AdAnalysisIssue.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/model/AdAnalysisKeyword.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/model/AdAnalysisPage.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/model/AdAnalysisRegion.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/repository/AdAnalysisDocumentRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/repository/AdAnalysisIssueRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/repository/AdAnalysisKeywordRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/repository/AdAnalysisPageRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/repository/AdAnalysisRegionRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/analysis/service/AdAnalysisBenchmarkService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/controller/AdCheckController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/controller/AdReviewRequestController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/model/AdCheckDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/model/AdReviewRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/repository/AdReviewRequestRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/service/AdCheckFileStorageService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/service/AdCheckService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/service/AdReviewRequestService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/adcheck/service/TextExtractorService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/controller/CampaignController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/controller/CampaignExportController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/controller/CampaignIntroController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/controller/CampaignKpiController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/controller/CampaignMemberController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CalendarEventsDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/Campaign.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignIntro.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignIntroDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignInvitation.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignInvitationStatus.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignInvitationType.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignKpi.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignKpiDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignMember.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignMemberDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignMemberRole.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignParticipant.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignProposalDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/CampaignRole.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/KpiCategory.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/model/KpiStatus.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/repository/CampaignIntroRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/repository/CampaignInvitationRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/repository/CampaignKpiRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/repository/CampaignMemberRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/repository/CampaignParticipantRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/repository/CampaignRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/service/CampaignCalendarService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/service/CampaignExportService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/service/CampaignImageStorageService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/service/CampaignIntroService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/service/CampaignKpiService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/service/CampaignMemberService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/service/CampaignPdfReportService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/service/CampaignService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/service/CampaignThumbnailGenerator.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/service/KpiFrameworkCatalog.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaign/service/OpenAiCampaignThumbnailClient.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaignframe/controller/CampaignFrameController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaignframe/model/CampaignFrame.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaignframe/model/CampaignFrameDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaignframe/repository/CampaignFrameRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/campaignframe/service/CampaignFrameService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/common/Constants.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/common/exception/BaseException.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/common/exception/GlobalExceptionHandler.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/common/model/BaseEntity.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/common/model/BaseResponse.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/common/model/BaseResponseStatus.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/common/security/CampaignMemberGuard.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/common/security/RoleGuard.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/common/security/Roles.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/config/AuthenticationManagerConfig.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/config/RestClientConfig.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/config/S3Config.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/config/SecurityConfig.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/config/filter/JwtFilter.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/config/filter/LoginFilter.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/dashboard/controller/DashboardController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/dashboard/dto/BlockerDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/dashboard/dto/DashboardSummaryDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/dashboard/dto/PartnerProgressDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/dashboard/dto/QuarterGoalProgressDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/dashboard/dto/ReviewQueueItemDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/dashboard/service/DashboardAggregateService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/controller/CampaignKpiContributionController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/controller/KpiTemplateController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/controller/OrganizationKpiController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/dto/CampaignKpiContributionDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/dto/CreateContributionRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/dto/CreateKpiTemplateRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/dto/CreateOrganizationKpiRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/dto/KpiTemplateDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/dto/OrganizationKpiDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/dto/UpdateOrganizationKpiRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/model/CampaignKpiContribution.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/model/EsgCategory.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/model/GoalKind.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/model/GoalPeriodType.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/model/GoalStatus.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/model/KpiDailySnapshot.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/model/KpiMonthlySnapshot.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/model/KpiTemplate.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/model/OrganizationKpi.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/model/TemplateScope.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/repository/CampaignKpiContributionRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/repository/KpiDailySnapshotRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/repository/KpiMonthlySnapshotRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/repository/KpiTemplateRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/repository/OrganizationKpiRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/scheduler/SnapshotScheduler.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/seeder/KpiTemplateSeeder.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/service/CampaignKpiContributionService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/service/KpiTemplateService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/kpi/service/OrganizationKpiService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/controller/AssetController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/controller/BenefitController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/controller/EvaluationController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/controller/GoalController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/CampaignGoal.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/CampaignMethod.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/GoalType.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/MarketingAsset.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/MatchingDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/PartnerBenefits.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/BrandEval.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/CostEval.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/CustomerEval.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/Evaluation.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/EvaluationDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/OperationEval.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/RevenueEval.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/repository/AssetRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/repository/BenefitRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/repository/BrandEvalRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/repository/CostEvalRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/repository/CustomerEvalRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/repository/EvaluationRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/repository/GoalRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/repository/OperationEvalRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/repository/RevenueEvalRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/service/AssetService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/service/BenefitService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/service/EvaluationService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/service/GoalService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/controller/NotificationController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/model/Notification.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/model/NotificationAdminPolicy.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/model/NotificationDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/model/NotificationLevel.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/model/NotificationSetting.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/model/NotificationSeverity.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/model/NotificationType.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/repository/NotificationAdminPolicyRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/repository/NotificationRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/repository/NotificationSettingRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/service/NotificationDeadlineScheduler.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/service/NotificationPreferenceResolver.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/service/NotificationService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/service/NotificationSettingsService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/notification/service/NotificationSseService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/organization/model/Organization.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/organization/model/OrganizationType.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/organization/repository/OrganizationRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/organization/service/OrganizationService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/reference/controller/ReferenceController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/reference/model/Reference.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/reference/model/ReferenceDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/reference/repository/ReferenceRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/reference/service/ReferenceService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/controller/MileStonesController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/controller/TaskController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/controller/TaskPartsController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/model/MileStones.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/model/MileStonesDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/model/Task.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/model/TaskDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/model/TaskParts.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/model/TaskPartsDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/model/TaskPriority.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/model/TaskStatus.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/model/TaskType.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/repository/MileStonesRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/repository/TaskPartsRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/repository/TaskRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/service/MileStonesService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/service/TaskPartsService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/teamboard/service/TaskService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/controller/AuthController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/model/Administrator.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/model/AuthUserDetails.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/model/RefreshToken.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/model/TokenDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/model/User.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/model/UserAccountStatus.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/model/UserDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/repository/RefreshTokenRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/repository/UserRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/service/AuthService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/service/UserService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/utils/Aes256.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/user/utils/JwtUtil.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/controller/UserProfileController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/model/ProfileImageGenerationLog.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/model/ProfileImageGenerationStatus.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/model/ProfileImageHistory.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/model/ProfileImageHistoryType.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/model/ProfileImageSource.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/model/UserProfile.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/model/UserProfileDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/repository/ProfileImageGenerationLogRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/repository/ProfileImageHistoryRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/repository/UserProfileRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/service/OpenAiProfileImageClient.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/service/ProfileImageGenerationLogService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/service/ProfileImageStorageService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/service/UserProfileInitializer.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/userInfo/service/UserProfileService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/resources/application-dev.yml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/resources/application-prod.yml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/resources/application-tls.yml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/resources/application.yml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/resources/keystore.p12" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/resources/templates/pdf/report.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/test/java/org/example/backend/BackendApplicationTests.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/test/java/org/example/backend/campaign/service/CampaignMemberServiceGroupInviteTest.java" beforeDir="false" />
-    </list>
+    <list default="true" id="00f6fb98-c998-401f-96dd-a1adfcd06bcd" name="Changes" comment="[B][F] 260514 Dev Update #1" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -332,7 +92,7 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "Spring Boot.BackendApplication.executor": "Run",
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "feat/multimodule",
+    "git-widget-placeholder": "main",
     "junie.onboarding.icon.badge.shown": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "D:/projects/callog/be24-fin-magamFairy-callog/backend/src/main/resources",
@@ -600,7 +360,15 @@
       <option name="project" value="LOCAL" />
       <updated>1778716605467</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="[Refactor][B][EVALUATION] 평가 요청 기관 불러오기">
+      <option name="closed" value="true" />
+      <created>1779091244553</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1779091244553</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -630,6 +398,18 @@
     <MESSAGE value="[B][F] 260513 Sub Merge #4" />
     <MESSAGE value="[B][F] 260513 Sub Merge #5" />
     <MESSAGE value="[B][F] 260514 Dev Update #1" />
-    <option name="LAST_COMMIT_MESSAGE" value="[B][F] 260514 Dev Update #1" />
+    <MESSAGE value="[Refactor][B][EVALUATION] 평가 요청 기관 불러오기" />
+    <option name="LAST_COMMIT_MESSAGE" value="[Refactor][B][EVALUATION] 평가 요청 기관 불러오기" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/service/EvaluationService.java</url>
+          <line>58</line>
+          <option name="timeStamp" value="9" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>
