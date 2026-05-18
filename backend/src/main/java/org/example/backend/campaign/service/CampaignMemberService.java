@@ -14,9 +14,12 @@ import org.example.backend.campaign.repository.CampaignInvitationRepository;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.common.redis.CacheNames;
 import org.example.backend.common.security.CampaignMemberGuard;
 import org.example.backend.common.security.Roles;
 import org.example.backend.notification.service.NotificationService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.example.backend.organization.model.Organization;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
@@ -46,6 +49,17 @@ public class CampaignMemberService {
     private final NotificationService notificationService;
     private final org.example.backend.notification.service.NotificationSseService sseService;
     private final org.example.backend.userInfo.service.UserProfileService userProfileService;
+
+    /**
+     * 캠페인 멤버 권한 조회 — 권한 체크에 가장 빈번히 호출되는 read-heavy 메서드라 캐싱.
+     * ★ stale = 보안 사고이므로 권한 변경 (updateMemberRole / removeMember) 시점에 즉시 evict 필수.
+     */
+    @Cacheable(value = CacheNames.CAMPAIGN_MEMBER_ROLE, key = "#campaignId + ':' + #userIdx")
+    public CampaignMemberRole getRole(Long campaignId, Long userIdx) {
+        return memberRepository.findByCampaignIdxAndUserIdx(campaignId, userIdx)
+                .map(CampaignMember::getCampaignRole)
+                .orElse(null);
+    }
 
     public List<CampaignMemberDto.ParticipantRes> listParticipants(Long campaignId) {
         return participantRepository.findAllByCampaignIdx(campaignId).stream()
@@ -79,6 +93,7 @@ public class CampaignMemberService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheNames.CAMPAIGN_MEMBER_ROLE, allEntries = true)   // 새 멤버 추가 시 그들의 권한 캐시도 새로 만들도록
     public List<CampaignMemberDto.Res> addTeamMembers(
             Long campaignId,
             String callerLoginId,
@@ -356,6 +371,7 @@ public class CampaignMemberService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheNames.CAMPAIGN_MEMBER_ROLE, allEntries = true)   // ★ 보안 critical — 전체 비움 (단순/안전)
     public CampaignMemberDto.Res updateMemberRole(
             Long campaignId,
             String callerLoginId,
@@ -382,6 +398,7 @@ public class CampaignMemberService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheNames.CAMPAIGN_MEMBER_ROLE, allEntries = true)   // ★ 보안 critical — 추방된 사용자의 stale 권한 차단
     public void removeMember(Long campaignId, String callerLoginId, Long memberId) {
         User caller = findUser(callerLoginId);
         CampaignMember me = memberRepository.findByCampaignIdxAndUserIdx(campaignId, caller.getIdx()).orElse(null);

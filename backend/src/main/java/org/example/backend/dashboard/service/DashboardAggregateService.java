@@ -31,8 +31,10 @@ import org.example.backend.organization.repository.OrganizationRepository;
 import org.example.backend.teamboard.model.Task;
 import org.example.backend.teamboard.model.TaskStatus;
 import org.example.backend.teamboard.repository.TaskRepository;
+import org.example.backend.common.redis.CacheNames;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,6 +76,7 @@ public class DashboardAggregateService {
 
     // ── 1. Summary ──────────────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_SUMMARY, key = "#callerIdx")
     public DashboardSummaryDto summary(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -164,6 +167,8 @@ public class DashboardAggregateService {
 
     // ── 2. Quarter Goals ────────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_QUARTER_GOALS,
+               key = "#callerIdx + ':' + (#periodCode ?: 'all')")
     public List<QuarterGoalProgressDto> quarterGoals(Long callerIdx, String periodCode) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -248,6 +253,7 @@ public class DashboardAggregateService {
 
     // ── 3. Partner Progress ─────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_PARTNER_PROGRESS, key = "#callerIdx")
     public List<PartnerProgressDto> partnerProgress(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -309,6 +315,7 @@ public class DashboardAggregateService {
 
     // ── 4. Review Queue ─────────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_REVIEW_QUEUE, key = "#callerIdx")
     public List<ReviewQueueItemDto> reviewQueue(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -337,6 +344,7 @@ public class DashboardAggregateService {
 
     // ── 5. Blockers ─────────────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_BLOCKERS, key = "#callerIdx")
     public List<BlockerDto> blockers(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -383,6 +391,7 @@ public class DashboardAggregateService {
 
     // ── 6. Asset Categories ────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_ASSET_CATEGORIES, key = "#callerIdx")
     public Map<String, Long> assetCategories(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -404,6 +413,7 @@ public class DashboardAggregateService {
 
     // ── 7. KPI Categories ──────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_KPI_CATEGORIES, key = "#callerIdx")
     public Map<String, Long> kpiCategories(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
