@@ -1,5 +1,6 @@
 package org.example.backend.matching.service;
 
+import com.mongodb.client.result.UpdateResult;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +11,7 @@ import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.matching.model.*;
 import org.example.backend.matching.model.evaluation.CustomerEval;
 import org.example.backend.matching.model.evaluation.Evaluation;
+import org.example.backend.matching.model.evaluation.EvaluationDocument;
 import org.example.backend.matching.model.evaluation.EvaluationDto;
 import org.example.backend.matching.repository.*;
 import org.example.backend.organization.model.Organization;
@@ -18,6 +20,10 @@ import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.GsonBuilderUtils;
@@ -26,10 +32,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EvaluationService {
@@ -76,37 +83,71 @@ public class EvaluationService {
         }
     }
 
+    private final MongoTemplate mongoTemplate;
+
     @Transactional
     public void collect(EvaluationDto.CollectDto dto) {
 
-        String category = dto.getCategory();
-        // 1. 현재 세션(Evaluation) 조회
-        Evaluation evaluation = evaluationRepository.findBySessionId(dto.getUuid())
-                .orElseGet(() -> {
-                    Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
-                            .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + dto.getCampaignIdx()));
-                    PartnerBenefits benefits = benefitRepository.findById(dto.getBenefitIdx())
-                            .orElseThrow(() -> new EntityNotFoundException("해당 Benefit을 찾을 수 없습니다. Benefit ID: " + dto.getBenefitIdx()));
-                    Evaluation newEval = Evaluation.builder()
-                            .sessionId(dto.getUuid())
-                            .campaign(campaign)
-                            .benefits(benefits)
-                            .build();
-                    return evaluationRepository.save(newEval);
-                });
+        String targetField = "evaluations." + dto.getCategory().toLowerCase();
 
-        // 2. DTO를 해당 카테고리의 엔티티로 변환
-        Object evalEntity = switch (category) {
+        Object evalData = switch (dto.getCategory()){
             case "CUSTOMER" -> ((EvaluationDto.CollectDto.Customer) dto).toEntity();
             case "REVENUE" -> ((EvaluationDto.CollectDto.Revenue) dto).toEntity();
             case "COST" -> ((EvaluationDto.CollectDto.Cost) dto).toEntity();
             case "OPERATION" -> ((EvaluationDto.CollectDto.Operation) dto).toEntity();
             case "BRAND" -> ((EvaluationDto.CollectDto.Brand) dto).toEntity();
-            default -> throw new IllegalArgumentException("잘못된 카테고리입니다.");
+            default -> throw new IllegalArgumentException("지원하지 않는 평가 카테고리입니다.");
         };
 
-        // 3. 세션 엔티티에 데이터 연결 (Dirty Checking에 의해 자동 업데이트)
-        evaluation.updateEval(evalEntity, category);
+        Query query = new Query(Criteria.where("sessionID").is(dto.getUuid()));
+
+        Update update =  new Update()
+                .set(targetField, evalData)
+                .setOnInsert("sessionID", dto.getUuid())
+                .setOnInsert("campaignID", dto.getCampaignIdx())
+                .setOnInsert("benefitID", dto.getBenefitIdx())
+                .setOnInsert("startedAt", LocalDateTime.now());
+
+        mongoTemplate.updateFirst(query, update, EvaluationDocument.class);
+
+        log.info("[Evaluation Collected] Session: {}, Category: {} updated", dto.getUuid(), dto.getCategory());
+
+        UpdateResult result = mongoTemplate.upsert(query, update, EvaluationDocument.class);
+
+        log.info("[MongoDB Upsert 영수증] Acknowledged: {}, Matched: {}, Modified: {}, UpsertedId: {}",
+                result.wasAcknowledged(),
+                result.getMatchedCount(),
+                result.getModifiedCount(),
+                result.getUpsertedId());
+
+//        String category = dto.getCategory();
+//        // 1. 현재 세션(Evaluation) 조회
+//        Evaluation evaluation = evaluationRepository.findBySessionId(dto.getUuid())
+//                .orElseGet(() -> {
+//                    Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
+//                            .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + dto.getCampaignIdx()));
+//                    PartnerBenefits benefits = benefitRepository.findById(dto.getBenefitIdx())
+//                            .orElseThrow(() -> new EntityNotFoundException("해당 Benefit을 찾을 수 없습니다. Benefit ID: " + dto.getBenefitIdx()));
+//                    Evaluation newEval = Evaluation.builder()
+//                            .sessionId(dto.getUuid())
+//                            .campaign(campaign)
+//                            .benefits(benefits)
+//                            .build();
+//                    return evaluationRepository.save(newEval);
+//                });
+//
+//        // 2. DTO를 해당 카테고리의 엔티티로 변환
+//        Object evalEntity = switch (category) {
+//            case "CUSTOMER" -> ((EvaluationDto.CollectDto.Customer) dto).toEntity();
+//            case "REVENUE" -> ((EvaluationDto.CollectDto.Revenue) dto).toEntity();
+//            case "COST" -> ((EvaluationDto.CollectDto.Cost) dto).toEntity();
+//            case "OPERATION" -> ((EvaluationDto.CollectDto.Operation) dto).toEntity();
+//            case "BRAND" -> ((EvaluationDto.CollectDto.Brand) dto).toEntity();
+//            default -> throw new IllegalArgumentException("잘못된 카테고리입니다.");
+//        };
+//
+//        // 3. 세션 엔티티에 데이터 연결 (Dirty Checking에 의해 자동 업데이트)
+//        evaluation.updateEval(evalEntity, category);
     }
 
     public List<EvaluationDto.EvaluationRes> result(String publicId, AuthUserDetails user) {
