@@ -65,6 +65,32 @@ spring:
   data:
     mongodb:
       uri: ${MONGODB_URL}
+    # ─────────────────────────────────────────────────────────────────────
+    # Redis (Bitnami Sentinel — callog-redis Service in redis-test namespace)
+    #   - 기본: Sentinel 모드 (master failover 자동 처리, HA)
+    #   - sentinel.master 를 빈 값으로 override 하면 host/port 기반 standalone 모드로 fallback
+    #   - 모든 값 환경변수 override 가능 — k8s ConfigMap 에서 덮어쓰기
+    # ─────────────────────────────────────────────────────────────────────
+    redis:
+      # Standalone 대안 (Sentinel master 가 빈 값일 때만 사용됨)
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      # Master/Replica 의 AUTH password (Bitnami 기본: 'admin')
+      password: ${REDIS_PASSWORD}
+      timeout: 5000ms
+      sentinel:
+        master: ${REDIS_SENTINEL_MASTER}
+        # 콤마 구분 — 여러 sentinel: "host1:26379,host2:26379,host3:26379"
+        nodes: ${REDIS_SENTINEL_NODES}
+        password: ${REDIS_SENTINEL_PASSWORD}
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 16       # 동시 명령어 처리 가능 connection 수
+          max-idle: 8
+          min-idle: 2
+          max-wait: 5000ms
+        shutdown-timeout: 200ms
 
 logging:
   level:

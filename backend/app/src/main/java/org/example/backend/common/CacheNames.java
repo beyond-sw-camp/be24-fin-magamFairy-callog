@@ -1,4 +1,4 @@
-package org.example.backend.common.redis;
+package org.example.backend.common;
 
 /**
  * @Cacheable / @CacheEvict 의 value 에 쓰일 캐시 이름 상수.
