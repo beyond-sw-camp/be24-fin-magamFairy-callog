@@ -26,7 +26,7 @@ public class EvaluationController {
     public ResponseEntity<BaseResponse> getEvaluation(@AuthenticationPrincipal AuthUserDetails user,
                                                       @RequestParam String campaignIdx) {
         try {
-            List<EvaluationDto.EvaluationRes> dto = evaluationService.result(campaignIdx, user);
+            List<EvaluationDto.MongoEvaluationRes> dto = evaluationService.result(campaignIdx, user);
             return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESS, dto));
         }
         catch (Exception e){

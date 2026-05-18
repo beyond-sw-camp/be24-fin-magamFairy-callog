@@ -103,9 +103,9 @@ public class EvaluationService {
 
         Update update =  new Update()
                 .set(targetField, evalData)
-                .setOnInsert("sessionID", dto.getUuid())
-                .setOnInsert("campaignID", dto.getCampaignIdx())
-                .setOnInsert("benefitID", dto.getBenefitIdx())
+                .setOnInsert("sessionId", dto.getUuid())
+                .setOnInsert("campaignIdx", dto.getCampaignIdx())
+                .setOnInsert("benefitIdx", dto.getBenefitIdx())
                 .setOnInsert("startedAt", LocalDateTime.now());
 
         mongoTemplate.updateFirst(query, update, EvaluationDocument.class);
@@ -150,39 +150,47 @@ public class EvaluationService {
 //        evaluation.updateEval(evalEntity, category);
     }
 
-    public List<EvaluationDto.EvaluationRes> result(String publicId, AuthUserDetails user) {
-        Long campaignIdx = campaignRepository.findByPublicId(publicId)
-                .orElseThrow(() -> new EntityNotFoundException("해당 캠페인을 찾을 수 없습니다. publicId: " + publicId))
-                .getIdx();
+    public List<EvaluationDto.MongoEvaluationRes> result(String publicId, AuthUserDetails user) {
 
-       List<Evaluation> evaluations = evaluationRepository.findAllByCampaignIdx(campaignIdx);
+        Campaign campaign = campaignRepository.findByPublicId(publicId)
+                .orElseThrow(() -> new EntityNotFoundException("해당 캠페인을 찾을 수 없습니다."));
+        Long campaignIdx = campaign.getIdx();
 
-       if (evaluations.isEmpty()) {
-           throw new EntityNotFoundException(("해당 캠페인에 대한 평가 정보가 없습니다. CampaignID: " + campaignIdx));
-       }
+        Query query = new Query(Criteria.where("campaignIdx").is(campaignIdx));
+        List<EvaluationDocument> evalDocs = mongoTemplate.find(query, EvaluationDocument.class);
 
-       return evaluations.stream()
-               .map(evaluation -> {
-                   PartnerBenefits benefits = evaluation.getBenefits();
-                   Campaign campaign = benefits.getCampaign();
+        if (evalDocs.isEmpty()) {
+            throw new EntityNotFoundException("해당 캠페인에 대한 평가 정보가 없습니다. CampaignID: " + campaignIdx);
+        }
 
-                   return EvaluationDto.EvaluationRes.toDto(
-                           campaign,
-                           benefits,
-                           evaluation,
-                           user.getCompanyName()
-                   );
-               })
-               .collect(Collectors.toList());
+        return evalDocs.stream()
+                .map(doc -> EvaluationDto.MongoEvaluationRes.of(doc, user.getCompanyName()))
+                .collect(Collectors.toList());
 
-//        Evaluation evaluation = evaluationRepository.findByCampaignIdx(evaluationId)
-//                .orElseThrow(() -> new EntityNotFoundException("해당 평가를 찾을 수 없습니다. Evaluation ID: " + evaluationId));
-//        PartnerBenefits benefits = benefitRepository.findById(evaluation.getBenefits().getIdx())
-//                .orElseThrow();
-//        Campaign campaign = campaignRepository.findById(evaluation.getCampaign().getIdx())
-//                .orElseThrow();
+//        Long campaignIdx = campaignRepository.findByPublicId(publicId)
+//                .orElseThrow(() -> new EntityNotFoundException("해당 캠페인을 찾을 수 없습니다. publicId: " + publicId))
+//                .getIdx();
 //
-//        return EvaluationDto.EvaluationRes.toDto(campaign, benefits, evaluation, user.getCompanyName());
+//       List<Evaluation> evaluations = evaluationRepository.findAllByCampaignIdx(campaignIdx);
+//
+//       if (evaluations.isEmpty()) {
+//           throw new EntityNotFoundException(("해당 캠페인에 대한 평가 정보가 없습니다. CampaignID: " + campaignIdx));
+//       }
+//
+//       return evaluations.stream()
+//               .map(evaluation -> {
+//                   PartnerBenefits benefits = evaluation.getBenefits();
+//                   Campaign campaign = benefits.getCampaign();
+//
+//                   return EvaluationDto.EvaluationRes.toDto(
+//                           campaign,
+//                           benefits,
+//                           evaluation,
+//                           user.getCompanyName()
+//                   );
+//               })
+//               .collect(Collectors.toList());
+
     }
 }
 

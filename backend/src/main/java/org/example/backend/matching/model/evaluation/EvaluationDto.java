@@ -9,10 +9,39 @@ import org.example.backend.matching.model.*;
 import org.example.backend.organization.model.Organization;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 public class EvaluationDto {
+
+    @Getter
+    @Builder
+    public static class MongoEvaluationRes {
+        private String sessionId;
+        private Long campaignIdx;
+        private Long benefitIdx;
+        private String companyName;
+        private EvaluationDocument.Evaluations evaluations;
+
+        private LocalDateTime startedAt;
+        private LocalDateTime endedAt;
+
+        public static MongoEvaluationRes of(
+                EvaluationDocument document,
+                String companyName
+        ) {
+            return MongoEvaluationRes.builder()
+                    .sessionId(document.getSessionId())
+                    .campaignIdx(document.getCampaignIdx())
+                    .benefitIdx(document.getBenefitIdx())
+                    .evaluations(document.getEvaluations())
+                    .startedAt(document.getStartedAt())
+                    .endedAt(document.getEndedAt())
+                    .companyName(companyName)
+                    .build();
+        }
+    }
 
     @Getter
     @Builder
