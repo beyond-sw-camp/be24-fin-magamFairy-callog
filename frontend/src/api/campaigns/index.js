@@ -93,10 +93,12 @@ export const GetCampaignDetails = async (taps) => {
 /**
  * 캠페인 생성.
  *
- * payload는 기존 캠페인 필드(name, purpose, tags, startDate, endDate, partners, goals,
- * mainMessage, color)에 더해 KPI cascade 매핑을 위한 `contributions`를 포함할 수 있다.
+ * payload는 기존 캠페인 필드(name, purpose, tags, startDate, endDate, partners,
+ * goals, color)에 더해 KPI cascade 매핑을 위한 `contributions`, 팀원 자동 등록을
+ * 위한 `ownerUserIdxs` 를 포함할 수 있다.
  *
  *   contributions: [{ targetOrgKpiId: number, committedValue: number }]
+ *   ownerUserIdxs: number[]
  *
  * 매핑이 없으면 빈 배열을 보낸다.
  */
@@ -150,6 +152,11 @@ export const ExportCampaignCsv = async (campaignId, sections) => {
 }
 
 /** 캠페인 PDF 보고서 다운로드. type='summary'(1쪽 임원 요약) | 'full'(다중 페이지 상세). */
+/** 캠페인 멤버 목록 — { members, me, organizationIsPm, pmOrganizationIdx } */
+export const ListCampaignMembers = async (publicId) => {
+  return unwrapResponse(await api.get(`/campaigns/${publicId}/members`))
+}
+
 export const ExportCampaignPdf = async (campaignId, type = 'summary') => {
   const response = await api.get(`/campaigns/${campaignId}/export.pdf`, {
     params: { type },
@@ -164,6 +171,7 @@ export const ExportCampaignPdf = async (campaignId, type = 'summary') => {
 
 export default {
   ListCampaign,
+  ListCampaignMembers,
   GetCampaignDetails,
   CreateCampaign,
   UpdateCampaign,

@@ -38,7 +38,8 @@ const memberContextError = ref('')
 
 const myCampaignRole = computed(() => memberContext.value?.me?.campaignRole ?? null)
 const organizationIsPm = computed(() => Boolean(memberContext.value?.organizationIsPm))
-const canRequestReview = computed(() => !organizationIsPm.value)
+const canUseAiJudge = computed(() => Boolean(props.campaignId))
+const canRequestReview = computed(() => Boolean(memberContext.value && !organizationIsPm.value))
 const canFinalReview = computed(() =>
   organizationIsPm.value
   && ['MANAGER', 'GENERAL_MANAGER'].includes(myCampaignRole.value),
@@ -276,7 +277,7 @@ function replaceReviewRequest(request) {
 }
 
 function openAnalysisRequest() {
-  if (!canRequestReview.value) return
+  if (!canUseAiJudge.value) return
   isAnalysisOpen.value = true
 }
 
@@ -433,7 +434,7 @@ watch(
             </template>
           </article>
 
-          <label class="memo-field">
+          <label v-if="canRequestReview" class="memo-field">
             <span>요청 메모</span>
             <textarea
               v-model="reviewRequestMemo"
@@ -494,6 +495,7 @@ watch(
           </article>
 
           <button
+            v-if="canRequestReview"
             type="button"
             class="primary-button"
             :disabled="!canCreateReviewRequest"
@@ -511,7 +513,7 @@ watch(
           <p>Review Requests</p>
           <h3>검수 요청</h3>
         </div>
-        <button v-if="canRequestReview" type="button" class="primary-button" @click="openAnalysisRequest">
+        <button v-if="canUseAiJudge" type="button" class="primary-button" @click="openAnalysisRequest">
           검수 요청
         </button>
       </header>

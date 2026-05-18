@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, onBeforeUnmount, onMounted } from 'vue'
 import EvaluationModal from './EvaluationModal.vue'
-import { ListBenefits } from '@/api/matchingBenefits/index.js'
+import { ListBenefits, getBenefitsFromCampaignIdx } from '@/api/matchingBenefits/index.js'
 
 defineProps({
   isDark: {
@@ -91,10 +91,11 @@ function getStatusLabel(status) {
 
 // 1️⃣ 기존 더미 데이터를 지우고 빈 배열로 초기화합니다.
 const benefits = ref([])
+const campaignIdx = localStorage.getItem('callog-active-campaign-id')
 
 onMounted(async () => {
   try {
-    const response = await ListBenefits()
+    const response = await getBenefitsFromCampaignIdx(campaignIdx)
     
     benefits.value = response.benefitList || response 
 

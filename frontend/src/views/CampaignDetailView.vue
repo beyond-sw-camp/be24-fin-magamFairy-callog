@@ -100,17 +100,17 @@ const metadataDraft = ref({
   startDate: '',
   endDate: '',
   summary: '',
-  partnersText: '',
   color: '',
   status: 'draft',
 })
 
-// 백엔드 CampaignService.CAMPAIGN_PALETTE와 동일한 20색
+// 백엔드 CampaignService.CAMPAIGN_PALETTE와 동일한 20색 (2025–2026 트렌드 큐레이션)
+// WGSN/Coloro 2026 + Pantone COY + 2025 디지털 디자인 시스템에서 추출
 const CAMPAIGN_PALETTE = [
-  '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6',
-  '#EF4444', '#06B6D4', '#84CC16', '#F97316', '#14B8A6',
-  '#6366F1', '#A855F7', '#D946EF', '#F43F5E', '#EAB308',
-  '#22C55E', '#0EA5E9', '#FB7185', '#4F46E5', '#059669',
+  '#7C3AED', '#B68BD9', '#4F4878', '#4A4E97', '#2740B2', // 01–05 violet · lavender · dusk · indigo · cobalt
+  '#0EA5E9', '#14B8A6', '#BEF264', '#F59E0B', '#FFBE98', // 06–10 sky · mint · lime · amber · peach
+  '#FF6B45', '#FB7185', '#C5174D', '#EC4899', '#A47864', // 11–15 lava · coral · cherry · petal · mocha
+  '#2F5D3D', '#FCD34D', '#67E8F9', '#475569', '#D946EF', // 16–20 sage · buttercream · glacier · slate · magenta
 ]
 
 const tabs = ["캠페인 오버뷰", "팀 보드 보기", "검수/승인", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
@@ -176,14 +176,6 @@ const currentStatusMeta = computed(() => {
 const campaignStatusLabel = computed(() => currentStatusMeta.value.label)
 const campaignStatusTone  = computed(() => currentStatusMeta.value.tone)
 
-const partnerNames = computed(() => {
-  if (activeCampaign.value?.partners?.length) {
-    return activeCampaign.value.partners
-  }
-
-  return ['디자인 스튜디오 A', '미디어 랩 B', 'PR 에이전시 C']
-})
-
 const currentStatus = computed(() => currentStatusMeta.value.value)
 
 
@@ -198,7 +190,6 @@ const statusColumns = [
 
 const milestoneRows = ref([])
 
-const teams = []
 const campaignMemberOptions = ref([])
 const campaignParticipantOptions = ref([])
 
@@ -221,18 +212,6 @@ const taskDetailItem = ref(null)
 const partFormError = ref('')
 const partCreateType = ref('part')
 const milestoneFormError = ref('')
-
-const campaignTeams = computed(() => [
-  ...(teams[0] ? [teams[0]] : []),
-  ...partnerNames.value.map((partnerName, index) => ({
-    id: `partner-${index}`,
-    name: partnerName,
-    role: '캠페인 협력 업무',
-    progress: 50,
-    color: 'blue',
-  })),
-])
-
 
 const taskPartRows = computed(() =>
   taskPartRecords.value.map((part) => ({
@@ -739,7 +718,6 @@ function syncMetadataDraft() {
     summary:
       activeCampaign.value?.purpose ??
       '여름 시즌을 맞이하여 북미 및 아시아 시장을 타겟으로 한 대규모 할인 프로모션 및 신제품 런칭 캠페인.',
-    partnersText: partnerNames.value.join(', '),
     color: activeCampaign.value?.color ?? '',
     status: activeCampaign.value?.status ?? 'draft',
   }
@@ -761,11 +739,6 @@ async function saveMetadata() {
     return
   }
 
-  const partners = metadataDraft.value.partnersText
-    .split(',')
-    .map((partner) => partner.trim())
-    .filter(Boolean)
-
   // 백엔드 UpsertReq 형식. 폼에서 안 건드는 필드는 기존 값 유지.
   const payload = {
     name: metadataDraft.value.name,
@@ -773,9 +746,7 @@ async function saveMetadata() {
     tags: Array.isArray(activeCampaign.value.tags) ? activeCampaign.value.tags : [],
     startDate: metadataDraft.value.startDate || null,
     endDate: metadataDraft.value.endDate || null,
-    partners,
     goals: activeCampaign.value.goals ?? null,
-    mainMessage: activeCampaign.value.mainMessage ?? null,
     color: metadataDraft.value.color || activeCampaign.value.color || null,
   }
 
@@ -1106,10 +1077,6 @@ watch(
                 <dd>{{ formatSysDate(activeCampaign?.createdAt) }}</dd>
               </div>
               <div>
-                <dt>생성자</dt>
-                <dd>{{ activeCampaign?.ownerName ?? activeCampaign?.ownerEmail ?? '-' }}</dd>
-              </div>
-              <div>
                 <dt>최근 수정</dt>
                 <dd>{{ formatSysDate(activeCampaign?.updatedAt) }}</dd>
               </div>
@@ -1299,7 +1266,6 @@ watch(
           </button>
         </div>
         <div class="board-toolbar__actions">
-          <span class="board-context-pill">본사 + 캠페인 참여사 {{ campaignTeams.length }}곳</span>
           <input type="search" placeholder="업무 검색..." />
           <button type="button" class="btn btn--primary" @click="openTaskCreateModal">업무 추가</button>
           <button type="button" class="btn btn--secondary" @click="openPartCreateModal">업무 파트 / 마일스톤 생성하기</button>
@@ -2336,7 +2302,6 @@ textarea:disabled {
   opacity: 1;
 }
 
-.partner-list,
 .activity-list,
 .candidate-list,
 .meta-list {
@@ -2344,22 +2309,12 @@ textarea:disabled {
   gap: 10px;
 }
 
-.partner-item,
 .activity-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
 }
 
-.partner-item {
-  align-items: center;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 12px;
-}
-
-.partner-item__avatar,
 .person-cell > span,
 .activity-item__icon {
   display: inline-flex;
@@ -2375,7 +2330,6 @@ textarea:disabled {
   font-weight: 800;
 }
 
-.partner-item strong,
 .person-cell strong,
 .data-table__row strong,
 .reference-card h3,
@@ -2386,7 +2340,6 @@ textarea:disabled {
   font-weight: 800;
 }
 
-.partner-item small,
 .person-cell small,
 .activity-item time,
 .reference-card small,

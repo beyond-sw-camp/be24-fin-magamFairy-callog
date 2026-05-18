@@ -45,6 +45,11 @@ public class AuthController {
         return ResponseEntity.ok(BaseResponse.success(userService.listManageableUsers(authentication)));
     }
 
+    @GetMapping("/users/colleagues")
+    public ResponseEntity<?> listColleagues(Authentication authentication) {
+        return ResponseEntity.ok(BaseResponse.success(userService.listColleagues(authentication)));
+    }
+
     @PostMapping("/signup")
     public ResponseEntity<?> partnerSignup(@RequestBody UserDto.PartnerSignupReq dto) {
         UserDto.PartnerSignupRes result = userService.partnerSignup(dto);

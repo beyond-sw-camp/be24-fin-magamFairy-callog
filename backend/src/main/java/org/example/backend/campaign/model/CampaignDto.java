@@ -19,7 +19,6 @@ public class CampaignDto {
             LocalDate endDate,
             List<String> partners,
             String goals,
-            String mainMessage,
             List<CreateContributionRequest> contributions,
             String assetName,
             String assetDescription,
@@ -27,8 +26,7 @@ public class CampaignDto {
             List<String> campaignMethods,
             String maxCost,
             String minRevenue,
-            String ownerName,
-            String ownerEmail,
+            List<Long> ownerUserIdxs,
             String color,
             String icon
     ) {
@@ -52,15 +50,12 @@ public class CampaignDto {
             String period,
             List<String> partners,
             String goals,
-            String mainMessage,
             String assetName,
             String assetDescription,
             String primaryGoal,
             List<String> campaignMethods,
             String maxCost,
             String minRevenue,
-            String ownerName,
-            String ownerEmail,
             String status,
             String initials,
             String icon,
@@ -86,15 +81,12 @@ public class CampaignDto {
                     .period(formatPeriod(entity.getStartDate(), entity.getEndDate()))
                     .partners(List.copyOf(entity.getPartners()))
                     .goals(entity.getGoals())
-                    .mainMessage(entity.getMainMessage())
                     .assetName(entity.getAssetName())
                     .assetDescription(entity.getAssetDescription())
                     .primaryGoal(entity.getPrimaryGoal())
                     .campaignMethods(List.copyOf(entity.getCampaignMethods()))
                     .maxCost(entity.getMaxCost())
                     .minRevenue(entity.getMinRevenue())
-                    .ownerName(entity.getOwnerName())
-                    .ownerEmail(entity.getOwnerEmail())
                     .status(entity.getStatus())
                     .initials(entity.getInitials())
                     .icon(entity.getIcon())
