@@ -36,6 +36,10 @@ public class AdCheckController {
     public ResponseEntity<BaseResponse<?>> checkFile(@RequestParam("file") MultipartFile file) {
         try {
             return ResponseEntity.ok(BaseResponse.success(adCheckService.checkFile(file)));
+        } catch (AdCheckService.FileCheckException e) {
+            log.error("Ad file check failed after text extraction. fileName={}, size={}",
+                    file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize(), e);
+            return ResponseEntity.ok(BaseResponse.fail(BaseResponseStatus.FAIL, e.getResponse()));
         } catch (RuntimeException e) {
             log.error("Ad file check failed. fileName={}, size={}", file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize(), e);
             return ResponseEntity.ok(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));

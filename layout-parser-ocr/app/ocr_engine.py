@@ -1,5 +1,7 @@
-import os
+from __future__ import annotations
+
 import logging
+import os
 import shutil
 import tempfile
 import time
@@ -8,7 +10,14 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, List, Optional, Tuple, Union
+
+import fitz
+from fastapi import APIRouter, File, HTTPException, UploadFile
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
+
 
 OCR_LANG = os.getenv("OCR_LANG", "korean")
 OCR_MAX_PDF_PAGES = int(os.getenv("OCR_MAX_PDF_PAGES", "10"))
@@ -19,6 +28,13 @@ OCR_ENABLE_MKLDNN = os.getenv("OCR_ENABLE_MKLDNN", "false").lower() == "true"
 OCR_CPU_THREADS = int(os.getenv("OCR_CPU_THREADS", "1"))
 OCR_TEMP_ROOT = os.getenv("OCR_TEMP_ROOT", "").strip()
 OCR_PREPROCESS = os.getenv("OCR_PREPROCESS", "true").lower() == "true"
+OCR_CANDIDATE_STRATEGY = os.getenv("OCR_CANDIDATE_STRATEGY", "auto").strip().lower()
+OCR_AUTO_ACCEPT_MIN_SCORE = float(os.getenv("OCR_AUTO_ACCEPT_MIN_SCORE", "330"))
+OCR_AUTO_ACCEPT_MIN_AVG_CONFIDENCE = float(os.getenv("OCR_AUTO_ACCEPT_MIN_AVG_CONFIDENCE", "0.88"))
+OCR_AUTO_ACCEPT_MIN_CHARS = int(os.getenv("OCR_AUTO_ACCEPT_MIN_CHARS", "180"))
+OCR_AUTO_ACCEPT_MIN_LINES = int(os.getenv("OCR_AUTO_ACCEPT_MIN_LINES", "2"))
+OCR_AUTO_ACCEPT_MIN_MEANINGFUL_RATIO = float(os.getenv("OCR_AUTO_ACCEPT_MIN_MEANINGFUL_RATIO", "0.72"))
+OCR_AUTO_ACCEPT_MAX_FRAGMENT_RATIO = float(os.getenv("OCR_AUTO_ACCEPT_MAX_FRAGMENT_RATIO", "0.35"))
 OCR_TARGET_LONG_EDGE = int(os.getenv("OCR_TARGET_LONG_EDGE", "1600"))
 OCR_DET_LIMIT_SIDE_LEN = int(os.getenv("OCR_DET_LIMIT_SIDE_LEN", str(OCR_TARGET_LONG_EDGE)))
 OCR_CONTRAST = float(os.getenv("OCR_CONTRAST", "1.8"))
@@ -35,14 +51,8 @@ os.environ["MKL_NUM_THREADS"] = str(OCR_CPU_THREADS)
 os.environ["OPENBLAS_NUM_THREADS"] = str(OCR_CPU_THREADS)
 os.environ["NUMEXPR_NUM_THREADS"] = str(OCR_CPU_THREADS)
 
-import fitz
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from paddleocr import PaddleOCR
-from PIL import Image, ImageEnhance, ImageFilter, ImageOps
-from pydantic import BaseModel
-from starlette.concurrency import run_in_threadpool
-
-logger = logging.getLogger("uvicorn.error")
+logger = logging.getLogger(__name__)
+ocr_router = APIRouter()
 ocr_lock = Lock()
 TRANSIENT_OCR_ERROR_MARKERS = (
     "could not execute a primitive",
@@ -57,27 +67,27 @@ TRANSIENT_OCR_ERROR_MARKERS = (
 
 class OcrLine(BaseModel):
     text: str
-    score: float | None = None
-    x: float | None = None
-    y: float | None = None
-    width: float | None = None
-    height: float | None = None
+    score: Optional[float] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
+    width: Optional[float] = None
+    height: Optional[float] = None
 
 
 class OcrResponse(BaseModel):
     text: str
-    lines: list[OcrLine]
+    lines: List[OcrLine]
     pageCount: int
 
 
 @dataclass
 class RawOcrItem:
     text: str
-    score: float | None = None
-    x: float | None = None
-    y: float | None = None
-    width: float | None = None
-    height: float | None = None
+    score: Optional[float] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
+    width: Optional[float] = None
+    height: Optional[float] = None
 
     @property
     def has_box(self) -> bool:
@@ -95,15 +105,25 @@ class RawOcrItem:
 @dataclass
 class CandidateResult:
     path: Path
-    lines: list[OcrLine]
+    lines: List[OcrLine]
     score: float
 
 
-app = FastAPI(title="Callog OCR Service")
+@dataclass
+class CandidateStats:
+    meaningful_char_count: int
+    total_non_space_count: int
+    avg_confidence: float
+    avg_line_length: float
+    short_line_count: int
+    fragment_ratio: float
+    meaningful_ratio: float
 
 
 @lru_cache(maxsize=1)
-def get_ocr() -> PaddleOCR:
+def get_ocr() -> Any:
+    from paddleocr import PaddleOCR
+
     return PaddleOCR(
         use_angle_cls=OCR_USE_ANGLE_CLS,
         lang=OCR_LANG,
@@ -116,11 +136,13 @@ def get_ocr() -> PaddleOCR:
     )
 
 
-@app.on_event("startup")
-def warm_up_model() -> None:
+def warm_up_ocr_model() -> None:
     get_ocr()
     logger.info(
-        "OCR model warmed up. lang=%s gpu=%s angle_cls=%s mkldnn=%s cpu_threads=%s target_long_edge=%s det_limit_side_len=%s",
+        (
+            "OCR model warmed up. lang=%s gpu=%s angle_cls=%s mkldnn=%s cpu_threads=%s "
+            "target_long_edge=%s det_limit_side_len=%s candidate_strategy=%s"
+        ),
         OCR_LANG,
         OCR_USE_GPU,
         OCR_USE_ANGLE_CLS,
@@ -128,15 +150,11 @@ def warm_up_model() -> None:
         OCR_CPU_THREADS,
         OCR_TARGET_LONG_EDGE,
         OCR_DET_LIMIT_SIDE_LEN,
+        _candidate_strategy(),
     )
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.post("/ocr", response_model=OcrResponse)
+@ocr_router.post("/ocr", response_model=OcrResponse)
 async def extract_text(file: UploadFile = File(...)) -> OcrResponse:
     request_id = uuid.uuid4().hex[:8]
     start_time = time.perf_counter()
@@ -191,20 +209,21 @@ def _extract_from_path(path: Path, content_type: str, temp_dir: Path) -> OcrResp
 
 
 def _make_temp_dir() -> Path:
-    roots: list[Path] = []
+    roots: List[Path] = []
     if OCR_TEMP_ROOT:
         roots.append(Path(OCR_TEMP_ROOT))
     roots.extend([Path(tempfile.gettempdir()), Path.cwd() / ".callog-ocr-tmp"])
 
     for root in roots:
-        temp_dir: Path | None = None
+        temp_dir: Optional[Path] = None
         try:
             root.mkdir(parents=True, exist_ok=True)
             temp_dir = root / f"callog-ocr-{uuid.uuid4().hex}"
             temp_dir.mkdir()
             probe_path = temp_dir / ".write-check"
             probe_path.write_bytes(b"")
-            probe_path.unlink(missing_ok=True)
+            if probe_path.exists():
+                probe_path.unlink()
             return temp_dir
         except Exception:
             if temp_dir is not None:
@@ -214,8 +233,8 @@ def _make_temp_dir() -> Path:
 
 
 def _extract_from_pdf(path: Path, temp_dir: Path) -> OcrResponse:
-    pages: list[list[OcrLine]] = []
-    page_errors: list[Exception] = []
+    pages: List[List[OcrLine]] = []
+    page_errors: List[Exception] = []
 
     with fitz.open(path) as document:
         page_count = min(len(document), OCR_MAX_PDF_PAGES)
@@ -243,12 +262,16 @@ def _extract_from_pdf(path: Path, temp_dir: Path) -> OcrResponse:
     return _response_from_pages(pages)
 
 
-def _extract_from_image(path: Path, temp_dir: Path) -> list[OcrLine]:
+def _extract_from_image(path: Path, temp_dir: Path) -> List[OcrLine]:
     candidates = _prepare_image_candidates(path, temp_dir)
-    best: CandidateResult | None = None
-    errors: list[Exception] = []
+    strategy = _candidate_strategy()
+    if strategy == "first":
+        candidates = candidates[:1]
 
-    for candidate_path in candidates:
+    best: Optional[CandidateResult] = None
+    errors: List[Exception] = []
+
+    for index, candidate_path in enumerate(candidates):
         try:
             result = _run_ocr(candidate_path)
             raw_items = _collect_raw_items(result)
@@ -256,6 +279,21 @@ def _extract_from_image(path: Path, temp_dir: Path) -> list[OcrLine]:
             score = _score_candidate(lines)
             if best is None or score > best.score:
                 best = CandidateResult(path=candidate_path, lines=lines, score=score)
+            if strategy == "auto" and index == 0 and _is_auto_acceptable(lines, score):
+                stats = _candidate_stats(lines)
+                logger.info(
+                    (
+                        "OCR accepted first candidate. path=%s candidate=%s score=%.2f "
+                        "avgConfidence=%.3f meaningfulChars=%s lineCount=%s"
+                    ),
+                    path,
+                    candidate_path.name,
+                    score,
+                    stats.avg_confidence,
+                    stats.meaningful_char_count,
+                    len(lines),
+                )
+                return lines
         except Exception as exc:
             errors.append(exc)
             logger.exception("OCR candidate failed. path=%s", candidate_path)
@@ -270,13 +308,30 @@ def _extract_from_image(path: Path, temp_dir: Path) -> list[OcrLine]:
 
     if best is not None and not best.lines:
         logger.warning("OCR completed but extracted no text. path=%s candidates=%s", path, len(candidates))
+    elif best is not None and len(candidates) > 1:
+        logger.info(
+            "OCR selected best candidate after full pass. path=%s candidate=%s candidates=%s score=%.2f",
+            path,
+            best.path.name,
+            len(candidates),
+            best.score,
+        )
 
     return best.lines if best is not None else []
 
 
+def _candidate_strategy() -> str:
+    if OCR_CANDIDATE_STRATEGY in {"auto", "all"}:
+        return OCR_CANDIDATE_STRATEGY
+    if OCR_CANDIDATE_STRATEGY in {"first", "rgb"}:
+        return "first"
+    logger.warning("Unknown OCR_CANDIDATE_STRATEGY=%s. Falling back to auto.", OCR_CANDIDATE_STRATEGY)
+    return "auto"
+
+
 def _run_ocr(path: Path) -> Any:
     attempts = max(1, OCR_RETRY_ATTEMPTS)
-    latest_error: Exception | None = None
+    latest_error: Optional[Exception] = None
 
     for attempt in range(1, attempts + 1):
         try:
@@ -307,7 +362,7 @@ def _is_transient_ocr_error(exc: Exception) -> bool:
     return any(marker in message for marker in TRANSIENT_OCR_ERROR_MARKERS)
 
 
-def _prepare_image_candidates(path: Path, temp_dir: Path) -> list[Path]:
+def _prepare_image_candidates(path: Path, temp_dir: Path) -> List[Path]:
     if not OCR_PREPROCESS:
         return [path]
 
@@ -359,8 +414,8 @@ def _save_candidate(image: Image.Image, temp_dir: Path, stem: str, suffix: str) 
     return output_path
 
 
-def _collect_raw_items(result: Any) -> list[RawOcrItem]:
-    items: list[RawOcrItem] = []
+def _collect_raw_items(result: Any) -> List[RawOcrItem]:
+    items: List[RawOcrItem] = []
 
     def add(text: Any, score: Any = None, box: Any = None) -> None:
         normalized_text = str(text or "").strip()
@@ -416,7 +471,7 @@ def _collect_raw_items(result: Any) -> list[RawOcrItem]:
     return items
 
 
-def _layout_lines(items: list[RawOcrItem]) -> list[OcrLine]:
+def _layout_lines(items: List[RawOcrItem]) -> List[OcrLine]:
     clean_items = [item for item in items if item.text.strip()]
     if not clean_items:
         return []
@@ -429,7 +484,7 @@ def _layout_lines(items: list[RawOcrItem]) -> list[OcrLine]:
             for item in filtered_items
         ]
 
-    line_groups: list[list[RawOcrItem]] = []
+    line_groups: List[List[RawOcrItem]] = []
     for item in sorted(boxed_items, key=lambda value: (value.center_y, value.x or 0)):
         target_group = _find_line_group(line_groups, item)
         if target_group is None:
@@ -437,7 +492,7 @@ def _layout_lines(items: list[RawOcrItem]) -> list[OcrLine]:
         else:
             target_group.append(item)
 
-    lines: list[OcrLine] = []
+    lines: List[OcrLine] = []
     for group in sorted(line_groups, key=lambda value: _group_center_y(value)):
         text = _join_line_group(group)
         if not text:
@@ -449,7 +504,7 @@ def _layout_lines(items: list[RawOcrItem]) -> list[OcrLine]:
     return lines
 
 
-def _filter_low_confidence(items: list[RawOcrItem]) -> list[RawOcrItem]:
+def _filter_low_confidence(items: List[RawOcrItem]) -> List[RawOcrItem]:
     filtered = [
         item for item in items
         if item.score is None or item.score >= OCR_MIN_SCORE or len(item.text.strip()) >= 4
@@ -459,19 +514,26 @@ def _filter_low_confidence(items: list[RawOcrItem]) -> list[RawOcrItem]:
     return filtered
 
 
-def _find_line_group(line_groups: list[list[RawOcrItem]], item: RawOcrItem) -> list[RawOcrItem] | None:
+def _find_line_group(
+    line_groups: List[List[RawOcrItem]],
+    item: RawOcrItem,
+) -> Optional[List[RawOcrItem]]:
     for group in reversed(line_groups):
-        group_height = max(_mean([entry.height for entry in group if entry.height is not None]) or 0, item.height or 0, 1)
+        group_height = max(
+            _mean([entry.height for entry in group if entry.height is not None]) or 0,
+            item.height or 0,
+            1,
+        )
         tolerance = max(8.0, group_height * 0.58)
         if abs(item.center_y - _group_center_y(group)) <= tolerance:
             return group
     return None
 
 
-def _join_line_group(group: list[RawOcrItem]) -> str:
+def _join_line_group(group: List[RawOcrItem]) -> str:
     ordered = sorted(group, key=lambda item: item.x or 0)
-    parts: list[str] = []
-    previous: RawOcrItem | None = None
+    parts: List[str] = []
+    previous: Optional[RawOcrItem] = None
 
     for item in ordered:
         text = item.text.strip()
@@ -490,20 +552,20 @@ def _join_line_group(group: list[RawOcrItem]) -> str:
     return _normalize_spacing("".join(parts))
 
 
-def _response_from_pages(pages: list[list[OcrLine]]) -> OcrResponse:
+def _response_from_pages(pages: List[List[OcrLine]]) -> OcrResponse:
     all_lines = [line for page in pages for line in page if line.text.strip()]
     page_texts = [_page_text(page) for page in pages]
     text = "\n\n".join(page_text for page_text in page_texts if page_text.strip())
     return OcrResponse(text=text, lines=all_lines, pageCount=len(pages))
 
 
-def _page_text(lines: list[OcrLine]) -> str:
+def _page_text(lines: List[OcrLine]) -> str:
     visible_lines = [line for line in lines if line.text.strip()]
     if not visible_lines:
         return ""
 
-    page_parts: list[str] = []
-    previous: OcrLine | None = None
+    page_parts: List[str] = []
+    previous: Optional[OcrLine] = None
     for line in visible_lines:
         if previous is not None and _should_start_paragraph(previous, line):
             page_parts.append("")
@@ -522,35 +584,64 @@ def _should_start_paragraph(previous: OcrLine, current: OcrLine) -> bool:
     return vertical_gap > reference_height * 0.85
 
 
-def _score_candidate(lines: list[OcrLine]) -> float:
+def _score_candidate(lines: List[OcrLine]) -> float:
     if not lines:
         return -1_000_000.0
 
+    stats = _candidate_stats(lines)
+
+    return (
+        stats.meaningful_char_count * 0.8
+        + stats.avg_confidence * 120
+        + min(stats.avg_line_length, 48) * 2.4
+        + stats.meaningful_ratio * 35
+        - stats.fragment_ratio * 90
+        - stats.short_line_count * 3.5
+    )
+
+
+def _candidate_stats(lines: List[OcrLine]) -> CandidateStats:
     texts = [line.text.strip() for line in lines if line.text.strip()]
     text = "\n".join(texts)
     meaningful_chars = [char for char in text if char.isalnum() or _is_hangul(char)]
     total_non_space = [char for char in text if not char.isspace()]
-    avg_score = _mean([line.score for line in lines if line.score is not None]) or 0.5
+    avg_confidence = _mean([line.score for line in lines if line.score is not None]) or 0.5
     avg_line_length = _mean([len(line.text.strip()) for line in lines]) or 0
     short_line_count = sum(1 for line in lines if len(line.text.strip()) <= 2)
     fragment_ratio = short_line_count / max(len(lines), 1)
     meaningful_ratio = len(meaningful_chars) / max(len(total_non_space), 1)
 
-    return (
-        len(meaningful_chars) * 0.8
-        + avg_score * 120
-        + min(avg_line_length, 48) * 2.4
-        + meaningful_ratio * 35
-        - fragment_ratio * 90
-        - short_line_count * 3.5
+    return CandidateStats(
+        meaningful_char_count=len(meaningful_chars),
+        total_non_space_count=len(total_non_space),
+        avg_confidence=avg_confidence,
+        avg_line_length=avg_line_length,
+        short_line_count=short_line_count,
+        fragment_ratio=fragment_ratio,
+        meaningful_ratio=meaningful_ratio,
     )
 
 
-def _group_center_y(group: list[RawOcrItem]) -> float:
+def _is_auto_acceptable(lines: List[OcrLine], score: float) -> bool:
+    if not lines:
+        return False
+
+    stats = _candidate_stats(lines)
+    return (
+        score >= OCR_AUTO_ACCEPT_MIN_SCORE
+        and stats.avg_confidence >= OCR_AUTO_ACCEPT_MIN_AVG_CONFIDENCE
+        and stats.meaningful_char_count >= OCR_AUTO_ACCEPT_MIN_CHARS
+        and len(lines) >= OCR_AUTO_ACCEPT_MIN_LINES
+        and stats.meaningful_ratio >= OCR_AUTO_ACCEPT_MIN_MEANINGFUL_RATIO
+        and stats.fragment_ratio <= OCR_AUTO_ACCEPT_MAX_FRAGMENT_RATIO
+    )
+
+
+def _group_center_y(group: List[RawOcrItem]) -> float:
     return _mean([item.center_y for item in group]) or 0.0
 
 
-def _group_box(group: list[RawOcrItem]) -> tuple[float | None, float | None, float | None, float | None]:
+def _group_box(group: List[RawOcrItem]) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[float]]:
     boxed = [item for item in group if item.has_box]
     if not boxed:
         return None, None, None, None
@@ -562,7 +653,7 @@ def _group_box(group: list[RawOcrItem]) -> tuple[float | None, float | None, flo
     return left, top, right - left, bottom - top
 
 
-def _normalize_box(box: Any) -> tuple[float | None, float | None, float | None, float | None]:
+def _normalize_box(box: Any) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[float]]:
     if box is None:
         return None, None, None, None
 
@@ -570,7 +661,7 @@ def _normalize_box(box: Any) -> tuple[float | None, float | None, float | None, 
         x1, y1, x2, y2 = [float(value) for value in box]
         return min(x1, x2), min(y1, y2), abs(x2 - x1), abs(y2 - y1)
 
-    points: list[tuple[float, float]] = []
+    points: List[Tuple[float, float]] = []
     if isinstance(box, (list, tuple)):
         for point in box:
             if isinstance(point, (list, tuple)) and len(point) >= 2 and _is_number(point[0]) and _is_number(point[1]):
@@ -590,7 +681,7 @@ def _normalize_spacing(text: str) -> str:
     return " ".join(text.split())
 
 
-def _mean(values: list[float | int | None]) -> float | None:
+def _mean(values: List[Optional[Union[float, int]]]) -> Optional[float]:
     numeric_values = [float(value) for value in values if value is not None]
     if not numeric_values:
         return None
@@ -604,7 +695,7 @@ def _at(values: Any, index: int) -> Any:
         return None
 
 
-def _to_float(value: Any) -> float | None:
+def _to_float(value: Any) -> Optional[float]:
     try:
         return float(value)
     except Exception:

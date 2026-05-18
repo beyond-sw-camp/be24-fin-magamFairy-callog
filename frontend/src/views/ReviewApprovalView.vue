@@ -78,6 +78,8 @@ const analysisIssues = computed(() => {
   }]
 })
 
+const analysisProcessingTimes = computed(() => analysisResult.value?.processingTimes ?? null)
+
 const canCreateReviewRequest = computed(() =>
   Boolean(
     analysisFileInfo.value
@@ -166,6 +168,24 @@ function reviewStatusTone(status) {
 function formatDate(value) {
   if (!value) return '요청일 없음'
   return String(value).slice(0, 10)
+}
+
+function extractionModeLabel(mode) {
+  if (mode === 'plain_text') return 'TXT 직접 읽기'
+  if (mode === 'pdf_embedded_text') return 'PDF 내장 텍스트'
+  if (mode === 'pdf_layout_ocr') return 'PDF Layout + OCR'
+  if (mode === 'image_layout_ocr') return '이미지 Layout + OCR'
+  if (mode === 'pdf_ocr_fallback') return 'PDF OCR fallback'
+  if (mode === 'image_ocr_fallback') return '이미지 OCR fallback'
+  if (mode === 'pdf_ocr') return 'PDF OCR'
+  if (mode === 'image_ocr') return '이미지 OCR'
+  return mode || '대기'
+}
+
+function formatDuration(millis) {
+  if (millis === null || millis === undefined) return '-'
+  if (millis < 1000) return `${millis}ms`
+  return `${(millis / 1000).toFixed(2)}s`
 }
 
 async function loadMemberContext() {
@@ -349,6 +369,9 @@ async function processAnalysisFile(file) {
       analysisError.value = 'AI 검수 결과 형식이 올바르지 않습니다. 서버 응답을 확인해주세요.'
     }
   } catch (error) {
+    if (error?.data && typeof error.data === 'object') {
+      analysisResult.value = error.data
+    }
     analysisError.value = error?.message ?? 'AI 검수 요청에 실패했습니다.'
   } finally {
     isAnalyzing.value = false
@@ -469,6 +492,35 @@ watch(
             <p v-else-if="normalizedAnalysisStatus === 'pass'">AI 1차 검수에서 문제 항목이 발견되지 않았습니다.</p>
             <p v-else-if="analysisIssues.length">아래 항목을 확인한 뒤 수정 후 다시 요청해주세요.</p>
             <p v-else>파일을 업로드하면 검수 결과가 표시됩니다.</p>
+          </article>
+
+          <article v-if="analysisProcessingTimes" class="analysis-timing">
+            <header class="analysis-timing__head">
+              <span>Processing Time</span>
+              <strong>{{ extractionModeLabel(analysisResult?.extractionMode) }}</strong>
+            </header>
+            <dl>
+              <div>
+                <dt>PDF/TXT</dt>
+                <dd>{{ formatDuration(analysisProcessingTimes.textExtractionMillis) }}</dd>
+              </div>
+              <div>
+                <dt>Layout</dt>
+                <dd>{{ formatDuration(analysisProcessingTimes.layoutMillis) }}</dd>
+              </div>
+              <div>
+                <dt>OCR</dt>
+                <dd>{{ formatDuration(analysisProcessingTimes.ocrMillis) }}</dd>
+              </div>
+              <div>
+                <dt>AI</dt>
+                <dd>{{ formatDuration(analysisProcessingTimes.aiAnalysisMillis) }}</dd>
+              </div>
+              <div>
+                <dt>Total</dt>
+                <dd>{{ formatDuration(analysisProcessingTimes.totalMillis) }}</dd>
+              </div>
+            </dl>
           </article>
 
           <div v-if="analysisIssues.length" class="issue-list">
@@ -784,6 +836,54 @@ watch(
   border-color: var(--border-color);
 }
 
+.analysis-timing {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+}
+
+.analysis-timing__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.analysis-timing__head span,
+.analysis-timing dt {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.analysis-timing__head strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.analysis-timing dl {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.analysis-timing div {
+  display: grid;
+  gap: 3px;
+}
+
+.analysis-timing dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 950;
+}
+
 .issue-list {
   display: grid;
   gap: 8px;
@@ -955,6 +1055,10 @@ watch(
   .review-card__actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .analysis-timing dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .primary-button,

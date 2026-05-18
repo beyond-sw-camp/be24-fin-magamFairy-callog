@@ -44,9 +44,12 @@ public class AdCheckDto {
         private String violationText;
         private String reason;
         private String suggestion;
+        private String extractionMode;
+        private ProcessingTimes processingTimes;
+        private String errorMessage;
 
         public static FileCheckRes of(String fileName, String extractedText, Res res) {
-            return of(fileName, null, null, null, null, extractedText, res);
+            return of(fileName, null, null, null, null, extractedText, res, null, null);
         }
 
         public static FileCheckRes of(
@@ -56,7 +59,9 @@ public class AdCheckDto {
                 String fileContentType,
                 Long fileSize,
                 String extractedText,
-                Res res
+                Res res,
+                String extractionMode,
+                ProcessingTimes processingTimes
         ) {
             return FileCheckRes.builder()
                     .fileName(fileName)
@@ -70,8 +75,20 @@ public class AdCheckDto {
                     .violationText(res.getViolationText())
                     .reason(res.getReason())
                     .suggestion(res.getSuggestion())
+                    .extractionMode(extractionMode)
+                    .processingTimes(processingTimes)
                     .build();
         }
+    }
+
+    @Getter
+    @Builder
+    public static class ProcessingTimes {
+        private Long textExtractionMillis;
+        private Long layoutMillis;
+        private Long ocrMillis;
+        private Long aiAnalysisMillis;
+        private Long totalMillis;
     }
 
     public record ReviewRequestCreateReq(

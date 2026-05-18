@@ -84,7 +84,9 @@ custom:
     evaluation-endpoint: ${EVALUATION_ENDPOINT}
     check-endpoint: ${CHECK_ENDPOINT}
   ocr:
-    url: ${OCR_SERVICE_URL:http://localhost:8000/ocr}
+    url: ${OCR_SERVICE_URL:http://localhost:8001/ocr}
+  layout:
+    url: ${LAYOUT_SERVICE_URL:http://localhost:8001/v1/layout/analyze}
 
 management:
   endpoints:
