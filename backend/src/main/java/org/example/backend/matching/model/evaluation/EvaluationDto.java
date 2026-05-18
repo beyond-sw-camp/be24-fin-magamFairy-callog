@@ -28,8 +28,7 @@ public class EvaluationDto {
         private LocalDateTime endedAt;
 
         public static MongoEvaluationRes of(
-                EvaluationDocument document,
-                String companyName
+                EvaluationDocument document
         ) {
             return MongoEvaluationRes.builder()
                     .sessionId(document.getSessionId())
@@ -38,7 +37,7 @@ public class EvaluationDto {
                     .evaluations(document.getEvaluations())
                     .startedAt(document.getStartedAt())
                     .endedAt(document.getEndedAt())
-                    .companyName(companyName)
+                    .companyName(document.getCompanyName())
                     .build();
         }
     }
@@ -185,6 +184,7 @@ public class EvaluationDto {
     public static class StartEvaluation {
         private CampaignDto.Res campaign;
         private MatchingDto.BenefitRes benefit;
+        private String companyName;
 
         @Getter
         @Builder
@@ -305,6 +305,7 @@ public class EvaluationDto {
         private Integer overallScore;
         private List<String> improvementDirections;
         private String uuid;
+        private String companyName;
         private Long campaignIdx;
         private Long benefitIdx;
 

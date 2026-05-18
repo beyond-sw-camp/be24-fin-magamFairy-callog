@@ -24,6 +24,7 @@ public class EvaluationDocument {
 
     private Long campaignIdx;  // 참조 관계는 조인 없이 ID 값만 유지합니다.
     private Long benefitIdx;
+    private String companyName;
 
     private Evaluations evaluations; // 5개 평가 영역을 담는 내장 객체
 

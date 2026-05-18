@@ -4,7 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="00f6fb98-c998-401f-96dd-a1adfcd06bcd" name="Changes" comment="[B][F] 260514 Dev Update #1" />
+    <list default="true" id="00f6fb98-c998-401f-96dd-a1adfcd06bcd" name="Changes" comment="[B][F] 260514 Dev Update #1">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/controller/EvaluationController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/controller/EvaluationController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/EvaluationDocument.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/EvaluationDocument.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/EvaluationDto.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/EvaluationDto.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/service/EvaluationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/service/EvaluationService.java" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -98,7 +104,7 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "Spring Boot.BackendApplication.executor": "Run",
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "main",
+    "git-widget-placeholder": "refactor/evaluation",
     "junie.onboarding.icon.badge.shown": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "D:/projects/callog/be24-fin-magamFairy-callog/backend/src/main/resources",
@@ -358,5 +364,16 @@
     <MESSAGE value="[B][F] 260513 Sub Merge #5" />
     <MESSAGE value="[B][F] 260514 Dev Update #1" />
     <option name="LAST_COMMIT_MESSAGE" value="[B][F] 260514 Dev Update #1" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/service/EvaluationService.java</url>
+          <line>58</line>
+          <option name="timeStamp" value="9" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>

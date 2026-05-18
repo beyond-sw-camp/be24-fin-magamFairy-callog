@@ -6,19 +6,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignDto;
-import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.matching.model.*;
-import org.example.backend.matching.model.evaluation.CustomerEval;
-import org.example.backend.matching.model.evaluation.Evaluation;
 import org.example.backend.matching.model.evaluation.EvaluationDocument;
 import org.example.backend.matching.model.evaluation.EvaluationDto;
 import org.example.backend.matching.repository.*;
-import org.example.backend.organization.model.Organization;
-import org.example.backend.organization.repository.OrganizationRepository;
 import org.example.backend.user.model.AuthUserDetails;
-import org.example.backend.user.model.User;
-import org.example.backend.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -26,7 +19,6 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.GsonBuilderUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
@@ -60,6 +52,7 @@ public class EvaluationService {
         eval = EvaluationDto.StartEvaluation.builder()
                 .campaign(CampaignDto.Res.from(campaign))
                 .benefit(MatchingDto.BenefitRes.toDto(requiredBenefit))
+                .companyName(requiredBenefit.getOrganization().getName())
                 .build();
 
         try {
@@ -106,6 +99,7 @@ public class EvaluationService {
                 .setOnInsert("sessionId", dto.getUuid())
                 .setOnInsert("campaignIdx", dto.getCampaignIdx())
                 .setOnInsert("benefitIdx", dto.getBenefitIdx())
+                .setOnInsert("companyName", dto.getCompanyName())
                 .setOnInsert("startedAt", LocalDateTime.now());
 
         mongoTemplate.updateFirst(query, update, EvaluationDocument.class);
@@ -150,7 +144,7 @@ public class EvaluationService {
 //        evaluation.updateEval(evalEntity, category);
     }
 
-    public List<EvaluationDto.MongoEvaluationRes> result(String publicId, AuthUserDetails user) {
+    public List<EvaluationDto.MongoEvaluationRes> result(String publicId) {
 
         Campaign campaign = campaignRepository.findByPublicId(publicId)
                 .orElseThrow(() -> new EntityNotFoundException("해당 캠페인을 찾을 수 없습니다."));
@@ -164,7 +158,7 @@ public class EvaluationService {
         }
 
         return evalDocs.stream()
-                .map(doc -> EvaluationDto.MongoEvaluationRes.of(doc, user.getCompanyName()))
+                .map(EvaluationDto.MongoEvaluationRes::of)
                 .collect(Collectors.toList());
 
 //        Long campaignIdx = campaignRepository.findByPublicId(publicId)
