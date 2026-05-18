@@ -40,6 +40,8 @@ admin:
 spring:
   application:
     name: callog-dev
+  cache:
+    type: redis   # 명시: Redis 미가용 시 부팅 실패(fail-fast) — silent NoOp fallback 방지
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
     url: ${DB_URL}
@@ -67,12 +69,10 @@ spring:
       uri: ${MONGODB_URL}
     # ─────────────────────────────────────────────────────────────────────
     # Redis (Bitnami Sentinel — callog-redis Service in redis-test namespace)
-    #   - 기본: Sentinel 모드 (master failover 자동 처리, HA)
-    #   - sentinel.master 를 빈 값으로 override 하면 host/port 기반 standalone 모드로 fallback
-    #   - 모든 값 환경변수 override 가능 — k8s ConfigMap 에서 덮어쓰기
+    #   - Sentinel 모드 전용 (master failover 자동 처리, HA)
+    #   - 모든 값은 k8s ConfigMap/Secret 에서 환경변수로 주입 — 누락 시 부팅 실패(fail-fast)
     # ─────────────────────────────────────────────────────────────────────
     redis:
-      # Standalone 대안 (Sentinel master 가 빈 값일 때만 사용됨)
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
       # Master/Replica 의 AUTH password (Bitnami 기본: 'admin')
@@ -90,7 +90,7 @@ spring:
           max-idle: 8
           min-idle: 2
           max-wait: 5000ms
-        shutdown-timeout: 200ms
+        shutdown-timeout: 2000ms   # graceful shutdown 중 in-flight Redis 명령 정리 시간
 
 logging:
   level:

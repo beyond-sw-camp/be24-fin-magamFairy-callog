@@ -61,7 +61,7 @@ public class DashboardAggregateService {
     private static final Set<String> ACTIVE_CAMPAIGN_STATUSES = Set.of("live", "review", "paused");
 
     private final UserRepository userRepository;
-    private final org.example.backend.common.cache.UserAuthCache userAuthCache;
+    private final org.example.backend.common.redis.UserAuthCache userAuthCache;
     private final OrganizationRepository organizationRepository;
     private final CampaignRepository campaignRepository;
     private final CampaignKpiRepository campaignKpiRepository;

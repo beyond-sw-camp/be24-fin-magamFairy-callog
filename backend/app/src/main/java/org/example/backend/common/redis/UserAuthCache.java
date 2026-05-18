@@ -1,4 +1,4 @@
-package org.example.backend.common.cache;
+package org.example.backend.common.redis;
 
 import lombok.RequiredArgsConstructor;
 import org.example.backend.user.model.User;
