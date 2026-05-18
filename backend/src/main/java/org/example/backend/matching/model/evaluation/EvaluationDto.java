@@ -21,7 +21,12 @@ public class EvaluationDto {
         private String sessionId;
         private Long campaignIdx;
         private Long benefitIdx;
-        private String companyName;
+        private String goal;
+        private String title;
+        private String partner;
+        private String assetDescription;
+        private String offer;
+        private String target;
         private EvaluationDocument.Evaluations evaluations;
 
         private LocalDateTime startedAt;
@@ -37,7 +42,7 @@ public class EvaluationDto {
                     .evaluations(document.getEvaluations())
                     .startedAt(document.getStartedAt())
                     .endedAt(document.getEndedAt())
-                    .companyName(document.getCompanyName())
+                    .partner(document.getPartner())
                     .build();
         }
     }
@@ -184,7 +189,7 @@ public class EvaluationDto {
     public static class StartEvaluation {
         private CampaignDto.Res campaign;
         private MatchingDto.BenefitRes benefit;
-        private String companyName;
+        private String partner;
 
         @Getter
         @Builder
@@ -305,7 +310,7 @@ public class EvaluationDto {
         private Integer overallScore;
         private List<String> improvementDirections;
         private String uuid;
-        private String companyName;
+        private String partner;
         private Long campaignIdx;
         private Long benefitIdx;
 

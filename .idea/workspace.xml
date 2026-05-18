@@ -4,12 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="00f6fb98-c998-401f-96dd-a1adfcd06bcd" name="Changes" comment="[B][F] 260514 Dev Update #1">
+    <list default="true" id="00f6fb98-c998-401f-96dd-a1adfcd06bcd" name="Changes" comment="[Refactor][B][EVALUATION] 평가 요청 기관 불러오기">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/controller/EvaluationController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/controller/EvaluationController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/EvaluationDocument.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/EvaluationDocument.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/EvaluationDto.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/model/evaluation/EvaluationDto.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/service/EvaluationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/example/backend/matching/service/EvaluationService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/matchengine/PartnerEvaluation.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/matchengine/PartnerEvaluation.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -333,7 +333,15 @@
       <option name="project" value="LOCAL" />
       <updated>1778716605467</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="[Refactor][B][EVALUATION] 평가 요청 기관 불러오기">
+      <option name="closed" value="true" />
+      <created>1779091244553</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1779091244553</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -363,7 +371,8 @@
     <MESSAGE value="[B][F] 260513 Sub Merge #4" />
     <MESSAGE value="[B][F] 260513 Sub Merge #5" />
     <MESSAGE value="[B][F] 260514 Dev Update #1" />
-    <option name="LAST_COMMIT_MESSAGE" value="[B][F] 260514 Dev Update #1" />
+    <MESSAGE value="[Refactor][B][EVALUATION] 평가 요청 기관 불러오기" />
+    <option name="LAST_COMMIT_MESSAGE" value="[Refactor][B][EVALUATION] 평가 요청 기관 불러오기" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

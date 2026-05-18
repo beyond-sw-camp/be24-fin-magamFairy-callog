@@ -52,7 +52,7 @@ public class EvaluationService {
         eval = EvaluationDto.StartEvaluation.builder()
                 .campaign(CampaignDto.Res.from(campaign))
                 .benefit(MatchingDto.BenefitRes.toDto(requiredBenefit))
-                .companyName(requiredBenefit.getOrganization().getName())
+                .partner(requiredBenefit.getOrganization().getName())
                 .build();
 
         try {
@@ -99,7 +99,7 @@ public class EvaluationService {
                 .setOnInsert("sessionId", dto.getUuid())
                 .setOnInsert("campaignIdx", dto.getCampaignIdx())
                 .setOnInsert("benefitIdx", dto.getBenefitIdx())
-                .setOnInsert("companyName", dto.getCompanyName())
+                .setOnInsert("partner", dto.getPartner())
                 .setOnInsert("startedAt", LocalDateTime.now());
 
         mongoTemplate.updateFirst(query, update, EvaluationDocument.class);
