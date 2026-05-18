@@ -19,8 +19,6 @@ public class EvaluationDto {
     @Builder
     public static class MongoEvaluationRes {
         private String sessionId;
-        private Long campaignIdx;
-        private Long benefitIdx;
         private String goal;
         private String title;
         private String partner;
@@ -37,12 +35,15 @@ public class EvaluationDto {
         ) {
             return MongoEvaluationRes.builder()
                     .sessionId(document.getSessionId())
-                    .campaignIdx(document.getCampaignIdx())
-                    .benefitIdx(document.getBenefitIdx())
                     .evaluations(document.getEvaluations())
                     .startedAt(document.getStartedAt())
                     .endedAt(document.getEndedAt())
                     .partner(document.getPartner())
+                    .title(document.getTitle())
+                    .goal(document.getGoal())
+                    .assetDescription(document.getAssetDescription())
+                    .offer(document.getOffer())
+                    .target(document.getTarget())
                     .build();
         }
     }
@@ -189,7 +190,6 @@ public class EvaluationDto {
     public static class StartEvaluation {
         private CampaignDto.Res campaign;
         private MatchingDto.BenefitRes benefit;
-        private String partner;
 
         @Getter
         @Builder
@@ -310,7 +310,6 @@ public class EvaluationDto {
         private Integer overallScore;
         private List<String> improvementDirections;
         private String uuid;
-        private String partner;
         private Long campaignIdx;
         private Long benefitIdx;
 

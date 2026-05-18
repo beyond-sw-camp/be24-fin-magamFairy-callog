@@ -52,7 +52,6 @@ public class EvaluationService {
         eval = EvaluationDto.StartEvaluation.builder()
                 .campaign(CampaignDto.Res.from(campaign))
                 .benefit(MatchingDto.BenefitRes.toDto(requiredBenefit))
-                .partner(requiredBenefit.getOrganization().getName())
                 .build();
 
         try {
@@ -80,6 +79,10 @@ public class EvaluationService {
 
     @Transactional
     public void collect(EvaluationDto.CollectDto dto) {
+        PartnerBenefits benefits = benefitRepository.findById(dto.getBenefitIdx())
+                .orElseThrow(EntityNotFoundException::new);
+        Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
+                .orElseThrow(EntityNotFoundException::new);
 
         String targetField = "evaluations." + dto.getCategory().toLowerCase();
 
@@ -99,7 +102,12 @@ public class EvaluationService {
                 .setOnInsert("sessionId", dto.getUuid())
                 .setOnInsert("campaignIdx", dto.getCampaignIdx())
                 .setOnInsert("benefitIdx", dto.getBenefitIdx())
-                .setOnInsert("partner", dto.getPartner())
+                .setOnInsert("goal",campaign.getGoals())
+                .setOnInsert("assetDescription",campaign.getAssetDescription())
+                .setOnInsert("title",benefits.getName())
+                .setOnInsert("target",benefits.getTargetAudience())
+                .setOnInsert("offer",benefits.getDescription())
+                .setOnInsert("partner", benefits.getOrganization().getName())
                 .setOnInsert("startedAt", LocalDateTime.now());
 
         mongoTemplate.updateFirst(query, update, EvaluationDocument.class);
@@ -154,7 +162,7 @@ public class EvaluationService {
         List<EvaluationDocument> evalDocs = mongoTemplate.find(query, EvaluationDocument.class);
 
         if (evalDocs.isEmpty()) {
-            throw new EntityNotFoundException("해당 캠페인에 대한 평가 정보가 없습니다. CampaignID: " + campaignIdx);
+            throw new EntityNotFoundException("해당 캠페인에 대한 평가 정보가 없습니다. CampaignIdx: " + campaignIdx);
         }
 
         return evalDocs.stream()
