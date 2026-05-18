@@ -1,0 +1,93 @@
+{
+  "document": {
+    "document_id": "sample-document-001",
+    "layout_job_id": "layout-job-id",
+    "layout_status": "completed",
+    "layout_result_url": "http://LAYOUT_SERVER:8001/assets/layout-job-id/layout_result.json"
+  },
+  "ocr": {
+    "document_id": "sample-document-001",
+    "layout_job_id": "layout-job-id",
+    "task_type": "ocr_batch",
+    "targets": [
+      {
+        "target_id": "ocr-0001",
+        "block_id": "p1-ocr-text-canvas",
+        "page": 1,
+        "reading_order": 2,
+        "priority": 100,
+        "route": "ocr_server",
+        "type": "PageTextCanvas",
+        "source": "page_text_canvas",
+        "bbox": [0.0, 0.0, 1653.0, 2339.0],
+        "bbox_normalized": [0.0, 0.0, 1.0, 1.0],
+        "input": {
+          "kind": "page_text_canvas",
+          "image_url": "http://LAYOUT_SERVER:8001/assets/layout-job-id/clean_crops/page-001/page-001-text-canvas.png",
+          "image_path": "layout-job-id/clean_crops/page-001/page-001-text-canvas.png",
+          "image_size": [1233, 1600],
+          "coordinate_space": "ocr_input_image",
+          "scale_to_canvas": 0.801603,
+          "canvas_size": [1538, 1996],
+          "original_canvas_path": "layout-job-id/clean_crops/page-001/page-001-text-canvas-original.png",
+          "original_canvas_url": "http://LAYOUT_SERVER:8001/assets/layout-job-id/clean_crops/page-001/page-001-text-canvas-original.png",
+          "original_page_size": [1653, 2339],
+          "page_image_url": "http://LAYOUT_SERVER:8001/assets/layout-job-id/pages/page-001.png"
+        },
+        "mapping": {
+          "ocr_box_to_canvas": "Divide OCR output coordinates by scale_to_canvas when scale_to_canvas < 1.",
+          "canvas_to_original_page": "Find the canvas_region_map item containing the OCR box center, then offset from canvas_bbox to original_bbox.",
+          "canvas_region_map": [
+            {
+              "region_id": "p1-r1",
+              "block_id": "p1-b2",
+              "source_block_id": "p1-b2",
+              "source": "visual_text",
+              "reading_order": 2,
+              "original_bbox": [64, 41, 271, 77],
+              "canvas_bbox": [30, 28, 237, 64]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "image": {
+    "document_id": "sample-document-001",
+    "layout_job_id": "layout-job-id",
+    "task_type": "image_analysis_batch",
+    "targets": [
+      {
+        "target_id": "image-0001",
+        "block_id": "p1-b10",
+        "page": 1,
+        "route": "image_analysis_server",
+        "type": "Figure",
+        "input": {
+          "kind": "figure_crop",
+          "image_url": "http://LAYOUT_SERVER:8001/assets/layout-job-id/clean_crops/page-001/region-003-image_region-image_analysis_server.png",
+          "coordinate_space": "original_page_image"
+        }
+      }
+    ]
+  },
+  "table": {
+    "document_id": "sample-document-001",
+    "layout_job_id": "layout-job-id",
+    "task_type": "table_extraction_batch",
+    "targets": [
+      {
+        "target_id": "table-0001",
+        "block_id": "p1-b15",
+        "page": 1,
+        "route": "table_extraction_server",
+        "type": "Table",
+        "input": {
+          "kind": "table_crop",
+          "image_url": "http://LAYOUT_SERVER:8001/assets/layout-job-id/clean_crops/page-001/region-006-table_region-table_extraction_server.png",
+          "coordinate_space": "original_page_image"
+        }
+      }
+    ]
+  }
+}
