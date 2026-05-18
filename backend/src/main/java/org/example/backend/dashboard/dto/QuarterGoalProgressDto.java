@@ -5,8 +5,7 @@ import java.util.List;
 
 /**
  * monthlyActuals / monthlyTargets: 분기 내 3개월 분배.
- * KpiMonthlySnapshot 테이블이 없으므로 actualSum/targetValue를 균등 분배 stub.
- * Phase 2에서 월별 스냅샷 테이블 도입 시 정확한 분배로 교체.
+ * KpiMonthlySnapshot 이 있는 달은 정확한 값, 현재 진행 월은 누적값으로 표시, 과거 미수집 달은 null.
  */
 public record QuarterGoalProgressDto(
         Long orgKpiId,
@@ -14,7 +13,7 @@ public record QuarterGoalProgressDto(
         String unit,
         BigDecimal targetValue,
         BigDecimal committedSum,
-        BigDecimal actualSum,
+        BigDecimal actualValue,           // 분기 누적 실적값 (frontend Z1/P2 KPI 카드의 액수 표시용)
         Integer achievementPercent,
         String periodCode,
         Long ownerOrgId,

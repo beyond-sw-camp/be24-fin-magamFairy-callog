@@ -96,12 +96,6 @@ function parseNumeric(v, fallback = 0) {
   const n = Number(cleaned)
   return Number.isNaN(n) ? fallback : n
 }
-function formatKpiValue(v) {
-  if (v === null || v === undefined || v === '') return '0'
-  const n = Number(v)
-  if (Number.isNaN(n)) return String(v)
-  return n.toLocaleString()
-}
 
 /* ───── 사용자·권한 ───── */
 const userName = computed(() => authStore.user?.name ?? authStore.user?.id ?? '운영자')
@@ -120,7 +114,7 @@ const roleLabel = computed(() => ({ GM: '총괄 매니저', MGR: '매니저', US
 const orgScope = computed(() => {
   const fromApi = dashboardStore.summary?.scope
   if (fromApi) return fromApi
-  // mock fallback — 사용자 organization.type 기반
+  // summary 미응답 시 사용자 organization.type 으로 폴백 (실제 인증 사용자 데이터)
   const t = String(authStore.user?.organization?.type ?? '').toUpperCase()
   if (t === 'HQ' || t === 'AFFILIATE' || t === 'EXTERNAL_PARTNER') return t
   return 'HQ'
@@ -163,9 +157,10 @@ const ROLE_KPI = computed(() => {
       const diff = curr - s.companyAveragePct
       delta = `전사 평균 ${s.companyAveragePct}% (${diff >= 0 ? '+' : ''}${diff}%p)`
       deltaPositive = diff >= 0
-    } else if (s?.trend != null) {
+    } else if (s?.trend != null && s.trend !== 0) {
+      // Backend 가 실 비교 데이터 있을 때만 숫자 반환. null/0 이면 "지난주" 표시 생략.
       delta = `${s.trend >= 0 ? '+' : ''}${s.trend}%p 지난주`
-      deltaPositive = (s?.trend ?? 0) >= 0
+      deltaPositive = s.trend >= 0
     }
     return {
       key: 'gm', label: '분기 달성률',
@@ -441,7 +436,7 @@ const compareLineDots = computed(() => {
   return dots
 })
 
-/* ═══════════ Row 3-2 — 자산 카테고리 도넛 (store 우선, mock fallback) ═══════════ */
+/* ═══════════ Row 3-2 — 자산 카테고리 도넛 (backend assetCategories 기반) ═══════════ */
 const ASSET_CAT_LABELS = {
   customer: '고객 자산',
   channel:  '채널 자산',
@@ -473,7 +468,7 @@ const assetSegments = computed(() => {
   })
 })
 
-/* ═══════════ Row 4-1 — 캠페인 진행 table (store 우선, mock fallback) ═══════════ */
+/* ═══════════ Row 4-1 — 캠페인 진행 table (backend myCampaigns 기반) ═══════════ */
 const STATUS_MAP = {
   live:      { label: 'LIVE',   cls: 'st--live' },
   running:   { label: 'LIVE',   cls: 'st--live' },
@@ -825,8 +820,9 @@ function ptaskFromCampaign(c, i) {
   const rate = typeof teamTaskStore.completionRateByCampaignId?.[String(id)] === 'number'
     ? teamTaskStore.completionRateByCampaignId[String(id)]
     : null
-  const total = c.totalTaskCount ?? 12
-  const done = rate != null ? Math.round((rate / 100) * total) : Math.round(total * 0.6)
+  // Backend 가 CampaignDto.Res.totalTaskCount 채워줌. 캠페인에 task 가 없으면 null/0 — 진행률 표시 생략.
+  const total = Number(c.totalTaskCount) || 0
+  const done = total > 0 && rate != null ? Math.round((rate / 100) * total) : 0
   const name = c.name ?? '캠페인'
   const half = Math.ceil(name.length / 2)
   const lines = name.length > 7 ? [name.slice(0, half), name.slice(half)] : [name]
@@ -835,7 +831,8 @@ function ptaskFromCampaign(c, i) {
     tone: TONES[i % TONES.length],
     lines,
     pill: 'HIGH PRIORITY',
-    progress: `${done} / ${total}`,
+    // task 없으면 "-" 로 표시 (가짜 "X / 12" 회피)
+    progress: total > 0 ? `${done} / ${total}` : '-',
     avatars: avatarsForCampaign(c),
   }
 }
@@ -1131,11 +1128,8 @@ function kpiCardsFromGoals(goals, titlePrefix) {
     const valueLabel = r.unit === '%'
       ? `${r.avg}%`
       : fmtCompactByUnit(r.actual, r.unit)
-    // 스파크라인 — 월별 추이가 모두 0이면 점진적 0~avg fallback
-    let spark = (r.monthly ?? []).filter((v) => Number.isFinite(v))
-    if (spark.length === 0 || spark.every((v) => v === 0)) {
-      spark = [Math.round(r.avg * 0.6), Math.round(r.avg * 0.85), r.avg]
-    }
+    // 스파크라인 — 실제 월별 actual 만 표시. 데이터 없으면 빈 차트 (가짜 우상향 생성 금지)
+    const spark = (r.monthly ?? []).filter((v) => Number.isFinite(v))
     return {
       id: `kpi-${r.key}`,
       tone: TONES[i % TONES.length],
@@ -1386,13 +1380,56 @@ const ZONE4_REVENUE_SERIES = computed(() => {
   return { labels, data, target }
 })
 
+/**
+ * Z4/P1 — 캠페인 누적 추이.
+ * Backend 의 myCampaigns[].createdAt 을 기준으로 분기 내 buckets (월간 3 / 주간 12) 마다
+ * 그 시점까지의 누적 캠페인 수를 계산. 가짜 균등 분배 없음.
+ *
+ * - 분기 코드(예: 2026-Q2) → 분기 시작/끝일 산출
+ * - 각 bucket 의 종료 시점에 created_at <= 종료 인 캠페인 수
+ * - target: 누적 캠페인 * 1.15 (시각화 비교용 baseline)
+ */
 const ZONE4_CAMPAIGN_SERIES = computed(() => {
   const list = dashboardStore.myCampaigns ?? []
-  if (list.length === 0) return { labels: [], data: [] }
   const isWeek = zone4Granularity.value === 'week'
   const labels = isWeek ? weekLabels() : quarterMonthLabelsLocal(currentPeriod.value)
-  const data = labels.map((_, i) => Math.max(0, Math.round(list.length * ((i + 1) / labels.length))))
-  return { labels, data, target: data.map((v) => Math.round(v * 1.15)) }
+  if (list.length === 0) return { labels, data: [], target: [] }
+
+  // 분기 범위 계산 (currentPeriod = "YYYY-QN")
+  const m = String(currentPeriod.value || '').match(/^(\d{4})-Q([1-4])$/)
+  if (!m) return { labels, data: [], target: [] }
+  const year = Number(m[1])
+  const quarter = Number(m[2])
+  const startMonth = (quarter - 1) * 3 // 0-based month for Date()
+  const quarterStart = new Date(year, startMonth, 1)
+  const quarterEnd = new Date(year, startMonth + 3, 0, 23, 59, 59, 999) // 분기 마지막 날 23:59
+
+  // 각 bucket 의 종료 시점 (월간: 각 월의 마지막 날 / 주간: 분기 시작 + 7일씩)
+  const bucketEnds = labels.map((_, i) => {
+    if (isWeek) {
+      const end = new Date(quarterStart)
+      end.setDate(end.getDate() + 7 * (i + 1) - 1)
+      end.setHours(23, 59, 59, 999)
+      return Math.min(end.getTime(), quarterEnd.getTime())
+    }
+    return new Date(year, startMonth + i + 1, 0, 23, 59, 59, 999).getTime()
+  })
+
+  // 캠페인 createdAt 추출 (Date 또는 ISO 문자열 모두 처리)
+  const createdAts = list
+    .map((c) => {
+      const v = c.createdAt
+      if (!v) return null
+      const t = new Date(v).getTime()
+      return Number.isFinite(t) ? t : null
+    })
+    .filter((t) => t != null)
+    .sort((a, b) => a - b)
+
+  // 각 bucket 종료까지 created_at <= 종료 인 캠페인 누적 수
+  const data = bucketEnds.map((endMs) => createdAts.filter((t) => t <= endMs).length)
+  const target = data.map((v) => Math.round(v * 1.15))
+  return { labels, data, target }
 })
 
 const ZONE4_SCOPE_SERIES = computed(() => {
@@ -1400,7 +1437,8 @@ const ZONE4_SCOPE_SERIES = computed(() => {
   const goals = dashboardStore.quarterGoals ?? []
   const labels = isWeek ? weekLabels() : quarterMonthLabelsLocal(currentPeriod.value)
   if (goals.length === 0) {
-    return { labels, data: labels.map((_, i) => 20 + i * 8), target: labels.map((_, i) => 30 + i * 6) }
+    // 데이터 없으면 빈 series 반환 → 템플릿이 empty state ("데이터가 없습니다") 표시
+    return { labels, data: [], target: [] }
   }
   const data = labels.map((_, i) => {
     const idx = isWeek ? Math.min(2, Math.floor(i / 4)) : i

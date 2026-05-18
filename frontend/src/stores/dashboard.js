@@ -7,10 +7,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const summary = ref(null)
   const quarterGoals = ref([])
   const partnerProgress = ref([])
-  const reviewQueue = ref([])
-  const blockers = ref([])
   const assetCategories = ref({})       // { "EVENT": 42, ... }
-  const kpiCategories = ref({})          // { "IMPRESSION": 87, ... }
   const myCampaigns = ref([])           // [{ idx, name, status, color, ... }]
   const loading = ref(false)
   const errorMessage = ref(null)
@@ -31,10 +28,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     summary: 'loading',
     quarterGoals: 'loading',
     partnerProgress: 'loading',
-    reviewQueue: 'loading',
-    blockers: 'loading',
     assetCategories: 'loading',
-    kpiCategories: 'loading',
     myCampaigns: 'loading',
   })
 
@@ -56,10 +50,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       ['summary', () => dashApi.GetDashboardSummary(period)],
       ['quarterGoals', () => dashApi.GetQuarterGoals(period)],
       ['partnerProgress', () => dashApi.GetPartnerProgress(period)],
-      ['reviewQueue', () => dashApi.GetReviewQueue()],
-      ['blockers', () => dashApi.GetBlockers()],
       ['assetCategories', () => dashApi.GetAssetCategories(period)],
-      ['kpiCategories', () => dashApi.GetKpiCategories(period)],
       ['myCampaigns', () => ListCampaign({ scope: 'mine' })],
     ]
 
@@ -72,10 +63,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         if (key === 'summary') summary.value = v
         if (key === 'quarterGoals') quarterGoals.value = normalizeArray(v)
         if (key === 'partnerProgress') partnerProgress.value = normalizeArray(v)
-        if (key === 'reviewQueue') reviewQueue.value = normalizeArray(v)
-        if (key === 'blockers') blockers.value = normalizeArray(v)
         if (key === 'assetCategories') assetCategories.value = v ?? {}
-        if (key === 'kpiCategories') kpiCategories.value = v ?? {}
         if (key === 'myCampaigns') myCampaigns.value = normalizeArray(v)
         status.value[key] = isEmptyResult(key, v) ? 'empty' : 'success'
       } else {
@@ -123,10 +111,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     summary,
     quarterGoals,
     partnerProgress,
-    reviewQueue,
-    blockers,
     assetCategories,
-    kpiCategories,
     myCampaigns,
     loading,
     errorMessage,

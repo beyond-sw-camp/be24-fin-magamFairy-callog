@@ -158,10 +158,14 @@ public class DashboardAggregateService {
                     : percents.stream().mapToInt(Integer::intValue).sum() / percents.size();
         }
 
+        // trend (지난주 대비 %p): 실 데이터 (지난주 OrgKpi snapshot) 없으면 null.
+        // frontend 는 null 일 때 "지난주" 표시 안 함.
+        Integer trend = null;
+
         return new DashboardSummaryDto(
                 active, avg, avg,
                 pending, partnerCount, newPartnerCount, rfpCount,
-                0, companyAvgPct, miniStats, scope.label
+                trend, companyAvgPct, miniStats, scope.label
         );
     }
 
@@ -223,7 +227,7 @@ public class DashboardAggregateService {
                 k.getUnit(),
                 k.getTargetValue(),
                 committed,
-                actual,
+                actual,                     // ← record 필드명이 actualValue 로 변경됨 (frontend Z1/P2 와 일치)
                 pct,
                 k.getPeriodCode(),
                 k.getOwner() != null ? k.getOwner().getIdx() : null,
@@ -285,32 +289,42 @@ public class DashboardAggregateService {
         return partners.values().stream()
                 .map(org -> {
                     Integer avgPct = averageAchievement(kpisByOrg.getOrDefault(org.getIdx(), List.of()));
+                    List<Integer> recent7d = recent7dFromSnapshots(org.getIdx(), sevenDaysAgo);
+                    Integer delta = computeDeltaFromRecent(recent7d);
                     return new PartnerProgressDto(
                             org.getIdx(),
                             org.getName(),
                             totalByOrg.getOrDefault(org.getIdx(), 0L),
                             activeByOrg.getOrDefault(org.getIdx(), 0L),
                             avgPct,
-                            recent7dFromSnapshots(org.getIdx(), sevenDaysAgo, avgPct)
+                            delta,
+                            recent7d
                     );
                 })
                 .toList();
     }
 
-    /** 최근 7일 daily snapshot 조회. 부족하면 평균 점수 기반 stub로 채움. */
-    private List<Integer> recent7dFromSnapshots(Long orgId, LocalDate from, Integer fallbackAvg) {
+    /**
+     * 최근 7일 daily snapshot 조회. 7개 미만이면 빈 배열 반환 (가짜 stub 생성 금지).
+     * Frontend Z2 sparkline 은 빈 배열 시 표시 생략.
+     */
+    private List<Integer> recent7dFromSnapshots(Long orgId, LocalDate from) {
         List<KpiDailySnapshot> snaps = dailySnapshotRepository
                 .findAllByOrganization_IdxAndDateGreaterThanEqualOrderByDateAsc(orgId, from);
-        if (snaps.size() >= 7) {
-            return snaps.stream()
-                    .skip(Math.max(0, snaps.size() - 7))
-                    .map(s -> s.getAvgKpiPercent() == null ? 0 : s.getAvgKpiPercent())
-                    .toList();
-        }
-        // 충분한 daily snapshot 누적 전: 기존 stub 유지
-        if (fallbackAvg == null) return List.of();
-        int base = Math.max(0, fallbackAvg - 4);
-        return List.of(base, base + 1, base + 2, base + 2, base + 3, base + 4, fallbackAvg);
+        if (snaps.size() < 7) return List.of();
+        return snaps.stream()
+                .skip(Math.max(0, snaps.size() - 7))
+                .map(s -> s.getAvgKpiPercent() == null ? 0 : s.getAvgKpiPercent())
+                .toList();
+    }
+
+    /**
+     * recent7d 의 첫 값 → 마지막 값 차이 (%p). 데이터 부족 시 null.
+     * Frontend Z2 "Δ +N" 배지 표시용. null 이면 배지 안 그림 ("안정" 으로 폴백되지 않게 됨).
+     */
+    private static Integer computeDeltaFromRecent(List<Integer> recent7d) {
+        if (recent7d == null || recent7d.size() < 2) return null;
+        return recent7d.get(recent7d.size() - 1) - recent7d.get(0);
     }
 
     // ── 4. Review Queue ─────────────────────────────────────
@@ -398,6 +412,8 @@ public class DashboardAggregateService {
         Set<Long> visibleCampaignIds = filterCampaigns(scope).stream()
                 .map(Campaign::getIdx).collect(Collectors.toSet());
 
+        // Frontend Z3/P1 도넛 라벨 키 (customer/channel/space/voucher/content) 와 매칭되도록
+        // DB 의 자유 입력 category 를 lowercase 로 정규화. 빈/null 은 "unknown" 으로.
         return assetRepository.findAll().stream()
                 .filter(a -> {
                     if (scope.allCampaigns) return true;
@@ -407,7 +423,11 @@ public class DashboardAggregateService {
                             || (scope.ownerOrgId != null && Objects.equals(scope.ownerOrgId, org));
                 })
                 .collect(Collectors.groupingBy(
-                        a -> a.getCategory() == null ? "UNKNOWN" : a.getCategory(),
+                        a -> {
+                            String raw = a.getCategory();
+                            if (raw == null || raw.isBlank()) return "unknown";
+                            return raw.trim().toLowerCase();
+                        },
                         Collectors.counting()));
     }
 

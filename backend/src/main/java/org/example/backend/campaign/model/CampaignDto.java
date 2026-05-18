@@ -63,13 +63,19 @@ public class CampaignDto {
             Date createdAt,
             Date updatedAt,
             CampaignMemberRole myCampaignRole,
-            boolean organizationIsPm
+            boolean organizationIsPm,
+            Integer totalTaskCount        // Dashboard Z1/P1 진행률 카드의 분모. 조회 컨텍스트에서 채워지면 값, 아니면 null.
     ) {
         public static Res from(Campaign entity) {
-            return from(entity, null, false);
+            return from(entity, null, false, null);
         }
 
         public static Res from(Campaign entity, CampaignMemberRole myCampaignRole, boolean organizationIsPm) {
+            return from(entity, myCampaignRole, organizationIsPm, null);
+        }
+
+        public static Res from(Campaign entity, CampaignMemberRole myCampaignRole, boolean organizationIsPm,
+                               Integer totalTaskCount) {
             return Res.builder()
                     .id(entity.getPublicId() != null ? entity.getPublicId() : String.valueOf(entity.getIdx()))
                     .idx(entity.getIdx())
@@ -95,6 +101,7 @@ public class CampaignDto {
                     .updatedAt(entity.getUpdatedAt())
                     .myCampaignRole(myCampaignRole)
                     .organizationIsPm(organizationIsPm)
+                    .totalTaskCount(totalTaskCount)
                     .build();
         }
     }

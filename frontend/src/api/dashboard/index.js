@@ -37,30 +37,14 @@ export const GetPartnerProgress = async (period) => {
   return unwrapResponse(await api.get('/dashboard/partner-progress', { params }))
 }
 
-export const GetReviewQueue = async () => {
-  return unwrapResponse(await api.get('/dashboard/review-queue'))
-}
-
-export const GetBlockers = async () => {
-  return unwrapResponse(await api.get('/dashboard/blockers'))
-}
-
 export const GetAssetCategories = async (period) => {
   const params = period ? { period } : {}
   return unwrapResponse(await api.get('/dashboard/asset-categories', { params }))
-}
-
-export const GetKpiCategories = async (period) => {
-  const params = period ? { period } : {}
-  return unwrapResponse(await api.get('/dashboard/kpi-categories', { params }))
 }
 
 export default {
   GetDashboardSummary,
   GetQuarterGoals,
   GetPartnerProgress,
-  GetReviewQueue,
-  GetBlockers,
   GetAssetCategories,
-  GetKpiCategories,
 }
