@@ -2,14 +2,21 @@ import api from '/plugins/interceptor.js'
 
 const AD_CHECK_TIMEOUT_MS = 180000
 
+function createAdCheckError(message, data) {
+  const error = new Error(message)
+  error.data = data
+  return error
+}
+
 function unwrapResponse(response) {
   const payload = response?.data
   if (!payload) throw new Error('응답이 비어있습니다.')
   if (!payload.isSuccess && !payload.success) {
-    throw new Error(
+    throw createAdCheckError(
       typeof payload?.data === 'string'
         ? payload.data
-        : payload?.message ?? 'AI 검수 요청이 실패했습니다.',
+        : payload?.data?.errorMessage ?? payload?.message ?? 'AI 검수 요청에 실패했습니다.',
+      payload?.data,
     )
   }
   return payload.data
@@ -17,19 +24,21 @@ function unwrapResponse(response) {
 
 function toAdCheckError(error) {
   const payload = error?.response?.data
-  return new Error(
+  return createAdCheckError(
     (typeof payload?.data === 'string' ? payload.data : null) ??
+    payload?.data?.errorMessage ??
     payload?.message ??
     payload?.error ??
     error?.message ??
-    'AI 검수 요청이 실패했습니다.',
+    'AI 검수 요청에 실패했습니다.',
+    payload?.data ?? error?.data,
   )
 }
 
 export const CheckAdCopy = async (copy) => {
   try {
     return unwrapResponse(
-      await api.post('/ad/check', { copy }, { timeout: AD_CHECK_TIMEOUT_MS })
+      await api.post('/ad/check', { copy }, { timeout: AD_CHECK_TIMEOUT_MS }),
     )
   } catch (error) {
     throw toAdCheckError(error)
@@ -44,7 +53,7 @@ export const CheckAdFile = async (file) => {
       await api.post('/ad/check/file', formData, {
         timeout: AD_CHECK_TIMEOUT_MS,
         headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      }),
     )
   } catch (error) {
     throw toAdCheckError(error)

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Document Layout Upload Example</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 32px;
+        color: #172033;
+      }
+
+      label,
+      input,
+      button {
+        display: block;
+        margin: 10px 0;
+      }
+
+      input[type="text"] {
+        width: min(560px, 100%);
+        padding: 8px;
+      }
+
+      button {
+        padding: 9px 14px;
+      }
+
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background: #f5f7fb;
+        padding: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Document Layout Upload Example</h1>
+
+    <label>
+      Layout service URL
+      <input id="layoutUrl" type="text" value="http://localhost:8001" />
+    </label>
+
+    <label>
+      Document ID
+      <input id="documentId" type="text" value="sample-document-001" />
+    </label>
+
+    <label>
+      PDF or image
+      <input id="file" type="file" accept=".pdf,image/*" />
+    </label>
+
+    <button id="submit">Analyze</button>
+    <pre id="output">대기 중</pre>
+
+    <script>
+      const output = document.querySelector("#output");
+
+      document.querySelector("#submit").addEventListener("click", async () => {
+        const layoutUrl = document.querySelector("#layoutUrl").value.replace(/\/$/, "");
+        const documentId = document.querySelector("#documentId").value;
+        const file = document.querySelector("#file").files[0];
+
+        if (!file) {
+          output.textContent = "파일을 선택하세요.";
+          return;
+        }
+
+        const form = new FormData();
+        form.append("document_id", documentId);
+        form.append("file", file);
+
+        output.textContent = "분석 중...";
+        const response = await fetch(`${layoutUrl}/v1/layout/analyze`, {
+          method: "POST",
+          body: form,
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          output.textContent = JSON.stringify(result, null, 2);
+          return;
+        }
+
+        output.textContent = JSON.stringify(
+          {
+            job_id: result.job_id,
+            document_id: result.document_id,
+            pages: result.pages?.length ?? 0,
+            ocr_targets: result.ocr_targets?.length ?? 0,
+            image_targets: result.image_targets?.length ?? 0,
+            table_targets: result.table_targets?.length ?? 0,
+            first_ocr_crop_url: result.ocr_targets?.[0]?.crop_url,
+            layout_result_url: result.layout_result_url,
+          },
+          null,
+          2
+        );
+      });
+    </script>
+  </body>
+</html>

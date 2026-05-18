@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+storage/
+source/
+.pytest_cache/
+layout-parser-main.zip

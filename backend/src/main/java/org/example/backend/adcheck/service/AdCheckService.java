@@ -1,7 +1,7 @@
 package org.example.backend.adcheck.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.adcheck.model.AdCheckDto;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -71,10 +71,18 @@ public class AdCheckService {
 
         } catch (ResourceAccessException e) {
             log.error("n8n ad check connection/read failed. url={}", adCheckUrl, e);
-            throw new RuntimeException("n8n 응답 대기 시간이 초과되었거나 서버에 연결할 수 없습니다. n8n 워크플로우가 활성화되어 있고 AI 처리 후 Respond to Webhook까지 도달하는지 확인해주세요.", e);
+            throw new RuntimeException(
+                    "n8n 응답 대기 시간이 초과되었거나 서버에 연결할 수 없습니다. "
+                            + "n8n 워크플로우가 활성화되어 있고 AI 처리 후 Respond to Webhook까지 도달하는지 확인해주세요.",
+                    e
+            );
         } catch (RestClientResponseException e) {
-            log.error("n8n ad check returned error status. url={}, status={}, body={}", adCheckUrl, e.getStatusCode(), e.getResponseBodyAsString(), e);
-            throw new RuntimeException("n8n 호출이 실패했습니다. HTTP " + e.getStatusCode() + " 응답: " + e.getResponseBodyAsString(), e);
+            log.error("n8n ad check returned error status. url={}, status={}, body={}",
+                    adCheckUrl, e.getStatusCode(), e.getResponseBodyAsString(), e);
+            throw new RuntimeException(
+                    "n8n 호출에 실패했습니다. HTTP " + e.getStatusCode() + " 응답: " + e.getResponseBodyAsString(),
+                    e
+            );
         } catch (RestClientException e) {
             log.error("n8n ad check RestClient failed. url={}", adCheckUrl, e);
             throw new RuntimeException("AI 검수 서버와 연결할 수 없습니다.", e);
@@ -82,21 +90,74 @@ public class AdCheckService {
     }
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file) {
+        long totalStartedAt = System.nanoTime();
         try {
             AdCheckFileStorageService.StoredFile storedFile = adCheckFileStorageService.upload(file);
-            String text = textExtractorService.extract(file);
-            AdCheckDto.Res result = check(text);
-            return AdCheckDto.FileCheckRes.of(
-                    file.getOriginalFilename(),
-                    storedFile.getObjectKey(),
-                    storedFile.getViewUrl(),
-                    storedFile.getContentType(),
-                    storedFile.getFileSize(),
-                    text,
-                    result
-            );
+            TextExtractorService.ExtractResult extraction = textExtractorService.extractWithTiming(file);
+            long aiStartedAt = System.nanoTime();
+
+            try {
+                AdCheckDto.Res result = check(extraction.text());
+                long aiAnalysisMillis = elapsedMillis(aiStartedAt);
+                return AdCheckDto.FileCheckRes.of(
+                        file.getOriginalFilename(),
+                        storedFile.getObjectKey(),
+                        storedFile.getViewUrl(),
+                        storedFile.getContentType(),
+                        storedFile.getFileSize(),
+                        extraction.text(),
+                        result,
+                        extraction.extractionMode(),
+                        buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt)
+                );
+            } catch (RuntimeException e) {
+                long aiAnalysisMillis = elapsedMillis(aiStartedAt);
+                AdCheckDto.FileCheckRes partialResponse = AdCheckDto.FileCheckRes.builder()
+                        .fileName(file.getOriginalFilename())
+                        .fileObjectKey(storedFile.getObjectKey())
+                        .fileUrl(storedFile.getViewUrl())
+                        .fileContentType(storedFile.getContentType())
+                        .fileSize(storedFile.getFileSize())
+                        .extractedText(extraction.text())
+                        .extractionMode(extraction.extractionMode())
+                        .processingTimes(buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt))
+                        .errorMessage(e.getMessage())
+                        .build();
+                throw new FileCheckException(e.getMessage(), partialResponse, e);
+            }
         } catch (IOException e) {
             throw new RuntimeException("파일 처리 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    private AdCheckDto.ProcessingTimes buildProcessingTimes(
+            TextExtractorService.ExtractResult extraction,
+            long aiAnalysisMillis,
+            long totalStartedAt
+    ) {
+        return AdCheckDto.ProcessingTimes.builder()
+                .textExtractionMillis(extraction.textExtractionMillis())
+                .layoutMillis(extraction.layoutMillis())
+                .ocrMillis(extraction.ocrMillis())
+                .aiAnalysisMillis(aiAnalysisMillis)
+                .totalMillis(elapsedMillis(totalStartedAt))
+                .build();
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return Math.max(0L, (System.nanoTime() - startedAt) / 1_000_000L);
+    }
+
+    public static class FileCheckException extends RuntimeException {
+        private final AdCheckDto.FileCheckRes response;
+
+        public FileCheckException(String message, AdCheckDto.FileCheckRes response, Throwable cause) {
+            super(message, cause);
+            this.response = response;
+        }
+
+        public AdCheckDto.FileCheckRes getResponse() {
+            return response;
         }
     }
 

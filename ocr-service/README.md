@@ -46,8 +46,9 @@ The service runs multiple local OCR candidates and chooses the best readable res
 
 - EXIF rotation correction
 - original RGB with upscale when the image is small
-- soft grayscale/autocontrast fallback
-- stronger high-contrast fallback
+- auto mode that returns after the first candidate only when the result is sufficiently confident
+- soft grayscale/autocontrast fallback for ambiguous results
+- stronger high-contrast fallback for ambiguous results
 - bounding-box based line grouping and paragraph spacing
 
 Angle classification is off by default because it can damage normal horizontal Korean text.
@@ -63,6 +64,14 @@ $env:OCR_MIN_SCORE = "0.42"
 $env:OCR_TEMP_ROOT = "C:\temp\callog-ocr"
 .\run-local.ps1
 ```
+
+`OCR_CANDIDATE_STRATEGY` controls the speed/accuracy balance:
+
+- `auto` runs the first OCR candidate and skips fallback candidates only when confidence is high. This is the default.
+- `all` always runs all candidates and preserves the previous most conservative behavior.
+- `first` only runs the first RGB candidate for fastest comparison testing.
+
+For accuracy-first operation, keep `auto` thresholds conservative. The defaults require a high candidate score and enough meaningful text before skipping fallback candidates. Use `OCR_AUTO_ACCEPT_MIN_SCORE` and `OCR_AUTO_ACCEPT_MIN_CHARS` only when you are comparing output against known samples.
 
 Set `$env:OCR_PREPROCESS = "false"` to compare against the raw OCR result.
 Set `$env:OCR_USE_ANGLE_CLS = "true"` only when rotated text is a stronger concern than Korean recognition quality.
