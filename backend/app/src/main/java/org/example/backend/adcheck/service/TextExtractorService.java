@@ -1,6 +1,7 @@
 package org.example.backend.adcheck.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -28,8 +29,10 @@ import java.net.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -50,6 +53,18 @@ public class TextExtractorService {
 
     @Value("${custom.ocr.url}")
     private String ocrUrl;
+
+    @Value("${custom.ocr.async-enabled:true}")
+    private boolean ocrAsyncEnabled;
+
+    @Value("${custom.ocr.job-url:}")
+    private String ocrJobUrl;
+
+    @Value("${custom.ocr.job-poll-interval-ms:1000}")
+    private long ocrJobPollIntervalMs;
+
+    @Value("${custom.ocr.job-poll-timeout-ms:180000}")
+    private long ocrJobPollTimeoutMs;
 
     public TextExtractorService(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -94,7 +109,8 @@ public class TextExtractorService {
                     elapsedMillis(textStartedAt),
                     0L,
                     0L,
-                    elapsedMillis(totalStartedAt)
+                    elapsedMillis(totalStartedAt),
+                    List.of()
             );
         }
 
@@ -103,13 +119,15 @@ public class TextExtractorService {
             String text = extractFromPdf(bytes);
             long pdfTextMillis = elapsedMillis(pdfStartedAt);
             if (StringUtils.hasText(text)) {
+                LayoutAssetsResult layoutAssets = extractLayoutAssets(bytes, filename, contentType);
                 return new ExtractResult(
                         text,
                         "pdf_embedded_text",
                         pdfTextMillis,
+                        layoutAssets.layoutMillis(),
                         0L,
-                        0L,
-                        elapsedMillis(totalStartedAt)
+                        elapsedMillis(totalStartedAt),
+                        layoutAssets.images()
                 );
             }
 
@@ -120,7 +138,8 @@ public class TextExtractorService {
                     pdfTextMillis,
                     layoutOcr.layoutMillis(),
                     layoutOcr.ocrMillis(),
-                    elapsedMillis(totalStartedAt)
+                    elapsedMillis(totalStartedAt),
+                    layoutOcr.images()
             );
         }
 
@@ -132,7 +151,8 @@ public class TextExtractorService {
                     0L,
                     layoutOcr.layoutMillis(),
                     layoutOcr.ocrMillis(),
-                    elapsedMillis(totalStartedAt)
+                    elapsedMillis(totalStartedAt),
+                    layoutOcr.images()
             );
         }
 
@@ -149,10 +169,14 @@ public class TextExtractorService {
         long layoutStartedAt = System.nanoTime();
         long layoutMillis = 0L;
         long ocrStartedAt = 0L;
+        List<ExtractedImageAsset> images = List.of();
+        String layoutJobId = null;
 
         try {
             JsonNode layoutResult = requestLayout(bytes, filename, contentType);
             layoutMillis = elapsedMillis(layoutStartedAt);
+            images = extractImageAssets(layoutResult);
+            layoutJobId = text(layoutResult, "job_id");
 
             List<OcrTarget> targets = extractOcrTargets(layoutResult);
             if (targets.isEmpty()) {
@@ -174,7 +198,12 @@ public class TextExtractorService {
                 throw new RuntimeException("Layout OCR text is empty.");
             }
 
-            return new LayoutOcrResult(text, layoutMillis, elapsedMillis(ocrStartedAt), false);
+            return new LayoutOcrResult(text, layoutMillis, elapsedMillis(ocrStartedAt), false, images, layoutJobId);
+        } catch (OcrServiceResourceException e) {
+            layoutMillis = layoutMillis == 0L ? elapsedMillis(layoutStartedAt) : layoutMillis;
+            log.warn("Layout OCR flow stopped because OCR service is busy or unavailable. skip full-file fallback. "
+                    + "fileName={}, layoutUrl={}", filename, layoutUrl, e);
+            throw e;
         } catch (RuntimeException e) {
             layoutMillis = layoutMillis == 0L ? elapsedMillis(layoutStartedAt) : layoutMillis;
             long failedTargetOcrMillis = ocrStartedAt == 0L ? 0L : elapsedMillis(ocrStartedAt);
@@ -187,8 +216,26 @@ public class TextExtractorService {
                     text,
                     layoutMillis,
                     failedTargetOcrMillis + elapsedMillis(fallbackOcrStartedAt),
-                    true
+                    true,
+                    images,
+                    layoutJobId
             );
+        }
+    }
+
+    private LayoutAssetsResult extractLayoutAssets(byte[] bytes, String filename, String contentType) {
+        long layoutStartedAt = System.nanoTime();
+        try {
+            JsonNode layoutResult = requestLayout(bytes, filename, contentType);
+            return new LayoutAssetsResult(
+                    extractImageAssets(layoutResult),
+                    elapsedMillis(layoutStartedAt),
+                    text(layoutResult, "job_id")
+            );
+        } catch (RuntimeException e) {
+            log.warn("Layout asset extraction failed. continue without extracted image assets. fileName={}, layoutUrl={}",
+                    filename, layoutUrl, e);
+            return new LayoutAssetsResult(List.of(), elapsedMillis(layoutStartedAt), null);
         }
     }
 
@@ -198,7 +245,7 @@ public class TextExtractorService {
 
         MultiValueMap<String, Object> body = createMultipartBody(bytes, filename, contentType);
         body.add("document_id", normalizeDocumentId(filename));
-        body.add("include_image_targets", "false");
+        body.add("include_image_targets", "true");
 
         try {
             byte[] rawBytes = layoutRestClient.post()
@@ -210,8 +257,8 @@ public class TextExtractorService {
 
             String raw = rawBytes == null ? "" : new String(rawBytes, StandardCharsets.UTF_8);
             JsonNode result = objectMapper.readTree(raw);
-            log.info("Layout-parser service response received. fileName={}, ocrTargetCount={}",
-                    filename, extractOcrTargets(result).size());
+            log.info("Layout-parser service response received. fileName={}, ocrTargetCount={}, imageTargetCount={}",
+                    filename, extractOcrTargets(result).size(), extractImageTargets(result).size());
             return result;
         } catch (IOException e) {
             throw new RuntimeException("Layout service response cannot be parsed.", e);
@@ -264,21 +311,105 @@ public class TextExtractorService {
     }
 
     private byte[] downloadCrop(OcrTarget target) {
+        return downloadCrop(target.cropUrl());
+    }
+
+    private byte[] downloadCrop(String cropUrl) {
         try {
             byte[] bytes = cropRestClient.get()
-                    .uri(target.cropUrl())
+                    .uri(cropUrl)
                     .retrieve()
                     .body(byte[].class);
             if (bytes == null || bytes.length == 0) {
-                throw new RuntimeException("Layout crop is empty: " + target.cropUrl());
+                throw new RuntimeException("Layout crop is empty: " + cropUrl);
             }
             return bytes;
         } catch (RestClientException e) {
-            throw new RuntimeException("Layout crop cannot be downloaded: " + target.cropUrl(), e);
+            throw new RuntimeException("Layout crop cannot be downloaded: " + cropUrl, e);
         }
     }
 
+    private List<ExtractedImageAsset> extractImageAssets(JsonNode layoutResult) {
+        List<ImageTarget> candidates = extractImageTargets(layoutResult);
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+
+        candidates.sort(Comparator
+                .comparingInt(ImageTarget::page)
+                .thenComparing(Comparator.comparingDouble(ImageTarget::area).reversed())
+                .thenComparingInt(ImageTarget::readingOrder)
+                .thenComparing(ImageTarget::targetId));
+
+        Map<Integer, Integer> selectedByPage = new HashMap<>();
+        List<ExtractedImageAsset> assets = new ArrayList<>();
+        for (ImageTarget target : candidates) {
+            int selectedCount = selectedByPage.getOrDefault(target.page(), 0);
+            if (selectedCount >= 2) {
+                continue;
+            }
+
+            try {
+                byte[] bytes = downloadCrop(target.cropUrl());
+                assets.add(new ExtractedImageAsset(
+                        target.targetId(),
+                        target.page(),
+                        target.readingOrder(),
+                        "image/png",
+                        target.area(),
+                        bytes
+                ));
+                selectedByPage.put(target.page(), selectedCount + 1);
+            } catch (RuntimeException e) {
+                log.warn("Layout image crop cannot be downloaded. skip image asset. targetId={}, cropUrl={}",
+                        target.targetId(), target.cropUrl(), e);
+            }
+        }
+        return assets;
+    }
+
+    private List<ImageTarget> extractImageTargets(JsonNode layoutResult) {
+        JsonNode targetsNode = layoutResult.path("image_targets");
+        if (!targetsNode.isArray()) {
+            targetsNode = layoutResult.path("downstream_targets").path("image_targets");
+        }
+        if (!targetsNode.isArray()) {
+            return List.of();
+        }
+
+        List<ImageTarget> targets = new ArrayList<>();
+        for (JsonNode target : targetsNode) {
+            String cropUrl = text(target, "crop_url", "image_url");
+            if (!StringUtils.hasText(cropUrl)) {
+                cropUrl = text(target.path("input"), "image_url", "crop_url");
+            }
+            if (!StringUtils.hasText(cropUrl)) {
+                cropUrl = text(target.path("metadata"), "image_url", "crop_url");
+            }
+            if (!StringUtils.hasText(cropUrl)) {
+                continue;
+            }
+
+            String targetId = text(target, "target_id", "id");
+            targets.add(new ImageTarget(
+                    StringUtils.hasText(targetId) ? targetId : "image-" + (targets.size() + 1),
+                    intValue(target, "page", 0),
+                    intValue(target, "reading_order", intValue(target.path("metadata"), "reading_order", 0)),
+                    cropUrl,
+                    areaValue(target)
+            ));
+        }
+        return targets;
+    }
+
     private String extractViaOcr(byte[] bytes, String filename, String contentType) {
+        if (ocrAsyncEnabled) {
+            return extractViaOcrJob(bytes, filename, contentType);
+        }
+        return extractViaOcrSync(bytes, filename, contentType);
+    }
+
+    private String extractViaOcrSync(byte[] bytes, String filename, String contentType) {
         log.info("Calling OCR service. url={}, fileName={}, contentType={}, size={}",
                 ocrUrl, filename, contentType, bytes.length);
 
@@ -304,11 +435,173 @@ public class TextExtractorService {
         } catch (RestClientResponseException e) {
             log.error("OCR service returned error status. url={}, status={}, body={}",
                     ocrUrl, e.getStatusCode(), e.getResponseBodyAsString(), e);
+            if (isOcrResourceStatus(e.getStatusCode().value())) {
+                throw new OcrServiceResourceException(
+                        "OCR service is busy or resource constrained: HTTP " + e.getStatusCode(),
+                        e
+                );
+            }
             throw new RuntimeException("OCR service returned HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
         } catch (RestClientException e) {
             log.error("OCR service request failed. url={}, fileName={}", ocrUrl, filename, e);
-            throw new RuntimeException("OCR service is unavailable.", e);
+            throw new OcrServiceResourceException("OCR service is unavailable.", e);
         }
+    }
+
+    private String extractViaOcrJob(byte[] bytes, String filename, String contentType) {
+        String jobUrl = resolveOcrJobUrl();
+        log.info("Calling OCR job service. url={}, fileName={}, contentType={}, size={}",
+                jobUrl, filename, contentType, bytes.length);
+
+        MultiValueMap<String, Object> body = createMultipartBody(bytes, filename, contentType);
+
+        try {
+            OcrJobAccepted accepted = ocrRestClient.post()
+                    .uri(jobUrl)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(body)
+                    .retrieve()
+                    .body(OcrJobAccepted.class);
+
+            if (accepted == null || !StringUtils.hasText(accepted.getJobId())) {
+                throw new RuntimeException("OCR job response is empty.");
+            }
+
+            OcrResponse response = waitForOcrJob(accepted, filename);
+            if (response == null || !StringUtils.hasText(response.getText())) {
+                log.warn("OCR job returned empty text. jobId={}, fileName={}, pageCount={}",
+                        accepted.getJobId(), filename, response == null ? null : response.getPageCount());
+                throw new RuntimeException("OCR job result is empty.");
+            }
+
+            log.info("OCR job result received. jobId={}, fileName={}, textLength={}, pageCount={}",
+                    accepted.getJobId(), filename, response.getText().length(), response.getPageCount());
+            return response.getText();
+        } catch (RestClientResponseException e) {
+            log.error("OCR job service returned error status. url={}, status={}, body={}",
+                    jobUrl, e.getStatusCode(), e.getResponseBodyAsString(), e);
+            if (isOcrResourceStatus(e.getStatusCode().value())) {
+                throw new OcrServiceResourceException(
+                        "OCR job service is busy or resource constrained: HTTP " + e.getStatusCode(),
+                        e
+                );
+            }
+            throw new RuntimeException("OCR job service returned HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
+        } catch (RestClientException e) {
+            log.error("OCR job service request failed. url={}, fileName={}", jobUrl, filename, e);
+            throw new OcrServiceResourceException("OCR job service is unavailable.", e);
+        }
+    }
+
+    private OcrResponse waitForOcrJob(OcrJobAccepted accepted, String filename) {
+        String statusUrl = resolveOcrJobStatusUrl(accepted);
+        String resultUrl = resolveOcrJobResultUrl(accepted);
+        long timeoutMs = Math.max(1L, ocrJobPollTimeoutMs);
+        long pollIntervalMs = Math.max(100L, ocrJobPollIntervalMs);
+        long deadline = System.nanoTime() + timeoutMs * 1_000_000L;
+
+        while (System.nanoTime() <= deadline) {
+            OcrJobStatus status = ocrRestClient.get()
+                    .uri(statusUrl)
+                    .retrieve()
+                    .body(OcrJobStatus.class);
+
+            String state = status == null ? "" : status.getStatus();
+            if ("completed".equalsIgnoreCase(state)) {
+                return ocrRestClient.get()
+                        .uri(resultUrl)
+                        .retrieve()
+                        .body(OcrResponse.class);
+            }
+            if ("failed".equalsIgnoreCase(state)) {
+                String error = status.getError() == null ? "" : status.getError();
+                if (isOcrResourceErrorMessage(error)) {
+                    throw new OcrServiceResourceException(
+                            "OCR job failed because the OCR service is resource constrained. jobId="
+                                    + accepted.getJobId() + ", error=" + error,
+                            null
+                    );
+                }
+                throw new RuntimeException("OCR job failed. jobId=" + accepted.getJobId() + ", error=" + error);
+            }
+
+            try {
+                Thread.sleep(pollIntervalMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new OcrServiceResourceException("OCR job polling was interrupted. jobId=" + accepted.getJobId(), e);
+            }
+        }
+
+        throw new OcrServiceResourceException(
+                "OCR job timed out. jobId=" + accepted.getJobId() + ", fileName=" + filename,
+                null
+        );
+    }
+
+    private String resolveOcrJobUrl() {
+        if (StringUtils.hasText(ocrJobUrl)) {
+            return normalizeOcrJobEndpoint(ocrJobUrl);
+        }
+        return normalizeOcrJobEndpoint(ocrUrl);
+    }
+
+    private String normalizeOcrJobEndpoint(String value) {
+        String endpoint = trimTrailingSlash(value);
+        if (!StringUtils.hasText(endpoint)) {
+            return "";
+        }
+        if (endpoint.endsWith("/ocr/jobs")) {
+            return endpoint;
+        }
+        if (endpoint.endsWith("/ocr")) {
+            return endpoint + "/jobs";
+        }
+        if (endpoint.endsWith("/jobs")) {
+            return endpoint;
+        }
+        return endpoint + "/ocr/jobs";
+    }
+
+    private String resolveOcrJobStatusUrl(OcrJobAccepted accepted) {
+        if (StringUtils.hasText(accepted.getStatusUrl())) {
+            return accepted.getStatusUrl();
+        }
+        return resolveOcrJobUrl() + "/" + accepted.getJobId();
+    }
+
+    private String resolveOcrJobResultUrl(OcrJobAccepted accepted) {
+        if (StringUtils.hasText(accepted.getResultUrl())) {
+            return accepted.getResultUrl();
+        }
+        return resolveOcrJobUrl() + "/" + accepted.getJobId() + "/result";
+    }
+
+    private String trimTrailingSlash(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.replaceAll("/+$", "");
+    }
+
+    private boolean isOcrResourceStatus(int statusCode) {
+        return statusCode == 408
+                || statusCode == 413
+                || statusCode == 429
+                || statusCode == 503
+                || statusCode == 507;
+    }
+
+    private boolean isOcrResourceErrorMessage(String error) {
+        String lower = error == null ? "" : error.toLowerCase(Locale.ROOT);
+        return lower.contains("resource")
+                || lower.contains("memory")
+                || lower.contains("bad_alloc")
+                || lower.contains("mkldnn")
+                || lower.contains("onednn")
+                || lower.contains("dnnl")
+                || lower.contains("busy")
+                || lower.contains("timed out");
     }
 
     private MultiValueMap<String, Object> createMultipartBody(byte[] bytes, String filename, String contentType) {
@@ -406,6 +699,45 @@ public class TextExtractorService {
         return defaultValue;
     }
 
+    private double areaValue(JsonNode node) {
+        double explicitArea = doubleValue(node.path("metadata"), "area", 0.0d);
+        if (explicitArea > 0.0d) {
+            return explicitArea;
+        }
+
+        JsonNode bbox = node.path("bbox");
+        if (!bbox.isArray() || bbox.size() != 4) {
+            bbox = node.path("metadata").path("bbox");
+        }
+        if (!bbox.isArray() || bbox.size() != 4) {
+            return 0.0d;
+        }
+
+        double x1 = bbox.get(0).asDouble(0.0d);
+        double y1 = bbox.get(1).asDouble(0.0d);
+        double x2 = bbox.get(2).asDouble(0.0d);
+        double y2 = bbox.get(3).asDouble(0.0d);
+        return Math.abs((x2 - x1) * (y2 - y1));
+    }
+
+    private double doubleValue(JsonNode node, String name, double defaultValue) {
+        JsonNode value = node == null ? null : node.path(name);
+        if (value == null || value.isMissingNode() || value.isNull()) {
+            return defaultValue;
+        }
+        if (value.isNumber()) {
+            return value.asDouble(defaultValue);
+        }
+        if (value.isTextual()) {
+            try {
+                return Double.parseDouble(value.asText().trim());
+            } catch (NumberFormatException ignored) {
+                return defaultValue;
+            }
+        }
+        return defaultValue;
+    }
+
     private long elapsedMillis(long startedAt) {
         return Math.max(0L, (System.nanoTime() - startedAt) / 1_000_000L);
     }
@@ -416,7 +748,21 @@ public class TextExtractorService {
             Long textExtractionMillis,
             Long layoutMillis,
             Long ocrMillis,
-            Long totalMillis
+            Long totalMillis,
+            List<ExtractedImageAsset> extractedImages
+    ) {
+        public ExtractResult {
+            extractedImages = extractedImages == null ? List.of() : List.copyOf(extractedImages);
+        }
+    }
+
+    public record ExtractedImageAsset(
+            String targetId,
+            int page,
+            int readingOrder,
+            String contentType,
+            double area,
+            byte[] bytes
     ) {
     }
 
@@ -424,8 +770,23 @@ public class TextExtractorService {
             String text,
             Long layoutMillis,
             Long ocrMillis,
-            boolean usedFallback
+            boolean usedFallback,
+            List<ExtractedImageAsset> images,
+            String layoutJobId
     ) {
+        private LayoutOcrResult {
+            images = images == null ? List.of() : List.copyOf(images);
+        }
+    }
+
+    private record LayoutAssetsResult(
+            List<ExtractedImageAsset> images,
+            Long layoutMillis,
+            String layoutJobId
+    ) {
+        private LayoutAssetsResult {
+            images = images == null ? List.of() : List.copyOf(images);
+        }
     }
 
     private record OcrTarget(
@@ -433,6 +794,15 @@ public class TextExtractorService {
             int page,
             int readingOrder,
             String cropUrl
+    ) {
+    }
+
+    private record ImageTarget(
+            String targetId,
+            int page,
+            int readingOrder,
+            String cropUrl,
+            double area
     ) {
     }
 
@@ -458,6 +828,64 @@ public class TextExtractorService {
         }
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private static class OcrJobAccepted {
+        @JsonProperty("job_id")
+        private String jobId;
+
+        @JsonProperty("status_url")
+        private String statusUrl;
+
+        @JsonProperty("result_url")
+        private String resultUrl;
+
+        public String getJobId() {
+            return jobId;
+        }
+
+        public void setJobId(String jobId) {
+            this.jobId = jobId;
+        }
+
+        public String getStatusUrl() {
+            return statusUrl;
+        }
+
+        public void setStatusUrl(String statusUrl) {
+            this.statusUrl = statusUrl;
+        }
+
+        public String getResultUrl() {
+            return resultUrl;
+        }
+
+        public void setResultUrl(String resultUrl) {
+            this.resultUrl = resultUrl;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private static class OcrJobStatus {
+        private String status;
+        private String error;
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
+        }
+
+        public String getError() {
+            return error;
+        }
+
+        public void setError(String error) {
+            this.error = error;
+        }
+    }
+
     private static class NamedByteArrayResource extends ByteArrayResource {
         private final String filename;
 
@@ -469,6 +897,12 @@ public class TextExtractorService {
         @Override
         public String getFilename() {
             return filename;
+        }
+    }
+
+    private static class OcrServiceResourceException extends RuntimeException {
+        private OcrServiceResourceException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 }

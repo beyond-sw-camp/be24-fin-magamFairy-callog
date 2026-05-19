@@ -3,6 +3,7 @@ package org.example.backend.adcheck.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
 import org.example.backend.adcheck.client.AiJudgeClient;
 import org.example.backend.adcheck.model.AdCheckDto;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -18,6 +19,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,10 +34,15 @@ public class AdCheckService {
     private final RestClient aiRestClient;
     private final AiJudgeClient aiJudgeClient;
     private static final Pattern JSON_FENCE_PATTERN = Pattern.compile("(?s)```(?:json)?\\s*(\\{.*?})\\s*```");
+    private static final String EXTRACTED_TEXT_PATH = "ocr/extracted-text.txt";
+    private static final String AI_RESULT_PATH = "ai/result.json";
+    private static final String AI_ERROR_PATH = "ai/error.json";
+    private static final String FINAL_RESULT_PATH = "final/result.json";
 
     private final ObjectMapper objectMapper;
     private final TextExtractorService textExtractorService;
     private final AdCheckFileStorageService adCheckFileStorageService;
+    private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
 
     @Value("${custom.n8n.webhook-url}${custom.n8n.check-endpoint}")
     private String adCheckUrl;
@@ -41,13 +52,15 @@ public class AdCheckService {
             AiJudgeClient aiJudgeClient,
             ObjectMapper objectMapper,
             TextExtractorService textExtractorService,
-            AdCheckFileStorageService adCheckFileStorageService
+            AdCheckFileStorageService adCheckFileStorageService,
+            AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService
     ) {
         this.aiRestClient = aiRestClient;
         this.aiJudgeClient = aiJudgeClient;
         this.objectMapper = objectMapper;
         this.textExtractorService = textExtractorService;
         this.adCheckFileStorageService = adCheckFileStorageService;
+        this.adCheckAnalysisMongoStorageService = adCheckAnalysisMongoStorageService;
     }
 
     public AdCheckDto.Res check(String copy) {
@@ -100,37 +113,63 @@ public class AdCheckService {
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file) {
         long totalStartedAt = System.nanoTime();
         try {
-            AdCheckFileStorageService.StoredFile storedFile = adCheckFileStorageService.upload(file);
+            AdCheckFileStorageService.AnalysisStorageContext storageContext =
+                    adCheckFileStorageService.createAnalysisStorageContext(file == null ? null : file.getOriginalFilename());
+            AdCheckFileStorageService.StoredFile storedFile =
+                    adCheckFileStorageService.uploadOriginal(file, storageContext);
             TextExtractorService.ExtractResult extraction = textExtractorService.extractWithTiming(file);
+            AdCheckFileStorageService.StoredFile extractedTextFile =
+                    adCheckFileStorageService.uploadText(storageContext, EXTRACTED_TEXT_PATH, extraction.text());
+            List<AdCheckDto.FileArtifact> imageArtifacts =
+                    uploadExtractedImageAssets(storageContext, extraction.extractedImages());
             long aiStartedAt = System.nanoTime();
 
             try {
                 AdCheckDto.Res result = check(extraction.text());
                 long aiAnalysisMillis = elapsedMillis(aiStartedAt);
-                return AdCheckDto.FileCheckRes.of(
-                        file.getOriginalFilename(),
+                AdCheckFileStorageService.StoredFile aiResultFile =
+                        uploadJsonArtifact(storageContext, AI_RESULT_PATH, result);
+                AdCheckDto.FileCheckRes response = buildFileCheckResponse(
+                        storageContext,
+                        file == null ? null : file.getOriginalFilename(),
                         storedFile.getObjectKey(),
                         storedFile.getViewUrl(),
                         storedFile.getContentType(),
                         storedFile.getFileSize(),
-                        extraction.text(),
+                        extractedTextFile,
+                        imageArtifacts,
+                        aiResultFile,
                         result,
+                        extraction.text(),
                         extraction.extractionMode(),
-                        buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt)
+                        buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt),
+                        null
                 );
+                response = storeFinalResult(storageContext, response);
+                adCheckAnalysisMongoStorageService.save(response);
+                return response;
             } catch (RuntimeException e) {
                 long aiAnalysisMillis = elapsedMillis(aiStartedAt);
-                AdCheckDto.FileCheckRes partialResponse = AdCheckDto.FileCheckRes.builder()
-                        .fileName(file.getOriginalFilename())
-                        .fileObjectKey(storedFile.getObjectKey())
-                        .fileUrl(storedFile.getViewUrl())
-                        .fileContentType(storedFile.getContentType())
-                        .fileSize(storedFile.getFileSize())
-                        .extractedText(extraction.text())
-                        .extractionMode(extraction.extractionMode())
-                        .processingTimes(buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt))
-                        .errorMessage(e.getMessage())
-                        .build();
+                AdCheckFileStorageService.StoredFile aiErrorFile =
+                        uploadJsonArtifact(storageContext, AI_ERROR_PATH, Map.of("errorMessage", String.valueOf(e.getMessage())));
+                AdCheckDto.FileCheckRes partialResponse = buildFileCheckResponse(
+                        storageContext,
+                        file == null ? null : file.getOriginalFilename(),
+                        storedFile.getObjectKey(),
+                        storedFile.getViewUrl(),
+                        storedFile.getContentType(),
+                        storedFile.getFileSize(),
+                        extractedTextFile,
+                        imageArtifacts,
+                        aiErrorFile,
+                        null,
+                        extraction.text(),
+                        extraction.extractionMode(),
+                        buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt),
+                        e.getMessage()
+                );
+                partialResponse = storeFinalResult(storageContext, partialResponse);
+                adCheckAnalysisMongoStorageService.save(partialResponse);
                 throw new FileCheckException(e.getMessage(), partialResponse, e);
             }
         } catch (IOException e) {
@@ -191,6 +230,118 @@ public class AdCheckService {
                 .aiAnalysisMillis(aiAnalysisMillis)
                 .totalMillis(elapsedMillis(totalStartedAt))
                 .build();
+    }
+
+    private List<AdCheckDto.FileArtifact> uploadExtractedImageAssets(
+            AdCheckFileStorageService.AnalysisStorageContext storageContext,
+            List<TextExtractorService.ExtractedImageAsset> extractedImages
+    ) {
+        if (extractedImages == null || extractedImages.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Integer, Integer> selectedByPage = new HashMap<>();
+        List<AdCheckDto.FileArtifact> artifacts = new ArrayList<>();
+        for (TextExtractorService.ExtractedImageAsset image : extractedImages) {
+            int page = Math.max(0, image.page());
+            int pageSequence = selectedByPage.getOrDefault(page, 0) + 1;
+            selectedByPage.put(page, pageSequence);
+
+            String relativePath = String.format(
+                    Locale.ROOT,
+                    "images/page-%03d/%02d_%s.png",
+                    page,
+                    pageSequence,
+                    hasText(image.targetId()) ? image.targetId() : "image"
+            );
+            String contentType = hasText(image.contentType()) ? image.contentType() : MediaType.IMAGE_PNG_VALUE;
+            AdCheckFileStorageService.StoredFile stored =
+                    adCheckFileStorageService.uploadBytes(storageContext, relativePath, image.bytes(), contentType);
+
+            artifacts.add(AdCheckDto.FileArtifact.builder()
+                    .type("extracted_image")
+                    .targetId(image.targetId())
+                    .page(image.page())
+                    .readingOrder(image.readingOrder())
+                    .objectKey(stored.getObjectKey())
+                    .url(stored.getViewUrl())
+                    .contentType(stored.getContentType())
+                    .fileSize(stored.getFileSize())
+                    .build());
+        }
+        return artifacts;
+    }
+
+    private AdCheckDto.FileCheckRes buildFileCheckResponse(
+            AdCheckFileStorageService.AnalysisStorageContext storageContext,
+            String fileName,
+            String fileObjectKey,
+            String fileUrl,
+            String fileContentType,
+            Long fileSize,
+            AdCheckFileStorageService.StoredFile extractedTextFile,
+            List<AdCheckDto.FileArtifact> imageArtifacts,
+            AdCheckFileStorageService.StoredFile aiResultFile,
+            AdCheckDto.Res result,
+            String extractedText,
+            String extractionMode,
+            AdCheckDto.ProcessingTimes processingTimes,
+            String errorMessage
+    ) {
+        AdCheckDto.FileCheckRes.FileCheckResBuilder builder = AdCheckDto.FileCheckRes.builder()
+                .analysisJobId(storageContext.getWorkId())
+                .analysisObjectPrefix(storageContext.getBasePrefix())
+                .fileName(fileName)
+                .fileObjectKey(fileObjectKey)
+                .fileUrl(fileUrl)
+                .fileContentType(fileContentType)
+                .fileSize(fileSize)
+                .extractedTextObjectKey(extractedTextFile == null ? null : extractedTextFile.getObjectKey())
+                .extractedTextUrl(extractedTextFile == null ? null : extractedTextFile.getViewUrl())
+                .aiResultObjectKey(aiResultFile == null ? null : aiResultFile.getObjectKey())
+                .aiResultUrl(aiResultFile == null ? null : aiResultFile.getViewUrl())
+                .extractedImageAssets(imageArtifacts == null ? List.of() : List.copyOf(imageArtifacts))
+                .extractedText(extractedText)
+                .extractionMode(extractionMode)
+                .processingTimes(processingTimes)
+                .errorMessage(errorMessage);
+
+        if (result != null) {
+            builder.status(result.getStatus())
+                    .law(result.getLaw())
+                    .violationText(result.getViolationText())
+                    .reason(result.getReason())
+                    .suggestion(result.getSuggestion());
+        }
+        return builder.build();
+    }
+
+    private AdCheckDto.FileCheckRes storeFinalResult(
+            AdCheckFileStorageService.AnalysisStorageContext storageContext,
+            AdCheckDto.FileCheckRes response
+    ) {
+        AdCheckFileStorageService.StoredFile finalResult =
+                uploadJsonArtifact(storageContext, FINAL_RESULT_PATH, response);
+        return response.toBuilder()
+                .finalResultObjectKey(finalResult.getObjectKey())
+                .finalResultUrl(finalResult.getViewUrl())
+                .build();
+    }
+
+    private AdCheckFileStorageService.StoredFile uploadJsonArtifact(
+            AdCheckFileStorageService.AnalysisStorageContext storageContext,
+            String relativePath,
+            Object value
+    ) {
+        return adCheckFileStorageService.uploadJson(storageContext, relativePath, toJson(value));
+    }
+
+    private String toJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            throw new RuntimeException("S3 artifact JSON cannot be serialized.", e);
+        }
     }
 
     private long elapsedMillis(long startedAt) {

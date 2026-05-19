@@ -16,7 +16,7 @@ sequenceDiagram
     Front->>App: "PDF/Image upload"
     App->>Layout: "POST /v1/layout/analyze or /v1/layout/jobs"
     Layout-->>App: "layout result JSON + crop_url"
-    App->>Layout: "POST /ocr: ocr_targets crop"
+    App->>Layout: "POST /ocr/jobs: ocr_targets crop"
     App->>Image: "image batch: image_targets"
     App->>Table: "table batch: table_targets"
     Layout-->>App: "recognized text"
@@ -25,7 +25,7 @@ sequenceDiagram
     App-->>Front: "combined document analysis"
 ```
 
-권장 구조는 프론트가 직접 분석 서버까지 호출하지 않는 방식입니다. 프론트는 파일 업로드만 하고, 백엔드가 layout 결과를 받아 같은 분석 서버의 `/ocr` endpoint로 OCR crop을 전달합니다.
+권장 구조는 프론트가 직접 분석 서버까지 호출하지 않는 방식입니다. 프론트는 파일 업로드만 하고, 백엔드가 layout 결과를 받아 같은 분석 서버의 `/ocr/jobs` endpoint로 OCR crop을 전달한 뒤 polling 합니다. 단건 즉시 테스트에는 `/ocr`도 유지합니다.
 
 ## 네트워크 전제
 
@@ -94,7 +94,7 @@ callback_url: 완료 후 layout service가 호출할 백엔드 URL
 job_id              layout service 작업 ID
 document_id         요청에서 넘긴 문서 ID
 pages               페이지 정보와 debug/audit block
-ocr_targets         분석 서버 `/ocr`로 보낼 대상
+ocr_targets         분석 서버 `/ocr/jobs` 또는 `/ocr`로 보낼 대상
 image_targets       이미지 분석 서버로 보낼 대상
 table_targets       표 추출 서버로 보낼 대상
 layout_result_url   compact layout JSON URL
@@ -119,14 +119,23 @@ ocr_targets[].metadata.original_page_size
 ocr_targets[].metadata.canvas_region_map
 ```
 
-현재 백엔드는 `ocr_targets[].crop_url`을 다운로드한 뒤 같은 분석 서버의 `/ocr` endpoint에 multipart 파일로 전달합니다.
-OCR endpoint는 기존 standalone OCR 서버와 같은 응답 형식을 유지합니다.
+현재 백엔드는 `ocr_targets[].crop_url`을 다운로드한 뒤 같은 분석 서버의 `/ocr/jobs` endpoint에 multipart 파일로 전달하고 완료될 때까지 polling 합니다.
+OCR result endpoint는 기존 standalone OCR 서버와 같은 응답 형식을 유지합니다.
 
 단일 crop OCR 요청 예:
 
 ```bash
 curl -X POST http://ANALYSIS_SERVER:8001/ocr \
   -F "file=@crop.png"
+```
+
+큐 기반 OCR 요청 예:
+
+```bash
+curl -X POST http://ANALYSIS_SERVER:8001/ocr/jobs \
+  -F "file=@crop.png"
+curl http://ANALYSIS_SERVER:8001/ocr/jobs/{job_id}
+curl http://ANALYSIS_SERVER:8001/ocr/jobs/{job_id}/result
 ```
 
 기존 batch payload를 사용하는 별도 downstream 서버를 둘 때의 예:
@@ -341,6 +350,7 @@ reading_order
 - `PUBLIC_BASE_URL`이 백엔드에서 접근 가능한 주소인지 확인
 - 백엔드에서 `ocr_targets[].crop_url` 다운로드 가능한지 확인
 - 백엔드의 `OCR_SERVICE_URL`이 같은 분석 서버의 `/ocr`를 바라보는지 확인
+- 기본값인 `OCR_ASYNC_ENABLED=true` 상태에서는 백엔드가 자동으로 `/ocr/jobs`를 사용함
 - 이미지 서버에서 `image_targets[].crop_url` 다운로드 가능한지 확인
 - 표 서버에서 `table_targets[].crop_url` 다운로드 가능한지 확인
 - 각 downstream 응답에 `target_id`가 그대로 돌아오는지 확인
