@@ -1,0 +1,34 @@
+services:
+  document-analysis-service:
+    build: .
+    container_name: document-analysis-service
+    ports:
+      - "8001:8001"
+    environment:
+      APP_NAME: document-analysis-service
+      STORAGE_DIR: /service/storage
+      PUBLIC_BASE_URL: http://localhost:8001
+      RENDER_DPI: 200
+      LAYOUT_MODEL_CONFIG: https://huggingface.co/layoutparser/detectron2/resolve/main/PubLayNet/faster_rcnn_R_50_FPN_3x/config.yml
+      LAYOUT_MODEL_WEIGHTS: https://huggingface.co/layoutparser/detectron2/resolve/main/PubLayNet/faster_rcnn_R_50_FPN_3x/model_final.pth
+      LAYOUT_MODEL_DEVICE: cpu
+      LAYOUT_SCORE_THRESHOLD: 0.50
+      INCLUDE_PDF_NATIVE_BLOCKS: "true"
+      INCLUDE_VISUAL_TEXT_BLOCKS: "true"
+      VISUAL_TEXT_FOR_PDF: "true"
+      RECLASSIFY_LAYOUT_WITH_VISUAL_TEXT: "true"
+      INCLUDE_FULL_PAGE_BLOCK: "true"
+      INCLUDE_IMAGE_TARGETS: "false"
+      SAVE_DEBUG_CROPS: "false"
+      OCR_TEXT_CANVAS_MAX_LONG_SIDE: 1600
+      OCR_TEXT_CANVAS_MAX_PIXELS: 2000000
+      OCR_TEXT_CANVAS_MIN_TEXT_HEIGHT: 20
+      OCR_TEXT_CANVAS_KEEP_ORIGINAL: "true"
+      OCR_TEMP_ROOT: /service/storage/ocr-temp
+      PADDLE_OCR_BASE_DIR: /service/storage/paddleocr
+      OCR_CANDIDATE_STRATEGY: auto
+      OCR_LOAD_MODEL_ON_STARTUP: "false"
+      LOAD_MODEL_ON_STARTUP: "false"
+      CALLBACK_TIMEOUT_SECONDS: 10
+    volumes:
+      - ./storage:/service/storage

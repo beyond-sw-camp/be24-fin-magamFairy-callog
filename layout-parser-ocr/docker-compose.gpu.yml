@@ -1,0 +1,5 @@
+services:
+  document-analysis-service:
+    gpus: all
+    environment:
+      LAYOUT_MODEL_DEVICE: cuda

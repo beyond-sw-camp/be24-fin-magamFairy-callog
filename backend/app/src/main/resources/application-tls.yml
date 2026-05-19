@@ -1,0 +1,98 @@
+server:
+  port: 443
+  error:
+    whitelabel:
+      enabled: false  # 기본 whitelabel 에러 페이지 비활성화
+    path: /error
+  ssl:
+    enabled: true
+    key-store: "classpath:keystore.p12"
+    key-store-type: "PKCS12"
+    key-store-password: gkrwnantjdna
+jdbc:
+  datasource:
+    proxy:
+      logging: true
+
+jwt:
+  key: ${JWT_SECRET}
+  secret: ${JWT_SECRET}
+  expire: ${JWT_EXPIRE}
+project:
+  aes:
+    key: aessecretkey01234567891011121314
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  secure-cookie: ${SECURE_COOKIE:false}
+aws:
+  s3:
+    bucket-name: ${AWS_BUCKET_NAME}
+    access-key: ${AWS_ACCESS_KEY}
+    secret-key: ${AWS_SECRET_KEY}
+    region: ap-northeast-2
+openai:
+  image:
+    api-key: ${OPEN_API_IMAGE:}
+    model: ${OPENAI_IMAGE_MODEL:gpt-image-1.5}
+    quality: ${OPENAI_IMAGE_QUALITY:low}
+admin:
+  id: ${ADMIN_ID}
+  email: ${ADMIN_EMAIL}
+  name: ${ADMIN_NAME}
+  role: ${ADMIN_ROLE}
+  password: ${ADMIN_PASSWORD}
+spring:
+  application:
+    name: callog
+  datasource:
+    driver-class-name: org.mariadb.jdbc.Driver
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASS}
+    hikari:
+      initialization-fail-timeout: 120000 # 120초 동안은 실패해도 포기하지 않고 재시도
+      connection-timeout: 15000 # 15초마다 재시도, 총 4회까지 연결 시도
+
+  jpa:
+    database-platform: org.hibernate.dialect.MariaDBDialect
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+logging:
+  level:
+    org.example.backend.matching.service: debug
+#    org.hibernate.SQL: debug
+#    org.hibernate.orm.jdbc.bind: trace
+#    org.example: debug
+    net.ttddyy.observation: DEBUG
+    # RestClient가 요청을 보내는 과정을 로그로 출력
+    org.springframework.web.client: DEBUG
+    # HTTP 통신 (헤더, 응답 등)의 아주 상세한 내역을 출력
+    org.springframework.http.client: TRACE
+
+custom:
+  n8n:
+    webhook-url: ${N8N_URL}
+    evaluation-endpoint: ${EVALUATION_ENDPOINT}
+    check-endpoint: ${CHECK_ENDPOINT}
+  ocr:
+    url: ${OCR_SERVICE_URL:http://localhost:8001/ocr}
+  layout:
+    url: ${LAYOUT_SERVICE_URL:http://localhost:8001/v1/layout/analyze}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
