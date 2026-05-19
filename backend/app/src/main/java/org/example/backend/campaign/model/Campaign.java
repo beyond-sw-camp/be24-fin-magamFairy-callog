@@ -120,17 +120,6 @@ public class Campaign extends BaseEntity {
     private String color;
 
     /**
-     * 캠페인 썸네일 S3 object key. null이면 디렉토리 카드는 단색+이니셜 fallback.
-     * Phase 4에서 AI 자동 생성으로 채울 수도 있음.
-     */
-    @Column(name = "thumbnail_object_key", length = 500)
-    private String thumbnailObjectKey;
-
-    public void updateThumbnailObjectKey(String objectKey) {
-        this.thumbnailObjectKey = objectKey;
-    }
-
-    /**
      * 캠페인 소개 페이지 공개 범위.
      * PRIVATE / HQ_ONLY / HQ_AND_AFFILIATE / AFFILIATE_ONLY / EXTERNAL_ONLY / ALL
      */

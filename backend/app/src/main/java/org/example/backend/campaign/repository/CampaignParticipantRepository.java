@@ -17,6 +17,16 @@ public interface CampaignParticipantRepository extends JpaRepository<CampaignPar
 
     List<CampaignParticipant> findAllByCampaignIdx(Long campaignIdx);
 
+    /**
+     * 여러 캠페인의 참여자를 단일 IN 쿼리로 (N+1 회피).
+     * Dashboard partnerProgress / summary 에서 캠페인 N개 × 1쿼리 → 1쿼리.
+     * organization 까지 fetch join 으로 LAZY 해결.
+     */
+    @Query("SELECT cp FROM CampaignParticipant cp " +
+           "JOIN FETCH cp.organization " +
+           "WHERE cp.campaign.idx IN :campaignIds")
+    List<CampaignParticipant> findAllByCampaignIdxInWithOrg(@Param("campaignIds") java.util.Collection<Long> campaignIds);
+
     java.util.Optional<CampaignParticipant> findFirstByCampaignIdxAndCampaignRole(
             Long campaignIdx, CampaignRole campaignRole);
 

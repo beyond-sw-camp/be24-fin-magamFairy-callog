@@ -7,10 +7,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const summary = ref(null)
   const quarterGoals = ref([])
   const partnerProgress = ref([])
-  const reviewQueue = ref([])
-  const blockers = ref([])
   const assetCategories = ref({})       // { "EVENT": 42, ... }
-  const kpiCategories = ref({})          // { "IMPRESSION": 87, ... }
   const myCampaigns = ref([])           // [{ idx, name, status, color, ... }]
   const loading = ref(false)
   const errorMessage = ref(null)
@@ -31,10 +28,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     summary: 'loading',
     quarterGoals: 'loading',
     partnerProgress: 'loading',
-    reviewQueue: 'loading',
-    blockers: 'loading',
     assetCategories: 'loading',
-    kpiCategories: 'loading',
     myCampaigns: 'loading',
   })
 
@@ -46,43 +40,47 @@ export const useDashboardStore = defineStore('dashboard', () => {
     return false
   }
 
+  /**
+   * ⚡ B4: 단일 통합 endpoint + ListCampaign 1번 = 2회 호출.
+   * 이전: summary/quarter-goals/partner-progress/asset-categories + campaigns = 5회.
+   * Backend 에서 user/scope/visibleCampaigns 가 1번만 계산되어 약 5배 효율.
+   */
   async function loadAll(period) {
     loading.value = true
     errorMessage.value = null
     currentPeriod.value = period ?? null
     Object.keys(status.value).forEach((k) => { status.value[k] = 'loading' })
 
-    const tasks = [
-      ['summary', () => dashApi.GetDashboardSummary(period)],
-      ['quarterGoals', () => dashApi.GetQuarterGoals(period)],
-      ['partnerProgress', () => dashApi.GetPartnerProgress(period)],
-      ['reviewQueue', () => dashApi.GetReviewQueue()],
-      ['blockers', () => dashApi.GetBlockers()],
-      ['assetCategories', () => dashApi.GetAssetCategories(period)],
-      ['kpiCategories', () => dashApi.GetKpiCategories(period)],
-      ['myCampaigns', () => ListCampaign({ scope: 'mine' })],
-    ]
+    const [pageRes, campaignsRes] = await Promise.allSettled([
+      dashApi.GetDashboardPage(period),
+      ListCampaign({ scope: 'mine' }),
+    ])
 
-    const results = await Promise.allSettled(tasks.map(([, fn]) => fn()))
+    if (pageRes.status === 'fulfilled') {
+      const page = pageRes.value ?? {}
+      summary.value = page.summary ?? null
+      quarterGoals.value = normalizeArray(page.quarterGoals)
+      partnerProgress.value = normalizeArray(page.partnerProgress)
+      assetCategories.value = page.assetCategories ?? {}
+      status.value.summary = page.summary ? 'success' : 'empty'
+      status.value.quarterGoals = isEmptyResult('quarterGoals', quarterGoals.value) ? 'empty' : 'success'
+      status.value.partnerProgress = isEmptyResult('partnerProgress', partnerProgress.value) ? 'empty' : 'success'
+      status.value.assetCategories = isEmptyResult('assetCategories', assetCategories.value) ? 'empty' : 'success'
+    } else {
+      console.warn('[dashboard] page load 실패', pageRes.reason)
+      status.value.summary = 'error'
+      status.value.quarterGoals = 'error'
+      status.value.partnerProgress = 'error'
+      status.value.assetCategories = 'error'
+    }
 
-    results.forEach((result, idx) => {
-      const [key] = tasks[idx]
-      if (result.status === 'fulfilled') {
-        const v = result.value
-        if (key === 'summary') summary.value = v
-        if (key === 'quarterGoals') quarterGoals.value = normalizeArray(v)
-        if (key === 'partnerProgress') partnerProgress.value = normalizeArray(v)
-        if (key === 'reviewQueue') reviewQueue.value = normalizeArray(v)
-        if (key === 'blockers') blockers.value = normalizeArray(v)
-        if (key === 'assetCategories') assetCategories.value = v ?? {}
-        if (key === 'kpiCategories') kpiCategories.value = v ?? {}
-        if (key === 'myCampaigns') myCampaigns.value = normalizeArray(v)
-        status.value[key] = isEmptyResult(key, v) ? 'empty' : 'success'
-      } else {
-        status.value[key] = 'error'
-        console.warn(`[dashboard] ${key} 실패`, result.reason)
-      }
-    })
+    if (campaignsRes.status === 'fulfilled') {
+      myCampaigns.value = normalizeArray(campaignsRes.value)
+      status.value.myCampaigns = isEmptyResult('myCampaigns', myCampaigns.value) ? 'empty' : 'success'
+    } else {
+      status.value.myCampaigns = 'error'
+      console.warn('[dashboard] myCampaigns 실패', campaignsRes.reason)
+    }
 
     loading.value = false
   }
@@ -123,10 +121,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     summary,
     quarterGoals,
     partnerProgress,
-    reviewQueue,
-    blockers,
     assetCategories,
-    kpiCategories,
     myCampaigns,
     loading,
     errorMessage,

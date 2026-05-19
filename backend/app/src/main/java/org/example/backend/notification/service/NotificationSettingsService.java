@@ -1,6 +1,7 @@
 package org.example.backend.notification.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.backend.common.redis.CacheNames;
 import org.example.backend.common.security.Roles;
 import org.example.backend.notification.model.NotificationAdminPolicy;
 import org.example.backend.notification.model.NotificationDto;
@@ -12,6 +13,8 @@ import org.example.backend.organization.repository.OrganizationRepository;
 import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,7 +32,12 @@ public class NotificationSettingsService {
     private final UserRepository userRepository;
     private final OrganizationRepository organizationRepository;
 
+    /**
+     * 알림 설정 조회 — 사용자별 키. TTL 30분 (CacheNames 설정).
+     * 변경(updateSetting) 시 즉시 evict 되어야 stale 안 됨.
+     */
     @Transactional
+    @Cacheable(value = CacheNames.NOTIFICATION_SETTING, key = "#authUser.idx")
     public NotificationDto.SettingRes getSetting(AuthUserDetails authUser) {
         User user = findUser(authUser);
         NotificationSetting setting = settingRepository.findByUser_Idx(user.getIdx())
@@ -39,6 +47,7 @@ public class NotificationSettingsService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheNames.NOTIFICATION_SETTING, key = "#authUser.idx")   // 변경 즉시 본인 캐시 비움
     public NotificationDto.SettingRes updateSetting(AuthUserDetails authUser, NotificationDto.SettingReq request) {
         User user = findUser(authUser);
         NotificationSetting setting = settingRepository.findByUser_Idx(user.getIdx())

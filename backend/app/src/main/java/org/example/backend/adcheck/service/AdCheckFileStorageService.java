@@ -17,6 +17,7 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -42,7 +43,8 @@ public class AdCheckFileStorageService {
             "image/jpeg", "jpg",
             "image/webp", "webp",
             "image/bmp", "bmp",
-            "image/tiff", "tiff"
+            "image/tiff", "tiff",
+            "application/json", "json"
     );
     private static final Map<String, String> CONTENT_TYPE_BY_EXTENSION = Map.of(
             "txt", "text/plain",
@@ -53,7 +55,8 @@ public class AdCheckFileStorageService {
             "webp", "image/webp",
             "bmp", "image/bmp",
             "tif", "image/tiff",
-            "tiff", "image/tiff"
+            "tiff", "image/tiff",
+            "json", "application/json"
     );
 
     private final S3Client s3Client;
@@ -62,7 +65,26 @@ public class AdCheckFileStorageService {
     @Value("${aws.s3.bucket-name}")
     private String bucketName;
 
+    public AnalysisStorageContext createAnalysisStorageContext(String originalFileName) {
+        Instant now = Instant.now();
+        String safeBaseName = sanitizeBaseName(removeExtension(resolveOriginalFileName(originalFileName)));
+        String workId = FILE_TIMESTAMP_FORMATTER.format(now)
+                + "_"
+                + UUID.randomUUID().toString().substring(0, 8)
+                + "_"
+                + safeBaseName;
+
+        return AnalysisStorageContext.builder()
+                .workId(workId)
+                .basePrefix(AD_CHECK_FILE_PREFIX + "/" + DATE_PATH_FORMATTER.format(now) + "/" + workId)
+                .build();
+    }
+
     public StoredFile upload(MultipartFile file) throws IOException {
+        return uploadOriginal(file, createAnalysisStorageContext(file == null ? null : file.getOriginalFilename()));
+    }
+
+    public StoredFile uploadOriginal(MultipartFile file, AnalysisStorageContext context) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ad check file is required.");
         }
@@ -74,7 +96,10 @@ public class AdCheckFileStorageService {
 
         String originalFileName = resolveOriginalFileName(file);
         String contentType = resolveContentType(file.getContentType(), originalFileName);
-        String objectKey = createObjectKey(originalFileName, contentType);
+        String objectKey = createArtifactObjectKey(
+                context,
+                "original/" + sanitizeBaseName(removeExtension(originalFileName)) + "." + EXTENSION_BY_CONTENT_TYPE.get(contentType)
+        );
         String objectContentType = createBrowserContentType(contentType);
 
         s3Client.putObject(
@@ -93,6 +118,54 @@ public class AdCheckFileStorageService {
                 .contentType(contentType)
                 .fileSize(fileSize)
                 .build();
+    }
+
+    public StoredFile uploadText(AnalysisStorageContext context, String relativePath, String text) {
+        byte[] bytes = (text == null ? "" : text).getBytes(StandardCharsets.UTF_8);
+        return uploadBytes(context, relativePath, bytes, "text/plain");
+    }
+
+    public StoredFile uploadJson(AnalysisStorageContext context, String relativePath, String json) {
+        byte[] bytes = (json == null ? "{}" : json).getBytes(StandardCharsets.UTF_8);
+        return uploadBytes(context, relativePath, bytes, "application/json");
+    }
+
+    public StoredFile uploadBytes(
+            AnalysisStorageContext context,
+            String relativePath,
+            byte[] bytes,
+            String contentType
+    ) {
+        String objectKey = createArtifactObjectKey(context, relativePath);
+        String normalizedContentType = normalizeContentType(contentType);
+        String objectContentType = createBrowserContentType(
+                normalizedContentType != null ? normalizedContentType : "application/octet-stream"
+        );
+        byte[] payload = bytes == null ? new byte[0] : bytes;
+
+        s3Client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucketName)
+                        .key(objectKey)
+                        .contentType(objectContentType)
+                        .contentLength((long) payload.length)
+                        .build(),
+                RequestBody.fromBytes(payload)
+        );
+
+        return StoredFile.builder()
+                .objectKey(objectKey)
+                .viewUrl(createViewUrl(objectKey, objectContentType))
+                .contentType(objectContentType)
+                .fileSize((long) payload.length)
+                .build();
+    }
+
+    public String createArtifactObjectKey(AnalysisStorageContext context, String relativePath) {
+        if (context == null || context.getBasePrefix() == null || context.getBasePrefix().isBlank()) {
+            throw new IllegalArgumentException("analysis storage context is required.");
+        }
+        return context.getBasePrefix() + "/" + sanitizeRelativePath(relativePath);
     }
 
     public String createViewUrl(String objectKey) {
@@ -138,24 +211,6 @@ public class AdCheckFileStorageService {
         return objectKey != null && objectKey.startsWith(AD_CHECK_FILE_PREFIX + "/");
     }
 
-    private String createObjectKey(String originalFileName, String contentType) {
-        Instant now = Instant.now();
-        String extension = EXTENSION_BY_CONTENT_TYPE.get(contentType);
-        String safeBaseName = sanitizeBaseName(removeExtension(originalFileName));
-
-        return AD_CHECK_FILE_PREFIX
-                + "/"
-                + DATE_PATH_FORMATTER.format(now)
-                + "/"
-                + FILE_TIMESTAMP_FORMATTER.format(now)
-                + "_"
-                + UUID.randomUUID()
-                + "_"
-                + safeBaseName
-                + "."
-                + extension;
-    }
-
     private String resolveContentType(String contentType, String fileName) {
         String normalizedContentType = normalizeContentType(contentType);
         if (EXTENSION_BY_CONTENT_TYPE.containsKey(normalizedContentType)) {
@@ -179,7 +234,10 @@ public class AdCheckFileStorageService {
     }
 
     private String resolveOriginalFileName(MultipartFile file) {
-        String originalFileName = file.getOriginalFilename();
+        return resolveOriginalFileName(file.getOriginalFilename());
+    }
+
+    private String resolveOriginalFileName(String originalFileName) {
         if (originalFileName == null || originalFileName.isBlank()) {
             return "upload";
         }
@@ -193,6 +251,30 @@ public class AdCheckFileStorageService {
         String sanitized = String.valueOf(value).trim().replaceAll("[^A-Za-z0-9._-]", "_");
         sanitized = sanitized.replaceAll("_+", "_").replaceAll("^[_ .-]+|[_ .-]+$", "");
         return sanitized.isBlank() ? "upload" : sanitized;
+    }
+
+    private String sanitizeRelativePath(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            return "artifact";
+        }
+
+        String normalized = relativePath.replace('\\', '/');
+        String[] parts = normalized.split("/");
+        StringBuilder sanitized = new StringBuilder();
+        for (String part : parts) {
+            if (part == null || part.isBlank() || ".".equals(part) || "..".equals(part)) {
+                continue;
+            }
+            if (sanitized.length() > 0) {
+                sanitized.append('/');
+            }
+            sanitized.append(sanitizeBaseName(part));
+        }
+
+        if (sanitized.length() == 0) {
+            return "artifact";
+        }
+        return sanitized.toString();
     }
 
     private String removeExtension(String fileName) {
@@ -218,5 +300,12 @@ public class AdCheckFileStorageService {
         private String viewUrl;
         private String contentType;
         private Long fileSize;
+    }
+
+    @Getter
+    @Builder
+    public static class AnalysisStorageContext {
+        private String workId;
+        private String basePrefix;
     }
 }
