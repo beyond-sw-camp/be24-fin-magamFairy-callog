@@ -3,6 +3,7 @@ package org.example.backend.adcheck.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
 import org.example.backend.adcheck.model.AdCheckDto;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +40,7 @@ public class AdCheckService {
     private final ObjectMapper objectMapper;
     private final TextExtractorService textExtractorService;
     private final AdCheckFileStorageService adCheckFileStorageService;
+    private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
 
     @Value("${custom.n8n.webhook-url}${custom.n8n.check-endpoint}")
     private String adCheckUrl;
@@ -47,12 +49,14 @@ public class AdCheckService {
             @Qualifier("aiRestClient") RestClient aiRestClient,
             ObjectMapper objectMapper,
             TextExtractorService textExtractorService,
-            AdCheckFileStorageService adCheckFileStorageService
+            AdCheckFileStorageService adCheckFileStorageService,
+            AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService
     ) {
         this.aiRestClient = aiRestClient;
         this.objectMapper = objectMapper;
         this.textExtractorService = textExtractorService;
         this.adCheckFileStorageService = adCheckFileStorageService;
+        this.adCheckAnalysisMongoStorageService = adCheckAnalysisMongoStorageService;
     }
 
     public AdCheckDto.Res check(String copy) {
@@ -133,7 +137,9 @@ public class AdCheckService {
                         buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt),
                         null
                 );
-                return storeFinalResult(storageContext, response);
+                response = storeFinalResult(storageContext, response);
+                adCheckAnalysisMongoStorageService.save(response);
+                return response;
             } catch (RuntimeException e) {
                 long aiAnalysisMillis = elapsedMillis(aiStartedAt);
                 AdCheckFileStorageService.StoredFile aiErrorFile =
@@ -155,6 +161,7 @@ public class AdCheckService {
                         e.getMessage()
                 );
                 partialResponse = storeFinalResult(storageContext, partialResponse);
+                adCheckAnalysisMongoStorageService.save(partialResponse);
                 throw new FileCheckException(e.getMessage(), partialResponse, e);
             }
         } catch (IOException e) {

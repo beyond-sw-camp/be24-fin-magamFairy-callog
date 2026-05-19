@@ -118,7 +118,7 @@ def _is_graphic_box(
 
     area = float(width * height)
     area_ratio = area / page_area
-    if area_ratio < 0.025 or area_ratio > 0.38:
+    if area_ratio < 0.025:
         return False
 
     aspect_ratio = width / float(max(1, height))
@@ -134,10 +134,35 @@ def _is_graphic_box(
         return False
 
     text_overlap = sum(_intersection_area(box, text_box) for text_box in text_boxes)
+    if area_ratio > 0.38 and not _is_large_lower_visual(
+        box,
+        page_height=page_height,
+        area_ratio=area_ratio,
+        text_overlap_ratio=text_overlap / area if area > 0 else 1.0,
+    ):
+        return False
     if text_overlap / area > 0.45:
         return False
 
     return True
+
+
+def _is_large_lower_visual(
+    box: Tuple[int, int, int, int],
+    *,
+    page_height: int,
+    area_ratio: float,
+    text_overlap_ratio: float,
+) -> bool:
+    """Allow poster-like lower illustrations that are larger than ordinary figures."""
+
+    _, y1, _, y2 = box
+    box_height = max(0, y2 - y1)
+    starts_below_header = y1 >= page_height * 0.35
+    substantial_visual = box_height >= page_height * 0.25
+    not_full_page = area_ratio <= 0.62
+    mostly_non_text = text_overlap_ratio <= 0.18
+    return starts_below_header and substantial_visual and not_full_page and mostly_non_text
 
 
 def _should_mask_text_box(

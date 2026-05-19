@@ -541,9 +541,26 @@ public class TextExtractorService {
 
     private String resolveOcrJobUrl() {
         if (StringUtils.hasText(ocrJobUrl)) {
-            return trimTrailingSlash(ocrJobUrl);
+            return normalizeOcrJobEndpoint(ocrJobUrl);
         }
-        return trimTrailingSlash(ocrUrl) + "/jobs";
+        return normalizeOcrJobEndpoint(ocrUrl);
+    }
+
+    private String normalizeOcrJobEndpoint(String value) {
+        String endpoint = trimTrailingSlash(value);
+        if (!StringUtils.hasText(endpoint)) {
+            return "";
+        }
+        if (endpoint.endsWith("/ocr/jobs")) {
+            return endpoint;
+        }
+        if (endpoint.endsWith("/ocr")) {
+            return endpoint + "/jobs";
+        }
+        if (endpoint.endsWith("/jobs")) {
+            return endpoint;
+        }
+        return endpoint + "/ocr/jobs";
     }
 
     private String resolveOcrJobStatusUrl(OcrJobAccepted accepted) {
