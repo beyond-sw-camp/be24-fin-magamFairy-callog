@@ -1,7 +1,8 @@
 <script setup>
 import { computed, ref, onBeforeUnmount, onMounted } from 'vue'
 import EvaluationModal from './EvaluationModal.vue'
-import { ListBenefits, getBenefitsFromCampaignIdx } from '@/api/matchingBenefits/index.js'
+import { getBenefitsFromCampaignIdx } from '@/api/matchingBenefits/index.js'
+import CampaignProposalSubmitView from '@/views/CampaignProposalSubmitView.vue'
 
 defineProps({
   isDark: {
@@ -10,20 +11,12 @@ defineProps({
   },
 })
 
-// 👇 1. 제안하기 뷰(컴포넌트) 임포트
-import CampaignProposalSubmitView from '@/views/CampaignProposalSubmitView.vue'
 
-// ... 기존 코드 ...
-
-// 👇 2. 모달 상태를 관리할 변수 추가
 const isCreateModalOpen = ref(false)
 
-// 👇 3. 이전의 alert를 지우고 상태를 true로 변경
 function openCreateBenefitModal() {
   isCreateModalOpen.value = true
 }
-
-// 👇 4. 모달 닫기 함수 추가
 function closeCreateBenefitModal() {
   isCreateModalOpen.value = false
 }
@@ -93,8 +86,8 @@ function getStatusLabel(status) {
 const benefits = ref([])
 const campaignIdx = localStorage.getItem('callog-active-campaign-id')
 
-onMounted(async () => {
-  try {
+async function loadBenefits() {
+    try {
     const response = await getBenefitsFromCampaignIdx(campaignIdx)
     
     benefits.value = response.benefitList || response 
@@ -105,6 +98,10 @@ onMounted(async () => {
   } catch (error) {
     console.error('혜택 목록을 불러오는데 실패했습니다:', error)
   }
+}
+
+onMounted(async () => {
+  loadBenefits()
 })
 
 onBeforeUnmount(() => {
@@ -453,7 +450,10 @@ function formatAutoRecommend(benefit) {
         </header>
         
         <div class="custom-modal-body">
-          <CampaignProposalSubmitView @close="closeCreateBenefitModal" />
+          <CampaignProposalSubmitView 
+            @close="closeCreateBenefitModal" 
+            @saved="loadBenefits" 
+          />
         </div>
       </div>
     </div>
