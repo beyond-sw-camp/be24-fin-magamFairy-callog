@@ -16,7 +16,7 @@ jwt:
   expire: ${JWT_EXPIRE}
 project:
   aes:
-    key: aessecretkey01234567891011121314
+    key: ${AES_SECRET_KEY}
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
   secure-cookie: ${SECURE_COOKIE:false}
@@ -111,8 +111,16 @@ custom:
     check-endpoint: ${CHECK_ENDPOINT}
   ocr:
     url: ${OCR_SERVICE_URL:http://localhost:8001/ocr}
+    async-enabled: ${OCR_ASYNC_ENABLED:true}
+    job-url: ${OCR_JOB_SERVICE_URL:}
+    job-poll-interval-ms: ${OCR_JOB_POLL_INTERVAL_MS:1000}
+    job-poll-timeout-ms: ${OCR_JOB_POLL_TIMEOUT_MS:180000}
   layout:
     url: ${LAYOUT_SERVICE_URL:http://localhost:8001/v1/layout/analyze}
+  mongodb:
+    analysis-uri: ${MONGODB_STD_URL:}
+    analysis-database: ${MONGODB_STD_DATABASE:}
+    analysis-collection: ${MONGODB_STD_COLLECTION:ad_check_analysis_results}
 
 management:
   endpoints:

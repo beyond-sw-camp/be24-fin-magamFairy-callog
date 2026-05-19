@@ -68,10 +68,10 @@ app/
 storage/
   uploads/
   results/
-  model_cache/
+  ocr-temp/
 ```
 
-`storage/model_cache`에는 layout-parser 모델 config/weight가 캐시됩니다. 다른 컴퓨터가 인터넷 접근이 느리거나 제한적이면 기존 PC의 `storage/model_cache`를 함께 복사하면 첫 요청 시간을 줄일 수 있습니다.
+layout-parser와 PaddleOCR 모델은 Docker 이미지 빌드 중 `/opt/models`에 포함됩니다. `storage/`는 업로드, 결과, OCR 임시 파일만 보관하므로 volume mount가 이미지 내장 모델을 가리지 않습니다.
 
 ## 최초 실행
 
@@ -149,6 +149,18 @@ curl.exe -X POST "http://localhost:8001/ocr" `
   -F "file=@C:\path\to\sample.png"
 ```
 
+OCR 비동기 큐 요청:
+
+```powershell
+curl.exe -X POST "http://localhost:8001/ocr/jobs" `
+  -F "file=@C:\path\to\sample.png"
+
+Invoke-RestMethod -Uri "http://localhost:8001/ocr/jobs/{job_id}" | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Uri "http://localhost:8001/ocr/jobs/{job_id}/result" | ConvertTo-Json -Depth 5
+```
+
+`/ocr/jobs`는 요청을 bounded queue에 넣고 `202`를 반환합니다. queue가 가득 차면 `429`를 반환합니다.
+
 지원 입력:
 
 - `.pdf`
@@ -217,6 +229,8 @@ table_targets[].crop_url
 PORT: 8001
 STORAGE_DIR: /service/storage
 RENDER_DPI: 200
+LAYOUT_MODEL_CONFIG: /opt/models/layout/config.yml
+LAYOUT_MODEL_WEIGHTS: /opt/models/layout/model_final.pth
 LAYOUT_MODEL_DEVICE: cpu 또는 cuda
 LAYOUT_SCORE_THRESHOLD: 0.50
 MAX_UPLOAD_MB: 100
@@ -230,15 +244,23 @@ OCR_TEXT_CANVAS_MAX_PIXELS=2000000
 OCR_TEXT_CANVAS_MIN_TEXT_HEIGHT=20
 OCR_TEXT_CANVAS_KEEP_ORIGINAL=true
 OCR_TEMP_ROOT=/service/storage/ocr-temp
-PADDLE_OCR_BASE_DIR=/service/storage/paddleocr
-OCR_CANDIDATE_STRATEGY=auto
-OCR_LOAD_MODEL_ON_STARTUP=false
+PADDLE_OCR_BASE_DIR=/opt/models/paddleocr
+OCR_CANDIDATE_STRATEGY=first
+OCR_MAX_CONCURRENT_REQUESTS=1
+OCR_BUSY_STATUS_CODE=503
+OCR_TEMP_CLEANUP_MAX_AGE_SECONDS=21600
+OCR_JOB_QUEUE_SIZE=5
+OCR_JOB_WORKERS=1
+OCR_JOB_RETENTION_SECONDS=3600
+OCR_LOAD_MODEL_ON_STARTUP=true
+LOAD_MODEL_ON_STARTUP=true
 ```
 
 정책:
 
 - layout-parser 입력 이미지는 줄이지 않습니다.
 - OCR endpoint로 보내는 text canvas만 조건부 축소합니다.
+- burst traffic은 `/ocr/jobs`로 보내서 같은 OCR concurrency guard 안에서 순차 처리합니다.
 - 작은 글자가 20px 아래로 내려갈 것으로 예상되면 과도하게 줄이지 않습니다.
 - 5% 미만의 미세 축소는 실익이 낮아 skip합니다.
 
@@ -336,9 +358,9 @@ PUBLIC_BASE_URL: http://192.168.0.25:8001
 
 모델 다운로드 실패:
 
-- 인터넷 연결 확인
-- Hugging Face 접근 가능 여부 확인
-- 기존 PC의 `storage/model_cache` 복사
+- Docker build 단계의 인터넷 연결 확인
+- Hugging Face와 PaddleOCR 모델 저장소 접근 가능 여부 확인
+- 이미지 내부 `/opt/models/layout`, `/opt/models/paddleocr` 파일 존재 확인
 
 GPU가 `cuda`로 뜨지 않음:
 
@@ -359,7 +381,7 @@ crop URL이 다른 서버에서 열리지 않음:
 결과가 너무 많이 쌓임:
 
 - `storage/results`와 `storage/uploads`는 운영 정책에 따라 주기적으로 정리
-- `storage/model_cache`는 삭제하지 않는 것을 권장
+- 모델은 이미지의 `/opt/models`에 있으므로 `storage/` 정리와 분리됩니다.
 
 ## 현재 기준 성능
 
