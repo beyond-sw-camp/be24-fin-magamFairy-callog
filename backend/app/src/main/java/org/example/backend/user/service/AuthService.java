@@ -2,31 +2,28 @@ package org.example.backend.user.service;
 
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.organization.model.OrganizationType;
 import org.example.backend.organization.repository.OrganizationRepository;
-import org.example.backend.user.model.RefreshToken;
 import org.example.backend.user.model.TokenDto;
 import org.example.backend.user.model.User;
 import org.example.backend.user.model.UserAccountStatus;
-import org.example.backend.user.repository.RefreshTokenRepository;
 import org.example.backend.user.repository.UserRepository;
 import org.example.backend.user.utils.JwtUtil;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.NoSuchElementException;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
     private final JwtUtil jwtUtil;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final RefreshTokenRedisService refreshTokenRedisService;
     private final UserRepository userRepository;
     private final OrganizationRepository organizationRepository;
 
-    @Transactional
+    @Transactional(readOnly = true)
     public TokenDto.AuthTokenResponse issueTokens(Long userIdx, String id, String email, String name, String role, String companyName, String department) {
         String userId = requireId(id, email);
         User userEntity = userRepository.findById(userIdx).orElseThrow(NoSuchElementException::new);
@@ -35,24 +32,14 @@ public class AuthService {
 
         String access = jwtUtil.createToken("access", userIdx, userId, email, name, role, companyName, department, 600000000L, organizationType);
         String refresh = jwtUtil.createToken("refresh", userIdx, userId, email, name, role, companyName, department, 1209600000L, organizationType);
-        LocalDateTime expiryDate = LocalDateTime.now().plusDays(14);
 
-        refreshTokenRepository.findByUserId(userId)
-                .ifPresentOrElse(
-                        existingToken -> existingToken.updateToken(refresh, expiryDate),
-                        () -> refreshTokenRepository.save(
-                                RefreshToken.builder()
-                                        .userId(userId)
-                                        .token(refresh)
-                                        .expiryDate(expiryDate)
-                                        .build()
-                        )
-                );
+        // Redis 저장 — TTL 14일 자동, RefreshTokenRedisService.save() 내부에서 기존 토큰 로테이션 처리
+        refreshTokenRedisService.save(userId, refresh);
 
         return new TokenDto.AuthTokenResponse(access, refresh, orgTypeName);
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public TokenDto.AuthTokenResponse reissue(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new IllegalArgumentException("Refresh token is required.");
@@ -70,10 +57,15 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found."));
         String userId = resolveUserId(user, refreshToken);
 
-        resolveRegisteredRefreshToken(userId, refreshToken);
+        // Redis 역인덱스 — 토큰으로 등록된 userId 조회 후 매칭 검증
+        String registeredUserId = refreshTokenRedisService.findUserIdByToken(refreshToken)
+                .orElseThrow(() -> new IllegalArgumentException("Refresh token is not registered."));
+        if (!userId.equals(registeredUserId)) {
+            throw new IllegalArgumentException("Refresh token does not belong to user.");
+        }
 
         if (!Boolean.TRUE.equals(user.getEnable()) || resolveStatus(user) != UserAccountStatus.ACTIVE) {
-            refreshTokenRepository.deleteByUserId(userId);
+            refreshTokenRedisService.deleteByUserId(userId);
             throw new IllegalArgumentException("User is not allowed to access.");
         }
         User reissueUser = userRepository.findById(userIdx).orElseThrow(NoSuchElementException::new);
@@ -93,22 +85,11 @@ public class AuthService {
         return new TokenDto.AuthTokenResponse(newAccess, refreshToken, (organizationType != null) ? organizationType.name() : null);
     }
 
-    private RefreshToken resolveRegisteredRefreshToken(String userId, String refreshToken) {
-        return refreshTokenRepository.findByToken(refreshToken)
-                .or(() -> refreshTokenRepository.findByUserId(userId)
-                        .map(existingToken -> {
-                            existingToken.updateToken(refreshToken, LocalDateTime.now().plusDays(14));
-                            return existingToken;
-                        }))
-                .orElseThrow(() -> new IllegalArgumentException("Refresh token is not registered."));
-    }
-
-    @Transactional
     public void logout(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
             return;
         }
-        refreshTokenRepository.deleteByToken(refreshToken);
+        refreshTokenRedisService.deleteByToken(refreshToken);
     }
 
     private UserAccountStatus resolveStatus(User user) {

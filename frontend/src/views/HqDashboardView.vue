@@ -85,9 +85,18 @@ async function retryDashboard() {
   if (compareMode.value) await dashboardStore.loadCompare(comparePeriod.value)
 }
 
-const hasError = computed(() =>
-  Object.values(dashboardStore.status ?? {}).some((s) => s === 'error'),
-)
+/**
+ * 모든 endpoint 응답이 끝난 후에만 에러 판단.
+ * Promise.allSettled 라 일부 endpoint 가 먼저 실패해도 나머지가 아직 'loading' 인 동안엔
+ * 배너 노출 보류 (= 로딩 중 깜빡임 방지).
+ */
+const hasError = computed(() => {
+  if (dashboardStore.loading) return false
+  const statuses = Object.values(dashboardStore.status ?? {})
+  if (statuses.length === 0) return false
+  if (statuses.some((s) => s === 'loading')) return false
+  return statuses.some((s) => s === 'error')
+})
 
 function parseNumeric(v, fallback = 0) {
   if (typeof v === 'number') return v
@@ -95,12 +104,6 @@ function parseNumeric(v, fallback = 0) {
   const cleaned = v.replace(/[^0-9.\-]/g, '')
   const n = Number(cleaned)
   return Number.isNaN(n) ? fallback : n
-}
-function formatKpiValue(v) {
-  if (v === null || v === undefined || v === '') return '0'
-  const n = Number(v)
-  if (Number.isNaN(n)) return String(v)
-  return n.toLocaleString()
 }
 
 /* ───── 사용자·권한 ───── */
@@ -120,7 +123,7 @@ const roleLabel = computed(() => ({ GM: '총괄 매니저', MGR: '매니저', US
 const orgScope = computed(() => {
   const fromApi = dashboardStore.summary?.scope
   if (fromApi) return fromApi
-  // mock fallback — 사용자 organization.type 기반
+  // summary 미응답 시 사용자 organization.type 으로 폴백 (실제 인증 사용자 데이터)
   const t = String(authStore.user?.organization?.type ?? '').toUpperCase()
   if (t === 'HQ' || t === 'AFFILIATE' || t === 'EXTERNAL_PARTNER') return t
   return 'HQ'
@@ -163,9 +166,10 @@ const ROLE_KPI = computed(() => {
       const diff = curr - s.companyAveragePct
       delta = `전사 평균 ${s.companyAveragePct}% (${diff >= 0 ? '+' : ''}${diff}%p)`
       deltaPositive = diff >= 0
-    } else if (s?.trend != null) {
+    } else if (s?.trend != null && s.trend !== 0) {
+      // Backend 가 실 비교 데이터 있을 때만 숫자 반환. null/0 이면 "지난주" 표시 생략.
       delta = `${s.trend >= 0 ? '+' : ''}${s.trend}%p 지난주`
-      deltaPositive = (s?.trend ?? 0) >= 0
+      deltaPositive = s.trend >= 0
     }
     return {
       key: 'gm', label: '분기 달성률',
@@ -441,7 +445,7 @@ const compareLineDots = computed(() => {
   return dots
 })
 
-/* ═══════════ Row 3-2 — 자산 카테고리 도넛 (store 우선, mock fallback) ═══════════ */
+/* ═══════════ Row 3-2 — 자산 카테고리 도넛 (backend assetCategories 기반) ═══════════ */
 const ASSET_CAT_LABELS = {
   customer: '고객 자산',
   channel:  '채널 자산',
@@ -473,7 +477,7 @@ const assetSegments = computed(() => {
   })
 })
 
-/* ═══════════ Row 4-1 — 캠페인 진행 table (store 우선, mock fallback) ═══════════ */
+/* ═══════════ Row 4-1 — 캠페인 진행 table (backend myCampaigns 기반) ═══════════ */
 const STATUS_MAP = {
   live:      { label: 'LIVE',   cls: 'st--live' },
   running:   { label: 'LIVE',   cls: 'st--live' },
@@ -825,8 +829,9 @@ function ptaskFromCampaign(c, i) {
   const rate = typeof teamTaskStore.completionRateByCampaignId?.[String(id)] === 'number'
     ? teamTaskStore.completionRateByCampaignId[String(id)]
     : null
-  const total = c.totalTaskCount ?? 12
-  const done = rate != null ? Math.round((rate / 100) * total) : Math.round(total * 0.6)
+  // Backend 가 CampaignDto.Res.totalTaskCount 채워줌. 캠페인에 task 가 없으면 null/0 — 진행률 표시 생략.
+  const total = Number(c.totalTaskCount) || 0
+  const done = total > 0 && rate != null ? Math.round((rate / 100) * total) : 0
   const name = c.name ?? '캠페인'
   const half = Math.ceil(name.length / 2)
   const lines = name.length > 7 ? [name.slice(0, half), name.slice(half)] : [name]
@@ -835,7 +840,8 @@ function ptaskFromCampaign(c, i) {
     tone: TONES[i % TONES.length],
     lines,
     pill: 'HIGH PRIORITY',
-    progress: `${done} / ${total}`,
+    // task 없으면 "-" 로 표시 (가짜 "X / 12" 회피)
+    progress: total > 0 ? `${done} / ${total}` : '-',
     avatars: avatarsForCampaign(c),
   }
 }
@@ -1131,11 +1137,8 @@ function kpiCardsFromGoals(goals, titlePrefix) {
     const valueLabel = r.unit === '%'
       ? `${r.avg}%`
       : fmtCompactByUnit(r.actual, r.unit)
-    // 스파크라인 — 월별 추이가 모두 0이면 점진적 0~avg fallback
-    let spark = (r.monthly ?? []).filter((v) => Number.isFinite(v))
-    if (spark.length === 0 || spark.every((v) => v === 0)) {
-      spark = [Math.round(r.avg * 0.6), Math.round(r.avg * 0.85), r.avg]
-    }
+    // 스파크라인 — 실제 월별 actual 만 표시. 데이터 없으면 빈 차트 (가짜 우상향 생성 금지)
+    const spark = (r.monthly ?? []).filter((v) => Number.isFinite(v))
     return {
       id: `kpi-${r.key}`,
       tone: TONES[i % TONES.length],
@@ -1223,14 +1226,8 @@ function partnersPage(list, mode) {
 
 const ZONE2_SCORE = computed(() => partnersPage(dashboardStore.partnerProgress, 'score'))
 const ZONE2_ACTIVE = computed(() => partnersPage(dashboardStore.partnerProgress, 'active'))
-const ZONE2_BY_SCOPE = computed(() => {
-  if (orgScope.value === 'EXTERNAL_PARTNER') {
-    const me = authStore.user?.organization?.idx ?? authStore.user?.organization?.id
-    const filtered = (dashboardStore.partnerProgress ?? []).filter((p) => (p.organizationId ?? p.partnerId) !== me)
-    return partnersPage(filtered, 'score')
-  }
-  return partnersPage(dashboardStore.partnerProgress, 'score')
-})
+// ⚡ F1: 백엔드가 partner-progress 응답 시점에 본인 조직을 일괄 제외함 → frontend 분기 불필요
+const ZONE2_BY_SCOPE = computed(() => partnersPage(dashboardStore.partnerProgress, 'score'))
 
 const ZONE2_TITLE = computed(() => ['Top5 협력사', '활성도 Top5', scopeLabelShort.value + ' 협력사'][zone2Page.value])
 const ZONE2_LEDE = computed(() => ['KPI 누적 점수 기준', '최근 7일 활성도', '권한 스코프 기준'][zone2Page.value])
@@ -1386,32 +1383,80 @@ const ZONE4_REVENUE_SERIES = computed(() => {
   return { labels, data, target }
 })
 
+/**
+ * Z4/P1 — 캠페인 누적 추이.
+ * Backend 의 myCampaigns[].createdAt 을 기준으로 분기 내 buckets (월간 3 / 주간 12) 마다
+ * 그 시점까지의 누적 캠페인 수를 계산. 가짜 균등 분배 없음.
+ *
+ * - 분기 코드(예: 2026-Q2) → 분기 시작/끝일 산출
+ * - 각 bucket 의 종료 시점에 created_at <= 종료 인 캠페인 수
+ * - target: 누적 캠페인 * 1.15 (시각화 비교용 baseline)
+ */
 const ZONE4_CAMPAIGN_SERIES = computed(() => {
   const list = dashboardStore.myCampaigns ?? []
-  if (list.length === 0) return { labels: [], data: [] }
   const isWeek = zone4Granularity.value === 'week'
   const labels = isWeek ? weekLabels() : quarterMonthLabelsLocal(currentPeriod.value)
-  const data = labels.map((_, i) => Math.max(0, Math.round(list.length * ((i + 1) / labels.length))))
-  return { labels, data, target: data.map((v) => Math.round(v * 1.15)) }
+  if (list.length === 0) return { labels, data: [], target: [] }
+
+  // 분기 범위 계산 (currentPeriod = "YYYY-QN")
+  const m = String(currentPeriod.value || '').match(/^(\d{4})-Q([1-4])$/)
+  if (!m) return { labels, data: [], target: [] }
+  const year = Number(m[1])
+  const quarter = Number(m[2])
+  const startMonth = (quarter - 1) * 3 // 0-based month for Date()
+  const quarterStart = new Date(year, startMonth, 1)
+  const quarterEnd = new Date(year, startMonth + 3, 0, 23, 59, 59, 999) // 분기 마지막 날 23:59
+
+  // 각 bucket 의 종료 시점 (월간: 각 월의 마지막 날 / 주간: 분기 시작 + 7일씩)
+  const bucketEnds = labels.map((_, i) => {
+    if (isWeek) {
+      const end = new Date(quarterStart)
+      end.setDate(end.getDate() + 7 * (i + 1) - 1)
+      end.setHours(23, 59, 59, 999)
+      return Math.min(end.getTime(), quarterEnd.getTime())
+    }
+    return new Date(year, startMonth + i + 1, 0, 23, 59, 59, 999).getTime()
+  })
+
+  // 캠페인 createdAt 추출 (Date 또는 ISO 문자열 모두 처리)
+  const createdAts = list
+    .map((c) => {
+      const v = c.createdAt
+      if (!v) return null
+      const t = new Date(v).getTime()
+      return Number.isFinite(t) ? t : null
+    })
+    .filter((t) => t != null)
+    .sort((a, b) => a - b)
+
+  // 각 bucket 종료까지 created_at <= 종료 인 캠페인 누적 수
+  const data = bucketEnds.map((endMs) => createdAts.filter((t) => t <= endMs).length)
+  const target = data.map((v) => Math.round(v * 1.15))
+  return { labels, data, target }
 })
 
+/**
+ * Z4/P2 — 스코프 평균 달성률 (%) 시계열.
+ * 🐛 버그 픽스 v2: backend 의 monthlyActuals/monthlyTargets 가 현재 진행 중 달은
+ *   "분기 누적 actual / 분기 전체 target" 으로 채워서 단위 불일치 → 비정상치 발생.
+ * 해결: KPI 별 backend 가 이미 계산한 g.achievementPercent (분기 누적 달성률 %) 평균을
+ *      모든 시점에 동일하게 표시. 0~100% clamp.
+ */
 const ZONE4_SCOPE_SERIES = computed(() => {
   const isWeek = zone4Granularity.value === 'week'
   const goals = dashboardStore.quarterGoals ?? []
   const labels = isWeek ? weekLabels() : quarterMonthLabelsLocal(currentPeriod.value)
   if (goals.length === 0) {
-    return { labels, data: labels.map((_, i) => 20 + i * 8), target: labels.map((_, i) => 30 + i * 6) }
+    // 데이터 없으면 빈 series 반환 → 템플릿이 empty state ("데이터가 없습니다") 표시
+    return { labels, data: [], target: [] }
   }
-  const data = labels.map((_, i) => {
-    const idx = isWeek ? Math.min(2, Math.floor(i / 4)) : i
-    const pcts = goals.map((g) => g.monthlyActuals?.[idx]).filter((v) => v != null)
-    return pcts.length ? Math.round(pcts.reduce((s, v) => s + v, 0) / pcts.length) : 0
-  })
-  const target = labels.map((_, i) => {
-    const idx = isWeek ? Math.min(2, Math.floor(i / 4)) : i
-    const tgs = goals.map((g) => g.monthlyTargets?.[idx]).filter((v) => v != null)
-    return tgs.length ? Math.round(tgs.reduce((s, v) => s + v, 0) / tgs.length) : 0
-  })
+  const pcts = goals.map((g) => g.achievementPercent ?? g.percent)
+                    .filter((v) => typeof v === 'number')
+  if (pcts.length === 0) return { labels, data: [], target: [] }
+  const avg = Math.max(0, Math.min(100, Math.round(
+      pcts.reduce((s, v) => s + v, 0) / pcts.length)))
+  const data = labels.map(() => avg)
+  const target = labels.map(() => 100)
   return { labels, data, target }
 })
 
@@ -1443,13 +1488,15 @@ const gaugePct = computed(() => {
     const done = list.filter((c) => ['completed', 'archived', 'done'].includes((c.status ?? '').toLowerCase())).length
     return Math.round((done / list.length) * 100)
   }
+  // 🐛 버그 픽스: backend 의 achievementPercent 가 단위 불일치로 비정상 % 들어올 수 있어 0~100% clamp.
   const goals = dashboardStore.quarterGoals ?? []
   if (goals.length === 0) return 0
   const pcts = goals
     .map((g) => g.achievementPercent ?? g.percent)
     .filter((v) => typeof v === 'number')
   if (pcts.length === 0) return 0
-  return Math.round(pcts.reduce((s, v) => s + v, 0) / pcts.length)
+  const avg = Math.round(pcts.reduce((s, v) => s + v, 0) / pcts.length)
+  return Math.max(0, Math.min(100, avg))
 })
 
 const gaugeLabel = computed(() => ['분기 달성률', '캠페인 완료율', scopeLabelShort.value + ' 평균'][zone4Page.value])
@@ -1600,27 +1647,36 @@ const zone4UnitSuffix = computed(() => {
   return ''
 })
 
+/**
+ * 헤드라인 큰 숫자 = "실적" (현재 시점 누적).
+ */
 const totalRevenueLabel = computed(() => {
   const arr = ZONE4_SERIES.value?.data ?? []
   if (arr.length === 0) return '0'
   if (zone4Page.value === 0) {
-    // 매출: 합계
     return arr.reduce((s, v) => s + (Number(v) || 0), 0).toLocaleString()
   }
-  if (zone4Page.value === 1) {
-    // 캠페인 누적: 마지막 = 최종 누적 캠페인 수
-    return Number(arr[arr.length - 1] ?? 0).toLocaleString()
-  }
-  // 스코프 평균: 마지막 시점 평균 달성률(%)
   return Number(arr[arr.length - 1] ?? 0).toLocaleString()
 })
+
+/**
+ * 🐛 버그 픽스: 오른쪽 작은 % = "목표 대비 얼마나 상승/하락" (이전 시점 대비 X).
+ */
 const totalRevenueDelta = computed(() => {
-  const arr = ZONE4_SERIES.value?.data ?? []
-  if (arr.length < 2) return 0
-  const last = arr[arr.length - 1] ?? 0
-  const prev = arr[arr.length - 2] ?? 0
-  if (prev === 0) return last > 0 ? 100 : 0
-  return Math.round(((last - prev) / Math.abs(prev)) * 100)
+  const dataArr = ZONE4_SERIES.value?.data ?? []
+  const targetArr = ZONE4_SERIES.value?.target ?? []
+  if (dataArr.length === 0 || targetArr.length === 0) return 0
+  let actualTotal
+  let targetTotal
+  if (zone4Page.value === 0) {
+    actualTotal = dataArr.reduce((s, v) => s + (Number(v) || 0), 0)
+    targetTotal = targetArr.reduce((s, v) => s + (Number(v) || 0), 0)
+  } else {
+    actualTotal = Number(dataArr[dataArr.length - 1]) || 0
+    targetTotal = Number(targetArr[targetArr.length - 1]) || 0
+  }
+  if (targetTotal === 0) return actualTotal > 0 ? 100 : 0
+  return Math.round(((actualTotal - targetTotal) / targetTotal) * 100)
 })
 
 /* ═══════════ GSAP fade-up + CountUp 통합 ═══════════ */
@@ -2035,22 +2091,31 @@ watch([zone3Page, zone3Granularity], () => {
           </div>
           <Transition name="page-slide" mode="out-in">
             <div :key="zone3Page" class="z3-body">
-              <!-- Page 0: KPI bars (카드 끝까지 확장) -->
+              <!-- Page 0: KPI bars — Y축 % 라벨 + 100% clamp -->
               <template v-if="zone3Page === 0">
                 <template v-if="ZONE3_BAR_DATA.length">
                   <div class="kpi-legend">
                     <span class="l-primary">달성</span>
                     <span class="l-lime">참여</span>
                   </div>
-                  <div class="bars bars--tall">
-                    <div
-                      v-for="(b, i) in ZONE3_BAR_DATA"
-                      :key="i"
-                      class="bar-col"
-                    >
-                      <div class="bar bar-primary" :style="{ height: b.primary + '%' }"></div>
-                      <div class="bar bar-lime" :style="{ height: b.lime + '%' }"></div>
-                      <span class="lbl">{{ b.lbl }}</span>
+                  <div class="kpi-bar-chart">
+                    <div class="kpi-y-axis">
+                      <span>100%</span>
+                      <span>75%</span>
+                      <span>50%</span>
+                      <span>25%</span>
+                      <span>0%</span>
+                    </div>
+                    <div class="bars bars--tall">
+                      <div
+                        v-for="(b, i) in ZONE3_BAR_DATA"
+                        :key="i"
+                        class="bar-col"
+                      >
+                        <div class="bar bar-primary" :style="{ height: Math.min(100, b.primary) + '%' }"></div>
+                        <div class="bar bar-lime" :style="{ height: Math.min(100, b.lime) + '%' }"></div>
+                        <span class="lbl">{{ b.lbl }}</span>
+                      </div>
                     </div>
                   </div>
                 </template>
@@ -2067,22 +2132,31 @@ watch([zone3Page, zone3Granularity], () => {
                 />
                 <div v-else class="zone-empty">자산 데이터가 없습니다.</div>
               </template>
-              <!-- Page 2: scope KPI (카드 끝까지 확장) -->
+              <!-- Page 2: scope KPI — Y축 % 라벨 + 100% clamp -->
               <template v-else>
                 <template v-if="ZONE3_KPI_BY_SCOPE.some(b => b.primary > 0)">
                   <div class="kpi-legend">
                     <span class="l-primary">달성</span>
                     <span class="l-lime">참여</span>
                   </div>
-                  <div class="bars bars--tall">
-                    <div
-                      v-for="(b, i) in ZONE3_KPI_BY_SCOPE"
-                      :key="i"
-                      class="bar-col"
-                    >
-                      <div class="bar bar-primary" :style="{ height: b.primary + '%' }"></div>
-                      <div class="bar bar-lime" :style="{ height: b.lime + '%' }"></div>
-                      <span class="lbl">{{ b.lbl }}</span>
+                  <div class="kpi-bar-chart">
+                    <div class="kpi-y-axis">
+                      <span>100%</span>
+                      <span>75%</span>
+                      <span>50%</span>
+                      <span>25%</span>
+                      <span>0%</span>
+                    </div>
+                    <div class="bars bars--tall">
+                      <div
+                        v-for="(b, i) in ZONE3_KPI_BY_SCOPE"
+                        :key="i"
+                        class="bar-col"
+                      >
+                        <div class="bar bar-primary" :style="{ height: Math.min(100, b.primary) + '%' }"></div>
+                        <div class="bar bar-lime" :style="{ height: Math.min(100, b.lime) + '%' }"></div>
+                        <span class="lbl">{{ b.lbl }}</span>
+                      </div>
                     </div>
                   </div>
                 </template>
@@ -2606,6 +2680,31 @@ watch([zone3Page, zone3Granularity], () => {
 .kpi-legend .l-lime::before { background: var(--lp-lime); }
 .bars { display: grid; grid-template-columns: repeat(6, 1fr); align-items: end; height: 240px; padding: 50px 4px 28px; margin-top: 14px; gap: 14px; position: relative; flex: 1; }
 .bars--tall { height: auto; min-height: 240px; flex: 1; padding: 50px 4px 32px; margin-top: 8px; }
+
+/* Y축 % 라벨 + 막대 차트 묶음 (Z3/P0 KPI 트래커, Z3/P2 스코프 KPI) */
+.kpi-bar-chart {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 10px;
+  flex: 1;
+  min-height: 240px;
+}
+.kpi-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 40px;
+  padding: 50px 0 32px;
+  margin-top: 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--lp-text-muted);
+  text-align: right;
+}
+.kpi-y-axis span { line-height: 1; }
+.kpi-bar-chart .bars--tall { margin-top: 8px; }
+/* 점선 gridline 제거 — 빈 카테고리에서 점선만 떠보이는 시각적 노이즈 회피 */
 
 /* Zone 3 body — row 2 (420px) - 카드 헤더(~60) + padding(~44) 빼고 영역 채움 */
 .z3-body {

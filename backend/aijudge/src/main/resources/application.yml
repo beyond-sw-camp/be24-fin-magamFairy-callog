@@ -1,0 +1,22 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: ai-judge
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+ai-judge:
+  n8n:
+    webhook-url: ${N8N_URL:}
+    check-endpoint: ${CHECK_ENDPOINT:}
+  ocr:
+    url: ${OCR_SERVICE_URL:}

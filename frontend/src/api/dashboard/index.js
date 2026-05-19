@@ -23,6 +23,14 @@ function unwrapResponse(response) {
   return payload.data
 }
 
+/**
+ * ⚡ B4: Dashboard 페이지 통합 호출.
+ */
+export const GetDashboardPage = async (period) => {
+  const params = period ? { period } : {}
+  return unwrapResponse(await api.get('/dashboard', { params }))
+}
+
 export const GetDashboardSummary = async (period) => {
   const params = period ? { period } : {}
   return unwrapResponse(await api.get('/dashboard/summary', { params }))
@@ -37,30 +45,15 @@ export const GetPartnerProgress = async (period) => {
   return unwrapResponse(await api.get('/dashboard/partner-progress', { params }))
 }
 
-export const GetReviewQueue = async () => {
-  return unwrapResponse(await api.get('/dashboard/review-queue'))
-}
-
-export const GetBlockers = async () => {
-  return unwrapResponse(await api.get('/dashboard/blockers'))
-}
-
 export const GetAssetCategories = async (period) => {
   const params = period ? { period } : {}
   return unwrapResponse(await api.get('/dashboard/asset-categories', { params }))
 }
 
-export const GetKpiCategories = async (period) => {
-  const params = period ? { period } : {}
-  return unwrapResponse(await api.get('/dashboard/kpi-categories', { params }))
-}
-
 export default {
+  GetDashboardPage,
   GetDashboardSummary,
   GetQuarterGoals,
   GetPartnerProgress,
-  GetReviewQueue,
-  GetBlockers,
   GetAssetCategories,
-  GetKpiCategories,
 }

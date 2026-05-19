@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
+import org.example.backend.adcheck.client.AiJudgeClient;
 import org.example.backend.adcheck.model.AdCheckDto;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +32,7 @@ import java.util.regex.Pattern;
 public class AdCheckService {
 
     private final RestClient aiRestClient;
+    private final AiJudgeClient aiJudgeClient;
     private static final Pattern JSON_FENCE_PATTERN = Pattern.compile("(?s)```(?:json)?\\s*(\\{.*?})\\s*```");
     private static final String EXTRACTED_TEXT_PATH = "ocr/extracted-text.txt";
     private static final String AI_RESULT_PATH = "ai/result.json";
@@ -47,12 +49,14 @@ public class AdCheckService {
 
     public AdCheckService(
             @Qualifier("aiRestClient") RestClient aiRestClient,
+            AiJudgeClient aiJudgeClient,
             ObjectMapper objectMapper,
             TextExtractorService textExtractorService,
             AdCheckFileStorageService adCheckFileStorageService,
             AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService
     ) {
         this.aiRestClient = aiRestClient;
+        this.aiJudgeClient = aiJudgeClient;
         this.objectMapper = objectMapper;
         this.textExtractorService = textExtractorService;
         this.adCheckFileStorageService = adCheckFileStorageService;
@@ -100,6 +104,10 @@ public class AdCheckService {
             log.error("n8n ad check RestClient failed. url={}", adCheckUrl, e);
             throw new RuntimeException("AI 검수 서버와 연결할 수 없습니다.", e);
         }
+    }
+
+    public AdCheckDto.Res checkWithAiJudge(String copy) {
+        return aiJudgeClient.check(copy);
     }
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file) {
@@ -166,6 +174,47 @@ public class AdCheckService {
             }
         } catch (IOException e) {
             throw new RuntimeException("파일 처리 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    public AdCheckDto.FileCheckRes checkFileWithAiJudge(MultipartFile file) {
+        long totalStartedAt = System.nanoTime();
+        try {
+            AdCheckFileStorageService.StoredFile storedFile = adCheckFileStorageService.upload(file);
+            TextExtractorService.ExtractResult extraction = textExtractorService.extractWithTiming(file);
+            long aiStartedAt = System.nanoTime();
+
+            try {
+                AdCheckDto.Res result = checkWithAiJudge(extraction.text());
+                long aiAnalysisMillis = elapsedMillis(aiStartedAt);
+                return AdCheckDto.FileCheckRes.of(
+                        file.getOriginalFilename(),
+                        storedFile.getObjectKey(),
+                        storedFile.getViewUrl(),
+                        storedFile.getContentType(),
+                        storedFile.getFileSize(),
+                        extraction.text(),
+                        result,
+                        extraction.extractionMode(),
+                        buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt)
+                );
+            } catch (RuntimeException e) {
+                long aiAnalysisMillis = elapsedMillis(aiStartedAt);
+                AdCheckDto.FileCheckRes partialResponse = AdCheckDto.FileCheckRes.builder()
+                        .fileName(file.getOriginalFilename())
+                        .fileObjectKey(storedFile.getObjectKey())
+                        .fileUrl(storedFile.getViewUrl())
+                        .fileContentType(storedFile.getContentType())
+                        .fileSize(storedFile.getFileSize())
+                        .extractedText(extraction.text())
+                        .extractionMode(extraction.extractionMode())
+                        .processingTimes(buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt))
+                        .errorMessage(e.getMessage())
+                        .build();
+                throw new FileCheckException(e.getMessage(), partialResponse, e);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("File processing failed.", e);
         }
     }
 

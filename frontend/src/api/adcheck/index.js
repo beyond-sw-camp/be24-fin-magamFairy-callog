@@ -60,6 +60,21 @@ export const CheckAdFile = async (file) => {
   }
 }
 
+export const CheckAdFileWithAiJudge = async (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  try {
+    return unwrapResponse(
+      await api.post('/ad/check/file/aijudge', formData, {
+        timeout: AD_CHECK_TIMEOUT_MS,
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    )
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
 export const ListAdReviewRequests = async (campaignId) => {
   try {
     return unwrapResponse(await api.get(`/campaigns/${campaignId}/ad-review-requests`))
