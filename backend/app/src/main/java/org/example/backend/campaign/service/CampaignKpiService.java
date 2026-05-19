@@ -5,6 +5,7 @@ import org.example.backend.campaign.model.*;
 import org.example.backend.campaign.repository.CampaignKpiRepository;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.common.security.CampaignMemberGuard;
 import org.example.backend.kpi.model.CampaignKpiContribution;
 import org.example.backend.kpi.repository.CampaignKpiContributionRepository;
@@ -33,6 +34,7 @@ public class CampaignKpiService {
     private final KpiFrameworkCatalog catalog;
     private final CampaignKpiContributionRepository contributionRepository;
     private final OrganizationKpiRepository orgKpiRepository;
+    private final DashboardCacheEvictor dashboardCacheEvictor;
 
     // ── 조회 ────────────────────────────────────────────────
 
@@ -120,6 +122,8 @@ public class CampaignKpiService {
             });
         }
 
+        // Dashboard 캐시 무효화 (kpiCategories, summary.matchAvg 영향)
+        dashboardCacheEvictor.evictAll();
         return CampaignKpiDto.Res.from(saved);
     }
 
@@ -145,6 +149,8 @@ public class CampaignKpiService {
         kpi.setUnit(req.unit());
         kpi.setOwnerLabel(req.ownerLabel());
         kpi.setOwnerUser(ownerUser);
+        // Dashboard 캐시 무효화 (category 변경 시 kpiCategories, target 변경 시 평균 영향)
+        dashboardCacheEvictor.evictAll();
         return CampaignKpiDto.Res.from(kpi);
     }
 
@@ -171,6 +177,8 @@ public class CampaignKpiService {
                     .ifPresent(c -> c.setActualValue(req.actualValue()));
         }
 
+        // Dashboard 캐시 무효화 (quarterGoals, partnerProgress.avgPct, summary.matchAvg 모두 영향)
+        dashboardCacheEvictor.evictAll();
         return CampaignKpiDto.Res.from(kpi);
     }
 
@@ -184,6 +192,8 @@ public class CampaignKpiService {
         CampaignKpi kpi = findKpi(campaignId, kpiId);
         requireOpen(kpi.getCampaign());
         kpiRepository.delete(kpi);
+        // Dashboard 캐시 무효화 (kpiCategories, summary.matchAvg 영향)
+        dashboardCacheEvictor.evictAll();
     }
 
     // ── 성과 분석 메모 ────────────────────────────────────────
@@ -225,7 +235,10 @@ public class CampaignKpiService {
                 .unit(item.unit())
                 .build()
         ).toList();
-        return kpiRepository.saveAll(created).stream().map(CampaignKpiDto.Res::from).toList();
+        List<CampaignKpiDto.Res> result = kpiRepository.saveAll(created).stream().map(CampaignKpiDto.Res::from).toList();
+        // Dashboard 캐시 무효화 (대량 KPI 추가 — kpiCategories, summary.matchAvg 영향)
+        dashboardCacheEvictor.evictAll();
+        return result;
     }
 
     // ── Helper ───────────────────────────────────────────────

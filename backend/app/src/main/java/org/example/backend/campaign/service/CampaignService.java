@@ -10,6 +10,7 @@ import org.example.backend.campaign.model.CampaignRole;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.kpi.service.CampaignKpiContributionService;
 import org.example.backend.notification.service.NotificationSseService;
 import org.example.backend.organization.model.OrganizationType;
@@ -72,50 +73,11 @@ public class CampaignService {
     private final CampaignParticipantRepository participantRepository;
     private final CampaignMemberRepository memberRepository;
     private final CampaignKpiContributionService contributionService;
-    private final CampaignImageStorageService thumbnailStorage;
-    private final CampaignThumbnailGenerator thumbnailGenerator;
     private final NotificationSseService sseService;
     private final TaskRepository taskRepository;
+    private final DashboardCacheEvictor dashboardCacheEvictor;
     public List<CampaignDto.Res> listCampaigns(Long userIdx) {
         return listCampaigns(userIdx, "mine");
-    }
-
-    // ── 썸네일 업로드 (Phase 3) ─────────────────────────────
-
-    /** 사용자가 직접 업로드 — presigned PUT URL 발급. */
-    public CampaignImageStorageService.UploadUrlResult createThumbnailUploadUrl(
-            String ownerLoginId, Long campaignId, String contentType, Long fileSize) {
-        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
-        return thumbnailStorage.createUploadUrl(campaign.getIdx(), contentType, fileSize);
-    }
-
-    /** 업로드 완료 확인 → Campaign.thumbnailObjectKey 저장 (이전 키 있으면 삭제). */
-    @Transactional
-    public void confirmThumbnail(String ownerLoginId, Long campaignId, String objectKey) {
-        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
-        if (objectKey == null || objectKey.isBlank()
-                || !thumbnailStorage.isCampaignThumbKey(campaign.getIdx(), objectKey)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid thumbnail object key.");
-        }
-        thumbnailStorage.validateUploadedObject(objectKey);
-
-        String previous = campaign.getThumbnailObjectKey();
-        campaign.updateThumbnailObjectKey(objectKey);
-        // 이전 썸네일 정리 (best-effort)
-        if (previous != null && !previous.equals(objectKey)) {
-            try { thumbnailStorage.deleteObject(previous); } catch (Exception ignored) { }
-        }
-    }
-
-    /** 썸네일 삭제. */
-    @Transactional
-    public void clearThumbnail(String ownerLoginId, Long campaignId) {
-        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
-        String previous = campaign.getThumbnailObjectKey();
-        campaign.updateThumbnailObjectKey(null);
-        if (previous != null) {
-            try { thumbnailStorage.deleteObject(previous); } catch (Exception ignored) { }
-        }
     }
 
     /**
@@ -232,23 +194,10 @@ public class CampaignService {
             contributionService.bulkCreate(saved, dto.contributions());
         }
 
-        // 썸네일 자동 생성 (Phase 4) — 비동기, 응답 안 막음. 키 없으면 조용히 skip.
-        thumbnailGenerator.generateAsyncIfMissing(saved.getIdx());
+        // Dashboard 캐시 무효화 (active count, partnerCount, kpiCategories, blockers 영향)
+        dashboardCacheEvictor.evictAll();
 
         return buildResponseFor(saved, owner);
-    }
-
-    /** 명시적 AI 생성 — 사용자가 직접 트리거 (Phase 4). */
-    @Transactional
-    public void regenerateThumbnail(String ownerLoginId, Long campaignId) {
-        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
-        // 기존 썸네일 키 비워서 generator가 생성하도록
-        String previous = campaign.getThumbnailObjectKey();
-        campaign.updateThumbnailObjectKey(null);
-        if (previous != null) {
-            try { thumbnailStorage.deleteObject(previous); } catch (Exception ignored) { }
-        }
-        thumbnailGenerator.generateAsyncIfMissing(campaign.getIdx());
     }
 
     @Transactional
@@ -277,6 +226,8 @@ public class CampaignService {
         );
 
         sseService.broadcastCalendarRefresh(campaign.getIdx(), "campaign");
+        // Dashboard 캐시 무효화 (캠페인명/partner 변경 시 partnerProgress 등 stale 방지)
+        dashboardCacheEvictor.evictAll();
         return buildResponseFor(campaign, user);
     }
 
@@ -285,6 +236,8 @@ public class CampaignService {
         Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
         User user = userRepository.findUserById(ownerLoginId).orElse(null);
         campaign.updatePartners(normalizeList(dto.partners()));
+        // Dashboard 캐시 무효화 (partnerCount, partnerProgress 영향)
+        dashboardCacheEvictor.evictAll();
         return buildResponseFor(campaign, user);
     }
 
@@ -299,6 +252,8 @@ public class CampaignService {
         }
 
         campaign.updateStatus(status);
+        // Dashboard 캐시 무효화 (active count, activeByOrg 영향)
+        dashboardCacheEvictor.evictAll();
         return buildResponseFor(campaign, user);
     }
 
