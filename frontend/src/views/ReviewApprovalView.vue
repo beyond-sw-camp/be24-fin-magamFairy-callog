@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import {
   ApproveAdReviewRequest,
-  CheckAdFile,
+  CheckAdFileWithAiJudge,
   CreateAdReviewRequest,
   ListAdReviewRequests,
   RejectAdReviewRequest,
@@ -363,7 +363,7 @@ async function processAnalysisFile(file) {
   selectedAnalysisFile.value = file
   isAnalyzing.value = true
   try {
-    const result = await CheckAdFile(file)
+    const result = await CheckAdFileWithAiJudge(file)
     analysisResult.value = result
     if (!normalizeAnalysisStatus(result?.status)) {
       analysisError.value = 'AI 검수 결과 형식이 올바르지 않습니다. 서버 응답을 확인해주세요.'
