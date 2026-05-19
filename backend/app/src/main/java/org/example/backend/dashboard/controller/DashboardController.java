@@ -20,6 +20,22 @@ public class DashboardController {
 
     private final DashboardAggregateService aggregateService;
 
+    /**
+     * ⚡ B4: Dashboard 페이지 통합 endpoint.
+     * 이전 5개 endpoint (summary, quarter-goals, partner-progress, asset-categories, kpi-categories)
+     * 를 한 번의 호출로 묶음. 응답 = DashboardPageDto.
+     *
+     * Frontend dashboardStore.loadAll() 이 이 endpoint 하나만 호출하도록 변경됨.
+     * 기존 개별 endpoint 들은 하위 호환 + nGrinder 부하 테스트용으로 유지.
+     */
+    @GetMapping
+    public ResponseEntity<BaseResponse> dashboardPage(
+            @RequestParam(required = false) String period,
+            @AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.loadAll(user.getIdx(), period)));
+    }
+
     @GetMapping("/summary")
     public ResponseEntity<BaseResponse> summary(@AuthenticationPrincipal AuthUserDetails user) {
         requireAuth(user);

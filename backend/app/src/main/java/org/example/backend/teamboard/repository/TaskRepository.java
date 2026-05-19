@@ -24,4 +24,19 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     );
 
     List<Task> findAllByDueDateBeforeAndStatusNotIn(LocalDateTime dueDate, Collection<TaskStatus> statuses);
+
+    /**
+     * 한 번의 쿼리로 여러 캠페인의 task 수를 GROUP BY 로 집계.
+     * 결과: [campaignIdx, count] 쌍 리스트. task가 없는 캠페인은 결과에 포함되지 않음.
+     * N+1 회피용 — DashboardView / CampaignList totalTaskCount 채울 때 사용.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT t.taskPart.campaign.idx, COUNT(t) " +
+            "FROM Task t " +
+            "WHERE t.taskPart.campaign.idx IN :campaignIds " +
+            "GROUP BY t.taskPart.campaign.idx"
+    )
+    List<Object[]> countByCampaignIdxIn(
+            @org.springframework.data.repository.query.Param("campaignIds") Collection<Long> campaignIds
+    );
 }

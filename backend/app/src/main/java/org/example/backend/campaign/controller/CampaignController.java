@@ -11,7 +11,6 @@ import org.example.backend.user.model.AuthUserDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -93,50 +92,6 @@ public class CampaignController {
                 campaignService.invitePartners(currentUser(user), toIdx(campaignId), dto)
         ));
     }
-
-    @PostMapping("/{campaignId}/thumbnail/upload-url")
-    public ResponseEntity<BaseResponse> createThumbnailUploadUrl(
-            @PathVariable String campaignId,
-            @RequestBody ThumbnailUploadReq dto,
-            @AuthenticationPrincipal AuthUserDetails user
-    ) {
-        return ResponseEntity.ok(BaseResponse.success(
-                campaignService.createThumbnailUploadUrl(currentUser(user), toIdx(campaignId),
-                        dto == null ? null : dto.contentType(),
-                        dto == null ? null : dto.fileSize())
-        ));
-    }
-
-    @PatchMapping("/{campaignId}/thumbnail")
-    public ResponseEntity<BaseResponse> confirmThumbnail(
-            @PathVariable String campaignId,
-            @RequestBody ThumbnailConfirmReq dto,
-            @AuthenticationPrincipal AuthUserDetails user
-    ) {
-        campaignService.confirmThumbnail(currentUser(user), toIdx(campaignId), dto == null ? null : dto.objectKey());
-        return ResponseEntity.ok(BaseResponse.success(null));
-    }
-
-    @DeleteMapping("/{campaignId}/thumbnail")
-    public ResponseEntity<BaseResponse> clearThumbnail(
-            @PathVariable String campaignId,
-            @AuthenticationPrincipal AuthUserDetails user
-    ) {
-        campaignService.clearThumbnail(currentUser(user), toIdx(campaignId));
-        return ResponseEntity.ok(BaseResponse.success(null));
-    }
-
-    @PostMapping("/{campaignId}/thumbnail/generate")
-    public ResponseEntity<BaseResponse> regenerateThumbnail(
-            @PathVariable String campaignId,
-            @AuthenticationPrincipal AuthUserDetails user
-    ) {
-        campaignService.regenerateThumbnail(currentUser(user), toIdx(campaignId));
-        return ResponseEntity.ok(BaseResponse.success("썸네일 생성을 시작했습니다."));
-    }
-
-    public record ThumbnailUploadReq(String contentType, Long fileSize) {}
-    public record ThumbnailConfirmReq(String objectKey) {}
 
     private String currentUser(AuthUserDetails user) {
         if (user == null) {

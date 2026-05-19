@@ -1,6 +1,7 @@
 package org.example.backend.kpi.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.backend.common.redis.CacheNames;
 import org.example.backend.kpi.dto.CreateKpiTemplateRequest;
 import org.example.backend.kpi.dto.KpiTemplateDto;
 import org.example.backend.kpi.dto.OrganizationKpiDto;
@@ -15,6 +16,8 @@ import org.example.backend.organization.model.OrganizationType;
 import org.example.backend.organization.repository.OrganizationRepository;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +38,12 @@ public class KpiTemplateService {
     private final OrganizationRepository organizationRepository;
     private final UserRepository userRepository;
 
+    /**
+     * 템플릿 목록 — 거의 안 바뀌고 read-heavy 라 캐싱 (TTL 1시간).
+     * 캐시 key 는 (scope, orgId) 조합. null 안전하게.
+     */
+    @Cacheable(value = CacheNames.KPI_TEMPLATES,
+            key = "(#scope == null ? 'ALL' : #scope.name()) + ':' + (#orgId == null ? 'X' : #orgId)")
     public List<KpiTemplateDto> list(TemplateScope scope, Long orgId) {
         return templateRepository.findByFilters(scope, orgId).stream()
                 .map(KpiTemplateDto::from)
@@ -42,6 +51,7 @@ public class KpiTemplateService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheNames.KPI_TEMPLATES, allEntries = true)   // 새 템플릿 생성 시 모든 목록 캐시 무효화
     public KpiTemplateDto create(Long callerIdx, CreateKpiTemplateRequest req) {
         User caller = findUser(callerIdx);
         requireAdminLike(caller);
@@ -97,6 +107,7 @@ public class KpiTemplateService {
      * 호출자 조직을 owner로 함. period/target 등은 호출 시점에 기본값으로 채움.
      */
     @Transactional
+    @CacheEvict(value = CacheNames.KPI_TEMPLATES, allEntries = true)   // usageCount 증가로 목록 응답이 변하므로
     public OrganizationKpiDto instantiate(Long callerIdx, Long templateId) {
         User caller = findUser(callerIdx);
         requireAdminLike(caller);

@@ -10,9 +10,11 @@ import org.example.backend.campaign.model.CampaignRole;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.kpi.service.CampaignKpiContributionService;
 import org.example.backend.notification.service.NotificationSseService;
 import org.example.backend.organization.model.OrganizationType;
+import org.example.backend.teamboard.repository.TaskRepository;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -22,7 +24,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
@@ -69,49 +73,11 @@ public class CampaignService {
     private final CampaignParticipantRepository participantRepository;
     private final CampaignMemberRepository memberRepository;
     private final CampaignKpiContributionService contributionService;
-    private final CampaignImageStorageService thumbnailStorage;
-    private final CampaignThumbnailGenerator thumbnailGenerator;
     private final NotificationSseService sseService;
+    private final TaskRepository taskRepository;
+    private final DashboardCacheEvictor dashboardCacheEvictor;
     public List<CampaignDto.Res> listCampaigns(Long userIdx) {
         return listCampaigns(userIdx, "mine");
-    }
-
-    // ── 썸네일 업로드 (Phase 3) ─────────────────────────────
-
-    /** 사용자가 직접 업로드 — presigned PUT URL 발급. */
-    public CampaignImageStorageService.UploadUrlResult createThumbnailUploadUrl(
-            String ownerLoginId, Long campaignId, String contentType, Long fileSize) {
-        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
-        return thumbnailStorage.createUploadUrl(campaign.getIdx(), contentType, fileSize);
-    }
-
-    /** 업로드 완료 확인 → Campaign.thumbnailObjectKey 저장 (이전 키 있으면 삭제). */
-    @Transactional
-    public void confirmThumbnail(String ownerLoginId, Long campaignId, String objectKey) {
-        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
-        if (objectKey == null || objectKey.isBlank()
-                || !thumbnailStorage.isCampaignThumbKey(campaign.getIdx(), objectKey)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid thumbnail object key.");
-        }
-        thumbnailStorage.validateUploadedObject(objectKey);
-
-        String previous = campaign.getThumbnailObjectKey();
-        campaign.updateThumbnailObjectKey(objectKey);
-        // 이전 썸네일 정리 (best-effort)
-        if (previous != null && !previous.equals(objectKey)) {
-            try { thumbnailStorage.deleteObject(previous); } catch (Exception ignored) { }
-        }
-    }
-
-    /** 썸네일 삭제. */
-    @Transactional
-    public void clearThumbnail(String ownerLoginId, Long campaignId) {
-        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
-        String previous = campaign.getThumbnailObjectKey();
-        campaign.updateThumbnailObjectKey(null);
-        if (previous != null) {
-            try { thumbnailStorage.deleteObject(previous); } catch (Exception ignored) { }
-        }
     }
 
     /**
@@ -121,16 +87,35 @@ public class CampaignService {
      */
     public List<CampaignDto.Res> listCampaigns(Long userIdx, String scope) {
         User user = userRepository.findById(userIdx).orElse(null);
+        List<Campaign> campaigns;
         if ("org".equalsIgnoreCase(scope) && user != null && user.getOrganization() != null) {
             Long orgIdx = user.getOrganization().getIdx();
-            return participantRepository.findCampaignsByOrganizationIdx(orgIdx).stream()
-                    .map(c -> buildResponseFor(c, user))
+            campaigns = participantRepository.findCampaignsByOrganizationIdx(orgIdx);
+        } else {
+            // 기본 — mine
+            campaigns = memberRepository.findAllWithCampaignByUserIdx(userIdx).stream()
+                    .map(CampaignMember::getCampaign)
                     .toList();
         }
-        // 기본 — mine
-        return memberRepository.findAllWithCampaignByUserIdx(userIdx).stream()
-                .map(cm -> buildResponseFor(cm.getCampaign(), user))
+        Map<Long, Integer> taskCounts = loadTaskCountMap(
+                campaigns.stream().map(Campaign::getIdx).toList());
+        return campaigns.stream()
+                .map(c -> buildResponseFor(c, user, taskCounts.getOrDefault(c.getIdx(), 0)))
                 .toList();
+    }
+
+    /**
+     * 캠페인 idx 목록에 대해 한 번의 GROUP BY 쿼리로 task 수 조회.
+     * Dashboard / CampaignList 의 N+1 회피용.
+     */
+    private Map<Long, Integer> loadTaskCountMap(List<Long> campaignIds) {
+        if (campaignIds == null || campaignIds.isEmpty()) return Map.of();
+        Map<Long, Integer> out = new HashMap<>();
+        for (Object[] row : taskRepository.countByCampaignIdxIn(campaignIds)) {
+            if (row == null || row.length < 2 || row[0] == null || row[1] == null) continue;
+            out.put((Long) row[0], ((Number) row[1]).intValue());
+        }
+        return out;
     }
 
     @Transactional
@@ -209,23 +194,10 @@ public class CampaignService {
             contributionService.bulkCreate(saved, dto.contributions());
         }
 
-        // 썸네일 자동 생성 (Phase 4) — 비동기, 응답 안 막음. 키 없으면 조용히 skip.
-        thumbnailGenerator.generateAsyncIfMissing(saved.getIdx());
+        // Dashboard 캐시 무효화 (active count, partnerCount, kpiCategories, blockers 영향)
+        dashboardCacheEvictor.evictAll();
 
         return buildResponseFor(saved, owner);
-    }
-
-    /** 명시적 AI 생성 — 사용자가 직접 트리거 (Phase 4). */
-    @Transactional
-    public void regenerateThumbnail(String ownerLoginId, Long campaignId) {
-        Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
-        // 기존 썸네일 키 비워서 generator가 생성하도록
-        String previous = campaign.getThumbnailObjectKey();
-        campaign.updateThumbnailObjectKey(null);
-        if (previous != null) {
-            try { thumbnailStorage.deleteObject(previous); } catch (Exception ignored) { }
-        }
-        thumbnailGenerator.generateAsyncIfMissing(campaign.getIdx());
     }
 
     @Transactional
@@ -254,6 +226,8 @@ public class CampaignService {
         );
 
         sseService.broadcastCalendarRefresh(campaign.getIdx(), "campaign");
+        // Dashboard 캐시 무효화 (캠페인명/partner 변경 시 partnerProgress 등 stale 방지)
+        dashboardCacheEvictor.evictAll();
         return buildResponseFor(campaign, user);
     }
 
@@ -262,6 +236,8 @@ public class CampaignService {
         Campaign campaign = getEditableCampaign(ownerLoginId, campaignId);
         User user = userRepository.findUserById(ownerLoginId).orElse(null);
         campaign.updatePartners(normalizeList(dto.partners()));
+        // Dashboard 캐시 무효화 (partnerCount, partnerProgress 영향)
+        dashboardCacheEvictor.evictAll();
         return buildResponseFor(campaign, user);
     }
 
@@ -276,14 +252,26 @@ public class CampaignService {
         }
 
         campaign.updateStatus(status);
+        // Dashboard 캐시 무효화 (active count, activeByOrg 영향)
+        dashboardCacheEvictor.evictAll();
         return buildResponseFor(campaign, user);
     }
 
     /**
      * 응답 DTO에 호출 유저 기준 권한 정보(내 캠페인 역할, 내 조직이 PM인지)를 채워서 반환한다.
      * user가 null이면 권한 정보는 null/false로 채움.
+     * 단일 캠페인 응답 (create/update 등) — task count 는 별도 쿼리로 채워 N+1 회피.
      */
     private CampaignDto.Res buildResponseFor(Campaign campaign, User user) {
+        int taskCount = loadTaskCountMap(List.of(campaign.getIdx()))
+                .getOrDefault(campaign.getIdx(), 0);
+        return buildResponseFor(campaign, user, taskCount);
+    }
+
+    /**
+     * task count 가 외부에서 미리 계산된 경우 (listCampaigns 의 group-by 결과) 그대로 주입.
+     */
+    private CampaignDto.Res buildResponseFor(Campaign campaign, User user, Integer totalTaskCount) {
         Long orgIdx = (user != null && user.getOrganization() != null) ? user.getOrganization().getIdx() : null;
         boolean isPmOrg = orgIdx != null && participantRepository.existsByCampaignIdxAndOrganizationIdxAndCampaignRole(
                 campaign.getIdx(), orgIdx, CampaignRole.PM);
@@ -291,7 +279,7 @@ public class CampaignService {
                 .findByCampaignIdxAndUserIdx(campaign.getIdx(), user.getIdx())
                 .map(CampaignMember::getCampaignRole)
                 .orElse(null);
-        return CampaignDto.Res.from(campaign, myRole, isPmOrg);
+        return CampaignDto.Res.from(campaign, myRole, isPmOrg, totalTaskCount);
     }
 
     /**

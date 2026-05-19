@@ -6,6 +6,7 @@ import org.example.backend.campaign.model.CampaignMemberRole;
 import org.example.backend.campaign.model.CampaignParticipant;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
+import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.notification.service.NotificationService;
 import org.example.backend.notification.service.NotificationSseService;
 import org.example.backend.teamboard.model.MileStones;
@@ -40,6 +41,7 @@ public class TaskService {
     private final CampaignMemberRepository campaignMemberRepository;
     private final NotificationService notificationService;
     private final NotificationSseService sseService;
+    private final DashboardCacheEvictor dashboardCacheEvictor;
 
     /** 메인 팀 보드 - 내가 참여한 캠페인의 Task */
     public List<TaskDto.ResList> listAll(Long userIdx) {
@@ -81,6 +83,8 @@ public class TaskService {
         Task saved = taskRepository.save(req.toEntity(participant, taskPart, milestone, assignee));
         notificationService.notifyTaskAssigned(saved, findActor(authUser));
         sseService.broadcastCalendarRefresh(campaignIdx, "task");
+        // Dashboard 캐시 무효화 (reviewQueue, summary.pending, blockers 영향)
+        dashboardCacheEvictor.evictAll();
         return TaskDto.ResTask.from(saved);
     }
 
@@ -149,6 +153,8 @@ public class TaskService {
         Long campaignIdxForSse = task.getTaskPart() != null && task.getTaskPart().getCampaign() != null
                 ? task.getTaskPart().getCampaign().getIdx() : null;
         sseService.broadcastCalendarRefresh(campaignIdxForSse, "task");
+        // Dashboard 캐시 무효화 (status 변경 시 reviewQueue/blockers/passPct 모두 영향)
+        dashboardCacheEvictor.evictAll();
         return TaskDto.ResTask.from(task);
     }
 
@@ -160,6 +166,8 @@ public class TaskService {
                 ? task.getTaskPart().getCampaign().getIdx() : null;
         taskRepository.deleteById(taskIdx);
         sseService.broadcastCalendarRefresh(campaignIdxForSse, "task");
+        // Dashboard 캐시 무효화 (reviewQueue/blockers 에서 제거)
+        dashboardCacheEvictor.evictAll();
     }
 
     private Task getTaskOrThrow(Long taskIdx) {

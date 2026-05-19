@@ -31,8 +31,10 @@ import org.example.backend.organization.repository.OrganizationRepository;
 import org.example.backend.teamboard.model.Task;
 import org.example.backend.teamboard.model.TaskStatus;
 import org.example.backend.teamboard.repository.TaskRepository;
+import org.example.backend.common.redis.CacheNames;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +61,7 @@ public class DashboardAggregateService {
     private static final Set<String> ACTIVE_CAMPAIGN_STATUSES = Set.of("live", "review", "paused");
 
     private final UserRepository userRepository;
+    private final org.example.backend.common.redis.UserAuthCache userAuthCache;
     private final OrganizationRepository organizationRepository;
     private final CampaignRepository campaignRepository;
     private final CampaignKpiRepository campaignKpiRepository;
@@ -72,12 +75,40 @@ public class DashboardAggregateService {
     private final KpiMonthlySnapshotRepository monthlySnapshotRepository;
     private final KpiDailySnapshotRepository dailySnapshotRepository;
 
+    // ── 0. Dashboard 페이지 통합 응답 (B4 + Fix A) ───────────────────
+    /**
+     * Dashboard 페이지 진입 시 5종 데이터를 한 번에 산출 + 캐시.
+     *
+     * ⚡ Fix A: 메소드 자체에 @Cacheable.
+     *   - 이전: loadAll() 안에서 summary() / quarterGoals() 등 같은 클래스 호출 →
+     *     Spring AOP proxy 우회 → sub-method 의 @Cacheable 무시 → 캐시 효과 거의 없었음.
+     *   - 현재: 통합 응답 (DashboardPageDto) 자체를 단일 키로 Redis 에 적재.
+     *     cache hit 시 sub-method 진입조차 안 함 (5종 DB 쿼리 전부 skip).
+     *
+     * 캐시 키: "{callerIdx}:{periodCode}" — 사용자별 + 분기별 분리.
+     * Invalidation: 캠페인/KPI/Task 변경 시 @CacheEvict(DASHBOARD_PAGE, allEntries=true) 필요.
+     */
+    @Cacheable(value = CacheNames.DASHBOARD_PAGE,
+            key = "#callerIdx + ':' + (#periodCode == null ? '' : #periodCode)")
+    public org.example.backend.dashboard.dto.DashboardPageDto loadAll(Long callerIdx, String periodCode) {
+        return new org.example.backend.dashboard.dto.DashboardPageDto(
+                summary(callerIdx),
+                quarterGoals(callerIdx, periodCode),
+                partnerProgress(callerIdx),
+                assetCategories(callerIdx),
+                kpiCategories(callerIdx)
+        );
+    }
+
     // ── 1. Summary ──────────────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_SUMMARY, key = "#callerIdx")
     public DashboardSummaryDto summary(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
         List<Campaign> visibleCampaigns = filterCampaigns(scope);
+        // F1: 본인 조직 idx — 협력사 카운트에서 제외
+        Long myOrgIdx = caller.getOrganization() == null ? null : caller.getOrganization().getIdx();
 
         long active = visibleCampaigns.stream()
                 .filter(c -> ACTIVE_CAMPAIGN_STATUSES.contains(c.getStatus()))
@@ -85,14 +116,13 @@ public class DashboardAggregateService {
 
         Set<Long> visibleCampaignIds = visibleCampaigns.stream()
                 .map(Campaign::getIdx).collect(Collectors.toSet());
+        // ⚡ B2: findAll() 풀스캔 → IN 쿼리
         List<CampaignKpi> kpis = visibleCampaignIds.isEmpty()
                 ? List.of()
-                : campaignKpiRepository.findAll().stream()
-                    .filter(k -> visibleCampaignIds.contains(k.getCampaign().getIdx()))
-                    .toList();
+                : campaignKpiRepository.findAllByCampaign_IdxInOrderByIdxAsc(visibleCampaignIds);
         Integer avg = averageAchievement(kpis);
 
-        // 검수 대기 / 패스율 (REVIEW vs DONE 비율)
+        // 검수 대기 / 패스율
         List<Task> scopedTasks = filterTasksForScope(scope);
         long pending = scopedTasks.stream().filter(t -> t.getStatus() == TaskStatus.REVIEW).count();
         long doneCnt = scopedTasks.stream().filter(t -> t.getStatus() == TaskStatus.DONE).count();
@@ -100,38 +130,34 @@ public class DashboardAggregateService {
         Integer passPct = reviewedTotal == 0 ? null
                 : (int) Math.round(doneCnt * 100.0 / reviewedTotal);
 
-        // 협력사 수 (참여 organization)
-        Set<Long> orgIds = new HashSet<>();
-        for (Campaign c : visibleCampaigns) {
-            for (CampaignParticipant cp : participantRepository.findAllByCampaignIdx(c.getIdx())) {
-                if (cp.getOrganization() != null) {
-                    orgIds.add(cp.getOrganization().getIdx());
-                }
+        // ⚡ B3 + F1: 캠페인 N개 × 1쿼리(루프) → 1 IN 쿼리. + 본인 조직 제외.
+        Set<Long> partnerOrgIds = new HashSet<>();
+        if (!visibleCampaignIds.isEmpty()) {
+            for (CampaignParticipant cp : participantRepository.findAllByCampaignIdxInWithOrg(visibleCampaignIds)) {
+                if (cp.getOrganization() == null) continue;
+                Long orgIdx = cp.getOrganization().getIdx();
+                if (myOrgIdx != null && Objects.equals(myOrgIdx, orgIdx)) continue;
+                partnerOrgIds.add(orgIdx);
             }
         }
-        long partnerCount = orgIds.size();
+        long partnerCount = partnerOrgIds.size();
 
-        // 자산 LIVE 카운트 (visible 캠페인 범위)
-        long liveAssetCount = assetRepository.findAll().stream()
-                .filter(a -> {
-                    if (scope.allCampaigns) return true;
-                    Long camp = a.getCampaign() != null ? a.getCampaign().getIdx() : null;
-                    Long org = a.getOrganization() != null ? a.getOrganization().getIdx() : null;
-                    return (camp != null && visibleCampaignIds.contains(camp))
-                            || (scope.ownerOrgId != null && Objects.equals(scope.ownerOrgId, org));
-                })
-                .count();
+        // ⚡ B2: findAll().stream().filter().count() → COUNT 쿼리 한 방
+        long liveAssetCount = scope.allCampaigns
+                ? assetRepository.countAllAssets()
+                : (visibleCampaignIds.isEmpty() && scope.ownerOrgId == null
+                        ? 0L
+                        : assetRepository.countVisibleAssets(
+                                visibleCampaignIds.isEmpty() ? Set.of(-1L) : visibleCampaignIds,
+                                scope.ownerOrgId));
 
-        // 매칭 평균 — KPI 평균 달성률을 차용 (별도 매칭 점수 데이터 없을 때)
         Integer matchAvg = avg;
-
-        // RFP 응모 = PartnerBenefits 전체 카운트 (Phase 2: visible 캠페인 범위로 좁히기)
         long rfpCount = benefitRepository.count();
 
-        // 신규 협력사 — visible org 중 createdAt가 30일 내인 것
+        // 신규 협력사 — 본인 조직 제외한 partnerOrgIds 중 createdAt가 30일 내 (F1)
         LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
-        long newPartnerCount = orgIds.isEmpty() ? 0L
-                : organizationRepository.findAllById(orgIds).stream()
+        long newPartnerCount = partnerOrgIds.isEmpty() ? 0L
+                : organizationRepository.findAllById(partnerOrgIds).stream()
                         .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(thirtyDaysAgo))
                         .count();
 
@@ -141,29 +167,50 @@ public class DashboardAggregateService {
                 new DashboardSummaryDto.MiniStat("자산 LIVE", String.valueOf(liveAssetCount))
         );
 
-        // AFFILIATE / EXTERNAL_PARTNER 스코프: 전사 OrgKpi 평균 — 자기 위치 비교용
+        // AFFILIATE / EXTERNAL_PARTNER 스코프: 전사 OrgKpi 평균 — ⚡ B1: N sum 쿼리 → 1 GROUP BY
         Integer companyAvgPct = null;
         if ("AFFILIATE".equals(scope.label) || "EXTERNAL_PARTNER".equals(scope.label)) {
             List<OrganizationKpi> allActive = orgKpiRepository.findByFilters(null, null, GoalStatus.ACTIVE);
-            List<Integer> percents = allActive.stream()
-                    .map(k -> calcPercent(
-                            contributionRepository.sumActualByTargetOrgKpi(k.getIdx()),
-                            k.getTargetValue()))
-                    .filter(Objects::nonNull)
-                    .toList();
-            companyAvgPct = percents.isEmpty() ? null
-                    : percents.stream().mapToInt(Integer::intValue).sum() / percents.size();
+            if (!allActive.isEmpty()) {
+                Map<Long, BigDecimal> actualByKpi = loadActualSumMap(
+                        allActive.stream().map(OrganizationKpi::getIdx).toList());
+                List<Integer> percents = allActive.stream()
+                        .map(k -> calcPercent(
+                                actualByKpi.getOrDefault(k.getIdx(), BigDecimal.ZERO),
+                                k.getTargetValue()))
+                        .filter(Objects::nonNull)
+                        .toList();
+                companyAvgPct = percents.isEmpty() ? null
+                        : percents.stream().mapToInt(Integer::intValue).sum() / percents.size();
+            }
         }
+
+        // trend (지난주 대비 %p): 실 데이터 (지난주 OrgKpi snapshot) 없으면 null.
+        // frontend 는 null 일 때 "지난주" 표시 안 함.
+        Integer trend = null;
 
         return new DashboardSummaryDto(
                 active, avg, avg,
                 pending, partnerCount, newPartnerCount, rfpCount,
-                0, companyAvgPct, miniStats, scope.label
+                trend, companyAvgPct, miniStats, scope.label
         );
+    }
+
+    /** B1 헬퍼: 여러 OrgKpi 의 actual sum 일괄 조회. */
+    private Map<Long, BigDecimal> loadActualSumMap(java.util.Collection<Long> orgKpiIds) {
+        if (orgKpiIds == null || orgKpiIds.isEmpty()) return Map.of();
+        Map<Long, BigDecimal> out = new HashMap<>();
+        for (Object[] row : contributionRepository.sumByOrgKpiIdxIn(orgKpiIds)) {
+            if (row == null || row.length < 3 || row[0] == null) continue;
+            out.put((Long) row[0], row[2] == null ? BigDecimal.ZERO : (BigDecimal) row[2]);
+        }
+        return out;
     }
 
     // ── 2. Quarter Goals ────────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_QUARTER_GOALS,
+               key = "#callerIdx + ':' + (#periodCode ?: 'all')")
     public List<QuarterGoalProgressDto> quarterGoals(Long callerIdx, String periodCode) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -172,12 +219,27 @@ public class DashboardAggregateService {
         List<OrganizationKpi> kpis = orgKpiRepository.findByFilters(
                 resolveOwnerOrgIdFilter(scope), nullIfBlank(periodCode), GoalStatus.ACTIVE);
 
-        return kpis.stream().map(this::toQuarterGoalDto).toList();
+        if (kpis.isEmpty()) return List.of();
+
+        // ⚡ B1: OrgKpi N개 × 2(sumCommitted+sumActual) → 1 GROUP BY
+        List<Long> kpiIds = kpis.stream().map(OrganizationKpi::getIdx).toList();
+        Map<Long, BigDecimal> committedByKpi = new HashMap<>();
+        Map<Long, BigDecimal> actualByKpi = new HashMap<>();
+        for (Object[] row : contributionRepository.sumByOrgKpiIdxIn(kpiIds)) {
+            if (row == null || row.length < 3 || row[0] == null) continue;
+            Long kpiId = (Long) row[0];
+            committedByKpi.put(kpiId, row[1] == null ? BigDecimal.ZERO : (BigDecimal) row[1]);
+            actualByKpi.put(kpiId, row[2] == null ? BigDecimal.ZERO : (BigDecimal) row[2]);
+        }
+
+        return kpis.stream()
+                .map(k -> toQuarterGoalDto(k,
+                        committedByKpi.getOrDefault(k.getIdx(), BigDecimal.ZERO),
+                        actualByKpi.getOrDefault(k.getIdx(), BigDecimal.ZERO)))
+                .toList();
     }
 
-    private QuarterGoalProgressDto toQuarterGoalDto(OrganizationKpi k) {
-        BigDecimal committed = contributionRepository.sumCommittedByTargetOrgKpi(k.getIdx());
-        BigDecimal actual = contributionRepository.sumActualByTargetOrgKpi(k.getIdx());
+    private QuarterGoalProgressDto toQuarterGoalDto(OrganizationKpi k, BigDecimal committed, BigDecimal actual) {
         Integer pct = calcPercent(actual, k.getTargetValue());
 
         // 월별 데이터 — snapshot 없는 달은 null (frontend 우측 정렬에 사용)
@@ -218,7 +280,7 @@ public class DashboardAggregateService {
                 k.getUnit(),
                 k.getTargetValue(),
                 committed,
-                actual,
+                actual,                     // ← record 필드명이 actualValue 로 변경됨 (frontend Z1/P2 와 일치)
                 pct,
                 k.getPeriodCode(),
                 k.getOwner() != null ? k.getOwner().getIdx() : null,
@@ -248,67 +310,96 @@ public class DashboardAggregateService {
 
     // ── 3. Partner Progress ─────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_PARTNER_PROGRESS, key = "#callerIdx")
     public List<PartnerProgressDto> partnerProgress(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
         List<Campaign> visibleCampaigns = filterCampaigns(scope);
+        // F1: 본인 조직 idx — Top5 협력사에서 자기 자신은 제외
+        Long myOrgIdx = caller.getOrganization() == null ? null : caller.getOrganization().getIdx();
 
-        // 캠페인별 참여 조직을 모음 — partner 후보
+        if (visibleCampaigns.isEmpty()) return List.of();
+        Set<Long> campaignIds = visibleCampaigns.stream()
+                .map(Campaign::getIdx).collect(Collectors.toSet());
+
+        // ⚡ B3: 캠페인 N개 × 2쿼리 → 2개 IN 쿼리
+        List<CampaignParticipant> allParticipants =
+                participantRepository.findAllByCampaignIdxInWithOrg(campaignIds);
+        List<CampaignKpi> allCampaignKpis =
+                campaignKpiRepository.findAllByCampaign_IdxInOrderByIdxAsc(campaignIds);
+
+        Map<Long, List<CampaignKpi>> kpisByCampaign = allCampaignKpis.stream()
+                .collect(Collectors.groupingBy(k -> k.getCampaign().getIdx()));
+        Map<Long, Campaign> campaignById = visibleCampaigns.stream()
+                .collect(Collectors.toMap(Campaign::getIdx, c -> c, (a, b) -> a));
+
         Map<Long, Organization> partners = new HashMap<>();
         Map<Long, Long> totalByOrg = new HashMap<>();
         Map<Long, Long> activeByOrg = new HashMap<>();
         Map<Long, List<CampaignKpi>> kpisByOrg = new HashMap<>();
 
-        for (Campaign c : visibleCampaigns) {
-            List<CampaignParticipant> ps = participantRepository.findAllByCampaignIdx(c.getIdx());
-            List<CampaignKpi> ckpis = campaignKpiRepository.findAllByCampaignIdxOrderByIdxAsc(c.getIdx());
+        for (CampaignParticipant cp : allParticipants) {
+            Organization org = cp.getOrganization();
+            if (org == null) continue;
+            // F1: 본인 조직 제외
+            if (myOrgIdx != null && Objects.equals(myOrgIdx, org.getIdx())) continue;
 
-            for (CampaignParticipant cp : ps) {
-                Organization org = cp.getOrganization();
-                if (org == null) continue;
-                partners.putIfAbsent(org.getIdx(), org);
-                totalByOrg.merge(org.getIdx(), 1L, Long::sum);
-                if (ACTIVE_CAMPAIGN_STATUSES.contains(c.getStatus())) {
-                    activeByOrg.merge(org.getIdx(), 1L, Long::sum);
-                }
-                kpisByOrg.computeIfAbsent(org.getIdx(), k -> new java.util.ArrayList<>()).addAll(ckpis);
+            Long orgIdx = org.getIdx();
+            partners.putIfAbsent(orgIdx, org);
+            totalByOrg.merge(orgIdx, 1L, Long::sum);
+            Campaign c = campaignById.get(cp.getCampaign().getIdx());
+            if (c != null && ACTIVE_CAMPAIGN_STATUSES.contains(c.getStatus())) {
+                activeByOrg.merge(orgIdx, 1L, Long::sum);
             }
+            kpisByOrg.computeIfAbsent(orgIdx, k -> new java.util.ArrayList<>())
+                    .addAll(kpisByCampaign.getOrDefault(cp.getCampaign().getIdx(), List.of()));
         }
 
         LocalDate sevenDaysAgo = LocalDate.now().minusDays(6);
         return partners.values().stream()
                 .map(org -> {
                     Integer avgPct = averageAchievement(kpisByOrg.getOrDefault(org.getIdx(), List.of()));
+                    List<Integer> recent7d = recent7dFromSnapshots(org.getIdx(), sevenDaysAgo);
+                    Integer delta = computeDeltaFromRecent(recent7d);
                     return new PartnerProgressDto(
                             org.getIdx(),
                             org.getName(),
                             totalByOrg.getOrDefault(org.getIdx(), 0L),
                             activeByOrg.getOrDefault(org.getIdx(), 0L),
                             avgPct,
-                            recent7dFromSnapshots(org.getIdx(), sevenDaysAgo, avgPct)
+                            delta,
+                            recent7d
                     );
                 })
                 .toList();
     }
 
-    /** 최근 7일 daily snapshot 조회. 부족하면 평균 점수 기반 stub로 채움. */
-    private List<Integer> recent7dFromSnapshots(Long orgId, LocalDate from, Integer fallbackAvg) {
+    /**
+     * 최근 7일 daily snapshot 조회. 7개 미만이면 빈 배열 반환 (가짜 stub 생성 금지).
+     * Frontend Z2 sparkline 은 빈 배열 시 표시 생략.
+     */
+    private List<Integer> recent7dFromSnapshots(Long orgId, LocalDate from) {
         List<KpiDailySnapshot> snaps = dailySnapshotRepository
                 .findAllByOrganization_IdxAndDateGreaterThanEqualOrderByDateAsc(orgId, from);
-        if (snaps.size() >= 7) {
-            return snaps.stream()
-                    .skip(Math.max(0, snaps.size() - 7))
-                    .map(s -> s.getAvgKpiPercent() == null ? 0 : s.getAvgKpiPercent())
-                    .toList();
-        }
-        // 충분한 daily snapshot 누적 전: 기존 stub 유지
-        if (fallbackAvg == null) return List.of();
-        int base = Math.max(0, fallbackAvg - 4);
-        return List.of(base, base + 1, base + 2, base + 2, base + 3, base + 4, fallbackAvg);
+        if (snaps.size() < 7) return List.of();
+        return snaps.stream()
+                .skip(Math.max(0, snaps.size() - 7))
+                .map(s -> s.getAvgKpiPercent() == null ? 0 : s.getAvgKpiPercent())
+                .toList();
+    }
+
+    /**
+     * recent7d 의 첫 값 → 마지막 값 차이 (%p). 데이터 부족 시 null.
+     * Frontend Z2 "Δ +N" 배지 표시용. null 이면 배지 안 그림 ("안정" 으로 폴백되지 않게 됨).
+     */
+    private static Integer computeDeltaFromRecent(List<Integer> recent7d) {
+        if (recent7d == null || recent7d.size() < 2) return null;
+        return recent7d.get(recent7d.size() - 1) - recent7d.get(0);
     }
 
     // ── 4. Review Queue ─────────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_REVIEW_QUEUE, key = "#callerIdx")
     public List<ReviewQueueItemDto> reviewQueue(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -337,6 +428,7 @@ public class DashboardAggregateService {
 
     // ── 5. Blockers ─────────────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_BLOCKERS, key = "#callerIdx")
     public List<BlockerDto> blockers(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -383,35 +475,46 @@ public class DashboardAggregateService {
 
     // ── 6. Asset Categories ────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_ASSET_CATEGORIES, key = "#callerIdx")
     public Map<String, Long> assetCategories(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
-        Set<Long> visibleCampaignIds = filterCampaigns(scope).stream()
-                .map(Campaign::getIdx).collect(Collectors.toSet());
 
-        return assetRepository.findAll().stream()
-                .filter(a -> {
-                    if (scope.allCampaigns) return true;
-                    Long camp = a.getCampaign() != null ? a.getCampaign().getIdx() : null;
-                    Long org = a.getOrganization() != null ? a.getOrganization().getIdx() : null;
-                    return (camp != null && visibleCampaignIds.contains(camp))
-                            || (scope.ownerOrgId != null && Objects.equals(scope.ownerOrgId, org));
-                })
-                .collect(Collectors.groupingBy(
-                        a -> a.getCategory() == null ? "UNKNOWN" : a.getCategory(),
-                        Collectors.counting()));
+        // ⚡ B2: findAll().stream().filter().groupingBy (풀스캔) → DB-level GROUP BY.
+        // category 도 LOWER() 로 정규화하여 frontend lowercase 키와 자동 매칭.
+        List<Object[]> rows;
+        if (scope.allCampaigns) {
+            rows = assetRepository.countCategoriesAll();
+        } else {
+            Set<Long> visibleCampaignIds = filterCampaigns(scope).stream()
+                    .map(Campaign::getIdx).collect(Collectors.toSet());
+            if (visibleCampaignIds.isEmpty() && scope.ownerOrgId == null) return Map.of();
+            rows = assetRepository.countCategoriesVisible(
+                    visibleCampaignIds.isEmpty() ? Set.of(-1L) : visibleCampaignIds,
+                    scope.ownerOrgId);
+        }
+        Map<String, Long> out = new HashMap<>();
+        for (Object[] row : rows) {
+            if (row == null || row.length < 2 || row[0] == null) continue;
+            out.put((String) row[0], ((Number) row[1]).longValue());
+        }
+        return out;
     }
 
     // ── 7. KPI Categories ──────────────────────────────────
 
+    @Cacheable(value = CacheNames.DASHBOARD_KPI_CATEGORIES, key = "#callerIdx")
     public Map<String, Long> kpiCategories(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
         Set<Long> visibleCampaignIds = filterCampaigns(scope).stream()
                 .map(Campaign::getIdx).collect(Collectors.toSet());
 
-        return campaignKpiRepository.findAll().stream()
-                .filter(k -> visibleCampaignIds.contains(k.getCampaign().getIdx()))
+        if (visibleCampaignIds.isEmpty()) return Map.of();
+
+        // ⚡ B2: findAll() 풀스캔 → IN 쿼리. 메모리에서 카테고리 GROUP BY.
+        List<CampaignKpi> kpis = campaignKpiRepository.findAllByCampaign_IdxInOrderByIdxAsc(visibleCampaignIds);
+        return kpis.stream()
                 .collect(Collectors.groupingBy(
                         k -> k.getCategory() == null ? "UNKNOWN" : k.getCategory().name(),
                         Collectors.counting()));
@@ -488,12 +591,12 @@ public class DashboardAggregateService {
 
     // ── Helper ──────────────────────────────────────────────
 
+    /**
+     * ⚡ B5: in-memory cache (60s TTL) 를 통한 user 조회.
+     * Dashboard 의 5개 endpoint 가 병렬 호출돼도 첫 호출만 DB, 나머지는 cache hit.
+     */
     private User findUser(Long userIdx) {
-        if (userIdx == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found.");
-        }
-        return userRepository.findById(userIdx)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found."));
+        return userAuthCache.loadUser(userIdx);
     }
 
     private static Integer averageAchievement(List<CampaignKpi> kpis) {
@@ -509,9 +612,13 @@ public class DashboardAggregateService {
     private static Integer calcPercent(BigDecimal actual, BigDecimal target) {
         if (actual == null) return null;
         if (target == null || target.compareTo(BigDecimal.ZERO) == 0) return 0;
-        return actual.multiply(BigDecimal.valueOf(100))
+        int pct = actual.multiply(BigDecimal.valueOf(100))
                 .divide(target, 0, RoundingMode.HALF_UP)
                 .intValue();
+        // 🛡 단위 불일치로 비정상 비율 (예: 10000000%) 들어오면 차트가 망가짐 → 9999% 로 clamp.
+        if (pct < 0) return 0;
+        if (pct > 9999) return 9999;
+        return pct;
     }
 
     private static String nullIfBlank(String s) {
