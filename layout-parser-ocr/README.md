@@ -230,6 +230,12 @@ passes.
   sent through PaddleOCR once. Use `auto` or `all` only for accuracy comparison
   runs because those modes can evaluate up to three preprocessed candidates per
   image.
+- `/ocr` accepts one active request by default
+  (`OCR_MAX_CONCURRENT_REQUESTS=1`) and returns `503` when busy. This prevents
+  queued OCR requests from piling up memory while PaddleOCR is already running.
+- OCR uploads are streamed to a temporary directory instead of being kept as one
+  full in-memory byte array. Stale `callog-ocr-*` temp folders are cleaned on
+  service startup.
 - OCR models are loaded lazily on the first `/ocr` request by default. Set
   `OCR_LOAD_MODEL_ON_STARTUP=true` only when startup latency is less important
   than first-request latency.

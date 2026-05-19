@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import gc
 import shutil
 import tempfile
 import time
@@ -9,8 +10,8 @@ import uuid
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from threading import Lock
-from typing import Any, List, Optional, Tuple, Union
+from threading import BoundedSemaphore, Lock
+from typing import Any, List, Optional, Sequence, Tuple, Union
 
 import fitz
 from fastapi import APIRouter, File, HTTPException, UploadFile
@@ -43,7 +44,11 @@ OCR_SOFT_CONTRAST = float(os.getenv("OCR_SOFT_CONTRAST", "1.18"))
 OCR_SOFT_SHARPNESS = float(os.getenv("OCR_SOFT_SHARPNESS", "1.08"))
 OCR_MIN_SCORE = float(os.getenv("OCR_MIN_SCORE", "0.42"))
 OCR_RETRY_ATTEMPTS = int(os.getenv("OCR_RETRY_ATTEMPTS", "3"))
+OCR_MAX_CONCURRENT_REQUESTS = max(1, int(os.getenv("OCR_MAX_CONCURRENT_REQUESTS", "1")))
+OCR_BUSY_STATUS_CODE = int(os.getenv("OCR_BUSY_STATUS_CODE", "503"))
+OCR_TEMP_CLEANUP_MAX_AGE_SECONDS = int(os.getenv("OCR_TEMP_CLEANUP_MAX_AGE_SECONDS", str(6 * 60 * 60)))
 PDF_RENDER_SCALE = float(os.getenv("OCR_PDF_RENDER_SCALE", "3"))
+OCR_TEMP_DIR_PREFIX = "callog-ocr-"
 
 os.environ["FLAGS_use_mkldnn"] = "1" if OCR_ENABLE_MKLDNN else "0"
 os.environ["OMP_NUM_THREADS"] = str(OCR_CPU_THREADS)
@@ -54,6 +59,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = str(OCR_CPU_THREADS)
 logger = logging.getLogger(__name__)
 ocr_router = APIRouter()
 ocr_lock = Lock()
+ocr_request_slots = BoundedSemaphore(OCR_MAX_CONCURRENT_REQUESTS)
 TRANSIENT_OCR_ERROR_MARKERS = (
     "could not execute a primitive",
     "onednn",
@@ -154,30 +160,47 @@ def warm_up_ocr_model() -> None:
     )
 
 
+def release_ocr_model() -> None:
+    with ocr_lock:
+        get_ocr.cache_clear()
+    gc.collect()
+    logger.info("OCR model cache cleared.")
+
+
 @ocr_router.post("/ocr", response_model=OcrResponse)
 async def extract_text(file: UploadFile = File(...)) -> OcrResponse:
     request_id = uuid.uuid4().hex[:8]
     start_time = time.perf_counter()
-    content = await file.read()
-    max_bytes = OCR_MAX_UPLOAD_MB * 1024 * 1024
-    if len(content) > max_bytes:
-        raise HTTPException(status_code=413, detail="File is too large")
+    temp_dir: Optional[Path] = None
 
-    suffix = Path(file.filename or "").suffix.lower()
-    if not suffix:
-        suffix = _suffix_from_content_type(file.content_type or "")
+    if not ocr_request_slots.acquire(blocking=False):
+        await _close_upload(file)
+        logger.warning(
+            "OCR request rejected because service is busy. id=%s fileName=%s maxConcurrent=%s",
+            request_id,
+            file.filename,
+            OCR_MAX_CONCURRENT_REQUESTS,
+        )
+        raise HTTPException(
+            status_code=OCR_BUSY_STATUS_CODE,
+            detail=f"OCR service is busy. max_concurrent_requests={OCR_MAX_CONCURRENT_REQUESTS}",
+        )
 
-    temp_dir = _make_temp_dir()
     try:
+        suffix = Path(file.filename or "").suffix.lower()
+        if not suffix:
+            suffix = _suffix_from_content_type(file.content_type or "")
+
+        temp_dir = _make_temp_dir()
+        upload_path = temp_dir / f"upload{suffix}"
+        uploaded_size = await _write_upload_to_path(file, upload_path)
         logger.info(
             "OCR request started. id=%s fileName=%s contentType=%s size=%s",
             request_id,
             file.filename,
             file.content_type,
-            len(content),
+            uploaded_size,
         )
-        upload_path = temp_dir / f"upload{suffix}"
-        upload_path.write_bytes(content)
         response = await run_in_threadpool(_extract_from_path, upload_path, file.content_type or "", temp_dir)
         logger.info(
             "OCR request completed. id=%s textLength=%s pageCount=%s elapsedMs=%s",
@@ -194,7 +217,37 @@ async def extract_text(file: UploadFile = File(...)) -> OcrResponse:
         logger.exception("OCR request crashed. id=%s fileName=%s", request_id, file.filename)
         raise HTTPException(status_code=500, detail=f"OCR service internal error: {type(exc).__name__}: {exc}") from exc
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        if temp_dir is not None:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        await _close_upload(file)
+        ocr_request_slots.release()
+
+
+async def _write_upload_to_path(file: UploadFile, upload_path: Path) -> int:
+    max_bytes = OCR_MAX_UPLOAD_MB * 1024 * 1024
+    uploaded_size = 0
+
+    with upload_path.open("wb") as out:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            uploaded_size += len(chunk)
+            if uploaded_size > max_bytes:
+                raise HTTPException(status_code=413, detail="File is too large")
+            out.write(chunk)
+
+    if uploaded_size == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    return uploaded_size
+
+
+async def _close_upload(file: UploadFile) -> None:
+    try:
+        await file.close()
+    except Exception:
+        logger.debug("Failed to close OCR upload file.", exc_info=True)
 
 
 def _extract_from_path(path: Path, content_type: str, temp_dir: Path) -> OcrResponse:
@@ -209,16 +262,11 @@ def _extract_from_path(path: Path, content_type: str, temp_dir: Path) -> OcrResp
 
 
 def _make_temp_dir() -> Path:
-    roots: List[Path] = []
-    if OCR_TEMP_ROOT:
-        roots.append(Path(OCR_TEMP_ROOT))
-    roots.extend([Path(tempfile.gettempdir()), Path.cwd() / ".callog-ocr-tmp"])
-
-    for root in roots:
+    for root in _ocr_temp_roots():
         temp_dir: Optional[Path] = None
         try:
             root.mkdir(parents=True, exist_ok=True)
-            temp_dir = root / f"callog-ocr-{uuid.uuid4().hex}"
+            temp_dir = root / f"{OCR_TEMP_DIR_PREFIX}{uuid.uuid4().hex}"
             temp_dir.mkdir()
             probe_path = temp_dir / ".write-check"
             probe_path.write_bytes(b"")
@@ -230,6 +278,52 @@ def _make_temp_dir() -> Path:
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
     raise HTTPException(status_code=500, detail="OCR temporary directory is not writable")
+
+
+def _ocr_temp_roots() -> List[Path]:
+    roots: List[Path] = []
+    if OCR_TEMP_ROOT:
+        roots.append(Path(OCR_TEMP_ROOT))
+    roots.extend([Path(tempfile.gettempdir()), Path.cwd() / ".callog-ocr-tmp"])
+
+    unique_roots: List[Path] = []
+    seen: set = set()
+    for root in roots:
+        normalized = str(root)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_roots.append(root)
+    return unique_roots
+
+
+def cleanup_stale_ocr_temp_dirs(
+    max_age_seconds: Optional[int] = None,
+    roots: Optional[Sequence[Path]] = None,
+) -> int:
+    cleanup_age = OCR_TEMP_CLEANUP_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
+    if cleanup_age < 0:
+        return 0
+
+    cutoff = time.time() - cleanup_age
+    removed = 0
+
+    for root in roots or _ocr_temp_roots():
+        try:
+            if not root.exists() or not root.is_dir():
+                continue
+            for child in root.iterdir():
+                if not child.is_dir() or not child.name.startswith(OCR_TEMP_DIR_PREFIX):
+                    continue
+                if cleanup_age == 0 or child.stat().st_mtime <= cutoff:
+                    shutil.rmtree(child, ignore_errors=True)
+                    removed += 1
+        except Exception:
+            logger.warning("Failed to cleanup stale OCR temp directory. root=%s", root, exc_info=True)
+
+    if removed:
+        logger.info("Removed stale OCR temp directories. count=%s", removed)
+    return removed
 
 
 def _extract_from_pdf(path: Path, temp_dir: Path) -> OcrResponse:

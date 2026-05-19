@@ -175,6 +175,11 @@ public class TextExtractorService {
             }
 
             return new LayoutOcrResult(text, layoutMillis, elapsedMillis(ocrStartedAt), false);
+        } catch (OcrServiceResourceException e) {
+            layoutMillis = layoutMillis == 0L ? elapsedMillis(layoutStartedAt) : layoutMillis;
+            log.warn("Layout OCR flow stopped because OCR service is busy or unavailable. skip full-file fallback. "
+                    + "fileName={}, layoutUrl={}", filename, layoutUrl, e);
+            throw e;
         } catch (RuntimeException e) {
             layoutMillis = layoutMillis == 0L ? elapsedMillis(layoutStartedAt) : layoutMillis;
             long failedTargetOcrMillis = ocrStartedAt == 0L ? 0L : elapsedMillis(ocrStartedAt);
@@ -304,11 +309,25 @@ public class TextExtractorService {
         } catch (RestClientResponseException e) {
             log.error("OCR service returned error status. url={}, status={}, body={}",
                     ocrUrl, e.getStatusCode(), e.getResponseBodyAsString(), e);
+            if (isOcrResourceStatus(e.getStatusCode().value())) {
+                throw new OcrServiceResourceException(
+                        "OCR service is busy or resource constrained: HTTP " + e.getStatusCode(),
+                        e
+                );
+            }
             throw new RuntimeException("OCR service returned HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
         } catch (RestClientException e) {
             log.error("OCR service request failed. url={}, fileName={}", ocrUrl, filename, e);
-            throw new RuntimeException("OCR service is unavailable.", e);
+            throw new OcrServiceResourceException("OCR service is unavailable.", e);
         }
+    }
+
+    private boolean isOcrResourceStatus(int statusCode) {
+        return statusCode == 408
+                || statusCode == 413
+                || statusCode == 429
+                || statusCode == 503
+                || statusCode == 507;
     }
 
     private MultiValueMap<String, Object> createMultipartBody(byte[] bytes, String filename, String contentType) {
@@ -469,6 +488,12 @@ public class TextExtractorService {
         @Override
         public String getFilename() {
             return filename;
+        }
+    }
+
+    private static class OcrServiceResourceException extends RuntimeException {
+        private OcrServiceResourceException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 }
