@@ -2,6 +2,7 @@ package org.example.backend.kpi.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.KpiCategory;
+import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.kpi.dto.CreateOrganizationKpiRequest;
 import org.example.backend.kpi.dto.OrganizationKpiDto;
 import org.example.backend.kpi.dto.UpdateOrganizationKpiRequest;
@@ -38,6 +39,7 @@ public class OrganizationKpiService {
     private final OrganizationRepository organizationRepository;
     private final UserRepository userRepository;
     private final CampaignKpiContributionRepository contributionRepository;
+    private final DashboardCacheEvictor dashboardCacheEvictor;
 
     // ── 조회 ────────────────────────────────────────────────
 
@@ -178,7 +180,10 @@ public class OrganizationKpiService {
                 .updatedBy(caller.getIdx())
                 .build();
 
-        return OrganizationKpiDto.from(kpiRepository.save(kpi));
+        OrganizationKpiDto result = OrganizationKpiDto.from(kpiRepository.save(kpi));
+        // Dashboard 캐시 무효화 (quarterGoals 데이터 소스, summary.companyAvgPct 영향)
+        dashboardCacheEvictor.evictAll();
+        return result;
     }
 
     // ── 수정 ────────────────────────────────────────────────
@@ -233,6 +238,8 @@ public class OrganizationKpiService {
         if (req.achievabilityNote() != null) kpi.setAchievabilityNote(req.achievabilityNote());
         kpi.setUpdatedBy(caller.getIdx());
 
+        // Dashboard 캐시 무효화 (target 변경 시 quarterGoals 의 퍼센트 계산 영향)
+        dashboardCacheEvictor.evictAll();
         return OrganizationKpiDto.from(kpi);
     }
 
@@ -252,6 +259,8 @@ public class OrganizationKpiService {
 
         kpi.setStatus(newStatus);
         kpi.setUpdatedBy(caller.getIdx());
+        // Dashboard 캐시 무효화 (ACTIVE 필터 조건 — quarterGoals 표시 여부 결정)
+        dashboardCacheEvictor.evictAll();
         return OrganizationKpiDto.from(kpi);
     }
 

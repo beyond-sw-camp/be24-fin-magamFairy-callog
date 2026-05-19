@@ -5,6 +5,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.matching.model.MarketingAsset;
 import org.example.backend.matching.model.MatchingDto;
 import org.example.backend.matching.model.PartnerBenefits;
@@ -30,6 +31,7 @@ public class BenefitService {
     private final BenefitRepository benefitRepository;
     private final UserRepository userRepository;
     private final CampaignRepository campaignRepository;
+    private final DashboardCacheEvictor dashboardCacheEvictor;
 
     public List<MatchingDto.BenefitRes> getBenefit(String publicId) {
         Long campaignIdx = campaignRepository.findByPublicId(publicId)
@@ -64,6 +66,8 @@ public class BenefitService {
             System.out.println("권한 거부");
         }else {
             benefitRepository.save(dto.toEntity(affiliate, campaign));
+            // Dashboard 캐시 무효화 (summary.rfpCount 영향)
+            dashboardCacheEvictor.evictAll();
         }
     }
 }

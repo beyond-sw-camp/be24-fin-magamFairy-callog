@@ -1,3 +1,4 @@
 rootProject.name = 'callog'
 include 'app'
 include 'matching-evaluation'
+include 'aijudge'

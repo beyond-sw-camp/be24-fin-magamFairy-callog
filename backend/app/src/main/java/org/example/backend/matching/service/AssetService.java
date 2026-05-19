@@ -3,6 +3,7 @@ package org.example.backend.matching.service;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.matching.model.MarketingAsset;
 import org.example.backend.matching.model.MatchingDto;
 import org.example.backend.matching.repository.AssetRepository;
@@ -21,6 +22,7 @@ import static org.example.backend.organization.model.OrganizationType.EXTERNAL_P
 public class AssetService {
     private final AssetRepository assetRepository;
     private final UserRepository userRepository;
+    private final DashboardCacheEvictor dashboardCacheEvictor;
 
     public MatchingDto.AssetRes getAsset(Long idx) {
         return MatchingDto.AssetRes.toDto(assetRepository.findById(idx).orElseThrow(EntityNotFoundException::new));
@@ -51,12 +53,16 @@ public class AssetService {
         }
 
         assetRepository.save(dto.toEntity(affiliate));
+        // Dashboard 캐시 무효화 (summary.liveAssetCount, assetCategories 영향)
+        dashboardCacheEvictor.evictAll();
     }
 
     @Transactional
     public void updateAsset(Long idx, MatchingDto.AddAsset dto) {
         MarketingAsset asset = assetRepository.findById(idx).orElseThrow(EntityNotFoundException::new);
         asset.update(dto.getTarget(), dto.getType(), dto.getScale(), dto.getConditions());
+        // Dashboard 캐시 무효화 (category 변경 시 assetCategories 영향)
+        dashboardCacheEvictor.evictAll();
     }
 
     @Transactional
@@ -65,5 +71,7 @@ public class AssetService {
             throw new EntityNotFoundException();
         }
         assetRepository.deleteById(idx);
+        // Dashboard 캐시 무효화 (summary.liveAssetCount, assetCategories 영향)
+        dashboardCacheEvictor.evictAll();
     }
 }
