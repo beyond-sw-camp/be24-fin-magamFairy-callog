@@ -28,7 +28,7 @@ OCR_ENABLE_MKLDNN = os.getenv("OCR_ENABLE_MKLDNN", "false").lower() == "true"
 OCR_CPU_THREADS = int(os.getenv("OCR_CPU_THREADS", "1"))
 OCR_TEMP_ROOT = os.getenv("OCR_TEMP_ROOT", "").strip()
 OCR_PREPROCESS = os.getenv("OCR_PREPROCESS", "true").lower() == "true"
-OCR_CANDIDATE_STRATEGY = os.getenv("OCR_CANDIDATE_STRATEGY", "auto").strip().lower()
+OCR_CANDIDATE_STRATEGY = os.getenv("OCR_CANDIDATE_STRATEGY", "first").strip().lower()
 OCR_AUTO_ACCEPT_MIN_SCORE = float(os.getenv("OCR_AUTO_ACCEPT_MIN_SCORE", "330"))
 OCR_AUTO_ACCEPT_MIN_AVG_CONFIDENCE = float(os.getenv("OCR_AUTO_ACCEPT_MIN_AVG_CONFIDENCE", "0.88"))
 OCR_AUTO_ACCEPT_MIN_CHARS = int(os.getenv("OCR_AUTO_ACCEPT_MIN_CHARS", "180"))
@@ -263,10 +263,8 @@ def _extract_from_pdf(path: Path, temp_dir: Path) -> OcrResponse:
 
 
 def _extract_from_image(path: Path, temp_dir: Path) -> List[OcrLine]:
-    candidates = _prepare_image_candidates(path, temp_dir)
     strategy = _candidate_strategy()
-    if strategy == "first":
-        candidates = candidates[:1]
+    candidates = _prepare_image_candidates(path, temp_dir, strategy=strategy)
 
     best: Optional[CandidateResult] = None
     errors: List[Exception] = []
@@ -362,7 +360,7 @@ def _is_transient_ocr_error(exc: Exception) -> bool:
     return any(marker in message for marker in TRANSIENT_OCR_ERROR_MARKERS)
 
 
-def _prepare_image_candidates(path: Path, temp_dir: Path) -> List[Path]:
+def _prepare_image_candidates(path: Path, temp_dir: Path, strategy: Optional[str] = None) -> List[Path]:
     if not OCR_PREPROCESS:
         return [path]
 
@@ -372,6 +370,8 @@ def _prepare_image_candidates(path: Path, temp_dir: Path) -> List[Path]:
             base = _resize_for_ocr(base)
 
             rgb_path = _save_candidate(base, temp_dir, path.stem, "rgb")
+            if strategy == "first":
+                return [rgb_path]
 
             soft_gray = ImageOps.grayscale(base)
             soft_gray = ImageOps.autocontrast(soft_gray, cutoff=1)

@@ -226,6 +226,10 @@ passes.
   cached in the container.
 - Store returned `crop_url` values in downstream systems instead of embedding
   base64 images in JSON.
+- OCR uses `OCR_CANDIDATE_STRATEGY=first` by default so each received image is
+  sent through PaddleOCR once. Use `auto` or `all` only for accuracy comparison
+  runs because those modes can evaluate up to three preprocessed candidates per
+  image.
 - OCR models are loaded lazily on the first `/ocr` request by default. Set
   `OCR_LOAD_MODEL_ON_STARTUP=true` only when startup latency is less important
   than first-request latency.
