@@ -224,19 +224,26 @@ For frontend/backend/OCR integration contracts, see
 docker compose up --build
 ```
 
+Build args `LAYOUT_MODEL_CONFIG_URL` and `LAYOUT_MODEL_WEIGHTS_URL` pin the
+layout assets that are copied into `/opt/models/layout`.
+
 The Dockerfile uses a Linux PyTorch runtime, installs Detectron2 from the
 official wheel index for CUDA 11.3 / Torch 1.10, and installs PaddleOCR for the
-co-located OCR endpoint. It defaults to CPU execution through
-`LAYOUT_MODEL_DEVICE=cpu` and `OCR_USE_GPU=false`. If this PC has an NVIDIA GPU
-and Docker GPU support, tune those values deliberately after a CPU baseline
-passes.
+co-located OCR endpoint. It also downloads the PubLayNet layout model and
+PaddleOCR Korean models into `/opt/models` at image build time, so runtime pods
+do not download model files on the first request. It defaults to CPU execution
+through `LAYOUT_MODEL_DEVICE=cpu` and `OCR_USE_GPU=false`. If this PC has an
+NVIDIA GPU and Docker GPU support, tune those values deliberately after a CPU
+baseline passes.
 
 ## Runtime notes
 
 - Use WSL2 or Docker on Windows. Native Windows Detectron2 installation is
   fragile.
-- The first request downloads the layout model weights unless they are already
-  cached in the container.
+- Model files are baked into the image under `/opt/models`; `/service/storage`
+  is only for uploads, results, and temporary OCR files.
+- Layout and OCR models are warmed on service startup by default. Startup is
+  slower, but first user traffic does not pay the model loading cost.
 - Store returned `crop_url` values in downstream systems instead of embedding
   base64 images in JSON.
 - OCR uses `OCR_CANDIDATE_STRATEGY=first` by default so each received image is
@@ -253,6 +260,6 @@ passes.
 - OCR uploads are streamed to a temporary directory instead of being kept as one
   full in-memory byte array. Stale `callog-ocr-*` temp folders are cleaned on
   service startup.
-- OCR models are loaded lazily on the first `/ocr` request by default. Set
-  `OCR_LOAD_MODEL_ON_STARTUP=true` only when startup latency is less important
-  than first-request latency.
+- Set `LOAD_MODEL_ON_STARTUP=false` or `OCR_LOAD_MODEL_ON_STARTUP=false` only
+  for local development when fast container startup is more important than
+  first-request latency.

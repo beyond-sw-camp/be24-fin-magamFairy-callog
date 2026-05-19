@@ -29,8 +29,10 @@ import java.net.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -107,7 +109,8 @@ public class TextExtractorService {
                     elapsedMillis(textStartedAt),
                     0L,
                     0L,
-                    elapsedMillis(totalStartedAt)
+                    elapsedMillis(totalStartedAt),
+                    List.of()
             );
         }
 
@@ -116,13 +119,15 @@ public class TextExtractorService {
             String text = extractFromPdf(bytes);
             long pdfTextMillis = elapsedMillis(pdfStartedAt);
             if (StringUtils.hasText(text)) {
+                LayoutAssetsResult layoutAssets = extractLayoutAssets(bytes, filename, contentType);
                 return new ExtractResult(
                         text,
                         "pdf_embedded_text",
                         pdfTextMillis,
+                        layoutAssets.layoutMillis(),
                         0L,
-                        0L,
-                        elapsedMillis(totalStartedAt)
+                        elapsedMillis(totalStartedAt),
+                        layoutAssets.images()
                 );
             }
 
@@ -133,7 +138,8 @@ public class TextExtractorService {
                     pdfTextMillis,
                     layoutOcr.layoutMillis(),
                     layoutOcr.ocrMillis(),
-                    elapsedMillis(totalStartedAt)
+                    elapsedMillis(totalStartedAt),
+                    layoutOcr.images()
             );
         }
 
@@ -145,7 +151,8 @@ public class TextExtractorService {
                     0L,
                     layoutOcr.layoutMillis(),
                     layoutOcr.ocrMillis(),
-                    elapsedMillis(totalStartedAt)
+                    elapsedMillis(totalStartedAt),
+                    layoutOcr.images()
             );
         }
 
@@ -162,10 +169,14 @@ public class TextExtractorService {
         long layoutStartedAt = System.nanoTime();
         long layoutMillis = 0L;
         long ocrStartedAt = 0L;
+        List<ExtractedImageAsset> images = List.of();
+        String layoutJobId = null;
 
         try {
             JsonNode layoutResult = requestLayout(bytes, filename, contentType);
             layoutMillis = elapsedMillis(layoutStartedAt);
+            images = extractImageAssets(layoutResult);
+            layoutJobId = text(layoutResult, "job_id");
 
             List<OcrTarget> targets = extractOcrTargets(layoutResult);
             if (targets.isEmpty()) {
@@ -187,7 +198,7 @@ public class TextExtractorService {
                 throw new RuntimeException("Layout OCR text is empty.");
             }
 
-            return new LayoutOcrResult(text, layoutMillis, elapsedMillis(ocrStartedAt), false);
+            return new LayoutOcrResult(text, layoutMillis, elapsedMillis(ocrStartedAt), false, images, layoutJobId);
         } catch (OcrServiceResourceException e) {
             layoutMillis = layoutMillis == 0L ? elapsedMillis(layoutStartedAt) : layoutMillis;
             log.warn("Layout OCR flow stopped because OCR service is busy or unavailable. skip full-file fallback. "
@@ -205,8 +216,26 @@ public class TextExtractorService {
                     text,
                     layoutMillis,
                     failedTargetOcrMillis + elapsedMillis(fallbackOcrStartedAt),
-                    true
+                    true,
+                    images,
+                    layoutJobId
             );
+        }
+    }
+
+    private LayoutAssetsResult extractLayoutAssets(byte[] bytes, String filename, String contentType) {
+        long layoutStartedAt = System.nanoTime();
+        try {
+            JsonNode layoutResult = requestLayout(bytes, filename, contentType);
+            return new LayoutAssetsResult(
+                    extractImageAssets(layoutResult),
+                    elapsedMillis(layoutStartedAt),
+                    text(layoutResult, "job_id")
+            );
+        } catch (RuntimeException e) {
+            log.warn("Layout asset extraction failed. continue without extracted image assets. fileName={}, layoutUrl={}",
+                    filename, layoutUrl, e);
+            return new LayoutAssetsResult(List.of(), elapsedMillis(layoutStartedAt), null);
         }
     }
 
@@ -216,7 +245,7 @@ public class TextExtractorService {
 
         MultiValueMap<String, Object> body = createMultipartBody(bytes, filename, contentType);
         body.add("document_id", normalizeDocumentId(filename));
-        body.add("include_image_targets", "false");
+        body.add("include_image_targets", "true");
 
         try {
             byte[] rawBytes = layoutRestClient.post()
@@ -228,8 +257,8 @@ public class TextExtractorService {
 
             String raw = rawBytes == null ? "" : new String(rawBytes, StandardCharsets.UTF_8);
             JsonNode result = objectMapper.readTree(raw);
-            log.info("Layout-parser service response received. fileName={}, ocrTargetCount={}",
-                    filename, extractOcrTargets(result).size());
+            log.info("Layout-parser service response received. fileName={}, ocrTargetCount={}, imageTargetCount={}",
+                    filename, extractOcrTargets(result).size(), extractImageTargets(result).size());
             return result;
         } catch (IOException e) {
             throw new RuntimeException("Layout service response cannot be parsed.", e);
@@ -282,18 +311,95 @@ public class TextExtractorService {
     }
 
     private byte[] downloadCrop(OcrTarget target) {
+        return downloadCrop(target.cropUrl());
+    }
+
+    private byte[] downloadCrop(String cropUrl) {
         try {
             byte[] bytes = cropRestClient.get()
-                    .uri(target.cropUrl())
+                    .uri(cropUrl)
                     .retrieve()
                     .body(byte[].class);
             if (bytes == null || bytes.length == 0) {
-                throw new RuntimeException("Layout crop is empty: " + target.cropUrl());
+                throw new RuntimeException("Layout crop is empty: " + cropUrl);
             }
             return bytes;
         } catch (RestClientException e) {
-            throw new RuntimeException("Layout crop cannot be downloaded: " + target.cropUrl(), e);
+            throw new RuntimeException("Layout crop cannot be downloaded: " + cropUrl, e);
         }
+    }
+
+    private List<ExtractedImageAsset> extractImageAssets(JsonNode layoutResult) {
+        List<ImageTarget> candidates = extractImageTargets(layoutResult);
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+
+        candidates.sort(Comparator
+                .comparingInt(ImageTarget::page)
+                .thenComparing(Comparator.comparingDouble(ImageTarget::area).reversed())
+                .thenComparingInt(ImageTarget::readingOrder)
+                .thenComparing(ImageTarget::targetId));
+
+        Map<Integer, Integer> selectedByPage = new HashMap<>();
+        List<ExtractedImageAsset> assets = new ArrayList<>();
+        for (ImageTarget target : candidates) {
+            int selectedCount = selectedByPage.getOrDefault(target.page(), 0);
+            if (selectedCount >= 2) {
+                continue;
+            }
+
+            try {
+                byte[] bytes = downloadCrop(target.cropUrl());
+                assets.add(new ExtractedImageAsset(
+                        target.targetId(),
+                        target.page(),
+                        target.readingOrder(),
+                        "image/png",
+                        target.area(),
+                        bytes
+                ));
+                selectedByPage.put(target.page(), selectedCount + 1);
+            } catch (RuntimeException e) {
+                log.warn("Layout image crop cannot be downloaded. skip image asset. targetId={}, cropUrl={}",
+                        target.targetId(), target.cropUrl(), e);
+            }
+        }
+        return assets;
+    }
+
+    private List<ImageTarget> extractImageTargets(JsonNode layoutResult) {
+        JsonNode targetsNode = layoutResult.path("image_targets");
+        if (!targetsNode.isArray()) {
+            targetsNode = layoutResult.path("downstream_targets").path("image_targets");
+        }
+        if (!targetsNode.isArray()) {
+            return List.of();
+        }
+
+        List<ImageTarget> targets = new ArrayList<>();
+        for (JsonNode target : targetsNode) {
+            String cropUrl = text(target, "crop_url", "image_url");
+            if (!StringUtils.hasText(cropUrl)) {
+                cropUrl = text(target.path("input"), "image_url", "crop_url");
+            }
+            if (!StringUtils.hasText(cropUrl)) {
+                cropUrl = text(target.path("metadata"), "image_url", "crop_url");
+            }
+            if (!StringUtils.hasText(cropUrl)) {
+                continue;
+            }
+
+            String targetId = text(target, "target_id", "id");
+            targets.add(new ImageTarget(
+                    StringUtils.hasText(targetId) ? targetId : "image-" + (targets.size() + 1),
+                    intValue(target, "page", 0),
+                    intValue(target, "reading_order", intValue(target.path("metadata"), "reading_order", 0)),
+                    cropUrl,
+                    areaValue(target)
+            ));
+        }
+        return targets;
     }
 
     private String extractViaOcr(byte[] bytes, String filename, String contentType) {
@@ -576,6 +682,45 @@ public class TextExtractorService {
         return defaultValue;
     }
 
+    private double areaValue(JsonNode node) {
+        double explicitArea = doubleValue(node.path("metadata"), "area", 0.0d);
+        if (explicitArea > 0.0d) {
+            return explicitArea;
+        }
+
+        JsonNode bbox = node.path("bbox");
+        if (!bbox.isArray() || bbox.size() != 4) {
+            bbox = node.path("metadata").path("bbox");
+        }
+        if (!bbox.isArray() || bbox.size() != 4) {
+            return 0.0d;
+        }
+
+        double x1 = bbox.get(0).asDouble(0.0d);
+        double y1 = bbox.get(1).asDouble(0.0d);
+        double x2 = bbox.get(2).asDouble(0.0d);
+        double y2 = bbox.get(3).asDouble(0.0d);
+        return Math.abs((x2 - x1) * (y2 - y1));
+    }
+
+    private double doubleValue(JsonNode node, String name, double defaultValue) {
+        JsonNode value = node == null ? null : node.path(name);
+        if (value == null || value.isMissingNode() || value.isNull()) {
+            return defaultValue;
+        }
+        if (value.isNumber()) {
+            return value.asDouble(defaultValue);
+        }
+        if (value.isTextual()) {
+            try {
+                return Double.parseDouble(value.asText().trim());
+            } catch (NumberFormatException ignored) {
+                return defaultValue;
+            }
+        }
+        return defaultValue;
+    }
+
     private long elapsedMillis(long startedAt) {
         return Math.max(0L, (System.nanoTime() - startedAt) / 1_000_000L);
     }
@@ -586,7 +731,21 @@ public class TextExtractorService {
             Long textExtractionMillis,
             Long layoutMillis,
             Long ocrMillis,
-            Long totalMillis
+            Long totalMillis,
+            List<ExtractedImageAsset> extractedImages
+    ) {
+        public ExtractResult {
+            extractedImages = extractedImages == null ? List.of() : List.copyOf(extractedImages);
+        }
+    }
+
+    public record ExtractedImageAsset(
+            String targetId,
+            int page,
+            int readingOrder,
+            String contentType,
+            double area,
+            byte[] bytes
     ) {
     }
 
@@ -594,8 +753,23 @@ public class TextExtractorService {
             String text,
             Long layoutMillis,
             Long ocrMillis,
-            boolean usedFallback
+            boolean usedFallback,
+            List<ExtractedImageAsset> images,
+            String layoutJobId
     ) {
+        private LayoutOcrResult {
+            images = images == null ? List.of() : List.copyOf(images);
+        }
+    }
+
+    private record LayoutAssetsResult(
+            List<ExtractedImageAsset> images,
+            Long layoutMillis,
+            String layoutJobId
+    ) {
+        private LayoutAssetsResult {
+            images = images == null ? List.of() : List.copyOf(images);
+        }
     }
 
     private record OcrTarget(
@@ -603,6 +777,15 @@ public class TextExtractorService {
             int page,
             int readingOrder,
             String cropUrl
+    ) {
+    }
+
+    private record ImageTarget(
+            String targetId,
+            int page,
+            int readingOrder,
+            String cropUrl,
+            double area
     ) {
     }
 
