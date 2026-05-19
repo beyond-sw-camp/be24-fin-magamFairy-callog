@@ -13,7 +13,14 @@ from fastapi.staticfiles import StaticFiles
 
 from app.jobs import jobs
 from app.layout_detector import detector
-from app.ocr_engine import cleanup_stale_ocr_temp_dirs, ocr_router, release_ocr_model, warm_up_ocr_model
+from app.ocr_engine import (
+    cleanup_stale_ocr_temp_dirs,
+    ocr_router,
+    release_ocr_model,
+    start_ocr_job_workers,
+    stop_ocr_job_workers,
+    warm_up_ocr_model,
+)
 from app.processor import process_document
 from app.schemas import HealthResponse, JobAccepted, JobStatusResponse
 from app.settings import settings
@@ -41,6 +48,7 @@ app.include_router(ocr_router)
 def startup() -> None:
     ensure_storage()
     cleanup_stale_ocr_temp_dirs()
+    start_ocr_job_workers()
     if settings.load_model_on_startup:
         detector.load()
     if settings.ocr_load_model_on_startup:
@@ -49,6 +57,7 @@ def startup() -> None:
 
 @app.on_event("shutdown")
 def shutdown() -> None:
+    stop_ocr_job_workers()
     release_ocr_model()
 
 

@@ -51,6 +51,19 @@ The OCR response matches the former standalone OCR service contract:
 }
 ```
 
+For bursty traffic, prefer the bounded OCR queue:
+
+```bash
+curl -X POST http://localhost:8001/ocr/jobs \
+  -F "file=@sample.png"
+curl http://localhost:8001/ocr/jobs/{job_id}
+curl http://localhost:8001/ocr/jobs/{job_id}/result
+```
+
+`/ocr/jobs` returns `202` with `status_url` and `result_url`. Jobs are kept in
+memory and expire after `OCR_JOB_RETENTION_SECONDS`, so use an external queue
+such as Redis, RabbitMQ, or Kafka before scaling this service to multiple pods.
+
 ### Synchronous analysis
 
 ```bash
@@ -233,6 +246,10 @@ passes.
 - `/ocr` accepts one active request by default
   (`OCR_MAX_CONCURRENT_REQUESTS=1`) and returns `503` when busy. This prevents
   queued OCR requests from piling up memory while PaddleOCR is already running.
+- `/ocr/jobs` accepts burst traffic into a bounded in-process queue
+  (`OCR_JOB_QUEUE_SIZE=5`, `OCR_JOB_WORKERS=1`) and processes jobs through the
+  same concurrency guard. Use this path from the backend when users can wait for
+  polling instead of failing immediately during short bursts.
 - OCR uploads are streamed to a temporary directory instead of being kept as one
   full in-memory byte array. Stale `callog-ocr-*` temp folders are cleaned on
   service startup.

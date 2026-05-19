@@ -149,6 +149,18 @@ curl.exe -X POST "http://localhost:8001/ocr" `
   -F "file=@C:\path\to\sample.png"
 ```
 
+OCR 비동기 큐 요청:
+
+```powershell
+curl.exe -X POST "http://localhost:8001/ocr/jobs" `
+  -F "file=@C:\path\to\sample.png"
+
+Invoke-RestMethod -Uri "http://localhost:8001/ocr/jobs/{job_id}" | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Uri "http://localhost:8001/ocr/jobs/{job_id}/result" | ConvertTo-Json -Depth 5
+```
+
+`/ocr/jobs`는 요청을 bounded queue에 넣고 `202`를 반환합니다. queue가 가득 차면 `429`를 반환합니다.
+
 지원 입력:
 
 - `.pdf`
@@ -235,6 +247,9 @@ OCR_CANDIDATE_STRATEGY=first
 OCR_MAX_CONCURRENT_REQUESTS=1
 OCR_BUSY_STATUS_CODE=503
 OCR_TEMP_CLEANUP_MAX_AGE_SECONDS=21600
+OCR_JOB_QUEUE_SIZE=5
+OCR_JOB_WORKERS=1
+OCR_JOB_RETENTION_SECONDS=3600
 OCR_LOAD_MODEL_ON_STARTUP=false
 ```
 
@@ -242,6 +257,7 @@ OCR_LOAD_MODEL_ON_STARTUP=false
 
 - layout-parser 입력 이미지는 줄이지 않습니다.
 - OCR endpoint로 보내는 text canvas만 조건부 축소합니다.
+- burst traffic은 `/ocr/jobs`로 보내서 같은 OCR concurrency guard 안에서 순차 처리합니다.
 - 작은 글자가 20px 아래로 내려갈 것으로 예상되면 과도하게 줄이지 않습니다.
 - 5% 미만의 미세 축소는 실익이 낮아 skip합니다.
 

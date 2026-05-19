@@ -1,6 +1,7 @@
 package org.example.backend.adcheck.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +51,18 @@ public class TextExtractorService {
 
     @Value("${custom.ocr.url}")
     private String ocrUrl;
+
+    @Value("${custom.ocr.async-enabled:true}")
+    private boolean ocrAsyncEnabled;
+
+    @Value("${custom.ocr.job-url:}")
+    private String ocrJobUrl;
+
+    @Value("${custom.ocr.job-poll-interval-ms:1000}")
+    private long ocrJobPollIntervalMs;
+
+    @Value("${custom.ocr.job-poll-timeout-ms:180000}")
+    private long ocrJobPollTimeoutMs;
 
     public TextExtractorService(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -284,6 +297,13 @@ public class TextExtractorService {
     }
 
     private String extractViaOcr(byte[] bytes, String filename, String contentType) {
+        if (ocrAsyncEnabled) {
+            return extractViaOcrJob(bytes, filename, contentType);
+        }
+        return extractViaOcrSync(bytes, filename, contentType);
+    }
+
+    private String extractViaOcrSync(byte[] bytes, String filename, String contentType) {
         log.info("Calling OCR service. url={}, fileName={}, contentType={}, size={}",
                 ocrUrl, filename, contentType, bytes.length);
 
@@ -322,12 +342,143 @@ public class TextExtractorService {
         }
     }
 
+    private String extractViaOcrJob(byte[] bytes, String filename, String contentType) {
+        String jobUrl = resolveOcrJobUrl();
+        log.info("Calling OCR job service. url={}, fileName={}, contentType={}, size={}",
+                jobUrl, filename, contentType, bytes.length);
+
+        MultiValueMap<String, Object> body = createMultipartBody(bytes, filename, contentType);
+
+        try {
+            OcrJobAccepted accepted = ocrRestClient.post()
+                    .uri(jobUrl)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(body)
+                    .retrieve()
+                    .body(OcrJobAccepted.class);
+
+            if (accepted == null || !StringUtils.hasText(accepted.getJobId())) {
+                throw new RuntimeException("OCR job response is empty.");
+            }
+
+            OcrResponse response = waitForOcrJob(accepted, filename);
+            if (response == null || !StringUtils.hasText(response.getText())) {
+                log.warn("OCR job returned empty text. jobId={}, fileName={}, pageCount={}",
+                        accepted.getJobId(), filename, response == null ? null : response.getPageCount());
+                throw new RuntimeException("OCR job result is empty.");
+            }
+
+            log.info("OCR job result received. jobId={}, fileName={}, textLength={}, pageCount={}",
+                    accepted.getJobId(), filename, response.getText().length(), response.getPageCount());
+            return response.getText();
+        } catch (RestClientResponseException e) {
+            log.error("OCR job service returned error status. url={}, status={}, body={}",
+                    jobUrl, e.getStatusCode(), e.getResponseBodyAsString(), e);
+            if (isOcrResourceStatus(e.getStatusCode().value())) {
+                throw new OcrServiceResourceException(
+                        "OCR job service is busy or resource constrained: HTTP " + e.getStatusCode(),
+                        e
+                );
+            }
+            throw new RuntimeException("OCR job service returned HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
+        } catch (RestClientException e) {
+            log.error("OCR job service request failed. url={}, fileName={}", jobUrl, filename, e);
+            throw new OcrServiceResourceException("OCR job service is unavailable.", e);
+        }
+    }
+
+    private OcrResponse waitForOcrJob(OcrJobAccepted accepted, String filename) {
+        String statusUrl = resolveOcrJobStatusUrl(accepted);
+        String resultUrl = resolveOcrJobResultUrl(accepted);
+        long timeoutMs = Math.max(1L, ocrJobPollTimeoutMs);
+        long pollIntervalMs = Math.max(100L, ocrJobPollIntervalMs);
+        long deadline = System.nanoTime() + timeoutMs * 1_000_000L;
+
+        while (System.nanoTime() <= deadline) {
+            OcrJobStatus status = ocrRestClient.get()
+                    .uri(statusUrl)
+                    .retrieve()
+                    .body(OcrJobStatus.class);
+
+            String state = status == null ? "" : status.getStatus();
+            if ("completed".equalsIgnoreCase(state)) {
+                return ocrRestClient.get()
+                        .uri(resultUrl)
+                        .retrieve()
+                        .body(OcrResponse.class);
+            }
+            if ("failed".equalsIgnoreCase(state)) {
+                String error = status.getError() == null ? "" : status.getError();
+                if (isOcrResourceErrorMessage(error)) {
+                    throw new OcrServiceResourceException(
+                            "OCR job failed because the OCR service is resource constrained. jobId="
+                                    + accepted.getJobId() + ", error=" + error,
+                            null
+                    );
+                }
+                throw new RuntimeException("OCR job failed. jobId=" + accepted.getJobId() + ", error=" + error);
+            }
+
+            try {
+                Thread.sleep(pollIntervalMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new OcrServiceResourceException("OCR job polling was interrupted. jobId=" + accepted.getJobId(), e);
+            }
+        }
+
+        throw new OcrServiceResourceException(
+                "OCR job timed out. jobId=" + accepted.getJobId() + ", fileName=" + filename,
+                null
+        );
+    }
+
+    private String resolveOcrJobUrl() {
+        if (StringUtils.hasText(ocrJobUrl)) {
+            return trimTrailingSlash(ocrJobUrl);
+        }
+        return trimTrailingSlash(ocrUrl) + "/jobs";
+    }
+
+    private String resolveOcrJobStatusUrl(OcrJobAccepted accepted) {
+        if (StringUtils.hasText(accepted.getStatusUrl())) {
+            return accepted.getStatusUrl();
+        }
+        return resolveOcrJobUrl() + "/" + accepted.getJobId();
+    }
+
+    private String resolveOcrJobResultUrl(OcrJobAccepted accepted) {
+        if (StringUtils.hasText(accepted.getResultUrl())) {
+            return accepted.getResultUrl();
+        }
+        return resolveOcrJobUrl() + "/" + accepted.getJobId() + "/result";
+    }
+
+    private String trimTrailingSlash(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.replaceAll("/+$", "");
+    }
+
     private boolean isOcrResourceStatus(int statusCode) {
         return statusCode == 408
                 || statusCode == 413
                 || statusCode == 429
                 || statusCode == 503
                 || statusCode == 507;
+    }
+
+    private boolean isOcrResourceErrorMessage(String error) {
+        String lower = error == null ? "" : error.toLowerCase(Locale.ROOT);
+        return lower.contains("resource")
+                || lower.contains("memory")
+                || lower.contains("bad_alloc")
+                || lower.contains("mkldnn")
+                || lower.contains("onednn")
+                || lower.contains("dnnl")
+                || lower.contains("busy")
+                || lower.contains("timed out");
     }
 
     private MultiValueMap<String, Object> createMultipartBody(byte[] bytes, String filename, String contentType) {
@@ -474,6 +625,64 @@ public class TextExtractorService {
 
         public void setPageCount(Integer pageCount) {
             this.pageCount = pageCount;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private static class OcrJobAccepted {
+        @JsonProperty("job_id")
+        private String jobId;
+
+        @JsonProperty("status_url")
+        private String statusUrl;
+
+        @JsonProperty("result_url")
+        private String resultUrl;
+
+        public String getJobId() {
+            return jobId;
+        }
+
+        public void setJobId(String jobId) {
+            this.jobId = jobId;
+        }
+
+        public String getStatusUrl() {
+            return statusUrl;
+        }
+
+        public void setStatusUrl(String statusUrl) {
+            this.statusUrl = statusUrl;
+        }
+
+        public String getResultUrl() {
+            return resultUrl;
+        }
+
+        public void setResultUrl(String resultUrl) {
+            this.resultUrl = resultUrl;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private static class OcrJobStatus {
+        private String status;
+        private String error;
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
+        }
+
+        public String getError() {
+            return error;
+        }
+
+        public void setError(String error) {
+            this.error = error;
         }
     }
 

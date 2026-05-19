@@ -1,20 +1,22 @@
 from __future__ import annotations
 
+import gc
 import logging
 import os
-import gc
 import shutil
 import tempfile
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from threading import BoundedSemaphore, Lock
-from typing import Any, List, Optional, Sequence, Tuple, Union
+from queue import Full, Queue
+from threading import BoundedSemaphore, Lock, Thread
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import fitz
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
@@ -27,6 +29,7 @@ OCR_USE_GPU = os.getenv("OCR_USE_GPU", "false").lower() == "true"
 OCR_USE_ANGLE_CLS = os.getenv("OCR_USE_ANGLE_CLS", "false").lower() == "true"
 OCR_ENABLE_MKLDNN = os.getenv("OCR_ENABLE_MKLDNN", "false").lower() == "true"
 OCR_CPU_THREADS = int(os.getenv("OCR_CPU_THREADS", "1"))
+PADDLE_OCR_BASE_DIR = os.getenv("PADDLE_OCR_BASE_DIR", "").strip()
 OCR_TEMP_ROOT = os.getenv("OCR_TEMP_ROOT", "").strip()
 OCR_PREPROCESS = os.getenv("OCR_PREPROCESS", "true").lower() == "true"
 OCR_CANDIDATE_STRATEGY = os.getenv("OCR_CANDIDATE_STRATEGY", "first").strip().lower()
@@ -47,6 +50,9 @@ OCR_RETRY_ATTEMPTS = int(os.getenv("OCR_RETRY_ATTEMPTS", "3"))
 OCR_MAX_CONCURRENT_REQUESTS = max(1, int(os.getenv("OCR_MAX_CONCURRENT_REQUESTS", "1")))
 OCR_BUSY_STATUS_CODE = int(os.getenv("OCR_BUSY_STATUS_CODE", "503"))
 OCR_TEMP_CLEANUP_MAX_AGE_SECONDS = int(os.getenv("OCR_TEMP_CLEANUP_MAX_AGE_SECONDS", str(6 * 60 * 60)))
+OCR_JOB_QUEUE_SIZE = max(1, int(os.getenv("OCR_JOB_QUEUE_SIZE", "5")))
+OCR_JOB_WORKERS = max(1, min(int(os.getenv("OCR_JOB_WORKERS", str(OCR_MAX_CONCURRENT_REQUESTS))), OCR_MAX_CONCURRENT_REQUESTS))
+OCR_JOB_RETENTION_SECONDS = int(os.getenv("OCR_JOB_RETENTION_SECONDS", str(60 * 60)))
 PDF_RENDER_SCALE = float(os.getenv("OCR_PDF_RENDER_SCALE", "3"))
 OCR_TEMP_DIR_PREFIX = "callog-ocr-"
 
@@ -55,11 +61,17 @@ os.environ["OMP_NUM_THREADS"] = str(OCR_CPU_THREADS)
 os.environ["MKL_NUM_THREADS"] = str(OCR_CPU_THREADS)
 os.environ["OPENBLAS_NUM_THREADS"] = str(OCR_CPU_THREADS)
 os.environ["NUMEXPR_NUM_THREADS"] = str(OCR_CPU_THREADS)
+if PADDLE_OCR_BASE_DIR:
+    os.environ["PADDLEOCR_HOME"] = PADDLE_OCR_BASE_DIR
 
 logger = logging.getLogger(__name__)
 ocr_router = APIRouter()
 ocr_lock = Lock()
 ocr_request_slots = BoundedSemaphore(OCR_MAX_CONCURRENT_REQUESTS)
+ocr_job_queue: Queue = Queue(maxsize=OCR_JOB_QUEUE_SIZE)
+ocr_job_workers: List[Thread] = []
+ocr_job_workers_lock = Lock()
+ocr_job_stop = object()
 TRANSIENT_OCR_ERROR_MARKERS = (
     "could not execute a primitive",
     "onednn",
@@ -84,6 +96,21 @@ class OcrResponse(BaseModel):
     text: str
     lines: List[OcrLine]
     pageCount: int
+
+
+class OcrJobAccepted(BaseModel):
+    job_id: str
+    status: str
+    status_url: str
+    result_url: str
+
+
+class OcrJobStatus(BaseModel):
+    job_id: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    error: Optional[str] = None
 
 
 @dataclass
@@ -126,9 +153,107 @@ class CandidateStats:
     meaningful_ratio: float
 
 
+@dataclass
+class OcrJobRecord:
+    job_id: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    upload_path: Path
+    temp_dir: Path
+    content_type: str
+    filename: Optional[str] = None
+    result: Optional[OcrResponse] = None
+    error: Optional[str] = None
+
+
+class OcrJobStore:
+    def __init__(self) -> None:
+        self._records: Dict[str, OcrJobRecord] = {}
+        self._lock = Lock()
+
+    def create(
+        self,
+        job_id: str,
+        upload_path: Path,
+        temp_dir: Path,
+        content_type: str,
+        filename: Optional[str],
+    ) -> OcrJobRecord:
+        now = _utc_now()
+        record = OcrJobRecord(
+            job_id=job_id,
+            status="queued",
+            created_at=now,
+            updated_at=now,
+            upload_path=upload_path,
+            temp_dir=temp_dir,
+            content_type=content_type,
+            filename=filename,
+        )
+        with self._lock:
+            self._records[job_id] = record
+        return replace(record)
+
+    def mark_running(self, job_id: str) -> None:
+        self._update(job_id, status="running", error=None)
+
+    def mark_completed(self, job_id: str, result: OcrResponse) -> None:
+        self._update(job_id, status="completed", result=result, error=None)
+
+    def mark_failed(self, job_id: str, error: str) -> None:
+        self._update(job_id, status="failed", error=error)
+
+    def get(self, job_id: str) -> Optional[OcrJobRecord]:
+        with self._lock:
+            record = self._records.get(job_id)
+            return replace(record) if record is not None else None
+
+    def remove(self, job_id: str) -> None:
+        with self._lock:
+            self._records.pop(job_id, None)
+
+    def cleanup_terminal(self, max_age_seconds: Optional[int] = None) -> int:
+        retention = OCR_JOB_RETENTION_SECONDS if max_age_seconds is None else max_age_seconds
+        if retention < 0:
+            return 0
+
+        cutoff = time.time() - retention
+        removed = 0
+        with self._lock:
+            for job_id, record in list(self._records.items()):
+                if record.status not in {"completed", "failed"}:
+                    continue
+                if retention == 0 or record.updated_at.timestamp() <= cutoff:
+                    self._records.pop(job_id, None)
+                    removed += 1
+        return removed
+
+    def _update(self, job_id: str, **changes: object) -> None:
+        with self._lock:
+            record = self._records[job_id]
+            for key, value in changes.items():
+                setattr(record, key, value)
+            record.updated_at = _utc_now()
+
+
+ocr_jobs = OcrJobStore()
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 @lru_cache(maxsize=1)
 def get_ocr() -> Any:
     from paddleocr import PaddleOCR
+
+    if PADDLE_OCR_BASE_DIR:
+        import paddleocr.paddleocr as paddleocr_module
+
+        base_dir = str(Path(PADDLE_OCR_BASE_DIR).expanduser())
+        Path(base_dir).mkdir(parents=True, exist_ok=True)
+        paddleocr_module.BASE_DIR = base_dir
 
     return PaddleOCR(
         use_angle_cls=OCR_USE_ANGLE_CLS,
@@ -165,6 +290,87 @@ def release_ocr_model() -> None:
         get_ocr.cache_clear()
     gc.collect()
     logger.info("OCR model cache cleared.")
+
+
+def start_ocr_job_workers() -> None:
+    with ocr_job_workers_lock:
+        if ocr_job_workers:
+            return
+        for index in range(OCR_JOB_WORKERS):
+            worker = Thread(target=_ocr_job_worker, name=f"ocr-job-worker-{index + 1}", daemon=True)
+            worker.start()
+            ocr_job_workers.append(worker)
+    logger.info(
+        "OCR job workers started. workers=%s queueSize=%s maxConcurrent=%s",
+        OCR_JOB_WORKERS,
+        OCR_JOB_QUEUE_SIZE,
+        OCR_MAX_CONCURRENT_REQUESTS,
+    )
+
+
+def stop_ocr_job_workers() -> None:
+    with ocr_job_workers_lock:
+        workers = list(ocr_job_workers)
+        ocr_job_workers.clear()
+
+    for _worker in workers:
+        try:
+            ocr_job_queue.put(ocr_job_stop, timeout=1)
+        except Full:
+            logger.warning("OCR job queue is full while stopping workers.")
+
+    for worker in workers:
+        worker.join(timeout=2)
+    if workers:
+        logger.info("OCR job workers stopped. count=%s", len(workers))
+
+
+def _ocr_job_worker() -> None:
+    while True:
+        item = ocr_job_queue.get()
+        try:
+            if item is ocr_job_stop:
+                return
+            _run_queued_ocr_job(str(item))
+        finally:
+            ocr_job_queue.task_done()
+
+
+def _run_queued_ocr_job(job_id: str) -> None:
+    record = ocr_jobs.get(job_id)
+    if record is None:
+        logger.warning("OCR job record was missing. jobId=%s", job_id)
+        return
+
+    start_time = time.perf_counter()
+    ocr_request_slots.acquire()
+    try:
+        ocr_jobs.mark_running(job_id)
+        logger.info(
+            "OCR job started. jobId=%s fileName=%s contentType=%s",
+            job_id,
+            record.filename,
+            record.content_type,
+        )
+        response = _extract_from_path(record.upload_path, record.content_type, record.temp_dir)
+        ocr_jobs.mark_completed(job_id, response)
+        logger.info(
+            "OCR job completed. jobId=%s textLength=%s pageCount=%s elapsedMs=%s",
+            job_id,
+            len(response.text or ""),
+            response.pageCount,
+            int((time.perf_counter() - start_time) * 1000),
+        )
+    except HTTPException as exc:
+        detail = str(exc.detail)
+        ocr_jobs.mark_failed(job_id, f"HTTP {exc.status_code}: {detail}")
+        logger.warning("OCR job failed. jobId=%s status=%s detail=%s", job_id, exc.status_code, detail)
+    except Exception as exc:
+        ocr_jobs.mark_failed(job_id, f"{type(exc).__name__}: {exc}")
+        logger.exception("OCR job crashed. jobId=%s fileName=%s", job_id, record.filename)
+    finally:
+        shutil.rmtree(record.temp_dir, ignore_errors=True)
+        ocr_request_slots.release()
 
 
 @ocr_router.post("/ocr", response_model=OcrResponse)
@@ -223,6 +429,96 @@ async def extract_text(file: UploadFile = File(...)) -> OcrResponse:
         ocr_request_slots.release()
 
 
+@ocr_router.post("/ocr/jobs", response_model=OcrJobAccepted, status_code=202)
+async def create_ocr_job(request: Request, file: UploadFile = File(...)) -> OcrJobAccepted:
+    ocr_jobs.cleanup_terminal()
+    if ocr_job_queue.full():
+        await _close_upload(file)
+        raise HTTPException(status_code=429, detail=f"OCR job queue is full. queue_size={OCR_JOB_QUEUE_SIZE}")
+
+    job_id = uuid.uuid4().hex
+    temp_dir: Optional[Path] = None
+    enqueued = False
+
+    try:
+        suffix = Path(file.filename or "").suffix.lower()
+        if not suffix:
+            suffix = _suffix_from_content_type(file.content_type or "")
+
+        temp_dir = _make_temp_dir()
+        upload_path = temp_dir / f"upload{suffix}"
+        uploaded_size = await _write_upload_to_path(file, upload_path)
+        ocr_jobs.create(
+            job_id=job_id,
+            upload_path=upload_path,
+            temp_dir=temp_dir,
+            content_type=file.content_type or "",
+            filename=file.filename,
+        )
+
+        try:
+            ocr_job_queue.put_nowait(job_id)
+            enqueued = True
+        except Full as exc:
+            ocr_jobs.remove(job_id)
+            raise HTTPException(
+                status_code=429,
+                detail=f"OCR job queue is full. queue_size={OCR_JOB_QUEUE_SIZE}",
+            ) from exc
+
+        logger.info(
+            "OCR job queued. jobId=%s fileName=%s contentType=%s size=%s queueSize=%s",
+            job_id,
+            file.filename,
+            file.content_type,
+            uploaded_size,
+            ocr_job_queue.qsize(),
+        )
+        base_url = _request_base_url(request)
+        return OcrJobAccepted(
+            job_id=job_id,
+            status="queued",
+            status_url=f"{base_url}/ocr/jobs/{job_id}",
+            result_url=f"{base_url}/ocr/jobs/{job_id}/result",
+        )
+    except HTTPException:
+        if temp_dir is not None and not enqueued:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+    except Exception as exc:
+        if temp_dir is not None and not enqueued:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        logger.exception("OCR job enqueue crashed. jobId=%s fileName=%s", job_id, file.filename)
+        raise HTTPException(status_code=500, detail=f"OCR job enqueue failed: {type(exc).__name__}: {exc}") from exc
+    finally:
+        await _close_upload(file)
+
+
+@ocr_router.get("/ocr/jobs/{job_id}", response_model=OcrJobStatus)
+def get_ocr_job(job_id: str) -> OcrJobStatus:
+    record = ocr_jobs.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="OCR job not found")
+
+    return OcrJobStatus(
+        job_id=record.job_id,
+        status=record.status,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        error=record.error,
+    )
+
+
+@ocr_router.get("/ocr/jobs/{job_id}/result", response_model=OcrResponse)
+def get_ocr_job_result(job_id: str) -> OcrResponse:
+    record = ocr_jobs.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="OCR job not found")
+    if record.status != "completed" or record.result is None:
+        raise HTTPException(status_code=409, detail=f"OCR job is {record.status}")
+    return record.result
+
+
 async def _write_upload_to_path(file: UploadFile, upload_path: Path) -> int:
     max_bytes = OCR_MAX_UPLOAD_MB * 1024 * 1024
     uploaded_size = 0
@@ -278,6 +574,10 @@ def _make_temp_dir() -> Path:
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
     raise HTTPException(status_code=500, detail="OCR temporary directory is not writable")
+
+
+def _request_base_url(request: Request) -> str:
+    return str(request.base_url).rstrip("/")
 
 
 def _ocr_temp_roots() -> List[Path]:
