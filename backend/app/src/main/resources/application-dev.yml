@@ -16,7 +16,7 @@ jwt:
   expire: ${JWT_EXPIRE}
 project:
   aes:
-    key: aessecretkey01234567891011121314
+    key: ${AES_SECRET_KEY}
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
   secure-cookie: ${SECURE_COOKIE:false}
