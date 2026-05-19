@@ -32,6 +32,16 @@ public class AdCheckController {
         }
     }
 
+    @PostMapping("/check/aijudge")
+    public ResponseEntity<BaseResponse<?>> checkWithAiJudge(@RequestBody AdCheckDto.Req req) {
+        try {
+            return ResponseEntity.ok(BaseResponse.success(adCheckService.checkWithAiJudge(req.getCopy())));
+        } catch (RuntimeException e) {
+            log.error("Ad copy check via ai-judge failed.", e);
+            return ResponseEntity.ok(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
+        }
+    }
+
     @PostMapping("/check/file")
     public ResponseEntity<BaseResponse<?>> checkFile(@RequestParam("file") MultipartFile file) {
         try {
@@ -42,6 +52,20 @@ public class AdCheckController {
             return ResponseEntity.ok(BaseResponse.fail(BaseResponseStatus.FAIL, e.getResponse()));
         } catch (RuntimeException e) {
             log.error("Ad file check failed. fileName={}, size={}", file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize(), e);
+            return ResponseEntity.ok(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
+        }
+    }
+
+    @PostMapping("/check/file/aijudge")
+    public ResponseEntity<BaseResponse<?>> checkFileWithAiJudge(@RequestParam("file") MultipartFile file) {
+        try {
+            return ResponseEntity.ok(BaseResponse.success(adCheckService.checkFileWithAiJudge(file)));
+        } catch (AdCheckService.FileCheckException e) {
+            log.error("Ad file check via ai-judge failed after text extraction. fileName={}, size={}",
+                    file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize(), e);
+            return ResponseEntity.ok(BaseResponse.fail(BaseResponseStatus.FAIL, e.getResponse()));
+        } catch (RuntimeException e) {
+            log.error("Ad file check via ai-judge failed. fileName={}, size={}", file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize(), e);
             return ResponseEntity.ok(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
         }
     }
