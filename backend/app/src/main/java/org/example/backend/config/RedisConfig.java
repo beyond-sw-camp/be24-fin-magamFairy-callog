@@ -7,7 +7,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.lettuce.core.ReadFrom;
 import org.example.backend.common.redis.CacheNames;
+import org.springframework.boot.autoconfigure.data.redis.LettuceClientConfigurationBuilderCustomizer;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -60,7 +62,9 @@ public class RedisConfig {
                 .entryTtl(Duration.ofMinutes(5))
                 .disableCachingNullValues()
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
-                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer()));
+                // ⚡ 값 직렬화는 JSON → GZIP 압축 (대시보드 ~17KB 응답을 약 70% 축소, 메모리/네트워크 절감)
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(
+                        new GzipRedisSerializer(jsonSerializer())));
 
         Map<String, RedisCacheConfiguration> perCache = new HashMap<>();
         CACHE_TTL.forEach((name, ttl) ->
@@ -77,6 +81,20 @@ public class RedisConfig {
     @Bean
     public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory cf) {
         return new StringRedisTemplate(cf);
+    }
+
+    /**
+     * ⚡ Read from Replica — 읽기를 replica 로 우선 분산.
+     *
+     * <p>yml 기반 Lettuce 자동설정(sentinel + pool)을 그대로 유지하면서 ReadFrom 정책만 끼워넣는다.
+     * REPLICA_PREFERRED: replica 우선, 모두 불가하면 master 로 자동 폴백.</p>
+     *
+     * <p>캐시 용도라 복제 지연(수 ms) 동안의 stale 은 TTL 범위 내에서 허용된다.
+     * (강한 일관성이 필요한 데이터는 master 에서 읽어야 함)</p>
+     */
+    @Bean
+    public LettuceClientConfigurationBuilderCustomizer readFromReplicaCustomizer() {
+        return builder -> builder.readFrom(ReadFrom.REPLICA_PREFERRED);
     }
 
     /**

@@ -80,6 +80,34 @@ public class DashboardController {
         return ResponseEntity.ok(BaseResponse.success(aggregateService.kpiCategories(user.getIdx())));
     }
 
+    /** ⭐NEW: Zone1 P1 우 — 내 참여 캠페인의 최근 활동 피드 (최신순 ~20건). */
+    @GetMapping("/recent-activity")
+    public ResponseEntity<BaseResponse> recentActivity(@AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.recentActivity(user.getIdx())));
+    }
+
+    /** ⭐NEW: Zone4 P1 — 내 캠페인 status별 count 퍼널. */
+    @GetMapping("/campaign-pipeline")
+    public ResponseEntity<BaseResponse> campaignPipeline(@AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.campaignPipeline(user.getIdx())));
+    }
+
+    /** ⭐NEW: Zone2 — 내 캠페인 진척률 랭킹 (완료율 내림차순). */
+    @GetMapping("/campaign-progress")
+    public ResponseEntity<BaseResponse> campaignProgress(@AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.campaignProgress(user.getIdx())));
+    }
+
+    /** ⭐NEW: Zone4 P2 — REVENUE KPI 월별 매출 추이 (최근 6개월). */
+    @GetMapping("/revenue-trend")
+    public ResponseEntity<BaseResponse> revenueTrend(@AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.revenueTrend(user.getIdx())));
+    }
+
     private void requireAuth(AuthUserDetails user) {
         if (user == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증된 유저 정보가 없습니다.");

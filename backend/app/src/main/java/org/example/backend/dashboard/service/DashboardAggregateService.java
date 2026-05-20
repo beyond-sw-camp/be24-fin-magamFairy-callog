@@ -1,6 +1,8 @@
 package org.example.backend.dashboard.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.backend.activity.model.CampaignActivity;
+import org.example.backend.activity.repository.CampaignActivityRepository;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignKpi;
 import org.example.backend.campaign.model.CampaignMember;
@@ -11,9 +13,13 @@ import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.dashboard.dto.BlockerDto;
+import org.example.backend.dashboard.dto.CampaignProgressDto;
 import org.example.backend.dashboard.dto.DashboardSummaryDto;
+import org.example.backend.dashboard.dto.LabelValueDto;
 import org.example.backend.dashboard.dto.PartnerProgressDto;
+import org.example.backend.dashboard.dto.PipelineStageDto;
 import org.example.backend.dashboard.dto.QuarterGoalProgressDto;
+import org.example.backend.dashboard.dto.RecentActivityDto;
 import org.example.backend.dashboard.dto.ReviewQueueItemDto;
 import org.example.backend.kpi.model.GoalStatus;
 import org.example.backend.kpi.model.KpiDailySnapshot;
@@ -74,6 +80,7 @@ public class DashboardAggregateService {
     private final BenefitRepository benefitRepository;
     private final KpiMonthlySnapshotRepository monthlySnapshotRepository;
     private final KpiDailySnapshotRepository dailySnapshotRepository;
+    private final CampaignActivityRepository activityRepository;
 
     // ── 0. Dashboard 페이지 통합 응답 (B4 + Fix A) ───────────────────
     /**
@@ -90,7 +97,7 @@ public class DashboardAggregateService {
      */
     @Cacheable(value = CacheNames.DASHBOARD_PAGE,
             key = "#callerIdx + ':' + (#periodCode == null ? '' : #periodCode)",
-                    sync = true )
+            sync = true)   // ⚡ Cache Stampede 방지: 동일 키 DB 로딩을 한 스레드만 수행 (cold-start DB 폭주 차단)
     public org.example.backend.dashboard.dto.DashboardPageDto loadAll(Long callerIdx, String periodCode) {
         return new org.example.backend.dashboard.dto.DashboardPageDto(
                 summary(callerIdx),
@@ -492,6 +499,170 @@ public class DashboardAggregateService {
                 .collect(Collectors.groupingBy(
                         k -> k.getCategory() == null ? "UNKNOWN" : k.getCategory().name(),
                         Collectors.counting()));
+    }
+
+    // ── 8. Recent Activity (Zone1 P1 우) ───────────────────
+
+    /**
+     * 호출자가 참여/담당한 캠페인들의 최근 활동 피드 (최신순, 최대 20건).
+     * 회사 격리: filterCampaigns(scope) 가 반환한 캠페인만 대상.
+     */
+    public List<RecentActivityDto> recentActivity(Long callerIdx) {
+        User caller = findUser(callerIdx);
+        Scope scope = resolveScope(caller);
+        Set<Long> campaignIds = filterCampaigns(scope).stream()
+                .map(Campaign::getIdx).collect(Collectors.toSet());
+        if (campaignIds.isEmpty()) return List.of();
+
+        return activityRepository.findRecentByCampaignIdxIn(
+                        campaignIds, org.springframework.data.domain.PageRequest.of(0, 20))
+                .stream()
+                .map(this::toRecentActivityDto)
+                .toList();
+    }
+
+    private RecentActivityDto toRecentActivityDto(CampaignActivity a) {
+        return new RecentActivityDto(
+                a.getIdx(),
+                a.getCampaign() != null ? a.getCampaign().getIdx() : null,
+                a.getCampaign() != null ? a.getCampaign().getName() : null,
+                a.getType(),
+                a.getDescription(),
+                a.getActor() != null ? a.getActor().getName() : null,
+                a.getCreatedAt()
+        );
+    }
+
+    // ── 9. Campaign Pipeline 퍼널 (Zone4 P1) ────────────────
+
+    private static final List<String> PIPELINE_ORDER = List.of("draft", "live", "review", "paused", "completed");
+    private static final Map<String, String> PIPELINE_LABELS = Map.of(
+            "draft", "기획",
+            "live", "실행",
+            "review", "검수",
+            "paused", "보류",
+            "completed", "완료");
+
+    /**
+     * 내 캠페인들을 status 별로 count 하여 퍼널 단계 순서로 반환.
+     * 알 수 없는 status 는 원본 문자열을 stage 라벨로 사용 (맨 뒤).
+     */
+    public List<PipelineStageDto> campaignPipeline(Long callerIdx) {
+        User caller = findUser(callerIdx);
+        Scope scope = resolveScope(caller);
+        Map<String, Long> countByStatus = filterCampaigns(scope).stream()
+                .collect(Collectors.groupingBy(
+                        c -> c.getStatus() == null ? "draft" : c.getStatus(),
+                        Collectors.counting()));
+        if (countByStatus.isEmpty()) return List.of();
+
+        List<PipelineStageDto> result = new ArrayList<>();
+        for (String status : PIPELINE_ORDER) {
+            long cnt = countByStatus.getOrDefault(status, 0L);
+            if (cnt > 0) {
+                result.add(new PipelineStageDto(PIPELINE_LABELS.getOrDefault(status, status), cnt));
+            }
+        }
+        // 정의되지 않은 status (예: closed 등) 는 뒤에 원본 라벨로 추가
+        countByStatus.entrySet().stream()
+                .filter(e -> !PIPELINE_ORDER.contains(e.getKey()))
+                .forEach(e -> result.add(new PipelineStageDto(e.getKey(), e.getValue())));
+        return result;
+    }
+
+    // ── 10. Campaign Progress 랭킹 (Zone2) ──────────────────
+
+    /**
+     * 내 캠페인별 진척률(DONE task / 전체 task)을 내림차순 정렬해 반환.
+     * isMine = 호출자가 해당 캠페인의 PM(MANAGER) 또는 GM 인 경우 true.
+     */
+    public List<CampaignProgressDto> campaignProgress(Long callerIdx) {
+        User caller = findUser(callerIdx);
+        Scope scope = resolveScope(caller);
+        List<Campaign> visibleCampaigns = filterCampaigns(scope);
+        if (visibleCampaigns.isEmpty()) return List.of();
+
+        Set<Long> campaignIds = visibleCampaigns.stream()
+                .map(Campaign::getIdx).collect(Collectors.toSet());
+
+        // 캠페인별 [total, done] 1 GROUP BY
+        Map<Long, long[]> stats = new HashMap<>();
+        for (Object[] row : taskRepository.countTotalAndDoneByCampaignIdxIn(campaignIds)) {
+            if (row == null || row.length < 3 || row[0] == null) continue;
+            long cid = ((Number) row[0]).longValue();
+            long total = row[1] == null ? 0L : ((Number) row[1]).longValue();
+            long done = row[2] == null ? 0L : ((Number) row[2]).longValue();
+            stats.put(cid, new long[]{total, done});
+        }
+
+        // 호출자가 PM/GM 인 캠페인 집합
+        Set<Long> myManagedCampaignIds = memberRepository.findAllWithCampaignByUserIdx(callerIdx).stream()
+                .filter(m -> m.getCampaignRole() == CampaignMemberRole.MANAGER
+                        || m.getCampaignRole() == CampaignMemberRole.GENERAL_MANAGER)
+                .map(m -> m.getCampaign().getIdx())
+                .collect(Collectors.toSet());
+
+        return visibleCampaigns.stream()
+                .map(c -> {
+                    long[] s = stats.getOrDefault(c.getIdx(), new long[]{0L, 0L});
+                    int pct = s[0] == 0 ? 0 : (int) Math.round(s[1] * 100.0 / s[0]);
+                    return new CampaignProgressDto(
+                            c.getIdx(),
+                            c.getName(),
+                            c.getColor(),
+                            myManagedCampaignIds.contains(c.getIdx()),
+                            pct);
+                })
+                .sorted((a, b) -> Integer.compare(b.completionPct(), a.completionPct()))
+                .toList();
+    }
+
+    // ── 11. Revenue Trend (Zone4 P2) ────────────────────────
+
+    /**
+     * REVENUE 카테고리 KPI 의 월별 실적 추이 (최근 6개월).
+     * 내 조직 소유 REVENUE OrganizationKpi 의 KpiMonthlySnapshot.actual 을 월별 합산.
+     * snapshot 데이터가 없으면 빈 리스트 (가짜 값 생성 금지).
+     */
+    public List<LabelValueDto> revenueTrend(Long callerIdx) {
+        User caller = findUser(callerIdx);
+        Scope scope = resolveScope(caller);
+
+        List<OrganizationKpi> revenueKpis = orgKpiRepository.findRevenueKpis(
+                scope.allCampaigns ? null : scope.ownerOrgId);
+        if (revenueKpis.isEmpty()) return List.of();
+
+        // 최근 6개월 (year-month) 키 순서 준비
+        LocalDate now = LocalDate.now();
+        List<int[]> months = new ArrayList<>(6); // [year, month]
+        for (int i = 5; i >= 0; i--) {
+            LocalDate ym = now.minusMonths(i);
+            months.add(new int[]{ym.getYear(), ym.getMonthValue()});
+        }
+
+        // KPI별 (year,month)->actual 합산
+        Map<String, BigDecimal> actualByYm = new HashMap<>();
+        for (OrganizationKpi kpi : revenueKpis) {
+            // 두 연도가 걸칠 수 있어 등장하는 연도 모두 조회
+            Set<Integer> years = months.stream().map(m -> m[0]).collect(Collectors.toSet());
+            for (Integer year : years) {
+                for (KpiMonthlySnapshot s : monthlySnapshotRepository
+                        .findAllByOrgKpi_IdxAndYearOrderByMonthAsc(kpi.getIdx(), year)) {
+                    if (s.getActualValue() == null) continue;
+                    String key = s.getYear() + "-" + s.getMonth();
+                    actualByYm.merge(key, s.getActualValue(), BigDecimal::add);
+                }
+            }
+        }
+        if (actualByYm.isEmpty()) return List.of();
+
+        List<LabelValueDto> result = new ArrayList<>(6);
+        for (int[] ym : months) {
+            String key = ym[0] + "-" + ym[1];
+            BigDecimal val = actualByYm.getOrDefault(key, BigDecimal.ZERO);
+            result.add(new LabelValueDto(String.format("%d-%02d", ym[0], ym[1]), val));
+        }
+        return result;
     }
 
     // ── 권한별 Scope 분기 ───────────────────────────────────

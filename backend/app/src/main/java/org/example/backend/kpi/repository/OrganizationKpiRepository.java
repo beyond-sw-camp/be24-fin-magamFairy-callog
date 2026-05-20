@@ -67,4 +67,13 @@ public interface OrganizationKpiRepository extends JpaRepository<OrganizationKpi
     List<OrganizationKpi> findAllByParentKpi_Idx(Long parentKpiIdx);
 
     boolean existsByParentKpi_Idx(Long parentKpiIdx);
+
+    /**
+     * REVENUE 카테고리 KPI (대시보드 Zone4 매출 추이용).
+     * ownerOrgIdx 가 null 이면 전체, 아니면 해당 조직 소유 REVENUE KPI.
+     */
+    @Query("SELECT k FROM OrganizationKpi k " +
+           "WHERE k.category = org.example.backend.campaign.model.KpiCategory.REVENUE " +
+           "AND (:ownerOrgIdx IS NULL OR k.owner.idx = :ownerOrgIdx)")
+    List<OrganizationKpi> findRevenueKpis(@Param("ownerOrgIdx") Long ownerOrgIdx);
 }

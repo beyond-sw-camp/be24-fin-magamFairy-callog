@@ -9,6 +9,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const partnerProgress = ref([])
   const assetCategories = ref({})       // { "EVENT": 42, ... }
   const myCampaigns = ref([])           // [{ idx, name, status, color, ... }]
+
+  /* ─── 대시보드 재설계 (Zone 1~4) ─── */
+  const recentActivity = ref([])        // Zone1 P1우 [{ idx, campaignId, campaignName, type, description, actorName, createdAt }]
+  const campaignPipeline = ref([])      // Zone4 P1 [{ stage, count }]
+  const campaignProgress = ref([])      // Zone2 [{ campaignId, campaignName, color, isMine, completionPct }]
+  const revenueTrend = ref([])          // Zone4 P2 [{ label, value }]
+  const reviewQueue = ref([])           // Zone1 P1좌 / Zone3 P2
+  const blockers = ref([])              // Zone1 P1좌
+
   const loading = ref(false)
   const errorMessage = ref(null)
   const currentPeriod = ref(null)
@@ -30,6 +39,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     partnerProgress: 'loading',
     assetCategories: 'loading',
     myCampaigns: 'loading',
+    recentActivity: 'loading',
+    campaignPipeline: 'loading',
+    campaignProgress: 'loading',
+    revenueTrend: 'loading',
+    reviewQueue: 'loading',
+    blockers: 'loading',
   })
 
   function isEmptyResult(key, value) {
@@ -83,6 +98,36 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
 
     loading.value = false
+
+    // 재설계 Zone 데이터는 메인 로드를 막지 않도록 비차단(detached) 로드.
+    // 각 zone 은 자기 status 만 갱신하며 실패 시 해당 zone 만 빈/에러 상태.
+    loadZoneExtras()
+  }
+
+  /**
+   * Zone1~4 신규 엔드포인트 일괄 best-effort 로드.
+   * 개별 실패는 해당 zone status='error' (→ View 에서 빈 상태) 로 격리, 화면 크래시 없음.
+   */
+  async function loadZoneExtras() {
+    const tasks = [
+      ['recentActivity', dashApi.GetRecentActivity, recentActivity],
+      ['campaignPipeline', dashApi.GetCampaignPipeline, campaignPipeline],
+      ['campaignProgress', dashApi.GetCampaignProgress, campaignProgress],
+      ['revenueTrend', dashApi.GetRevenueTrend, revenueTrend],
+      ['reviewQueue', dashApi.GetReviewQueue, reviewQueue],
+      ['blockers', dashApi.GetBlockers, blockers],
+    ]
+    await Promise.all(tasks.map(async ([key, fn, target]) => {
+      try {
+        const data = normalizeArray(await fn())
+        target.value = data
+        status.value[key] = isEmptyResult(key, data) ? 'empty' : 'success'
+      } catch (e) {
+        target.value = []
+        status.value[key] = 'error'
+        console.warn(`[dashboard] ${key} 실패`, e)
+      }
+    }))
   }
 
   /**
@@ -123,6 +168,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     partnerProgress,
     assetCategories,
     myCampaigns,
+    recentActivity,
+    campaignPipeline,
+    campaignProgress,
+    revenueTrend,
+    reviewQueue,
+    blockers,
     loading,
     errorMessage,
     status,
@@ -133,6 +184,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     comparePartnerProgress,
     compareLoading,
     loadAll,
+    loadZoneExtras,
     loadCompare,
     clearCompare,
   }

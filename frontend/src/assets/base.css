@@ -115,6 +115,15 @@
   --lp-text-muted:         #6B6582;
   --lp-text-faint:         #9991AE;
   --lp-border:             #E5DDF0;
+  /* Avatar / initial-badge palette (mockup "Lavender Pop") */
+  --a-violet:              #8E72BA;
+  --a-lime:                #A8BD42;
+  --a-lavender:            #B0A4DA;
+  --a-cream:               #D7B97C;
+  --a-rose:                #C58FA3;
+  /* Frosted-glass pill (on pastel card surfaces) */
+  --lp-frost:              rgba(255, 255, 255, 0.65);
+  --lp-frost-strong:       rgba(255, 255, 255, 0.82);
   /* Button surfaces — distinct from primary so light/dark can diverge cleanly */
   --lp-button-bg:          #3F3463;        /* deep purple, white text on top */
   --lp-button-bg-hover:    #4F4275;
@@ -214,6 +223,15 @@
   --lp-text-muted:         #A89FC0;
   --lp-text-faint:         #6E6586;
   --lp-border:             rgba(255, 255, 255, 0.08);
+  /* Avatar / initial-badge palette — slightly brighter for dark surfaces */
+  --a-violet:              #A98DCC;
+  --a-lime:                #C2D85F;
+  --a-lavender:            #C6BAE6;
+  --a-cream:               #E0C68A;
+  --a-rose:                #D6A3B6;
+  /* Frosted-glass pill — light frost reads on dark translucent pastel surfaces */
+  --lp-frost:              rgba(255, 255, 255, 0.12);
+  --lp-frost-strong:       rgba(255, 255, 255, 0.18);
   /* Button surfaces — dark navy-violet bg + lavender text (per user: lavender = main emphasis) */
   --lp-button-bg:          #1A1530;
   --lp-button-bg-hover:    #252040;
