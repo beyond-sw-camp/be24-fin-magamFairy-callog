@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.backend.organization.model.Organization;
 import org.example.backend.organization.model.OrganizationType;
 import org.example.backend.organization.repository.OrganizationRepository;
+import org.example.backend.user.model.User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,5 +76,21 @@ public class OrganizationService {
                         .canCreateCampaign(false)
                         .build()
         );
+    }
+
+    @Transactional
+    public Organization ensureExternalPartnerOrganization(String companyName) {
+        return organizationRepository.findByNameIgnoreCase(companyName)
+                .orElseGet(() -> createPartnerOrganization(companyName));
+    }
+
+    @Transactional
+    public void assignGeneralManager(Organization organization, User generalManager) {
+        if (organization == null || organization.getIdx() == null || generalManager == null) {
+            return;
+        }
+
+        organizationRepository.findById(organization.getIdx())
+                .ifPresent(managedOrganization -> managedOrganization.setGeneralManager(generalManager));
     }
 }
