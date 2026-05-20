@@ -3,6 +3,7 @@ package org.example.backend.teamboard.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignParticipant;
 import org.example.backend.user.model.User;
 import org.springframework.data.annotation.CreatedDate;
@@ -26,6 +27,12 @@ public class Task {
 
     @Column(nullable = false, length = 200)
     private String name;
+
+    // 캠페인 직접 연결 (1급화) — taskPart/마일스톤 없이도 캠페인 소속 가능. 개인 업무는 null.
+    @Setter
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "campaign_id")
+    private Campaign campaign;
 
     // 참여사
     @ManyToOne(fetch = FetchType.LAZY)

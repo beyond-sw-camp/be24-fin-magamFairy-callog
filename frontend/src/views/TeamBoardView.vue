@@ -90,10 +90,11 @@ const filteredTasks = computed(() => {
   })
 })
 
+// 요약 숫자는 선택한 보드(팀보드/개인보드) 기준
 const boardMetrics = computed(() => ({
-  active: tasks.value.filter((task) => task.status === 'in_progress').length,
-  review: tasks.value.filter((task) => task.status === 'review').length,
-  blocked: tasks.value.filter((task) => task.status === 'blocked').length,
+  active: modeTasks.value.filter((task) => task.status === 'in_progress').length,
+  review: modeTasks.value.filter((task) => task.status === 'review').length,
+  blocked: modeTasks.value.filter((task) => task.status === 'blocked').length,
 }))
 
 function getTasks(companyId, statusId) {

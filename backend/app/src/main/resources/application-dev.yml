@@ -95,14 +95,17 @@ spring:
 logging:
   level:
     org.example.backend.matching.service: debug
-#    org.hibernate.SQL: debug
-#    org.hibernate.orm.jdbc.bind: trace
-#    org.example: debug
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
+    org.example: debug
     net.ttddyy.observation: DEBUG
     # RestClient가 요청을 보내는 과정을 로그로 출력
     org.springframework.web.client: DEBUG
     # HTTP 통신 (헤더, 응답 등)의 아주 상세한 내역을 출력
     org.springframework.http.client: TRACE
+    # 로컬: MongoDB 미가용 시 백그라운드 모니터 스레드의 연결 실패 로그 폭주 차단
+    org.mongodb.driver: "OFF"
+    org.springframework.data.mongodb: "OFF"
 
 custom:
   n8n:
@@ -130,6 +133,10 @@ management:
   endpoint:
     health:
       show-details: always
+  health:
+    # 로컬 개발: MongoDB 미가용(K8s 내부 주소)이어도 헬스 체크가 30초 막지 않도록 비활성화
+    mongo:
+      enabled: false
   prometheus:
     metrics:
       export:

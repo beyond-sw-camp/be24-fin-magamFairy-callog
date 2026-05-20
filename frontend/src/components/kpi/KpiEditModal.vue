@@ -114,6 +114,21 @@ const showTemplate = ref(false)
 const submitError = ref('')
 const isSubmitting = ref(false)
 
+/* ───── 기간: 연도 + 분기 버튼 선택 ───── */
+const pickerYear = ref(new Date().getFullYear())
+function pickPeriod(q) {
+  if (q === 'FY') {
+    form.periodCode = `${pickerYear.value}-FY`
+    form.periodType = 'ANNUAL'
+  } else {
+    form.periodCode = `${pickerYear.value}-Q${q}`
+    form.periodType = 'QUARTERLY'
+  }
+  const d = derivePeriodDates(form.periodCode)
+  form.periodStart = d.start
+  form.periodEnd = d.end
+}
+
 watch(
   () => [props.mode, props.initialValues],
   () => {
@@ -146,6 +161,9 @@ watch(
     if (isAffiliateOwner.value && form.ownerOrgId) {
       void store.fetchParentCandidates(form.ownerOrgId)
     }
+    // 기간 버튼 UI 연도 동기화
+    const yr = parseInt(String(form.periodCode || '').slice(0, 4))
+    if (!Number.isNaN(yr)) pickerYear.value = yr
     submitError.value = ''
   },
   { immediate: true, deep: true },
@@ -390,29 +408,31 @@ const parentOptions = computed(() => store.parentCandidates ?? [])
 
           <div class="field-row">
             <label class="lbl"><span>기간</span></label>
-            <select v-model="form.periodSelect" class="fld">
-              <option v-for="opt in PERIOD_OPTIONS" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
-            <!-- CUSTOM 모드일 때만 코드 + 날짜 입력 -->
-            <div v-if="isCustomPeriod" class="custom-period">
-              <input
-                v-model="form.periodCode"
-                type="text"
-                class="fld"
-                placeholder="기간 코드 (예: 2026-H1)"
-              />
-              <div class="dual-input">
-                <input v-model="form.periodStart" type="date" class="fld" />
-                <input v-model="form.periodEnd" type="date" class="fld" />
+            <div class="period-picker">
+              <div class="pp-year">
+                <button type="button" class="pp-step" aria-label="이전 연도" @click="pickerYear -= 1">‹</button>
+                <span class="pp-year__label">{{ pickerYear }}년</span>
+                <button type="button" class="pp-step" aria-label="다음 연도" @click="pickerYear += 1">›</button>
               </div>
-              <p v-if="validation.periodCode" class="err">{{ validation.periodCode }}</p>
-              <p v-if="validation.periodStart" class="err">{{ validation.periodStart }}</p>
-              <p v-if="validation.periodEnd" class="err">{{ validation.periodEnd }}</p>
+              <div class="pp-grid">
+                <button
+                  v-for="q in [1, 2, 3, 4]"
+                  :key="'q' + q"
+                  type="button"
+                  class="pp-cell"
+                  :class="{ 'is-active': form.periodCode === `${pickerYear}-Q${q}` }"
+                  @click="pickPeriod(q)"
+                >{{ q }}분기</button>
+                <button
+                  type="button"
+                  class="pp-cell pp-cell--fy"
+                  :class="{ 'is-active': form.periodCode === `${pickerYear}-FY` }"
+                  @click="pickPeriod('FY')"
+                >연간</button>
+              </div>
             </div>
-            <p v-else class="hint">
-              {{ form.periodStart }} ~ {{ form.periodEnd }} (자동 계산)
+            <p class="hint">
+              {{ form.periodCode }} · {{ form.periodStart }} ~ {{ form.periodEnd }}
             </p>
           </div>
 
@@ -671,6 +691,70 @@ const parentOptions = computed(() => store.parentCandidates ?? [])
   gap: 6px;
 }
 .custom-period { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+
+/* 기간: 연도 + 분기 버튼 */
+.period-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--panel-muted);
+}
+.pp-year {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.pp-year__label {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 64px;
+  text-align: center;
+}
+.pp-step {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-color);
+  color: var(--color-primary-700);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+}
+.pp-step:hover { background: var(--color-primary-50); }
+.pp-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.pp-cell {
+  padding: 9px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.pp-cell:hover { background: var(--color-primary-50); color: var(--color-primary-700); }
+.pp-cell.is-active {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-500);
+  color: #fff;
+}
+@media (max-width: 480px) {
+  .pp-grid { grid-template-columns: repeat(3, 1fr); }
+}
 
 .hint {
   font-size: 11px;

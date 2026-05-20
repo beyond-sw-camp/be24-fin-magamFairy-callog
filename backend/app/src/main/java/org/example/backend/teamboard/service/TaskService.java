@@ -1,11 +1,13 @@
 package org.example.backend.teamboard.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignMember;
 import org.example.backend.campaign.model.CampaignMemberRole;
 import org.example.backend.campaign.model.CampaignParticipant;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
+import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.notification.service.NotificationService;
 import org.example.backend.notification.service.NotificationSseService;
@@ -39,6 +41,7 @@ public class TaskService {
     private final UserRepository userRepository;
     private final CampaignParticipantRepository participantRepository;
     private final CampaignMemberRepository campaignMemberRepository;
+    private final CampaignRepository campaignRepository;
     private final NotificationService notificationService;
     private final NotificationSseService sseService;
     private final DashboardCacheEvictor dashboardCacheEvictor;
@@ -51,10 +54,10 @@ public class TaskService {
                 .toList();
         List<Task> campaignTasks = campaignIds.isEmpty()
                 ? List.of()
-                : taskRepository.findAllByTaskPart_Campaign_IdxInOrderByIdxDesc(campaignIds);
+                : taskRepository.findAllByCampaignIdsDirectOrViaTaskPart(campaignIds);
         // 개인 업무: 캠페인 연결 전혀 없는 본인 담당 Task (캘린더 개인 일정)
         List<Task> personalTasks = taskRepository
-                .findAllByAssignee_IdxAndParticipantIsNullAndMilestoneIsNullAndTaskPartIsNullOrderByIdxDesc(userIdx);
+                .findAllByAssignee_IdxAndCampaignIsNullAndParticipantIsNullAndMilestoneIsNullAndTaskPartIsNullOrderByIdxDesc(userIdx);
         return java.util.stream.Stream.concat(campaignTasks.stream(), personalTasks.stream())
                 .map(TaskDto.ResList::from)
                 .toList();
@@ -73,9 +76,9 @@ public class TaskService {
         return TaskDto.ResTask.from(saved);
     }
 
-    /** 캠페인 팀 보드 - 캠페인 종속 Task */
+    /** 캠페인 팀 보드 - 캠페인 종속 Task (직접 campaign_id 또는 업무파트 경유) */
     public List<TaskDto.ResList> listByCampaign(Long campaignIdx) {
-        return taskRepository.findAllByTaskPart_Campaign_IdxOrderByIdxDesc(campaignIdx).stream()
+        return taskRepository.findAllByCampaignDirectOrViaTaskPart(campaignIdx).stream()
                 .map(TaskDto.ResList::from)
                 .toList();
     }
@@ -96,7 +99,10 @@ public class TaskService {
         CampaignParticipant participant = req.participantId() != null
                 ? getParticipantOrThrow(req.participantId()) : null;
 
-        Task saved = taskRepository.save(req.toEntity(participant, taskPart, milestone, assignee));
+        Task entity = req.toEntity(participant, taskPart, milestone, assignee);
+        // 1급화: 캠페인을 직접 연결 (taskPart 없이도 캠페인 소속이 되도록)
+        campaignRepository.findById(campaignIdx).ifPresent(entity::setCampaign);
+        Task saved = taskRepository.save(entity);
         notificationService.notifyTaskAssigned(saved, findActor(authUser));
         sseService.broadcastCalendarRefresh(campaignIdx, "task");
         // Dashboard 캐시 무효화 (reviewQueue, summary.pending, blockers 영향)

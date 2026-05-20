@@ -15,10 +15,31 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     List<Task> findAllByAssignee_IdxOrderByIdxDesc(Long assigneeIdx);
 
-    /** 개인 업무: 캠페인 연결(참여사/마일스톤/업무파트)이 전혀 없고 담당자가 본인인 Task. */
-    List<Task> findAllByAssignee_IdxAndParticipantIsNullAndMilestoneIsNullAndTaskPartIsNullOrderByIdxDesc(Long assigneeIdx);
+    /**
+     * 개인 업무: 캠페인 연결(직접 campaign/참여사/마일스톤/업무파트)이 전혀 없고 담당자가 본인인 Task.
+     */
+    List<Task> findAllByAssignee_IdxAndCampaignIsNullAndParticipantIsNullAndMilestoneIsNullAndTaskPartIsNullOrderByIdxDesc(Long assigneeIdx);
 
     List<Task> findAllByTaskPart_Campaign_IdxInOrderByIdxDesc(Collection<Long> campaignIds);
+
+    /** 1급화: 캠페인 직접 연결(campaign_id) · 업무파트 경유 · 참여사 경유 모두 커버 (단일 캠페인).
+     *  LEFT JOIN 으로 null 경로가 행을 배제하지 않게 함. */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT t FROM Task t "
+                    + "LEFT JOIN t.campaign c LEFT JOIN t.taskPart tp LEFT JOIN tp.campaign tpc "
+                    + "LEFT JOIN t.participant p LEFT JOIN p.campaign pc "
+                    + "WHERE c.idx = :cid OR tpc.idx = :cid OR pc.idx = :cid ORDER BY t.idx DESC")
+    List<Task> findAllByCampaignDirectOrViaTaskPart(
+            @org.springframework.data.repository.query.Param("cid") Long campaignIdx);
+
+    /** 1급화: 여러 캠페인 — 직접 · 업무파트 · 참여사 경유 (LEFT JOIN). */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT t FROM Task t "
+                    + "LEFT JOIN t.campaign c LEFT JOIN t.taskPart tp LEFT JOIN tp.campaign tpc "
+                    + "LEFT JOIN t.participant p LEFT JOIN p.campaign pc "
+                    + "WHERE c.idx IN :cids OR tpc.idx IN :cids OR pc.idx IN :cids ORDER BY t.idx DESC")
+    List<Task> findAllByCampaignIdsDirectOrViaTaskPart(
+            @org.springframework.data.repository.query.Param("cids") Collection<Long> campaignIds);
 
     List<Task> findAllByDueDateBetweenAndStatusNotIn(
             LocalDateTime start,

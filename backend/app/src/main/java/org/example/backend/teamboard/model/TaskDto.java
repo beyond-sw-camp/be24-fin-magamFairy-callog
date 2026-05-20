@@ -97,8 +97,11 @@ public class TaskDto {
             if (entity.getParticipant() != null && entity.getParticipant().getOrganization() != null) {
                 companyName = entity.getParticipant().getOrganization().getName();
             }
-            Long campaignIdx = entity.getTaskPart() != null && entity.getTaskPart().getCampaign() != null
-                    ? entity.getTaskPart().getCampaign().getIdx() : null;
+            // 1급화: 직접 campaign 우선, 없으면 업무파트 경유
+            Long campaignIdx = entity.getCampaign() != null
+                    ? entity.getCampaign().getIdx()
+                    : (entity.getTaskPart() != null && entity.getTaskPart().getCampaign() != null
+                            ? entity.getTaskPart().getCampaign().getIdx() : null);
             return new ResList(
                     entity.getIdx(),
                     entity.getName(),

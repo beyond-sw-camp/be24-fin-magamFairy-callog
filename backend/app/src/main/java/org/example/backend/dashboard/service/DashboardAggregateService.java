@@ -562,7 +562,8 @@ public class DashboardAggregateService {
             List<Long> campaignIds = participantRepository.findCampaignsByOrganizationIdx(scope.ownerOrgId).stream()
                     .map(Campaign::getIdx).toList();
             if (campaignIds.isEmpty()) return List.of();
-            return taskRepository.findAllByTaskPart_Campaign_IdxInOrderByIdxDesc(campaignIds);
+            // 1급화: 직접 campaign_id 또는 업무파트 경유 둘 다 포함
+            return taskRepository.findAllByCampaignIdsDirectOrViaTaskPart(campaignIds);
         }
         return List.of();
     }
