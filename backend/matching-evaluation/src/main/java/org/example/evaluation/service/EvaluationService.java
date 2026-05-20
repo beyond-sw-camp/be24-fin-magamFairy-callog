@@ -4,7 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.example.evaluation.model.EvaluationDocument;
 import org.example.evaluation.model.EvaluationDto;
 import org.example.evaluation.repository.EvaluationMongoRepository;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -13,6 +16,19 @@ import java.util.NoSuchElementException;
 @RequiredArgsConstructor
 public class EvaluationService {
     private final EvaluationMongoRepository evaluationMongoRepository;
+    private final RestClient restClient;
+
+    @Value("${custom.n8n.webhook-url}${custom.n8n.evaluation-endpoint}")
+    private String n8nWebhookUrl;
+
+    public void startEvaluation(EvaluationDto.StartEvaluationReq dto) {
+        restClient.post()
+                .uri(n8nWebhookUrl)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(dto)
+                .retrieve()
+                .toBodilessEntity();
+    }
 
     public EvaluationDocument save(EvaluationDto.SaveEvaluationReq dto) {
         return evaluationMongoRepository.save(dto.toDocument());

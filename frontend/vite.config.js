@@ -29,7 +29,15 @@ export default defineConfig({
         changeOrigin: true,             // 대상 서버의 호스트 헤더를 target 주소로 변경
         rewrite: (path) => path.replace(/^\/api/, ''), // 요청 경로에서 /api를 제거하고 전달
         secure: false,                  // SSL 인증서 검증 무시 (자체 서명된 인증서 사용 시 필요)
-      }
-    }
-  }
+      },
+
+      // matching-evaluation 모듈로 가는 요청
+      '/matching-evaluation-api': {
+        target: 'http://localhost:10030',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/matching-evaluation-api/, ''),
+        secure: false,
+      },
+    },
+  },
 })

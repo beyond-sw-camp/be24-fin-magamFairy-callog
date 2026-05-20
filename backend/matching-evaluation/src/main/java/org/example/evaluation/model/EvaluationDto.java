@@ -36,14 +36,17 @@ public class EvaluationDto {
                     .build();
         }
     }
+
     @Getter
     @Setter
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
     public static class StartEvaluationReq {
-        private Long benefitIdx;
+        private Object campaign;
+        private Object benefit;
     }
+
     @Getter
     @Setter
     @NoArgsConstructor

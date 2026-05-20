@@ -69,4 +69,12 @@ public class EvaluationController {
                     .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
         }
     }
+
+    @PostMapping("/start")
+    public ResponseEntity<BaseResponse> start(@RequestBody EvaluationDto.StartEvaluationReq dto) {
+        evaluationService.startEvaluation(dto);
+
+        return ResponseEntity.accepted()
+                .body(BaseResponse.processing(BaseResponseStatus.EVLUATION_STARTED));
+    }
 }
