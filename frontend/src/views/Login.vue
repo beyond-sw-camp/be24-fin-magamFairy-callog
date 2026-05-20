@@ -12,6 +12,21 @@ const form = reactive({
   password: '',
 })
 
+const testAccounts = [
+  {
+    key: 'hq-general-manager',
+    label: '본사 GM',
+    id: 'hqgm@callog.com',
+    password: 'Qwer1234!',
+  },
+  {
+    key: 'partner-general-manager',
+    label: '협력사 GM',
+    id: 'partner@callog.com',
+    password: 'Qwer1234!',
+  },
+]
+
 const isLoading = ref(false)
 const errorMessage = ref('')
 
@@ -21,6 +36,12 @@ function getRedirectTarget() {
     : route.query.redirect
 
   return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/dashboard'
+}
+
+function fillTestAccount(account) {
+  form.id = account.id
+  form.password = account.password
+  errorMessage.value = ''
 }
 
 const handleLogin = async () => {
@@ -66,6 +87,32 @@ const handleLogin = async () => {
           <p v-if="errorMessage" class="login-error mb-4 px-4 py-3 text-sm font-medium">
             {{ errorMessage }}
           </p>
+
+          <div class="login-presets mb-5">
+            <p class="login-presets__label mb-2 text-[11px] font-semibold uppercase tracking-[0.22em]">
+              Test accounts
+            </p>
+            <div class="login-presets__list flex flex-wrap gap-2">
+              <button
+                v-for="account in testAccounts"
+                :key="account.key"
+                type="button"
+                class="login-preset-button text-left transition"
+                :class="{ 'login-preset-button--active': form.id === account.id }"
+                @click="fillTestAccount(account)"
+              >
+                <span class="login-preset-button__title block text-sm font-semibold">
+                  {{ account.label }}
+                </span>
+                <span class="login-preset-button__meta mt-1 block text-xs">
+                  {{ account.id }}
+                </span>
+                <span class="login-preset-button__meta mt-0.5 block text-xs">
+                  PW {{ account.password }}
+                </span>
+              </button>
+            </div>
+          </div>
 
           <form
             class="flex flex-col items-stretch gap-4 md:flex-row md:gap-5"
@@ -226,6 +273,41 @@ const handleLogin = async () => {
 .login-description {
   color: var(--text-muted);
   transition: color var(--transition-normal);
+}
+
+.login-presets__label {
+  color: var(--text-muted);
+}
+
+.login-presets__list {
+  gap: 12px;
+}
+
+.login-preset-button {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  color: var(--text-body);
+  min-height: 118px;
+  padding: 22px 24px;
+  width: min(100%, 260px);
+}
+
+.login-preset-button:hover,
+.login-preset-button--active {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 9%, var(--surface-control));
+}
+
+.login-preset-button__title {
+  color: var(--text-heading);
+  line-height: 1.4;
+}
+
+.login-preset-button__meta {
+  color: var(--text-muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .login-error {

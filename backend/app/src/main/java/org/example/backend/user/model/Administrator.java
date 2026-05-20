@@ -15,6 +15,17 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class Administrator implements ApplicationRunner {
+    private static final String GENERAL_MANAGER_ROLE = "ROLE_GENERAL_MANAGER";
+    private static final String HQ_GM_ID = "hqgm@callog.com";
+    private static final String HQ_GM_EMAIL = "hqgm@callog.com";
+    private static final String HQ_GM_NAME = "HQ General Manager";
+    private static final String HQ_GM_DEPARTMENT = "HQ";
+    private static final String PARTNER_GM_ID = "partner@callog.com";
+    private static final String PARTNER_GM_EMAIL = "partner@callog.com";
+    private static final String PARTNER_GM_NAME = "Partner General Manager";
+    private static final String PARTNER_GM_COMPANY_NAME = "Callog Partner";
+    private static final String PARTNER_GM_DEPARTMENT = "Partnership";
+    private static final String TEST_GM_PASSWORD = "Qwer1234!";
 
     @Value("${admin.id}") private String ADMIN_ID;
     @Value("${admin.email}") private String ADMIN_EMAIL;
@@ -30,44 +41,98 @@ public class Administrator implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         Organization headquarters = organizationService.ensureHeadquarters();
-        User admin = userRepository.findUserById(ADMIN_ID)
-                .or(() -> userRepository.findByEmail(ADMIN_EMAIL))
-                .orElseGet(() -> User.builder()
-                        .id(ADMIN_ID)
-                        .email(ADMIN_EMAIL)
-                        .name(ADMIN_NAME)
-                        .enable(true)
-                        .role(ADMIN_ROLE)
-                        .accountStatus(UserAccountStatus.ACTIVE)
-                        .organization(headquarters)
-                        .build());
+        saveSeedUser(
+                ADMIN_ID,
+                ADMIN_EMAIL,
+                ADMIN_NAME,
+                ADMIN_ROLE,
+                ADMIN_PASSWORD,
+                headquarters,
+                null,
+                null
+        );
 
-        admin.setId(ADMIN_ID);
-        admin.setEmail(ADMIN_EMAIL);
-        admin.setName(ADMIN_NAME);
-        admin.setEnable(true);
-        admin.setRole(ADMIN_ROLE);
-        admin.setOrganization(headquarters);
-        admin.setAccountStatus(UserAccountStatus.ACTIVE);
+        User savedHqGeneralManager = saveSeedUser(
+                HQ_GM_ID,
+                HQ_GM_EMAIL,
+                HQ_GM_NAME,
+                GENERAL_MANAGER_ROLE,
+                TEST_GM_PASSWORD,
+                headquarters,
+                OrganizationService.HQ_NAME,
+                HQ_GM_DEPARTMENT
+        );
+        organizationService.assignGeneralManager(headquarters, savedHqGeneralManager);
 
-        if (shouldResetPassword(admin.getPassword())) {
-            admin.setPassword(passwordEncoder.encode(ADMIN_PASSWORD));
-        }
-
-        User savedAdmin = userRepository.save(admin);
-        userProfileService.ensureProfile(savedAdmin);
+        Organization partnerOrganization = organizationService.ensureExternalPartnerOrganization(PARTNER_GM_COMPANY_NAME);
+        User savedPartnerGeneralManager = saveSeedUser(
+                PARTNER_GM_ID,
+                PARTNER_GM_EMAIL,
+                PARTNER_GM_NAME,
+                GENERAL_MANAGER_ROLE,
+                TEST_GM_PASSWORD,
+                partnerOrganization,
+                PARTNER_GM_COMPANY_NAME,
+                PARTNER_GM_DEPARTMENT
+        );
+        organizationService.assignGeneralManager(partnerOrganization, savedPartnerGeneralManager);
     }
 
-    private boolean shouldResetPassword(String storedPassword) {
+    private User saveSeedUser(
+            String id,
+            String email,
+            String name,
+            String role,
+            String password,
+            Organization organization,
+            String companyName,
+            String department
+    ) {
+        User user = userRepository.findUserById(id)
+                .or(() -> userRepository.findByEmail(email))
+                .orElseGet(() -> User.builder()
+                        .id(id)
+                        .email(email)
+                        .name(name)
+                        .enable(true)
+                        .role(role)
+                        .accountStatus(UserAccountStatus.ACTIVE)
+                        .organization(organization)
+                        .build());
+
+        user.setId(id);
+        user.setEmail(email);
+        user.setName(name);
+        if (companyName != null) {
+            user.setCompanyName(companyName);
+        }
+        if (department != null) {
+            user.setDepartment(department);
+        }
+        user.setEnable(true);
+        user.setRole(role);
+        user.setOrganization(organization);
+        user.setAccountStatus(UserAccountStatus.ACTIVE);
+
+        if (shouldResetPassword(user.getPassword(), password)) {
+            user.setPassword(passwordEncoder.encode(password));
+        }
+
+        User savedUser = userRepository.save(user);
+        userProfileService.ensureProfile(savedUser);
+        return savedUser;
+    }
+
+    private boolean shouldResetPassword(String storedPassword, String expectedPassword) {
         if (storedPassword == null || storedPassword.isBlank()) {
             return true;
         }
 
         try {
-            return !passwordEncoder.matches(ADMIN_PASSWORD, storedPassword);
+            return !passwordEncoder.matches(expectedPassword, storedPassword);
         } catch (IllegalArgumentException exception) {
             // Legacy plain-text or unknown encoded passwords should be replaced
-            // with the configured administrator password on startup.
+            // with the configured seed password on startup.
             return true;
         }
     }
