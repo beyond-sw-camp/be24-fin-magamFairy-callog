@@ -4,6 +4,11 @@ server:
     whitelabel:
       enabled: false  # 기본 whitelabel 에러 페이지 비활성화
     path: /error
+  tomcat:
+    threads:
+      max: 4000
+    max-connections: 10000
+    accept-count: 10000
 
 jdbc:
   datasource:
@@ -66,6 +71,7 @@ spring:
 
   data:
     mongodb:
+      auto-index-creation: true
       uri: ${MONGODB_URL}
     # ─────────────────────────────────────────────────────────────────────
     # Redis (Bitnami Sentinel — callog-redis Service in redis-test namespace)
