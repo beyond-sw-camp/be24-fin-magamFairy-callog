@@ -51,6 +51,16 @@ public interface OrganizationKpiRepository extends JpaRepository<OrganizationKpi
     List<OrganizationKpi> findActiveParentCandidates(@Param("orgIdx") Long orgIdx);
 
     /**
+     * 계열사 cascade 매핑용 후보 - 본사(HQ) 가 '계열사 노출 ON' 한 ACTIVE KPI.
+     */
+    @Query("SELECT k FROM OrganizationKpi k " +
+           "WHERE k.status = org.example.backend.kpi.model.GoalStatus.ACTIVE " +
+           "AND k.owner.type = org.example.backend.organization.model.OrganizationType.HQ " +
+           "AND k.visibleToAffiliate = true " +
+           "ORDER BY k.idx DESC")
+    List<OrganizationKpi> findVisibleHqParentCandidates();
+
+    /**
      * 자손 KPI 조회 (cascade 루프 검증용).
      * 주어진 KPI를 parent로 가지는 모든 자식 KPI.
      */

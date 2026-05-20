@@ -61,16 +61,16 @@
 /* ─────────────────────────────────────────────────────── */
 
 :root {
-  /* ─── Light theme: Pastel Tech + Vanilla (Lavender Pop) ─────────── */
-  --app-bg:                #F5EFE6;        /* vanilla */
-  --panel-color:           #FBF7F0;        /* surface (cream) */
-  --panel-muted:           #F0EBE2;        /* subtle hover */
-  --panel-subtle:          #F8F2EA;        /* deeper subtle */
-  --header-color:          #FBF7F0;
-  --sidebar-color:         #FBF7F0;
-  --dropdown-color:        #FBF7F0;
-  --control-color:         #F0EBE2;
-  --control-focus-color:   #FBF7F0;
+  /* ─── Light theme: 순수 화이트 (크림/바닐라 제거) ─────────── */
+  --app-bg:                #FFFFFF;        /* page bg — pure white */
+  --panel-color:           #FFFFFF;        /* surface (cards) — white */
+  --panel-muted:           #F2F2F5;        /* subtle hover (faint gray) */
+  --panel-subtle:          #F8F8FA;        /* deeper subtle */
+  --header-color:          #FFFFFF;
+  --sidebar-color:         #FFFFFF;
+  --dropdown-color:        #FFFFFF;
+  --control-color:         #F2F2F5;
+  --control-focus-color:   #FFFFFF;
   --text-primary:          #2A2440;        /* deep lavender */
   --text-secondary:        #4A4258;
   --muted-text:            #6B6582;
@@ -97,9 +97,9 @@
   --shadow-elevated:       0 32px 80px rgba(63, 52, 99, 0.16);
 
   /* ─── Lavender Pop tokens (Pastel Tech + Vanilla) — globally available ─── */
-  --lp-bg:                 #F5EFE6;        /* vanilla */
-  --lp-surface:            #FBF7F0;
-  --lp-surface-soft:       #F0EBE2;
+  --lp-bg:                 #FFFFFF;        /* pure white */
+  --lp-surface:            #FFFFFF;
+  --lp-surface-soft:       #F2F2F5;
   --lp-primary:            #B79BD9;
   --lp-primary-strong:     #6F5A9B;
   --lp-primary-deep:       #3F3463;

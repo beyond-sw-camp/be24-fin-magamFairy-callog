@@ -153,14 +153,19 @@ const calendarWeeks = computed(() => {
     // sort events by start date for deterministic placement
     const sorted = [...events.value].sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''))
     sorted.forEach(evt => {
-      const evtStart = new Date(evt.start)
-      const evtEnd = new Date(evt.end)
+      // ⚠ 버그 수정: task 의 start/end 는 datetime("2026-05-22T10:00:00") 이라
+      // 날짜 전용("2026-05-22") cell 과 === 비교가 안 됨 → findIndex -1 → span=7(한 주 전체).
+      // 날짜 부분(YYYY-MM-DD)만 잘라서 비교한다.
+      const startStr = (evt.start ?? '').slice(0, 10)
+      const endStr = (evt.end ?? '').slice(0, 10) || startStr
+      const evtStart = new Date(startStr)
+      const evtEnd = new Date(endStr)
       if (!(evtStart <= weekEnd && evtEnd >= weekStart)) return
 
       const startOffset = evtStart < weekStart
         ? 0
-        : Math.max(0, week.days.findIndex(d => d.date === evt.start))
-      const endIdx = week.days.findIndex(d => d.date === evt.end)
+        : Math.max(0, week.days.findIndex(d => d.date === startStr))
+      const endIdx = week.days.findIndex(d => d.date === endStr)
       const endOffset = endIdx === -1 ? 6 : Math.min(6, endIdx)
       const span = endOffset - startOffset + 1
 
@@ -202,7 +207,12 @@ const calendarWeeks = computed(() => {
 
 // 그날 일정 전체 (모달용)
 function eventsOnDay(iso) {
-  return events.value.filter(e => e.start && e.end && iso >= e.start && iso <= e.end)
+  return events.value.filter(e => {
+    if (!e.start) return false
+    const s = e.start.slice(0, 10)
+    const en = (e.end ?? '').slice(0, 10) || s
+    return iso >= s && iso <= en
+  })
 }
 </script>
 

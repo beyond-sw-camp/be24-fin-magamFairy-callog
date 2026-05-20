@@ -113,7 +113,15 @@ const CAMPAIGN_PALETTE = [
   '#2F5D3D', '#FCD34D', '#67E8F9', '#475569', '#D946EF', // 16–20 sage · buttercream · glacier · slate · magenta
 ]
 
-const tabs = ["캠페인 오버뷰", "팀 보드 보기", "검수/승인", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
+// EXTERNAL_PARTNER 는 KPI 탭 차단 (회사 격리 — Task #3)
+const isPartner = computed(() => {
+  const t = String(authStore.user?.organization?.type ?? authStore.user?.orgType ?? '').toUpperCase();
+  return t === 'EXTERNAL_PARTNER';
+});
+const tabs = computed(() => {
+  const base = ["캠페인 오버뷰", "팀 보드 보기", "검수/승인", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
+  return isPartner.value ? base.filter((t) => t !== '캠페인 성과/KPI') : base;
+});
 
 const handleTabClick = (tabName) => {
   activeTab.value = tabName
@@ -1323,14 +1331,15 @@ watch(
     </section>
 
     <section v-else-if="activeTab === '검수/승인'" class="tab-surface">
-      <ReviewApprovalView :campaign-id="campaignId" />
+      <ReviewApprovalView :key="campaignId" :campaign-id="campaignId" />
     </section>
 
     <section v-else-if="activeTab === '참여자 설정'" class="tab-surface">
-      <CampaignMembersPanel :campaign-id="campaignId" />
+      <!-- :key — 캠페인 전환 시 재마운트 강제 (stale 데이터 버그 수정) -->
+      <CampaignMembersPanel :key="campaignId" :campaign-id="campaignId" />
     </section>
 
-    <section v-else-if="activeTab === '캠페인 성과/KPI'" class="tab-surface">
+    <section v-else-if="activeTab === '캠페인 성과/KPI' && !isPartner" class="tab-surface">
       <div class="kpi-tab-legend">
         <span class="kpi-tab-legend__chip kpi-tab-legend__chip--cascade">🟣 cascade</span>
         <span class="kpi-tab-legend__text">상위 KPI(본사·계열사)에 기여하는 매핑</span>
@@ -1343,11 +1352,11 @@ watch(
         :loading="kpiCascadeLoading"
         style="margin-bottom: 16px;"
       />
-      <CampaignKpiTab :campaign-id="campaignId" />
+      <CampaignKpiTab :key="campaignId" :campaign-id="campaignId" />
     </section>
 
     <section v-else-if="activeTab === '매칭 탭'" class="tab-surface">
-      <MatchOverview :campaign-id="campaignId" />
+      <MatchOverview :key="campaignId" :campaign-id="campaignId" />
     </section>
 
     <Teleport to="body">

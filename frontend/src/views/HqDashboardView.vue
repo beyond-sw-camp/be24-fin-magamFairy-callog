@@ -129,15 +129,15 @@ const orgScope = computed(() => {
   return 'HQ'
 })
 const orgScopeLabel = computed(() => ({
-  HQ: '본사 · 전사',
+  HQ: '본사 · 자기 조직',
   AFFILIATE: '계열사 · 자기 조직',
   EXTERNAL_PARTNER: '외부 파트너 · 참여 캠페인',
   STAFF: '실무자 · 본인 캠페인',
-}[orgScope.value] ?? '본사 · 전사'))
+}[orgScope.value] ?? '본사 · 자기 조직'))
 
 /* ═══════════ Row 1 — KPI 6-up (모든 value 0 default — 데이터 없으면 0 표시) ═══════════ */
 const TODAY_KPIS = [
-  { key: 'progress', label: '전사 진행률',   value: 0, unit: '%',  delta: '', deltaPositive: true,  icon: '📈', bg: '#E7E1FF', iconBg: '#9D85FF' },
+  { key: 'progress', label: '진행률',        value: 0, unit: '%',  delta: '', deltaPositive: true,  icon: '📈', bg: '#E7E1FF', iconBg: '#9D85FF' },
   { key: 'pass',     label: '검수 패스율',   value: 0, unit: '%',  delta: '', deltaPositive: true,  icon: '✅', bg: '#FFE8DD', iconBg: '#FF8A5C' },
   { key: 'match',    label: '매칭 평균 (5축)', value: 0, unit: '점', delta: '', deltaPositive: true,  icon: '🤝', bg: '#DCEEFA', iconBg: '#5DAFD8' },
   { key: 'asset',    label: '자산 LIVE',     value: 0, unit: '개',  delta: '', deltaPositive: true,  icon: '🛍', bg: '#D7EFDD', iconBg: '#6FBF87' },
@@ -158,14 +158,6 @@ const ROLE_KPI = computed(() => {
       const d = pctDelta(curr, cs?.progressPct ?? 0)
       delta = `${d >= 0 ? '+' : ''}${d}%`
       deltaPositive = d >= 0
-    } else if (
-      (orgScope.value === 'AFFILIATE' || orgScope.value === 'EXTERNAL_PARTNER')
-      && s?.companyAveragePct != null
-    ) {
-      // AFFILIATE/EXTERNAL GM: 전사 평균 대비 위치 표시
-      const diff = curr - s.companyAveragePct
-      delta = `전사 평균 ${s.companyAveragePct}% (${diff >= 0 ? '+' : ''}${diff}%p)`
-      deltaPositive = diff >= 0
     } else if (s?.trend != null && s.trend !== 0) {
       // Backend 가 실 비교 데이터 있을 때만 숫자 반환. null/0 이면 "지난주" 표시 생략.
       delta = `${s.trend >= 0 ? '+' : ''}${s.trend}%p 지난주`
@@ -295,7 +287,7 @@ const ROLE_CARD = computed(() => {
       }
     })
     const subtitleByScope = {
-      HQ:               `${currentPeriod.value} · 전사 OrgKpi 평균`,
+      HQ:               `${currentPeriod.value} · 본사 OrgKpi 평균`,
       AFFILIATE:        `${currentPeriod.value} · 우리 조직 OrgKpi 평균`,
       EXTERNAL_PARTNER: `${currentPeriod.value} · 참여 캠페인 KPI 평균`,
       STAFF:            `${currentPeriod.value} · 내 캠페인 KPI 평균`,
@@ -1180,7 +1172,7 @@ function buildSparklineOptions(direction) {
 
 
 const ZONE1_BY_SCOPE = computed(() => {
-  if (orgScope.value === 'HQ') return kpiCardsFromGoals(dashboardStore.quarterGoals, '전사 KPI')
+  if (orgScope.value === 'HQ') return kpiCardsFromGoals(dashboardStore.quarterGoals, '본사 KPI')
   if (orgScope.value === 'AFFILIATE') return kpiCardsFromGoals(dashboardStore.quarterGoals, '본사 KPI')
   if (orgScope.value === 'EXTERNAL_PARTNER') return kpiCardsFromGoals(dashboardStore.quarterGoals, '참여 KPI')
   return kpiCardsFromGoals(dashboardStore.quarterGoals, '내 KPI')
@@ -1461,11 +1453,11 @@ const ZONE4_SCOPE_SERIES = computed(() => {
 })
 
 const scopeLabelShort = computed(() => ({
-  HQ: '전사',
-  AFFILIATE: '본사',
+  HQ: '본사',
+  AFFILIATE: '우리 조직',
   EXTERNAL_PARTNER: '내 참여',
   STAFF: '내 담당',
-}[orgScope.value] ?? '전사'))
+}[orgScope.value] ?? '본사'))
 
 const ZONE4_TITLE = computed(() => ['성과 트래커', '캠페인 누적 추이', scopeLabelShort.value + ' 진행률'][zone4Page.value])
 const ZONE4_LEDE = computed(() => ['분기 매출 vs 목표 추이', '내 캠페인 누적 진행', '권한 스코프 평균 달성률'][zone4Page.value])

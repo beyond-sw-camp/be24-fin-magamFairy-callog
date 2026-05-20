@@ -90,6 +90,11 @@ export const CreateTask = async (campaignId, payload) => {
   return unwrapResponse(await api.post(`/campaigns/${campaignId}/tasks`, payload))
 }
 
+// 개인 업무 생성 (캠페인 없이, 담당=본인)
+export const CreatePersonalTask = async (payload) => {
+  return unwrapResponse(await api.post('/tasks', payload))
+}
+
 export const UpdateTask = async (taskId, payload) => {
   return unwrapResponse(await api.put(`/tasks/${taskId}`, payload))
 }
@@ -113,6 +118,7 @@ export default {
   ListTasksByCampaign,
   GetTask,
   CreateTask,
+  CreatePersonalTask,
   UpdateTask,
   DeleteTask,
 }

@@ -65,6 +65,18 @@ public class TaskController {
         ));
     }
 
+    /** 개인 업무 생성 — 캠페인 없이 본인 담당 Task. 누구나(인증된 사용자) 가능. */
+    @PostMapping("/tasks")
+    public ResponseEntity<BaseResponse> createPersonal(
+            @RequestBody TaskDto.ReqTask req,
+            @AuthenticationPrincipal AuthUserDetails user
+    ) {
+        RoleGuard.requireAuthenticated(user);
+        return ResponseEntity.ok(BaseResponse.success(
+                taskService.createPersonal(req, user)
+        ));
+    }
+
     @PutMapping("/tasks/{taskId}")
     public ResponseEntity<BaseResponse> update(
             @PathVariable Long taskId,

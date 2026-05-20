@@ -43,18 +43,34 @@ public class TaskService {
     private final NotificationSseService sseService;
     private final DashboardCacheEvictor dashboardCacheEvictor;
 
-    /** 메인 팀 보드 - 내가 참여한 캠페인의 Task */
+    /** 메인 팀 보드 - 내가 참여한 캠페인의 Task + 내 개인 업무(캠페인 무관). */
     public List<TaskDto.ResList> listAll(Long userIdx) {
         List<Long> campaignIds = campaignMemberRepository.findAllWithCampaignByUserIdx(userIdx)
                 .stream()
                 .map(cm -> cm.getCampaign().getIdx())
                 .toList();
-        if (campaignIds.isEmpty()) {
-            return List.of();
-        }
-        return taskRepository.findAllByTaskPart_Campaign_IdxInOrderByIdxDesc(campaignIds).stream()
+        List<Task> campaignTasks = campaignIds.isEmpty()
+                ? List.of()
+                : taskRepository.findAllByTaskPart_Campaign_IdxInOrderByIdxDesc(campaignIds);
+        // 개인 업무: 캠페인 연결 전혀 없는 본인 담당 Task (캘린더 개인 일정)
+        List<Task> personalTasks = taskRepository
+                .findAllByAssignee_IdxAndParticipantIsNullAndMilestoneIsNullAndTaskPartIsNullOrderByIdxDesc(userIdx);
+        return java.util.stream.Stream.concat(campaignTasks.stream(), personalTasks.stream())
                 .map(TaskDto.ResList::from)
                 .toList();
+    }
+
+    /** 개인 업무 생성 — 캠페인/참여사/마일스톤/업무파트 없이, 담당자는 항상 본인. */
+    @Transactional
+    public TaskDto.ResTask createPersonal(TaskDto.ReqTask req, AuthUserDetails authUser) {
+        if (authUser == null || authUser.getIdx() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        User assignee = getUserOrThrow(authUser.getIdx());
+        Task saved = taskRepository.save(req.toEntity(null, null, null, assignee));
+        sseService.broadcastCalendarRefresh(null, "task");
+        dashboardCacheEvictor.evictAll();
+        return TaskDto.ResTask.from(saved);
     }
 
     /** 캠페인 팀 보드 - 캠페인 종속 Task */

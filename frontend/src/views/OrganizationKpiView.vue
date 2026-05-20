@@ -45,6 +45,20 @@ const canEditPartnerKpi = computed(() =>
   (authStore.isGeneralManager || authStore.isManager || authStore.isAdmin)
 )
 
+// ───── KPI 생성 버튼 통합 ─────
+// 각 조직은 "자기 소유 KPI" 만 생성 (HQ→본사 KPI, 계열사→계열사 KPI, 파트너→자사 KPI).
+// HQ가 계열사 KPI를 대신 생성하던 기능은 cascade 모델상 불필요하므로 제거 → 버튼 1개로 통합.
+const canCreateKpi = computed(() =>
+  canEditHqKpi.value || canEditAffiliateKpi.value || canEditPartnerKpi.value
+)
+const ownOrgType = computed(() => orgType.value ?? 'HQ')
+const createBtnLabel = computed(() => {
+  if (isHqAdmin.value) return '새 본사 KPI'
+  if (isAffiliateAdmin.value) return '새 계열사 KPI'
+  if (isExternalPartner.value) return '새 자사 KPI'
+  return '새 KPI'
+})
+
 /* ───── Status 탭 (활성 default) ───── */
 const STATUS_TABS = [
   { key: 'ACTIVE', label: '활성' },
@@ -93,20 +107,16 @@ const activePeriodCode = computed(() => {
   return chip?.code ?? ''
 })
 
-const customOptions = computed(() => {
-  // 직접 지정 popover에 보여줄 후보
-  const cur = nowQuarter()
-  const set = new Set()
-  for (let d = -2; d <= 4; d += 1) {
-    const sh = shiftQuarter(cur.year, cur.q, d)
-    set.add(quarterCode(sh.year, sh.q))
-  }
-  set.add(`${cur.year}-FY`)
-  set.add(`${cur.year + 1}-FY`)
-  // 데이터에서 발견된 코드도 합침
-  ;(store.items ?? []).forEach((k) => k.periodCode && set.add(k.periodCode))
-  return Array.from(set).sort()
-})
+// 직접 지정: 연도 + 분기 세밀 선택
+const pickerYear = ref(nowQuarter().year)
+function pickYearQuarter(q) {
+  // q: 1~4 (분기) | 'FY' (연간) | 'H1' | 'H2' (반기)
+  let code
+  if (q === 'FY') code = `${pickerYear.value}-FY`
+  else if (q === 'H1' || q === 'H2') code = `${pickerYear.value}-${q}`
+  else code = quarterCode(pickerYear.value, q)
+  pickCustomPeriod(code)
+}
 
 /* ───── Editor 상태 ───── */
 const editorOpen = ref(false)
@@ -171,9 +181,9 @@ function isHqOwned(k) {
 }
 const visibleHqItems = computed(() => filteredItems.value.filter(isHqOwned))
 /**
- * 계열사 섹션 가시성:
- * - HQ: 모든 계열사 KPI 노출 (전사 monitoring)
- * - AFFILIATE/EXTERNAL: 자기 조직 KPI만
+ * 비(非)본사 KPI 섹션 가시성:
+ * - 백엔드 isVisibleTo 가 1차로 걸러줌 (자기 조직 소유 + HQ가 노출 ON 한 본사 KPI만 내려옴).
+ * - AFFILIATE/EXTERNAL: 추가로 자기 조직 KPI만 클라에서 한 번 더 필터.
  */
 const visibleOrgItems = computed(() => {
   const nonHq = filteredItems.value.filter((k) => !isHqOwned(k))
@@ -261,41 +271,18 @@ const periodLabel = computed(() => {
       </div>
 
       <div class="page-bar__actions">
+        <!-- KPI 생성 버튼 1개로 통합: 자기 조직 소유 KPI만 생성 -->
         <button
-          v-if="canEditHqKpi"
+          v-if="canCreateKpi"
           type="button"
           class="btn btn--primary"
-          @click="openCreate('HQ')"
+          @click="openCreate(ownOrgType)"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
-          <span>새 본사 KPI</span>
-        </button>
-        <button
-          v-if="isHqAdmin || canEditAffiliateKpi"
-          type="button"
-          class="btn btn--secondary"
-          @click="openCreate('AFFILIATE')"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          <span>{{ isHqAdmin ? '계열사 KPI' : '우리 조직 KPI' }}</span>
-        </button>
-        <button
-          v-if="canEditPartnerKpi"
-          type="button"
-          class="btn btn--secondary"
-          @click="openCreate('EXTERNAL_PARTNER')"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          <span>자사 KPI 추가</span>
+          <span>{{ createBtnLabel }}</span>
         </button>
       </div>
     </header>
@@ -340,15 +327,33 @@ const periodLabel = computed(() => {
             <span v-if="activePeriodChip === 'CUSTOM'">{{ customPeriodCode || '직접 지정' }}</span>
             <span v-else>+ 직접 지정</span>
           </button>
-          <div v-if="customPickerOpen" class="custom-pop" role="listbox">
-            <button
-              v-for="code in customOptions"
-              :key="code"
-              type="button"
-              class="custom-pop__item"
-              :class="{ 'is-active': customPeriodCode === code }"
-              @click="pickCustomPeriod(code)"
-            >{{ code }}</button>
+          <div v-if="customPickerOpen" class="custom-pop custom-pop--ym">
+            <!-- 연도 스텝퍼 -->
+            <div class="ym-year">
+              <button type="button" class="ym-step" aria-label="이전 연도" @click="pickerYear -= 1">‹</button>
+              <span class="ym-year__label">{{ pickerYear }}년</span>
+              <button type="button" class="ym-step" aria-label="다음 연도" @click="pickerYear += 1">›</button>
+            </div>
+            <!-- 분기 -->
+            <div class="ym-grid">
+              <button
+                v-for="q in [1, 2, 3, 4]"
+                :key="'q' + q"
+                type="button"
+                class="ym-cell"
+                :class="{ 'is-active': customPeriodCode === `${pickerYear}-Q${q}` }"
+                @click="pickYearQuarter(q)"
+              >{{ q }}분기</button>
+            </div>
+            <!-- 연간 -->
+            <div class="ym-grid ym-grid--single">
+              <button
+                type="button"
+                class="ym-cell ym-cell--fy"
+                :class="{ 'is-active': customPeriodCode === `${pickerYear}-FY` }"
+                @click="pickYearQuarter('FY')"
+              >{{ pickerYear }}년 전체 (연간)</button>
+            </div>
           </div>
         </div>
       </div>
@@ -647,6 +652,60 @@ const periodLabel = computed(() => {
   background: var(--color-primary-100);
   color: var(--color-primary-700);
 }
+
+/* 연도+분기 세밀 선택 */
+.custom-pop--ym { min-width: 200px; gap: 8px; }
+.ym-year {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+.ym-year__label {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.ym-step {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--panel-color);
+  color: var(--color-primary-700);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+}
+.ym-step:hover { background: var(--color-primary-50); }
+.ym-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.ym-grid--single { grid-template-columns: 1fr; }
+.ym-cell {
+  padding: 7px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.ym-cell:hover { background: var(--panel-muted); color: var(--text-primary); }
+.ym-cell.is-active {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-500);
+  color: #fff;
+}
+.ym-cell--fy { color: var(--color-primary-700); }
 
 /* ───── 섹션 ───── */
 .kpi-section { display: flex; flex-direction: column; gap: 14px; }

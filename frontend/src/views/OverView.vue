@@ -23,7 +23,7 @@ import { useToastStore } from '@/stores/toast'
 import { useConfirmStore } from '@/stores/confirmDialog'
 import { useNotificationsStore } from '@/stores/notifications'
 import { ListCalendarEvents, UpdateCampaign, UpdateCampaignIntro } from '@/api/campaigns'
-import { UpdateMilestone, UpdateTask, CreateMilestone, CreateTask } from '@/api/teamboard'
+import { UpdateMilestone, UpdateTask, CreatePersonalTask, CreateMilestone, CreateTaskPart } from '@/api/teamboard'
 
 const store = usePlannerStore()
 const partnershipStore = usePartnershipsStore()
@@ -190,6 +190,8 @@ const deadlineEvents = computed(() => intros.value
     start: isoOf(i.recruitDeadline),
     end: isoOf(i.recruitDeadline),
     campaignId: i.campaignId,
+    campaignName: i.campaignName ?? '',
+    projectManager: '',
     colorClass: colorByType('deadline'),
   })))
 
@@ -202,7 +204,8 @@ const milestoneEvents = computed(() => milestones.value
     start: isoOf(m.startDate ?? m.endDate),
     end: isoOf(m.endDate ?? m.startDate),
     campaignId: m.campaignId,
-    projectManager: m.campaignName,
+    campaignName: m.campaignName ?? '',
+    projectManager: '',
     colorClass: colorByType('milestone'),
   })))
 
@@ -222,7 +225,8 @@ const taskEvents = computed(() => {
         projectManager: t.assigneeName ?? '',
         campaignId: c?.id ?? c?.idx ?? t.campaignIdx ?? null,
         campaignIdx: t.campaignIdx,
-        campaignName: c?.title ?? c?.name ?? '',
+        // 캠페인 없는 개인 업무는 캠페인명 칸에 "개인 업무" 로 표기
+        campaignName: c?.title ?? c?.name ?? (t.campaignIdx ? '' : '개인 업무'),
         customColor: c?.color || '#8B5CF6',
         status: t.status,
         priority: t.priority,
@@ -270,6 +274,24 @@ const filteredEvents = computed(() => {
       (e.projectManager ?? '').toLowerCase().includes(q),
     )
   }
+  return arr
+})
+
+// 월간(calendar) 뷰: 업무(task)만 표시 — 마일스톤/업무파트/모집마감은 숨김 (사용자 요청)
+const monthEvents = computed(() => filteredEvents.value.filter(e => e.type === 'task'))
+
+// 타임라인/테이블 서브탭: 캠페인 일정 vs 개인 업무 분리
+const BOARD_TABS = [
+  { key: 'all', label: '전체' },
+  { key: 'campaign', label: '캠페인' },
+  { key: 'personal', label: '개인 업무' },
+]
+const boardTab = ref('all')
+const isPersonalEvent = (e) => e.type === 'task' && !e.campaignId
+const boardEvents = computed(() => {
+  const arr = filteredEvents.value
+  if (boardTab.value === 'personal') return arr.filter(isPersonalEvent)
+  if (boardTab.value === 'campaign') return arr.filter((e) => !isPersonalEvent(e))
   return arr
 })
 
@@ -443,15 +465,17 @@ async function updateTaskDate(event, newDate) {
 }
 
 /* ─── Quick-add ─── */
-async function createTaskFromQuick({ title, date, campaignId }) {
+// 캘린더 빠른 추가 = 개인 업무 (캠페인 무관, 담당=본인)
+async function createTaskFromQuick({ title, date, time, priority }) {
   try {
-    await CreateTask(campaignId, {
+    await CreatePersonalTask({
       name: title,
-      dueDate: `${date}T23:59:59`,
+      dueDate: `${date}T${time || '23:59'}:00`,   // 시간 지정 반영
       status: 'TODO',
+      priority: priority || 'MEDIUM',
     })
-    toast.success(`'${title}' 업무 생성`, '업무 추가')
-    teamTaskStore.fetch()
+    toast.success(`'${title}' 개인 업무 생성`, '업무 추가')
+    await teamTaskStore.fetch()   // 즉시 반영 (새로고침 불필요)
   } catch (e) {
     toast.error(e?.response?.data?.message || '업무 생성에 실패했습니다.')
   }
@@ -465,15 +489,23 @@ async function createMilestoneFromQuick({ title, date, campaignId }) {
       endDate: `${date}T23:59:59`,
     })
     toast.success(`'${title}' 마일스톤 생성`, '마일스톤 추가')
-    loadAll()  // milestones 재로드
+    loadAll()   // milestones 재로드
   } catch (e) {
     toast.error(e?.response?.data?.message || '마일스톤 생성에 실패했습니다.')
   }
 }
 
-function openCampaignFullModal({ date }) {
-  // 캠페인 생성 모달 라우팅 — 별도 페이지/모달이 있다면 여기서 호출
-  toast.info(`${date}에 시작하는 새 캠페인 만들기 — 상세 모달은 캠페인 페이지에서 진행하세요.`)
+async function createTaskPartFromQuick({ title, campaignId, milestoneId, priority }) {
+  try {
+    await CreateTaskPart(campaignId, milestoneId, {
+      name: title,
+      taskPriority: priority || 'MEDIUM',
+    })
+    toast.success(`'${title}' 업무파트 생성`, '업무파트 추가')
+    loadAll()
+  } catch (e) {
+    toast.error(e?.response?.data?.message || '업무파트 생성에 실패했습니다.')
+  }
 }
 
 function resetFilters() {
@@ -598,6 +630,27 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <!-- 타임라인/테이블 전용 서브탭: 캠페인 / 개인 업무 분리 -->
+        <div
+          v-else-if="currentView === 'timeline' || currentView === 'table'"
+          class="board-shell"
+        >
+          <div class="board-subtabs" role="tablist">
+            <button
+              v-for="t in BOARD_TABS"
+              :key="t.key"
+              type="button"
+              role="tab"
+              class="board-subtab"
+              :class="{ 'is-on': boardTab === t.key }"
+              :aria-selected="boardTab === t.key"
+              @click="boardTab = t.key"
+            >{{ t.label }}</button>
+          </div>
+          <MainTimeline v-if="currentView === 'timeline'" :events-data="boardEvents" @event-click="onEventClick" />
+          <MainTable v-else :events-data="boardEvents" @event-click="onEventClick" />
+        </div>
+
         <transition v-else name="view-fade" mode="out-in">
           <LavenderWeekCalendar
             v-if="currentView === 'week'"
@@ -613,7 +666,7 @@ onUnmounted(() => {
           <MainCalendar
             v-else-if="currentView === 'calendar'"
             key="calendar"
-            :events-data="filteredEvents"
+            :events-data="monthEvents"
             :anchor-date="anchorDate"
             @event-click="onEventClick"
             @day-click="onDayClick"
@@ -627,16 +680,6 @@ onUnmounted(() => {
             :events-data="filteredEvents"
             :anchor-date="anchorDate"
             @event-click="onEventClick"
-          />
-          <MainTimeline
-            v-else-if="currentView === 'timeline'"
-            key="timeline"
-            :events-data="filteredEvents"
-          />
-          <MainTable
-            v-else-if="currentView === 'table'"
-            key="table"
-            :events-data="filteredEvents"
           />
         </transition>
       </main>
@@ -657,7 +700,7 @@ onUnmounted(() => {
       @close="closeQuickAdd"
       @create-task="createTaskFromQuick"
       @create-milestone="createMilestoneFromQuick"
-      @open-campaign-modal="openCampaignFullModal"
+      @create-taskpart="createTaskPartFromQuick"
     />
     <CommandPalette
       :open="cmdkOpen"
@@ -902,6 +945,41 @@ onUnmounted(() => {
   }
 }
 .overview--lp-week { overflow: hidden; }
+
+/* === 타임라인/테이블 서브탭 (캠페인/개인 업무) === */
+.board-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 10px;
+}
+.board-shell > :last-child { flex: 1; min-height: 0; }
+.board-subtabs {
+  display: inline-flex;
+  align-self: flex-start;
+  background: var(--lp-surface-soft);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.board-subtab {
+  padding: 7px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--lp-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+.board-subtab:hover { color: var(--lp-text); }
+.board-subtab.is-on {
+  background: var(--lp-surface);
+  color: var(--lp-primary-deep);
+  box-shadow: 0 1px 3px rgba(63, 52, 99, .12);
+}
 
 /* === View Transition === */
 .view-fade-enter-active,

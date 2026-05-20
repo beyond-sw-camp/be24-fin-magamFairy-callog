@@ -25,5 +25,6 @@ public record CreateOrganizationKpiRequest(
         GoalKind kind,
         GoalStatus status,
         String achievabilityNote,
-        Long templateId
+        Long templateId,
+        Boolean visibleToAffiliate   // HQ KPI 를 계열사에 노출할지 (HQ 전용 토글)
 ) {}

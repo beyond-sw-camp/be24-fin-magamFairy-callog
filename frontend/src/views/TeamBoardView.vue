@@ -50,11 +50,22 @@ const priorityLabels = {
 const searchText = ref('')
 const selectedPriority = ref('all')
 
-// tasks에서 고유 회사 목록을 동적으로 추출
+// 팀보드(회사 업무) / 개인보드(미지정 = 개인 업무) 필터
+const boardMode = ref('team')   // 'team' | 'personal'
+const isPersonalTask = (t) => !t.companyName
+const BOARD_MODES = [
+  { key: 'team', label: '팀보드' },
+  { key: 'personal', label: '개인보드' },
+]
+const modeTasks = computed(() =>
+  tasks.value.filter((t) => (boardMode.value === 'personal' ? isPersonalTask(t) : !isPersonalTask(t))),
+)
+
+// tasks에서 고유 회사 목록을 동적으로 추출 (현재 모드 기준)
 const companies = computed(() => {
   const seen = new Set()
   const result = []
-  for (const t of tasks.value) {
+  for (const t of modeTasks.value) {
     const name = t.companyName || '미지정'
     if (!seen.has(name)) {
       seen.add(name)
@@ -67,7 +78,7 @@ const companies = computed(() => {
 const filteredTasks = computed(() => {
   const query = searchText.value.trim().toLowerCase()
 
-  return tasks.value.filter((task) => {
+  return modeTasks.value.filter((task) => {
     const matchesQuery =
       !query ||
       [task.title, task.part, task.milestone, task.companyName].some((value) =>
@@ -106,6 +117,9 @@ async function loadTasksFromBackend() {
       dueDate: formatDueDateLabel(task.dueDate),
       ownerInitial: task.assigneeName ? task.assigneeName.charAt(0) : '?',
       priority: PRIORITY_MAP[task.priority] ?? 'medium',
+      // 상세 패널용 원본 정보
+      assigneeName: task.assigneeName ?? null,
+      dueRaw: task.dueDate ?? null,
     }))
   } catch (error) {
     console.error('팀보드 Task 로딩 실패:', error)
@@ -119,6 +133,14 @@ function getStatusTone(statusId) {
   if (statusId === 'blocked') return 'warning'
   if (statusId === 'review') return 'primary'
   return 'info'
+}
+
+/* ───── 업무 상세 사이드 패널 ───── */
+const selectedTask = ref(null)
+function openTaskDetail(task) { selectedTask.value = task }
+function closeTaskDetail() { selectedTask.value = null }
+function statusLabelOf(id) {
+  return statusColumns.find((c) => c.id === id)?.label ?? id
 }
 </script>
 
@@ -147,6 +169,18 @@ function getStatusTone(statusId) {
     </header>
 
     <div class="team-board-toolbar">
+      <div class="board-mode-tabs" role="tablist" aria-label="보드 종류">
+        <button
+          v-for="m in BOARD_MODES"
+          :key="m.key"
+          type="button"
+          role="tab"
+          class="board-mode-tab"
+          :class="{ 'is-on': boardMode === m.key }"
+          :aria-selected="boardMode === m.key"
+          @click="boardMode = m.key"
+        >{{ m.label }}</button>
+      </div>
       <input v-model.trim="searchText" type="search" placeholder="캠페인, 업무명, 파트를 검색..." />
       <select v-model="selectedPriority" aria-label="우선순위 필터">
         <option value="all">전체 우선순위</option>
@@ -182,8 +216,12 @@ function getStatusTone(statusId) {
           <article
             v-for="task in getTasks(company.id, column.id)"
             :key="task.id"
-            class="board-task"
+            class="board-task board-task--click"
             :class="[`board-task--${getStatusTone(column.id)}`, { 'board-task--urgent': task.priority === 'critical' }]"
+            role="button"
+            tabindex="0"
+            @click="openTaskDetail({ ...task, columnId: column.id })"
+            @keydown.enter="openTaskDetail({ ...task, columnId: column.id })"
           >
             <div class="board-task__top">
               <span>{{ task.part }}</span>
@@ -198,6 +236,33 @@ function getStatusTone(statusId) {
         </div>
       </div>
     </div>
+
+    <!-- 업무 상세 사이드 패널 -->
+    <transition name="tb-drawer">
+      <div v-if="selectedTask" class="tb-detail" role="dialog" aria-label="업무 상세">
+        <div class="tb-detail__backdrop" @click="closeTaskDetail" />
+        <aside class="tb-detail__panel">
+          <header class="tb-detail__head">
+            <span class="tb-detail__eyebrow">업무 상세</span>
+            <button class="tb-detail__close" aria-label="닫기" @click="closeTaskDetail">✕</button>
+          </header>
+          <h2 class="tb-detail__title">{{ selectedTask.title }}</h2>
+          <span
+            class="tb-detail__prio"
+            :class="`tb-detail__prio--${selectedTask.priority}`"
+          >우선순위 · {{ priorityLabels[selectedTask.priority] }}</span>
+
+          <dl class="tb-detail__list">
+            <div><dt>상태</dt><dd>{{ statusLabelOf(selectedTask.status) }}</dd></div>
+            <div><dt>회사</dt><dd>{{ selectedTask.companyName || '개인 업무' }}</dd></div>
+            <div><dt>마일스톤</dt><dd>{{ selectedTask.milestone || '—' }}</dd></div>
+            <div><dt>업무파트</dt><dd>{{ selectedTask.part || '—' }}</dd></div>
+            <div><dt>담당</dt><dd>{{ selectedTask.assigneeName || '—' }}</dd></div>
+            <div><dt>마감</dt><dd>{{ selectedTask.dueDate }}</dd></div>
+          </dl>
+        </aside>
+      </div>
+    </transition>
   </section>
 </template>
 
@@ -207,6 +272,90 @@ function getStatusTone(statusId) {
   gap: 18px;
   padding: 24px;
 }
+
+/* ───── 팀보드 / 개인보드 탭 ───── */
+.board-mode-tabs {
+  display: inline-flex;
+  background: var(--panel-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+.board-mode-tab {
+  padding: 7px 18px;
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.board-mode-tab:hover { color: var(--text-primary); }
+.board-mode-tab.is-on {
+  background: var(--color-primary-500);
+  color: #fff;
+}
+
+/* ───── 업무 카드 클릭 ───── */
+.board-task--click { cursor: pointer; }
+.board-task--click:hover { filter: brightness(0.985); transform: translateY(-1px); transition: transform .12s; }
+
+/* ───── 업무 상세 사이드 패널 ───── */
+.tb-detail { position: fixed; inset: 0; z-index: 200; }
+.tb-detail__backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.28); }
+.tb-detail__panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 360px;
+  max-width: 92vw;
+  background: var(--panel-color);
+  border-left: 1px solid var(--border-color);
+  box-shadow: -12px 0 40px rgba(15, 23, 42, 0.16);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+.tb-detail__head { display: flex; align-items: center; justify-content: space-between; }
+.tb-detail__eyebrow {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--color-primary-700, #6F5A9B);
+}
+.tb-detail__close {
+  border: 0; background: transparent; font-size: 16px; cursor: pointer; color: var(--muted-text);
+  width: 28px; height: 28px; border-radius: 8px;
+}
+.tb-detail__close:hover { background: var(--panel-muted); color: var(--text-primary); }
+.tb-detail__title { font-size: 18px; font-weight: 800; margin: 0; color: var(--text-primary); }
+.tb-detail__prio {
+  align-self: flex-start;
+  padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 800;
+  background: var(--panel-muted); color: var(--text-secondary);
+}
+.tb-detail__prio--critical { background: #fde2e1; color: #c0392b; }
+.tb-detail__prio--high     { background: #ffe7d6; color: #c05621; }
+.tb-detail__prio--medium   { background: var(--badge-bg, #DDD2EE); color: var(--badge-text, #3F3463); }
+.tb-detail__prio--low      { background: var(--panel-muted); color: var(--muted-text); }
+.tb-detail__list { display: flex; flex-direction: column; gap: 0; margin: 6px 0 0; }
+.tb-detail__list > div {
+  display: grid; grid-template-columns: 84px 1fr; gap: 10px;
+  padding: 11px 0; border-bottom: 1px solid var(--border-color);
+}
+.tb-detail__list dt { font-size: 12px; font-weight: 700; color: var(--muted-text); margin: 0; }
+.tb-detail__list dd { font-size: 13px; color: var(--text-primary); margin: 0; word-break: break-word; }
+
+.tb-drawer-enter-active, .tb-drawer-leave-active { transition: opacity .18s; }
+.tb-drawer-enter-active .tb-detail__panel, .tb-drawer-leave-active .tb-detail__panel { transition: transform .2s ease; }
+.tb-drawer-enter-from, .tb-drawer-leave-to { opacity: 0; }
+.tb-drawer-enter-from .tb-detail__panel, .tb-drawer-leave-to .tb-detail__panel { transform: translateX(100%); }
 
 .team-board-hero,
 .team-board-toolbar,

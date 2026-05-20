@@ -89,7 +89,8 @@ public class DashboardAggregateService {
      * Invalidation: 캠페인/KPI/Task 변경 시 @CacheEvict(DASHBOARD_PAGE, allEntries=true) 필요.
      */
     @Cacheable(value = CacheNames.DASHBOARD_PAGE,
-            key = "#callerIdx + ':' + (#periodCode == null ? '' : #periodCode)")
+            key = "#callerIdx + ':' + (#periodCode == null ? '' : #periodCode)",
+                    sync = true )
     public org.example.backend.dashboard.dto.DashboardPageDto loadAll(Long callerIdx, String periodCode) {
         return new org.example.backend.dashboard.dto.DashboardPageDto(
                 summary(callerIdx),
@@ -167,24 +168,6 @@ public class DashboardAggregateService {
                 new DashboardSummaryDto.MiniStat("자산 LIVE", String.valueOf(liveAssetCount))
         );
 
-        // AFFILIATE / EXTERNAL_PARTNER 스코프: 전사 OrgKpi 평균 — ⚡ B1: N sum 쿼리 → 1 GROUP BY
-        Integer companyAvgPct = null;
-        if ("AFFILIATE".equals(scope.label) || "EXTERNAL_PARTNER".equals(scope.label)) {
-            List<OrganizationKpi> allActive = orgKpiRepository.findByFilters(null, null, GoalStatus.ACTIVE);
-            if (!allActive.isEmpty()) {
-                Map<Long, BigDecimal> actualByKpi = loadActualSumMap(
-                        allActive.stream().map(OrganizationKpi::getIdx).toList());
-                List<Integer> percents = allActive.stream()
-                        .map(k -> calcPercent(
-                                actualByKpi.getOrDefault(k.getIdx(), BigDecimal.ZERO),
-                                k.getTargetValue()))
-                        .filter(Objects::nonNull)
-                        .toList();
-                companyAvgPct = percents.isEmpty() ? null
-                        : percents.stream().mapToInt(Integer::intValue).sum() / percents.size();
-            }
-        }
-
         // trend (지난주 대비 %p): 실 데이터 (지난주 OrgKpi snapshot) 없으면 null.
         // frontend 는 null 일 때 "지난주" 표시 안 함.
         Integer trend = null;
@@ -192,19 +175,8 @@ public class DashboardAggregateService {
         return new DashboardSummaryDto(
                 active, avg, avg,
                 pending, partnerCount, newPartnerCount, rfpCount,
-                trend, companyAvgPct, miniStats, scope.label
+                trend, miniStats, scope.label
         );
-    }
-
-    /** B1 헬퍼: 여러 OrgKpi 의 actual sum 일괄 조회. */
-    private Map<Long, BigDecimal> loadActualSumMap(java.util.Collection<Long> orgKpiIds) {
-        if (orgKpiIds == null || orgKpiIds.isEmpty()) return Map.of();
-        Map<Long, BigDecimal> out = new HashMap<>();
-        for (Object[] row : contributionRepository.sumByOrgKpiIdxIn(orgKpiIds)) {
-            if (row == null || row.length < 3 || row[0] == null) continue;
-            out.put((Long) row[0], row[2] == null ? BigDecimal.ZERO : (BigDecimal) row[2]);
-        }
-        return out;
     }
 
     // ── 2. Quarter Goals ────────────────────────────────────
@@ -227,9 +199,11 @@ public class DashboardAggregateService {
         Map<Long, BigDecimal> actualByKpi = new HashMap<>();
         for (Object[] row : contributionRepository.sumByOrgKpiIdxIn(kpiIds)) {
             if (row == null || row.length < 3 || row[0] == null) continue;
-            Long kpiId = (Long) row[0];
-            committedByKpi.put(kpiId, row[1] == null ? BigDecimal.ZERO : (BigDecimal) row[1]);
-            actualByKpi.put(kpiId, row[2] == null ? BigDecimal.ZERO : (BigDecimal) row[2]);
+            // COALESCE(SUM(...),0) 의 반환 타입이 DB/Hibernate 버전에 따라 BigDecimal 이 아닐 수 있어
+            // 강제 캐스팅 대신 Number → BigDecimal 변환 (ClassCastException 방지).
+            Long kpiId = ((Number) row[0]).longValue();
+            committedByKpi.put(kpiId, toBigDecimal(row[1]));
+            actualByKpi.put(kpiId, toBigDecimal(row[2]));
         }
 
         return kpis.stream()
@@ -523,10 +497,13 @@ public class DashboardAggregateService {
     // ── 권한별 Scope 분기 ───────────────────────────────────
 
     /**
-     * Phase D — 권한별 분기.
-     * - HQ + ROLE_ADMIN/GENERAL_MANAGER: 전체
-     * - AFFILIATE / EXTERNAL_PARTNER: 본인 조직 참여 캠페인만
+     * 권한별 분기 (회사 격리 — 모든 조직이 자기 조직 참여 캠페인만).
+     * - HQ + ADMIN/GM/MANAGER: 자기(HQ) 조직이 participant인 캠페인만 (= 만든 캠페인 PM + 참여 캠페인)
+     * - AFFILIATE / EXTERNAL_PARTNER + 관리자: 본인 조직 참여 캠페인만
      * - 그 외 (ROLE_USER 등 STAFF): assignee = 본인인 task / member로 참여한 캠페인만
+     *
+     * ※ 이전엔 HQ가 allCampaigns=true(전사)였으나, "자기 회사만" 정책에 따라 제거.
+     *   HQ도 다른 조직과 동일하게 ownerOrgId(participant) 기반.
      */
     private Scope resolveScope(User caller) {
         Organization org = caller.getOrganization();
@@ -538,7 +515,8 @@ public class DashboardAggregateService {
                 || "ROLE_MANAGER".equals(role);
 
         if (orgType == OrganizationType.HQ && isAdminLike) {
-            return new Scope("HQ", true, null, caller.getIdx(), false);
+            // 변경: 전사(allCampaigns=true) 제거 → 자기 조직 participant 캠페인만
+            return new Scope("HQ", false, org.getIdx(), caller.getIdx(), false);
         }
         if (orgType == OrganizationType.AFFILIATE && isAdminLike) {
             return new Scope("AFFILIATE", false, org.getIdx(), caller.getIdx(), false);
@@ -607,6 +585,14 @@ public class DashboardAggregateService {
         if (percents.isEmpty()) return null;
         int sum = percents.stream().mapToInt(Integer::intValue).sum();
         return sum / percents.size();
+    }
+
+    /** COALESCE/SUM 결과(BigDecimal·Long·Double 등 무엇이든)를 안전하게 BigDecimal 로 변환. */
+    private static BigDecimal toBigDecimal(Object v) {
+        if (v == null) return BigDecimal.ZERO;
+        if (v instanceof BigDecimal bd) return bd;
+        if (v instanceof Number n) return new BigDecimal(n.toString());
+        return new BigDecimal(v.toString());
     }
 
     private static Integer calcPercent(BigDecimal actual, BigDecimal target) {

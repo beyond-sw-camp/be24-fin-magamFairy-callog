@@ -15,6 +15,9 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     List<Task> findAllByAssignee_IdxOrderByIdxDesc(Long assigneeIdx);
 
+    /** 개인 업무: 캠페인 연결(참여사/마일스톤/업무파트)이 전혀 없고 담당자가 본인인 Task. */
+    List<Task> findAllByAssignee_IdxAndParticipantIsNullAndMilestoneIsNullAndTaskPartIsNullOrderByIdxDesc(Long assigneeIdx);
+
     List<Task> findAllByTaskPart_Campaign_IdxInOrderByIdxDesc(Collection<Long> campaignIds);
 
     List<Task> findAllByDueDateBetweenAndStatusNotIn(
