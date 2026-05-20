@@ -18,8 +18,8 @@ project:
   aes:
     key: ${AES_SECRET_KEY}
 app:
-  frontend-url: ${FRONTEND_URL:http://localhost:5173}
-  secure-cookie: ${SECURE_COOKIE:false}
+  frontend-url: ${FRONTEND_URL}
+  secure-cookie: ${SECURE_COOKIE}
 aws:
   s3:
     bucket-name: ${AWS_BUCKET_NAME}
@@ -28,9 +28,9 @@ aws:
     region: ap-northeast-2
 openai:
   image:
-    api-key: ${OPEN_API_IMAGE:}
-    model: ${OPENAI_IMAGE_MODEL:gpt-image-1.5}
-    quality: ${OPENAI_IMAGE_QUALITY:low}
+    api-key: ${OPEN_API_IMAGE}
+    model: ${OPENAI_IMAGE_MODEL}
+    quality: ${OPENAI_IMAGE_QUALITY}
 admin:
   id: ${ADMIN_ID}
   email: ${ADMIN_EMAIL}
@@ -110,23 +110,23 @@ custom:
     evaluation-endpoint: ${EVALUATION_ENDPOINT}
     check-endpoint: ${CHECK_ENDPOINT}
   ocr:
-    url: ${OCR_SERVICE_URL:http://localhost:8001/ocr}
-    async-enabled: ${OCR_ASYNC_ENABLED:true}
-    job-url: ${OCR_JOB_SERVICE_URL:}
-    job-poll-interval-ms: ${OCR_JOB_POLL_INTERVAL_MS:1000}
-    job-poll-timeout-ms: ${OCR_JOB_POLL_TIMEOUT_MS:180000}
+    url: ${OCR_SERVICE_URL}
+    async-enabled: ${OCR_ASYNC_ENABLED}
+    job-url: ${OCR_JOB_SERVICE_URL}
+    job-poll-interval-ms: ${OCR_JOB_POLL_INTERVAL_MS}
+    job-poll-timeout-ms: ${OCR_JOB_POLL_TIMEOUT_MS}
   layout:
-    url: ${LAYOUT_SERVICE_URL:http://localhost:8001/v1/layout/analyze}
+    url: ${LAYOUT_SERVICE_URL}
   mongodb:
-    analysis-uri: ${MONGODB_STD_URL:}
-    analysis-database: ${MONGODB_STD_DATABASE:}
-    analysis-collection: ${MONGODB_STD_COLLECTION:ad_check_analysis_results}
+    analysis-uri: ${MONGODB_STD_URL}
+    analysis-database: ${MONGODB_STD_DATABASE}
+    analysis-collection: ${MONGODB_STD_COLLECTION}
 
 management:
   endpoints:
     web:
       exposure:
-        include: "*"
+        include: health, info, prometheus, metrics
   endpoint:
     health:
       show-details: always
