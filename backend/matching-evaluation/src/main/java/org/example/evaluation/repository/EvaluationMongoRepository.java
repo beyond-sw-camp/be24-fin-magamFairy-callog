@@ -8,6 +8,5 @@ import java.util.Optional;
 
 
 public interface EvaluationMongoRepository extends MongoRepository<EvaluationDocument, String> {
-    Optional<EvaluationDocument> findBySessionId(String sessionId);
-    List<EvaluationDocument> findAllByCampaignIdx(Long campaignIdx);
+    List<EvaluationDocument> findAllByPublicId(String publicId);
 }

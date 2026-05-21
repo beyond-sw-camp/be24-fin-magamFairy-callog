@@ -22,7 +22,8 @@ public class EvaluationDocument {
     @Indexed(unique=true)
     private String sessionId;
 
-    private Long campaignIdx;  // 참조 관계는 조인 없이 ID 값만 유지합니다.
+    @Indexed
+    private String publicId;  // 참조 관계는 조인 없이 ID 값만 유지합니다.
     private Long benefitIdx;
 
     private String goal;

@@ -56,10 +56,7 @@ public class EvaluationDto {
 
         @JsonAlias("uuid")
         private String sessionId;
-
-        private Long campaignIdx;
-        private Long benefitIdx;
-
+        private String publicId;
         private String goal;
         private String title;
         private String partner;
@@ -72,8 +69,7 @@ public class EvaluationDto {
         public EvaluationDocument toDocument() {
             return EvaluationDocument.builder()
                     .sessionId(sessionId)
-                    .campaignIdx(campaignIdx)
-                    .benefitIdx(benefitIdx)
+                    .publicId(publicId)
                     .goal(goal)
                     .title(title)
                     .partner(partner)
