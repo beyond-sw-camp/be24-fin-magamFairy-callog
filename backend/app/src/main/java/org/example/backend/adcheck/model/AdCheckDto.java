@@ -32,6 +32,8 @@ public class AdCheckDto {
     }
 
     @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
     @Builder(toBuilder = true)
     public static class FileCheckRes {
         private String analysisJobId;
@@ -92,6 +94,8 @@ public class AdCheckDto {
     }
 
     @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
     @Builder
     public static class FileArtifact {
         private String type;
@@ -105,6 +109,8 @@ public class AdCheckDto {
     }
 
     @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
     @Builder
     public static class ProcessingTimes {
         private Long textExtractionMillis;

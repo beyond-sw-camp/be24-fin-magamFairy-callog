@@ -1,9 +1,14 @@
 server:
   port: 8082
-
+  tomcat:
+    keep-alive-timeout: 60000
+    max-keep-alive-requests: -1
 spring:
   application:
     name: ai-evaluation
+  data:
+    mongodb:
+      uri: ${MONGODB_URL}
 
 management:
   endpoints:
