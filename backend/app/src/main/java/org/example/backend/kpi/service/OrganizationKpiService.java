@@ -175,7 +175,7 @@ public class OrganizationKpiService {
             if (periodStart == null) periodStart = inferred[0];
             if (periodEnd == null) periodEnd = inferred[1];
         }
-        KpiCategory category = req.category() != null ? req.category() : KpiCategory.OTHER;
+        KpiCategory category = req.category() != null ? req.category() : KpiCategory.OPERATIONAL;
         GoalKind kind = req.kind() != null ? req.kind() : defaultKindFor(owner);
 
         OrganizationKpi kpi = OrganizationKpi.builder()

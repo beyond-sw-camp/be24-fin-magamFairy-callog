@@ -14,9 +14,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const recentActivity = ref([])        // Zone1 P1우 [{ idx, campaignId, campaignName, type, description, actorName, createdAt }]
   const campaignPipeline = ref([])      // Zone4 P1 [{ stage, count }]
   const campaignProgress = ref([])      // Zone2 [{ campaignId, campaignName, color, isMine, completionPct }]
-  const revenueTrend = ref([])          // Zone4 P2 [{ label, value }]
-  const reviewQueue = ref([])           // Zone1 P1좌 / Zone3 P2
-  const blockers = ref([])              // Zone1 P1좌
+  const reviewQueue = ref([])           // Zone1 P1좌 (Task REVIEW 기반)
+  const adReviewQueue = ref({ toReview: [], mine: [] })  // Zone3 P2 — { 검수목록(toReview), 검수결과(mine) }
+  const blockers = ref([])              // Zone1 P1좌 (마감초과/반려검수)
 
   const loading = ref(false)
   const errorMessage = ref(null)
@@ -42,8 +42,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     recentActivity: 'loading',
     campaignPipeline: 'loading',
     campaignProgress: 'loading',
-    revenueTrend: 'loading',
     reviewQueue: 'loading',
+    adReviewQueue: 'loading',
     blockers: 'loading',
   })
 
@@ -113,7 +113,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
       ['recentActivity', dashApi.GetRecentActivity, recentActivity],
       ['campaignPipeline', dashApi.GetCampaignPipeline, campaignPipeline],
       ['campaignProgress', dashApi.GetCampaignProgress, campaignProgress],
-      ['revenueTrend', dashApi.GetRevenueTrend, revenueTrend],
       ['reviewQueue', dashApi.GetReviewQueue, reviewQueue],
       ['blockers', dashApi.GetBlockers, blockers],
     ]
@@ -128,6 +127,19 @@ export const useDashboardStore = defineStore('dashboard', () => {
         console.warn(`[dashboard] ${key} 실패`, e)
       }
     }))
+
+    // 검수 큐 — { toReview, mine } 객체 형태라 별도 처리
+    try {
+      const d = await dashApi.GetAdReviewQueue()
+      const toReview = normalizeArray(d?.toReview)
+      const mine = normalizeArray(d?.mine)
+      adReviewQueue.value = { toReview, mine }
+      status.value.adReviewQueue = (toReview.length || mine.length) ? 'success' : 'empty'
+    } catch (e) {
+      adReviewQueue.value = { toReview: [], mine: [] }
+      status.value.adReviewQueue = 'error'
+      console.warn('[dashboard] adReviewQueue 실패', e)
+    }
   }
 
   /**
@@ -171,8 +183,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     recentActivity,
     campaignPipeline,
     campaignProgress,
-    revenueTrend,
     reviewQueue,
+    adReviewQueue,
     blockers,
     loading,
     errorMessage,

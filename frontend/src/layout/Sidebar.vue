@@ -19,13 +19,13 @@ const allNavItems = [
   {
     id: 'dashboard',
     to: '/dashboard',
-    label: 'Dashboard',
+    label: '대시보드',
     icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>`,
   },
   {
     id: 'calendar',
     to: '/calendar',
-    label: 'Campaign Timeline',
+    label: '캘린더',
     icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>`,
   },
   {
@@ -122,7 +122,8 @@ function isActive(item) {
   gap: 4px;
   flex: 1;
   width: 100%;
-  overflow-y: auto;
+  /* overflow-y:auto 는 x축까지 클리핑해 우측 툴팁을 잘라먹음 → visible 로 둬서 툴팁이 레일 밖으로 나오게 */
+  overflow: visible;
   padding: 4px 0;
 }
 
@@ -211,10 +212,9 @@ function isActive(item) {
   border-radius: var(--radius-md);
   pointer-events: none;
   opacity: 0;
-  transition:
-    opacity var(--transition-fast),
-    transform var(--transition-fast);
-  transform: translateY(-50%) translateX(-4px);
+  transform: translateY(-50%);
+  transition: opacity .06s ease; /* 호버 즉시 표시 */
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
   z-index: 100;
 }
 
@@ -230,6 +230,5 @@ function isActive(item) {
 
 .global-nav__item-wrap:hover .global-nav__tooltip {
   opacity: 1;
-  transform: translateY(-50%) translateX(0);
 }
 </style>

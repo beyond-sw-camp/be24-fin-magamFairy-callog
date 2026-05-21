@@ -117,10 +117,58 @@ function onDragEnd() {
   hoverDate.value = null
 }
 
-// "+N more" 처리
-const MAX_VISIBLE_PER_WEEK = 3
+// 한 셀(날짜)에 들어갈 수 있는 최대 "줄" 수 (칩 + "+N more" 버튼 포함).
+// 이벤트가 이 수보다 많으면 마지막 한 줄을 "+N more"로 양보해 잘리지 않게 한다.
+const MAX_ROWS_PER_DAY = 3
 
-// 캘린더 로직 — slot 알고리즘으로 멀티-위크 이벤트 막대 배치
+// 날짜(iso, "YYYY-MM-DD") → 그날에 걸치는 이벤트 배열 맵.
+// 멀티-데이 이벤트는 시작~종료 사이의 모든 날짜 셀에 동일하게 표시된다.
+const eventsByDay = computed(() => {
+  const map = new Map()
+  for (const evt of events.value) {
+    const startStr = (evt.start ?? '').slice(0, 10)
+    if (!startStr) continue
+    const endStr = (evt.end ?? '').slice(0, 10) || startStr
+    const start = new Date(startStr)
+    const end = new Date(endStr)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue
+
+    const cursor = new Date(start)
+    let guard = 0
+    while (cursor <= end && guard < 400) {
+      const iso = fmtIso(cursor)
+      if (!map.has(iso)) map.set(iso, [])
+      map.get(iso).push(evt)
+      cursor.setDate(cursor.getDate() + 1)
+      guard++
+    }
+  }
+  // 결정적 정렬: 시작일 → 제목
+  for (const list of map.values()) {
+    list.sort((a, b) =>
+      (a.start ?? '').localeCompare(b.start ?? '') ||
+      (a.title ?? '').localeCompare(b.title ?? ''),
+    )
+  }
+  return map
+})
+
+// 그날 일정 전체 (모달/오버플로우용)
+function eventsOnDay(iso) {
+  return eventsByDay.value.get(iso) ?? []
+}
+function visibleEventsOnDay(iso) {
+  const list = eventsOnDay(iso)
+  // 다 들어가면 전부, 초과하면 "+N more" 한 줄을 위해 한 칸 양보.
+  if (list.length <= MAX_ROWS_PER_DAY) return list
+  return list.slice(0, MAX_ROWS_PER_DAY - 1)
+}
+function extraCountOnDay(iso) {
+  const n = eventsOnDay(iso).length
+  return n > MAX_ROWS_PER_DAY ? n - (MAX_ROWS_PER_DAY - 1) : 0
+}
+
+// 캘린더 격자 — 주(week) × 일(day) 구조만 계산. 이벤트는 셀별로 직접 렌더.
 const calendarWeeks = computed(() => {
   const year = currentYear.value
   const month = currentMonth.value - 1
@@ -131,89 +179,23 @@ const calendarWeeks = computed(() => {
   startDate.setDate(startDate.getDate() - startDate.getDay())
 
   const weeks = []
-  let current = new Date(startDate)
+  const current = new Date(startDate)
 
   while (current <= lastDayOfMonth || current.getDay() !== 0) {
-    const week = { days: [], events: [], extraByDay: [0,0,0,0,0,0,0] }
+    const days = []
     for (let i = 0; i < 7; i++) {
-      const dateStr = fmtIso(current)
-      week.days.push({
-        date: dateStr,
+      days.push({
+        date: fmtIso(current),
         dayOfMonth: current.getDate(),
         dayOfWeek: current.getDay(),
         isCurrentMonth: current.getMonth() === month,
       })
       current.setDate(current.getDate() + 1)
     }
-
-    const weekStart = new Date(week.days[0].date)
-    const weekEnd = new Date(week.days[6].date)
-    const slots = []
-
-    // sort events by start date for deterministic placement
-    const sorted = [...events.value].sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''))
-    sorted.forEach(evt => {
-      // ⚠ 버그 수정: task 의 start/end 는 datetime("2026-05-22T10:00:00") 이라
-      // 날짜 전용("2026-05-22") cell 과 === 비교가 안 됨 → findIndex -1 → span=7(한 주 전체).
-      // 날짜 부분(YYYY-MM-DD)만 잘라서 비교한다.
-      const startStr = (evt.start ?? '').slice(0, 10)
-      const endStr = (evt.end ?? '').slice(0, 10) || startStr
-      const evtStart = new Date(startStr)
-      const evtEnd = new Date(endStr)
-      if (!(evtStart <= weekEnd && evtEnd >= weekStart)) return
-
-      const startOffset = evtStart < weekStart
-        ? 0
-        : Math.max(0, week.days.findIndex(d => d.date === startStr))
-      const endIdx = week.days.findIndex(d => d.date === endStr)
-      const endOffset = endIdx === -1 ? 6 : Math.min(6, endIdx)
-      const span = endOffset - startOffset + 1
-
-      let slotIndex = 0
-      while (slots[slotIndex] && slots[slotIndex].some(s => !(startOffset > s.end || startOffset + span - 1 < s.start))) {
-        slotIndex++
-      }
-
-      if (!slots[slotIndex]) slots[slotIndex] = []
-      slots[slotIndex].push({ start: startOffset, end: startOffset + span - 1 })
-
-      week.events[slotIndex] = week.events[slotIndex] || []
-      week.events[slotIndex].push({
-        ...evt,
-        isVisible: true,
-        startOffset,
-        span,
-        slotIndex,
-      })
-    })
-
-    // overflow per day — slots beyond MAX_VISIBLE_PER_WEEK 모두 +N개로 합침
-    for (let s = MAX_VISIBLE_PER_WEEK; s < slots.length; s++) {
-      ;(slots[s] ?? []).forEach(seg => {
-        for (let d = seg.start; d <= seg.end; d++) week.extraByDay[d] += 1
-      })
-    }
-    // 상위 슬롯만 표시할 이벤트로 flatten
-    const visible = []
-    for (let i = 0; i < Math.min(MAX_VISIBLE_PER_WEEK, slots.length); i++) {
-      if (week.events[i]) week.events[i].forEach(e => visible.push(e))
-      else visible.push({ id: `empty-${i}`, isVisible: false, slotIndex: i })
-    }
-    week.events = visible
-    weeks.push(week)
+    weeks.push({ days })
   }
   return weeks
 })
-
-// 그날 일정 전체 (모달용)
-function eventsOnDay(iso) {
-  return events.value.filter(e => {
-    if (!e.start) return false
-    const s = e.start.slice(0, 10)
-    const en = (e.end ?? '').slice(0, 10) || s
-    return iso >= s && iso <= en
-  })
-}
 </script>
 
 <template>
@@ -255,7 +237,7 @@ function eventsOnDay(iso) {
 
     <div class="main-cal__grid">
       <div v-for="(week, wi) in calendarWeeks" :key="wi" class="main-cal__week">
-        <!-- 셀 (mini-card surface + 날짜 원 + 빈 영역 클릭) -->
+        <!-- 셀 (mini-card surface + 날짜 원 + 그날의 이벤트 칩) -->
         <div
           v-for="day in week.days"
           :key="day.date"
@@ -288,29 +270,16 @@ function eventsOnDay(iso) {
               @click.stop="emit('day-click', { date: day.date, event: $event })"
             >+</button>
           </div>
-        </div>
 
-        <!-- 이벤트 막대 오버레이 (multi-day = single bar spanning cells) -->
-        <div class="main-cal__events">
-          <div
-            v-for="(ev, idx) in week.events"
-            :key="ev.id"
-            class="main-cal__event-row"
-            :style="{ top: (idx * 26) + 'px' }"
-          >
-            <div
-              v-if="ev.isVisible"
+          <!-- 그날의 이벤트 칩 (셀 내부에 직접 렌더) -->
+          <div class="main-cal__cell-events">
+            <button
+              v-for="ev in visibleEventsOnDay(day.date)"
+              :key="ev.id"
+              type="button"
               class="main-cal__event"
               :class="[ev.customColor ? '' : ev.colorClass, { 'main-cal__event--dragging': dragState?.event?.id === ev.id }]"
-              :style="{
-                marginLeft: `calc(${(ev.startOffset / 7) * 100}% + 6px)`,
-                width: `calc(${(ev.span / 7) * 100}% - 12px)`,
-                ...(ev.customColor ? {
-                  background: ev.customColor,
-                  color: '#2D2649',
-                  borderColor: 'transparent',
-                } : {}),
-              }"
+              :style="ev.customColor ? { background: ev.customColor, color: '#2D2649', borderColor: 'transparent' } : {}"
               draggable="true"
               @click.stop="emit('event-click', ev)"
               @mouseenter="onEventHover(ev, $event)"
@@ -318,37 +287,17 @@ function eventsOnDay(iso) {
               @dragstart="onEventDragStart(ev, $event, 'move')"
               @dragend="onDragEnd"
             >
-              <!-- 좌측 리사이즈 핸들 -->
-              <span
-                class="main-cal__event-handle main-cal__event-handle--start"
-                draggable="true"
-                @dragstart.stop="onEventDragStart(ev, $event, 'resize-start')"
-                @dragend.stop="onDragEnd"
-                @click.stop
-              ></span>
               <span v-if="ev.icon" class="main-cal__event-icon">{{ ev.icon }}</span>{{ ev.title }}
-              <!-- 우측 리사이즈 핸들 -->
-              <span
-                class="main-cal__event-handle main-cal__event-handle--end"
-                draggable="true"
-                @dragstart.stop="onEventDragStart(ev, $event, 'resize-end')"
-                @dragend.stop="onDragEnd"
-                @click.stop
-              ></span>
-            </div>
-          </div>
-        </div>
+            </button>
 
-        <!-- "+N more" 칩 (셀 하단) -->
-        <div class="main-cal__extras">
-          <button
-            v-for="(extra, di) in week.extraByDay"
-            :key="di"
-            v-show="extra > 0"
-            class="main-cal__more"
-            :style="{ left: `calc(${(di / 7) * 100}% + 6px)`, width: `calc(${(1 / 7) * 100}% - 12px)` }"
-            @click.stop="emit('more-click', { date: week.days[di].date, events: eventsOnDay(week.days[di].date) })"
-          >+{{ extra }} more</button>
+            <!-- "+N more" -->
+            <button
+              v-if="extraCountOnDay(day.date) > 0"
+              type="button"
+              class="main-cal__more"
+              @click.stop="emit('more-click', { date: day.date, events: eventsOnDay(day.date) })"
+            >+{{ extraCountOnDay(day.date) }} more</button>
+          </div>
         </div>
       </div>
     </div>
@@ -478,13 +427,16 @@ function eventsOnDay(iso) {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .main-cal__week {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  /* gap intentionally 0: event bars use % of week width and must align to columns */
+  /* 단일 행이 주(week)의 flex 높이를 꽉 채우도록 1fr 지정 →
+     셀이 아래까지 늘어나 둥근 사각형이 닫힌다(바닥 뚫림 방지). */
+  grid-template-rows: 1fr;
   gap: 0;
   border-bottom: 0;
   position: relative;
@@ -498,7 +450,7 @@ function eventsOnDay(iso) {
   position: relative;
   transition: background 0.18s;
   overflow: hidden;
-  min-height: 96px;
+  min-height: 116px;
 }
 .main-cal__cell::before {
   content: '';
@@ -506,13 +458,13 @@ function eventsOnDay(iso) {
   inset: 3px;
   border-radius: 14px;
   background: var(--lp-surface);
-  box-shadow: inset 0 0 0 1px rgba(229, 221, 240, .55);
+  box-shadow: inset 0 0 0 1.5px rgba(199, 187, 224, .85);
   z-index: 0;
   transition: box-shadow 0.18s ease, background 0.18s;
 }
 .main-cal__cell:hover::before {
   box-shadow:
-    inset 0 0 0 1px rgba(229, 221, 240, .9),
+    inset 0 0 0 1.5px var(--lp-primary, #9D85FF),
     0 6px 18px rgba(63,52,99,.10);
 }
 .main-cal__cell-head {
@@ -605,96 +557,60 @@ function eventsOnDay(iso) {
   box-shadow: 0 2px 6px rgba(63, 52, 99, 0.20);
 }
 
-/* ═══ Events overlay (Linear/Notion-style multi-day bars) ═══ */
-.main-cal__events {
-  position: absolute;
-  top: 32px;
-  left: 0;
-  right: 0;
-  bottom: 22px;
-  pointer-events: none;
-  overflow: hidden;
-}
-.main-cal__event-row {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 22px;
+/* ═══ Events — 셀 내부에 직접 쌓이는 칩 ═══ */
+.main-cal__cell-events {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 6px 6px;
+  min-height: 0;
 }
 .main-cal__event {
   display: block;
-  position: relative;
-  height: 22px;
-  padding: 4px 8px;
-  font-size: 11px;
+  width: 100%;
+  box-sizing: border-box;
+  height: 20px;
+  padding: 3px 8px;
+  font-size: 10.5px;
   font-weight: 600;
   line-height: 14px;
-  border-radius: 8px;
+  border-radius: 7px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  pointer-events: auto;
+  text-align: left;
   cursor: pointer;
   background: var(--lp-card-lavender-1);
   color: var(--lp-violet-deep);
   border: 0;
   box-shadow: 0 1px 2px rgba(63,52,99,.05);
   letter-spacing: -0.005em;
-  transition: margin-left 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.12s, box-shadow 0.15s;
+  transition: transform 0.12s, box-shadow 0.15s, filter 0.12s;
 }
 .main-cal__event:hover {
   transform: translateY(-1px);
+  filter: brightness(0.97);
   box-shadow: 0 4px 12px rgba(63, 52, 99, 0.16);
 }
 .main-cal__event-icon { font-size: 11px; margin-right: 3px; }
 .main-cal__event--dragging { opacity: 0.45; }
 
-/* 양쪽 리사이즈 핸들 */
-.main-cal__event-handle {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 6px;
-  cursor: ew-resize;
-  background: transparent;
-  z-index: 1;
-}
-.main-cal__event-handle--start {
-  left: 0;
-  border-top-left-radius: 8px;
-  border-bottom-left-radius: 8px;
-}
-.main-cal__event-handle--end {
-  right: 0;
-  border-top-right-radius: 8px;
-  border-bottom-right-radius: 8px;
-}
-.main-cal__event-handle:hover { background: rgba(63, 52, 99, 0.22); }
-
 /* +N more */
-.main-cal__extras {
-  position: absolute;
-  bottom: 4px;
-  left: 0;
-  right: 0;
-  height: 16px;
-  pointer-events: none;
-}
 .main-cal__more {
-  position: absolute;
-  height: 16px;
+  display: block;
+  width: 100%;
+  height: 17px;
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--lp-primary-deep);
   background: transparent;
   border: none;
   cursor: pointer;
-  pointer-events: auto;
   border-radius: 6px;
   text-align: left;
-  padding: 0 4px;
+  padding: 0 6px;
   letter-spacing: 0.01em;
 }
 .main-cal__more:hover {
@@ -743,7 +659,7 @@ function eventsOnDay(iso) {
 @media (max-width: 720px) {
   .main-cal { padding: 16px 14px 12px; border-radius: 18px; }
   .main-cal__title, .lp-range-label { font-size: 15px; }
-  .main-cal__cell { min-height: 72px; border-radius: 12px; }
+  .main-cal__cell { min-height: 124px; border-radius: 12px; }
   .main-cal__date { font-size: 12px; }
   .main-cal__date--today { width: 24px; height: 24px; min-width: 24px; }
 }

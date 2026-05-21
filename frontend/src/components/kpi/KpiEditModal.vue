@@ -15,12 +15,11 @@ const emit = defineEmits(['close', 'submit'])
 const store = useOrganizationKpiStore()
 
 const CATEGORY_OPTIONS = [
-  { value: 'OTHER', label: '기타' },
-  { value: 'IMPRESSION', label: '노출' },
-  { value: 'ENGAGEMENT', label: '참여' },
-  { value: 'CONVERSION', label: '전환' },
-  { value: 'REVENUE', label: '매출' },
+  { value: 'GROWTH', label: '성장' },
+  { value: 'FINANCIAL', label: '재무' },
   { value: 'BRAND', label: '브랜드' },
+  { value: 'OPERATIONAL', label: '운영' },
+  { value: 'SUSTAINABILITY', label: '지속가능성' },
 ]
 const ESG_OPTIONS = [
   { value: 'ENVIRONMENTAL', label: '환경 (E)' },
@@ -93,7 +92,7 @@ function emptyForm() {
     periodEnd: dates.end,
     targetValue: null,
     unit: '',
-    category: 'OTHER',
+    category: 'OPERATIONAL',
     esgEnabled: false,
     esgCategory: '',
     kind: props.defaultOwnerOrgType === 'HQ' ? 'STRATEGIC' : 'TACTICAL',
@@ -226,8 +225,8 @@ async function applyTemplate(template) {
   form.templateId = template.idx
   if (template.name && !form.name) form.name = template.name
   if (template.defaultUnit && !form.unit) form.unit = template.defaultUnit
-  // category는 default 'OTHER'라 사용자가 안 바꿨으면 템플릿 값으로 override
-  if (template.defaultCategory && (!form.category || form.category === 'OTHER')) {
+  // category는 default 'OPERATIONAL'라 사용자가 안 바꿨으면 템플릿 값으로 override
+  if (template.defaultCategory && (!form.category || form.category === 'OPERATIONAL')) {
     form.category = template.defaultCategory
   }
   if (template.defaultKind) form.kind = template.defaultKind

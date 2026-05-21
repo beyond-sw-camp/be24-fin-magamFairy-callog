@@ -1878,7 +1878,7 @@ watch([zone3Page, zone3Granularity], () => {
               <input class="lp-switch" type="checkbox" v-model="sectionVisible.zone3" />
             </label>
             <label class="page-settings__row tight">
-              <span class="page-settings__lbl">흐름 (퍼널 &amp; 추세)</span>
+              <span class="page-settings__lbl">흐름 (파이프라인 &amp; 매출)</span>
               <input class="lp-switch" type="checkbox" v-model="sectionVisible.zone4" />
             </label>
 
@@ -1890,8 +1890,8 @@ watch([zone3Page, zone3Granularity], () => {
             <div class="page-settings__row tight">
               <span class="page-settings__lbl">Zone 1 시작</span>
               <select v-model.number="zonePrefs.zone1" class="lp-select">
-                <option :value="0">액션·활동</option>
-                <option :value="1">오늘업무/마감</option>
+                <option :value="0">오늘의 데스크</option>
+                <option :value="1">마감 임박</option>
               </select>
             </div>
             <div class="page-settings__row tight">
@@ -1904,7 +1904,7 @@ watch([zone3Page, zone3Granularity], () => {
             <div class="page-settings__row tight">
               <span class="page-settings__lbl">Zone 4 시작</span>
               <select v-model.number="zonePrefs.zone4" class="lp-select">
-                <option :value="0">파이프라인</option>
+                <option :value="0">캠페인 파이프라인</option>
                 <option :value="1">매출 추이</option>
               </select>
             </div>

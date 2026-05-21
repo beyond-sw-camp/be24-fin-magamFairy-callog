@@ -62,6 +62,13 @@ public class DashboardController {
         return ResponseEntity.ok(BaseResponse.success(aggregateService.reviewQueue(user.getIdx())));
     }
 
+    /** ⭐NEW: Zone3 P2 — 광고검수 요청 큐(REQUESTED) — 실제 승인/반려 대상(requestId+campaignId). */
+    @GetMapping("/ad-review-requests")
+    public ResponseEntity<BaseResponse> adReviewRequests(@AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.adReviewQueue(user.getIdx())));
+    }
+
     @GetMapping("/blockers")
     public ResponseEntity<BaseResponse> blockers(@AuthenticationPrincipal AuthUserDetails user) {
         requireAuth(user);
@@ -101,11 +108,14 @@ public class DashboardController {
         return ResponseEntity.ok(BaseResponse.success(aggregateService.campaignProgress(user.getIdx())));
     }
 
-    /** ⭐NEW: Zone4 P2 — REVENUE KPI 월별 매출 추이 (최근 6개월). */
-    @GetMapping("/revenue-trend")
-    public ResponseEntity<BaseResponse> revenueTrend(@AuthenticationPrincipal AuthUserDetails user) {
+    /** ⭐NEW: Zone4 P2 — 선택 연도/분기 월별 매출 YoY (올해 value + 전년 prev). */
+    @GetMapping("/revenue-yoy")
+    public ResponseEntity<BaseResponse> revenueYoY(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer quarter,
+            @AuthenticationPrincipal AuthUserDetails user) {
         requireAuth(user);
-        return ResponseEntity.ok(BaseResponse.success(aggregateService.revenueTrend(user.getIdx())));
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.revenueYoY(user.getIdx(), year, quarter)));
     }
 
     private void requireAuth(AuthUserDetails user) {

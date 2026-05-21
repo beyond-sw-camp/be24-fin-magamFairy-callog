@@ -51,6 +51,14 @@ public class RedisConfig {
             Map.entry(CacheNames.DASHBOARD_ASSET_CATEGORIES,Duration.ofMinutes(5)),
             Map.entry(CacheNames.DASHBOARD_KPI_CATEGORIES,  Duration.ofMinutes(5)),
 
+            // Zone 신규 — 실시간성/변경빈도에 따라 차등
+            Map.entry(CacheNames.DASHBOARD_RECENT_ACTIVITY, Duration.ofSeconds(30)), // 활동 피드 — 실시간성 ↑
+            Map.entry(CacheNames.DASHBOARD_AD_REVIEW_QUEUE, Duration.ofMinutes(1)),  // 검수 큐 — 변경 잦음
+            Map.entry(CacheNames.DASHBOARD_CAMPAIGN_PIPELINE,Duration.ofMinutes(3)),
+            Map.entry(CacheNames.DASHBOARD_CAMPAIGN_PROGRESS,Duration.ofMinutes(3)),
+            Map.entry(CacheNames.DASHBOARD_REVENUE_YOY,     Duration.ofMinutes(10)), // 월별 매출 — 거의 안 변함
+
+            Map.entry(CacheNames.CAMPAIGN_LIST,             Duration.ofMinutes(2)),  // 캠페인 목록 — 변경 잦아 짧게
             Map.entry(CacheNames.CAMPAIGN_MEMBER_ROLE,      Duration.ofMinutes(2)),  // ★ 짧게, evict 보강
             Map.entry(CacheNames.KPI_TEMPLATES,             Duration.ofHours(1)),
             Map.entry(CacheNames.NOTIFICATION_SETTING,      Duration.ofMinutes(30))

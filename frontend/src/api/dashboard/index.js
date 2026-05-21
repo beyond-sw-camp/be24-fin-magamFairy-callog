@@ -67,14 +67,22 @@ export const GetCampaignProgress = async () => {
   return unwrapResponse(await api.get('/dashboard/campaign-progress'))
 }
 
-/** Zone4 P2 · 매출(REVENUE KPI) 월별 추이 → [{ label, value }] */
-export const GetRevenueTrend = async () => {
-  return unwrapResponse(await api.get('/dashboard/revenue-trend'))
+/** Zone4 P2 · 매출 YoY(연/분기 월별, 올해+작년) → [{ label, value, prev }] */
+export const GetRevenueYoY = async (year, quarter) => {
+  const params = {}
+  if (year != null) params.year = year
+  if (quarter != null) params.quarter = quarter
+  return unwrapResponse(await api.get('/dashboard/revenue-yoy', { params }))
 }
 
 /** Zone1 P1좌 / Zone3 P2 · 검수 대기/목록 → [{ ... }] */
 export const GetReviewQueue = async () => {
   return unwrapResponse(await api.get('/dashboard/review-queue'))
+}
+
+/** Zone3 P2 · 광고검수 요청 큐(REQUESTED) → [{ requestId, campaignId, campaignName, fileName, requesterName, requestStatus }] */
+export const GetAdReviewQueue = async () => {
+  return unwrapResponse(await api.get('/dashboard/ad-review-requests'))
 }
 
 /** Zone1 P1좌 · 차단/미배정 → [{ ... }] */
@@ -91,7 +99,8 @@ export default {
   GetRecentActivity,
   GetCampaignPipeline,
   GetCampaignProgress,
-  GetRevenueTrend,
+  GetRevenueYoY,
   GetReviewQueue,
+  GetAdReviewQueue,
   GetBlockers,
 }

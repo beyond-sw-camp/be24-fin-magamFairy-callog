@@ -10,11 +10,12 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useDashboardZonePrefs } from '@/composables/useDashboardZonePrefs'
+import { ApproveAdReviewRequest, RejectAdReviewRequest } from '@/api/adcheck'
 
 const router = useRouter()
 const auth = useAuthStore()
 const store = useDashboardStore()
-const { prefs, setZoneDefault } = useDashboardZonePrefs()
+const { prefs } = useDashboardZonePrefs()
 
 const PAGE_COUNT = 2
 const page = ref(prefs.value.zone3 ?? 0)
@@ -28,12 +29,11 @@ const isPartner = computed(() => orgType.value === 'EXTERNAL_PARTNER')
 /* ─── P1: KPI 트래커 ─── */
 const granularity = ref('month')
 const KPI_CATS = [
-  { key: 'IMPRESSION', label: '노출' },
-  { key: 'ENGAGEMENT', label: '참여' },
-  { key: 'CONVERSION', label: '전환' },
-  { key: 'REVENUE', label: '매출' },
+  { key: 'GROWTH', label: '성장' },
+  { key: 'FINANCIAL', label: '재무' },
   { key: 'BRAND', label: '브랜드' },
-  { key: 'ESG', label: 'ESG' },
+  { key: 'OPERATIONAL', label: '운영' },
+  { key: 'SUSTAINABILITY', label: '지속가능성' },
 ]
 function granularityFactor(g) { return g === 'week' ? 0.78 : 1 }
 function fmtCompact(v) {
@@ -49,7 +49,7 @@ const kpiBars = computed(() => {
   const goals = store.quarterGoals ?? []
   const buckets = {}
   goals.forEach((g) => {
-    const key = g.esgCategory != null ? 'ESG' : g.category
+    const key = g.category ?? (g.esgCategory != null ? 'SUSTAINABILITY' : null)
     if (!key) return
     if (!buckets[key]) buckets[key] = { target: 0, actual: 0 }
     buckets[key].target += Number(g.targetValue) || 0
@@ -72,9 +72,10 @@ const kpiBars = computed(() => {
 })
 const hasKpi = computed(() => kpiBars.value.some((b) => b.hasData))
 
-/* ─── P2: 검수 ─── */
-const reviewMode = computed(() => (isPartner.value ? 'submitted' : 'toReview'))
-const reviewLabel = computed(() => (isPartner.value ? '내가 제출한 것' : '내가 검수할 것'))
+/* ─── P2: 검수 (검수 목록 ↔ 검수 결과 토글) ─── */
+const reviewMode = ref('list') // 'list'=검수 목록(내가 검수할 것) / 'result'=검수 결과(우리가 제출한 것)
+const canReview = computed(() => reviewMode.value === 'list')
+const reviewLabel = computed(() => (reviewMode.value === 'list' ? '검수 목록' : '검수 결과'))
 
 function publicIdByCampaignId(id) {
   if (id == null) return null
@@ -85,26 +86,59 @@ function openCampaign(id) {
   const pid = publicIdByCampaignId(id)
   if (pid) router.push(`/campaigns/${pid}`)
 }
-const PRIORITY_LABEL = { CRITICAL: '긴급', HIGH: '높음', MEDIUM: '보통', LOW: '낮음' }
-const reviewItems = computed(() => (store.reviewQueue ?? []).map((r) => ({
-  id: r.taskId,
+const reviewSource = computed(() => {
+  const q = store.adReviewQueue ?? {}
+  return reviewMode.value === 'list' ? (q.toReview ?? []) : (q.mine ?? [])
+})
+const reviewItems = computed(() => reviewSource.value.map((r) => ({
+  requestId: r.requestId,
   campaignId: r.campaignId,
-  name: r.taskName ?? '검수 항목',
+  name: r.fileName ?? '검수 요청',
   campaign: r.campaignName ?? '',
-  assignee: r.assigneeName ?? '',
-  priority: PRIORITY_LABEL[String(r.priority ?? '').toUpperCase()] ?? '',
+  requester: r.requesterName ?? '',
+  status: String(r.requestStatus ?? '').toUpperCase(),
 })))
 
-/* ⋯ 기본 화면 지정 */
-const menuOpen = ref(false)
-function makeDefault() { setZoneDefault('zone3', page.value); menuOpen.value = false }
+/* 요청자(파트너) 입장 — 내 제출물의 검수 결과 상태 배지 */
+function statusLabel(s) {
+  return ({ APPROVED: '승인됨', REJECTED: '반려됨', REQUESTED: '검수중' })[s] ?? '검수중'
+}
+function statusTone(s) {
+  return ({ APPROVED: 'ok', REJECTED: 'no', REQUESTED: 'wait' })[s] ?? 'wait'
+}
+
+/* ✓/✗ → 컨펌 모달 → 실제 PATCH 호출 */
+const confirmState = ref(null) // { item, action: 'approve' | 'reject' }
+const submitting = ref(false)
+function askConfirm(item, action) { confirmState.value = { item, action } }
+function cancelConfirm() { if (!submitting.value) confirmState.value = null }
+async function doConfirm() {
+  if (!confirmState.value) return
+  const { item, action } = confirmState.value
+  submitting.value = true
+  try {
+    if (action === 'approve') {
+      await ApproveAdReviewRequest(item.campaignId, item.requestId, {})
+    } else {
+      await RejectAdReviewRequest(item.campaignId, item.requestId, { reason: '대시보드에서 반려' })
+    }
+    await store.loadZoneExtras?.() // 검수큐 등 재로드
+  } catch (e) {
+    console.warn('[zone3] 검수 처리 실패', e)
+  } finally {
+    submitting.value = false
+    confirmState.value = null
+  }
+}
+
 </script>
 
 <template>
   <section class="card zone3" aria-label="KPI와 검수">
     <div class="card-h">
-      <div>
+      <div class="card-h-ttl">
         <h2>{{ page === 0 ? 'KPI 트래커' : '검수' }}</h2>
+        <span class="card-dot" />
         <p class="lede">{{ page === 0 ? '카테고리별 달성률' : reviewLabel }}</p>
       </div>
       <div class="z3-controls">
@@ -113,15 +147,8 @@ function makeDefault() { setZoneDefault('zone3', page.value); menuOpen.value = f
           <button class="gn-btn" :class="{ 'is-on': granularity === 'month' }" @click="granularity = 'month'">월간</button>
         </div>
         <div v-else class="gn-seg">
-          <button class="gn-btn is-on">{{ reviewLabel }}</button>
-        </div>
-        <div class="z3-menu-wrap">
-          <button class="z3-dots" aria-label="옵션" @click="menuOpen = !menuOpen">⋯</button>
-          <Transition name="z3-pop">
-            <div v-if="menuOpen" class="z3-menu" @mouseleave="menuOpen = false">
-              <button @click="makeDefault">이 화면을 기본으로</button>
-            </div>
-          </Transition>
+          <button class="gn-btn" :class="{ 'is-on': reviewMode === 'list' }" @click="reviewMode = 'list'">검수 목록</button>
+          <button class="gn-btn" :class="{ 'is-on': reviewMode === 'result' }" @click="reviewMode = 'result'">검수 결과</button>
         </div>
         <div class="zone-nav">
           <button class="nav-btn" aria-label="이전" @click="shift(-1)">‹</button>
@@ -159,29 +186,52 @@ function makeDefault() { setZoneDefault('zone3', page.value); menuOpen.value = f
         <div v-else class="z3-empty">KPI 데이터가 없습니다.</div>
       </div>
 
-      <!-- P2: 검수 -->
+      <!-- P2: 검수 (광고검수 요청 — 인라인 ✓/✗ + 컨펌 모달) -->
       <div v-else :key="'review'" class="z3-body">
         <ul v-if="reviewItems.length" class="z3-review-list">
-          <li
-            v-for="it in reviewItems"
-            :key="it.id"
-            class="z3-review-row"
-            :class="{ 'is-click': it.campaignId != null }"
-            @click="openCampaign(it.campaignId)"
-          >
-            <div class="z3-review-mid">
+          <li v-for="it in reviewItems" :key="it.requestId" class="z3-review-row">
+            <div
+              class="z3-review-mid"
+              :class="{ 'is-click': it.campaignId != null }"
+              @click="openCampaign(it.campaignId)"
+            >
               <div class="z3-review-name">{{ it.name }}</div>
               <div class="z3-review-sub">
                 <span v-if="it.campaign">{{ it.campaign }}</span>
-                <span v-if="it.assignee" class="z3-review-who">· {{ isPartner ? '검수자' : '제출자' }} {{ it.assignee }}</span>
+                <span v-if="it.requester" class="z3-review-who">· 제출자 {{ it.requester }}</span>
               </div>
             </div>
-            <span v-if="it.priority" class="z3-review-pri">{{ it.priority }}</span>
+            <div class="z3-acts">
+              <template v-if="canReview">
+                <button class="z3-act approve" title="승인" @click.stop="askConfirm(it, 'approve')">✓</button>
+                <button class="z3-act reject" title="반려" @click.stop="askConfirm(it, 'reject')">✗</button>
+              </template>
+              <span v-else class="z3-status" :class="statusTone(it.status)">{{ statusLabel(it.status) }}</span>
+              <button class="z3-act open" title="검수 페이지 열기" @click.stop="openCampaign(it.campaignId)">›</button>
+            </div>
           </li>
         </ul>
         <div v-else class="z3-empty">
-          {{ isPartner ? '제출한 검수 항목이 없습니다.' : '검수할 항목이 없습니다.' }}
+          {{ reviewMode === 'list' ? '검수할 요청이 없습니다.' : '제출한 검수 요청이 없습니다.' }}
         </div>
+
+        <!-- 승인/반려 컨펌 모달 -->
+        <Transition name="z3-modal">
+          <div v-if="confirmState" class="z3-modal-backdrop" @click="cancelConfirm">
+            <div class="z3-modal" role="dialog" aria-modal="true" @click.stop>
+              <div class="z3-modal-msg">
+                <strong>{{ confirmState.item.name }}</strong>
+                <span>{{ confirmState.action === 'approve' ? ' 검수를 승인하시겠습니까?' : ' 검수를 반려하시겠습니까?' }}</span>
+              </div>
+              <div class="z3-modal-acts">
+                <button class="z3-modal-btn no" :disabled="submitting" @click="cancelConfirm">아니오</button>
+                <button class="z3-modal-btn yes" :class="confirmState.action" :disabled="submitting" @click="doConfirm">
+                  {{ submitting ? '처리 중…' : '예' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </Transition>
       </div>
     </Transition>
   </section>
@@ -189,22 +239,16 @@ function makeDefault() { setZoneDefault('zone3', page.value); menuOpen.value = f
 
 <style scoped>
 .zone3 { display: flex; flex-direction: column; }
-.card-h { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; gap: 12px; }
-.card-h h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--lp-text); letter-spacing: -0.01em; }
-.card-h .lede { margin: 4px 0 0; font-size: 12px; font-weight: 500; color: var(--lp-text-muted); }
+.card-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px; }
+.card-h-ttl { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.card-dot { width: 9px; height: 9px; border-radius: 999px; background: var(--lp-primary); align-self: center; flex-shrink: 0; }
+.card-h h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--lp-text); letter-spacing: -0.01em; flex-shrink: 0; }
+.card-h .lede { margin: 0; font-size: 12px; font-weight: 500; color: var(--lp-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .z3-controls { display: inline-flex; align-items: center; gap: 10px; }
 .gn-seg { display: inline-flex; background: var(--lp-surface-soft); border-radius: 999px; padding: 3px; gap: 2px; }
 .gn-btn { padding: 4px 10px; font-size: 11px; font-weight: 600; color: var(--lp-text-muted); border: 0; background: transparent; border-radius: 999px; cursor: pointer; }
 .gn-btn.is-on { background: var(--lp-surface); color: var(--lp-primary-deep); box-shadow: 0 1px 3px rgba(63,52,99,.10); }
-.z3-menu-wrap { position: relative; }
-.z3-dots { width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--lp-border); background: var(--lp-surface); color: var(--lp-text-muted); cursor: pointer; font-size: 15px; line-height: 1; }
-.z3-dots:hover { background: var(--lp-surface-soft); }
-.z3-menu { position: absolute; top: calc(100% + 6px); right: 0; background: var(--lp-surface); border: 1px solid var(--lp-border); border-radius: 10px; box-shadow: 0 8px 24px rgba(63,52,99,.16); padding: 5px; z-index: 30; white-space: nowrap; }
-.z3-menu button { display: block; padding: 7px 12px; font-size: 12.5px; font-weight: 600; color: var(--lp-text); background: transparent; border: 0; border-radius: 7px; cursor: pointer; }
-.z3-menu button:hover { background: var(--lp-surface-soft); color: var(--lp-primary-deep); }
-.z3-pop-enter-active, .z3-pop-leave-active { transition: opacity .15s ease, transform .15s ease; }
-.z3-pop-enter-from, .z3-pop-leave-to { opacity: 0; transform: translateY(-4px); }
 
 .zone-nav { display: inline-flex; align-items: center; gap: 6px; }
 .nav-btn { width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--lp-border); background: var(--lp-surface); color: var(--lp-primary-deep); cursor: pointer; font-size: 14px; line-height: 1; transition: background .15s, transform .12s; }
@@ -212,7 +256,7 @@ function makeDefault() { setZoneDefault('zone3', page.value); menuOpen.value = f
 .nav-btn:active { transform: scale(0.94); }
 .nav-ind { font-size: 11px; font-weight: 600; color: var(--lp-text-faint); min-width: 36px; text-align: center; font-variant-numeric: tabular-nums; }
 
-.z3-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.z3-body { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
 
 /* KPI dual bars (목표 vs 실제) */
 .z3-legend { display: flex; gap: 16px; justify-content: flex-end; margin-bottom: 6px; }
@@ -228,21 +272,50 @@ function makeDefault() { setZoneDefault('zone3', page.value); menuOpen.value = f
 .z3-bars.dual::after { top: 66%; }
 .z3-bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
 .z3-bar-pair { flex: 1; min-height: 0; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 6px; }
-.z3-bar { width: 18px; min-height: 6px; border-radius: 999px; transition: height .6s cubic-bezier(.4,0,.2,1); }
+.z3-bar { width: 18px; min-height: 6px; border-radius: 999px; transition: height .6s cubic-bezier(.4,0,.2,1); transform-origin: bottom; animation: lp-grow-y .55s cubic-bezier(.4,0,.2,1) both; }
+.z3-bar--actual { animation-delay: .06s; }
 .z3-bar--target { background: linear-gradient(180deg, var(--lp-primary), var(--lp-primary-strong)); }
 .z3-bar--actual { background: linear-gradient(180deg, #E2F079, var(--lp-lime)); }
 .z3-lbl { margin-top: 8px; font-size: 10.5px; font-weight: 600; color: var(--lp-text-muted); }
 
 /* review list */
 .z3-review-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; overflow-y: auto; flex: 1; }
-.z3-review-row { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 12px; background: var(--lp-surface-soft); }
-.z3-review-row.is-click { cursor: pointer; }
-.z3-review-row.is-click:hover { background: var(--lp-border); }
+.z3-review-row { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 12px; background: var(--lp-surface-soft); animation: lp-rise .4s cubic-bezier(.4,0,.2,1) both; }
+.z3-review-row:nth-child(2) { animation-delay: .06s; }
+.z3-review-row:nth-child(3) { animation-delay: .12s; }
+.z3-review-row:nth-child(n+4) { animation-delay: .18s; }
 .z3-review-mid { flex: 1; min-width: 0; }
+.z3-review-mid.is-click { cursor: pointer; }
+.z3-review-mid.is-click:hover .z3-review-name { color: var(--lp-primary-deep); }
 .z3-review-name { font-size: 13px; font-weight: 700; color: var(--lp-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .z3-review-sub { font-size: 11px; color: var(--lp-text-faint); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .z3-review-who { color: var(--lp-text-muted); }
-.z3-review-pri { font-size: 10.5px; font-weight: 700; color: #FF7A4D; background: rgba(255,138,92,.16); padding: 3px 10px; border-radius: 999px; flex-shrink: 0; }
+/* 인라인 ✓/✗/› 액션 */
+.z3-acts { display: flex; gap: 6px; flex-shrink: 0; }
+.z3-act { width: 30px; height: 30px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; cursor: pointer; border: 0; transition: transform .12s, box-shadow .15s; }
+.z3-act:hover { transform: scale(1.08); box-shadow: 0 4px 10px rgba(63,52,99,.18); }
+.z3-act.approve { background: var(--lp-lime); color: var(--lp-primary-deep); }
+.z3-act.reject { background: rgba(226,91,73,.16); color: #E25B49; }
+.z3-act.open { background: var(--lp-surface); color: var(--lp-primary-deep); border: 1px solid var(--lp-border); }
+/* 요청자 입장 — 결과 상태 배지 */
+.z3-status { font-size: 10.5px; font-weight: 800; padding: 4px 11px; border-radius: 999px; flex-shrink: 0; white-space: nowrap; }
+.z3-status.ok { background: var(--lp-lime-soft, #EAF2A8); color: #4F7A2E; }
+.z3-status.no { background: rgba(226,91,73,.16); color: #E25B49; }
+.z3-status.wait { background: var(--accent-soft); color: var(--lp-primary-deep); }
+
+/* 승인/반려 컨펌 모달 */
+.z3-modal-backdrop { position: absolute; inset: 0; background: rgba(42,36,64,.42); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 40; }
+.z3-modal { background: var(--lp-surface); border-radius: var(--r-lg, 18px); padding: 20px; width: min(280px, 86%); box-shadow: 0 16px 40px rgba(63,52,99,.28); text-align: center; }
+.z3-modal-msg { font-size: 13.5px; color: var(--lp-text); line-height: 1.5; }
+.z3-modal-msg strong { color: var(--lp-primary-deep); }
+.z3-modal-acts { display: flex; gap: 8px; margin-top: 16px; }
+.z3-modal-btn { flex: 1; padding: 9px 0; border-radius: 999px; font-size: 12.5px; font-weight: 700; cursor: pointer; border: 0; }
+.z3-modal-btn.no { background: var(--lp-surface-soft); color: var(--lp-text-muted); }
+.z3-modal-btn.yes.approve { background: var(--lp-lime); color: var(--lp-primary-deep); }
+.z3-modal-btn.yes.reject { background: #E25B49; color: #fff; }
+.z3-modal-btn:disabled { opacity: .6; cursor: not-allowed; }
+.z3-modal-enter-active, .z3-modal-leave-active { transition: opacity .2s ease; }
+.z3-modal-enter-from, .z3-modal-leave-to { opacity: 0; }
 
 .z3-empty { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12.5px; color: var(--lp-text-faint); padding: 24px; text-align: center; }
 

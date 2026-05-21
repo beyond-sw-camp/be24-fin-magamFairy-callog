@@ -73,7 +73,7 @@ public interface OrganizationKpiRepository extends JpaRepository<OrganizationKpi
      * ownerOrgIdx 가 null 이면 전체, 아니면 해당 조직 소유 REVENUE KPI.
      */
     @Query("SELECT k FROM OrganizationKpi k " +
-           "WHERE k.category = org.example.backend.campaign.model.KpiCategory.REVENUE " +
+           "WHERE k.category = org.example.backend.campaign.model.KpiCategory.FINANCIAL " +
            "AND (:ownerOrgIdx IS NULL OR k.owner.idx = :ownerOrgIdx)")
     List<OrganizationKpi> findRevenueKpis(@Param("ownerOrgIdx") Long ownerOrgIdx);
 }
