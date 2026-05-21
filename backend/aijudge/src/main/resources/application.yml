@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: ai-judge
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   servlet:
     multipart:
       max-file-size: 20MB
@@ -26,6 +31,9 @@ management:
       show-details: always
 
 ai-judge:
+  kafka:
+    enabled: ${AI_JUDGE_KAFKA_ENABLED:false}
+    completed-topic: ${AI_JUDGE_COMPLETED_TOPIC:ai-judge.completed}
   n8n:
     webhook-url: ${N8N_URL:}
     check-endpoint: ${CHECK_ENDPOINT:}
