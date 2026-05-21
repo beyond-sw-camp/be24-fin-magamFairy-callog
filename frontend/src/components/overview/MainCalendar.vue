@@ -117,10 +117,76 @@ function onDragEnd() {
   hoverDate.value = null
 }
 
-// "+N more" 처리
-const MAX_VISIBLE_PER_WEEK = 3
+/* ═══ 구글 캘린더식 레인(lane) 레이아웃 ═══
+ *  - 멀티-데이/종일 이벤트 → 컬럼을 가로지르는 막대(bar)
+ *  - 시간 단일일 이벤트 → "● 오전 10:13 제목" 한 줄
+ *  - 같은 주 안에서 레인을 공유해 막대가 다른 일정과 세로로 겹치지 않게 배치
+ *  - 레인 초과분은 컬럼별 "+N 더보기"
+ */
+const HEADER_OFFSET = 30   // 날짜 숫자 영역 높이
+const LANE_H = 22          // 레인 한 줄 높이
+const MAX_LANES = 4        // 보이는 레인 수 (초과 → +N 더보기)
 
-// 캘린더 로직 — slot 알고리즘으로 멀티-위크 이벤트 막대 배치
+function dateStr(iso) { return (iso ?? '').slice(0, 10) }
+
+function spanDays(e) {
+  const s = new Date(dateStr(e.start))
+  const en = new Date(dateStr(e.end) || dateStr(e.start))
+  if (Number.isNaN(s.getTime()) || Number.isNaN(en.getTime())) return 1
+  return Math.round((en - s) / 86400000) + 1
+}
+// 종일성: 시작이 자정이고 종료가 없거나 하루 끝(23:59/00:00)
+function isAllDayLike(e) {
+  const s = e.start ?? ''
+  const en = e.end ?? s
+  const sTime = s.includes('T') ? s.slice(11, 19) : ''
+  const eTime = en.includes('T') ? en.slice(11, 19) : ''
+  const startMidnight = sTime === '' || sTime === '00:00:00'
+  const endEod = eTime === '' || eTime === '23:59:59' || eTime === '00:00:00'
+  return startMidnight && endEod
+}
+function isBarEvent(e) { return spanDays(e) > 1 || isAllDayLike(e) }
+
+function fmtKoTime(iso) {
+  if (!iso || !iso.includes('T')) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const h = d.getHours()
+  const m = d.getMinutes()
+  const period = h < 12 ? '오전' : '오후'
+  let h12 = h % 12
+  if (h12 === 0) h12 = 12
+  return m === 0 ? `${period} ${h12}시` : `${period} ${h12}:${String(m).padStart(2, '0')}`
+}
+function displayTitle(ev) {
+  let t = ev.title ?? ''
+  if (ev.type === 'task') t = t.replace(/^✅\s*/, '')   // 시간 줄은 체크 이모지 제거(깔끔)
+  return t
+}
+function dotColor(ev) { return ev.customColor || 'var(--lp-primary, #8B5CF6)' }
+function barBg(ev) {
+  if (ev.customColor) return ev.customColor
+  if (ev.type === 'milestone') return 'var(--lp-card-lavender-2, #B0A4DA)'
+  return 'var(--lp-card-lavender-1, #DDD2EE)'
+}
+
+// 위치 계산 헬퍼
+function itemTop(it) { return HEADER_OFFSET + it.lane * LANE_H }
+function itemLeftPct(it) { return (it.startCol / 7) * 100 }
+function itemWidthPct(it) { return ((it.endCol - it.startCol + 1) / 7) * 100 }
+function moreTop() { return HEADER_OFFSET + MAX_LANES * LANE_H }
+
+// 그날 일정 전체 (모달/더보기용)
+function eventsOnDay(iso) {
+  return events.value.filter((e) => {
+    const s = dateStr(e.start)
+    if (!s) return false
+    const en = dateStr(e.end) || s
+    return iso >= s && iso <= en
+  })
+}
+
+// 캘린더 격자 + 주별 레인 배치
 const calendarWeeks = computed(() => {
   const year = currentYear.value
   const month = currentMonth.value - 1
@@ -131,79 +197,78 @@ const calendarWeeks = computed(() => {
   startDate.setDate(startDate.getDate() - startDate.getDay())
 
   const weeks = []
-  let current = new Date(startDate)
+  const current = new Date(startDate)
 
   while (current <= lastDayOfMonth || current.getDay() !== 0) {
-    const week = { days: [], events: [], extraByDay: [0,0,0,0,0,0,0] }
+    const days = []
     for (let i = 0; i < 7; i++) {
-      const dateStr = fmtIso(current)
-      week.days.push({
-        date: dateStr,
+      days.push({
+        date: fmtIso(current),
         dayOfMonth: current.getDate(),
         dayOfWeek: current.getDay(),
         isCurrentMonth: current.getMonth() === month,
       })
       current.setDate(current.getDate() + 1)
     }
+    const weekStart = days[0].date
+    const weekEnd = days[6].date
 
-    const weekStart = new Date(week.days[0].date)
-    const weekEnd = new Date(week.days[6].date)
-    const slots = []
-
-    // sort events by start date for deterministic placement
-    const sorted = [...events.value].sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''))
-    sorted.forEach(evt => {
-      const evtStart = new Date(evt.start)
-      const evtEnd = new Date(evt.end)
-      if (!(evtStart <= weekEnd && evtEnd >= weekStart)) return
-
-      const startOffset = evtStart < weekStart
-        ? 0
-        : Math.max(0, week.days.findIndex(d => d.date === evt.start))
-      const endIdx = week.days.findIndex(d => d.date === evt.end)
-      const endOffset = endIdx === -1 ? 6 : Math.min(6, endIdx)
-      const span = endOffset - startOffset + 1
-
-      let slotIndex = 0
-      while (slots[slotIndex] && slots[slotIndex].some(s => !(startOffset > s.end || startOffset + span - 1 < s.start))) {
-        slotIndex++
-      }
-
-      if (!slots[slotIndex]) slots[slotIndex] = []
-      slots[slotIndex].push({ start: startOffset, end: startOffset + span - 1 })
-
-      week.events[slotIndex] = week.events[slotIndex] || []
-      week.events[slotIndex].push({
-        ...evt,
-        isVisible: true,
-        startOffset,
-        span,
-        slotIndex,
+    // 이 주에 걸치는 이벤트 → 컬럼 범위/종류 계산
+    const inWeek = []
+    for (const e of events.value) {
+      const s = dateStr(e.start)
+      if (!s) continue
+      const en = dateStr(e.end) || s
+      if (s > weekEnd || en < weekStart) continue
+      const startIdx = s <= weekStart ? 0 : days.findIndex((d) => d.date === s)
+      const endIdx = en >= weekEnd ? 6 : days.findIndex((d) => d.date === en)
+      const startCol = startIdx < 0 ? 0 : startIdx
+      const endCol = endIdx < 0 ? 6 : Math.max(startCol, endIdx)
+      inWeek.push({
+        ev: e,
+        bar: isBarEvent(e),
+        startCol,
+        endCol,
+        continuesLeft: s < weekStart,
+        continuesRight: en > weekEnd,
+        isStartSegment: s >= weekStart,
       })
+    }
+
+    // 정렬: 막대 먼저(시작 컬럼 → 긴 것 우선), 그다음 시간 이벤트(시작 시각순)
+    inWeek.sort((a, b) => {
+      if (a.bar !== b.bar) return a.bar ? -1 : 1
+      if (a.bar) {
+        if (a.startCol !== b.startCol) return a.startCol - b.startCol
+        return (b.endCol - b.startCol) - (a.endCol - a.startCol)
+      }
+      return (a.ev.start ?? '').localeCompare(b.ev.start ?? '')
     })
 
-    // overflow per day — slots beyond MAX_VISIBLE_PER_WEEK 모두 +N개로 합침
-    for (let s = MAX_VISIBLE_PER_WEEK; s < slots.length; s++) {
-      ;(slots[s] ?? []).forEach(seg => {
-        for (let d = seg.start; d <= seg.end; d++) week.extraByDay[d] += 1
-      })
+    // 레인 배정 — 같은 컬럼 범위가 겹치지 않는 가장 낮은 레인
+    const lanes = []
+    for (const it of inWeek) {
+      let L = 0
+      while (lanes[L] && lanes[L].some((seg) => !(it.endCol < seg[0] || it.startCol > seg[1]))) L++
+      if (!lanes[L]) lanes[L] = []
+      lanes[L].push([it.startCol, it.endCol])
+      it.lane = L
     }
-    // 상위 슬롯만 표시할 이벤트로 flatten
-    const visible = []
-    for (let i = 0; i < Math.min(MAX_VISIBLE_PER_WEEK, slots.length); i++) {
-      if (week.events[i]) week.events[i].forEach(e => visible.push(e))
-      else visible.push({ id: `empty-${i}`, isVisible: false, slotIndex: i })
+
+    // 가시 레인 / 컬럼별 초과 개수
+    const extraByCol = [0, 0, 0, 0, 0, 0, 0]
+    const items = []
+    for (const it of inWeek) {
+      if (it.lane < MAX_LANES) {
+        items.push(it)
+      } else {
+        for (let c = it.startCol; c <= it.endCol; c++) extraByCol[c] += 1
+      }
     }
-    week.events = visible
-    weeks.push(week)
+    weeks.push({ days, items, extraByCol })
   }
   return weeks
 })
-
-// 그날 일정 전체 (모달용)
-function eventsOnDay(iso) {
-  return events.value.filter(e => e.start && e.end && iso >= e.start && iso <= e.end)
-}
 </script>
 
 <template>
@@ -245,7 +310,7 @@ function eventsOnDay(iso) {
 
     <div class="main-cal__grid">
       <div v-for="(week, wi) in calendarWeeks" :key="wi" class="main-cal__week">
-        <!-- 셀 (mini-card surface + 날짜 원 + 빈 영역 클릭) -->
+        <!-- 배경 셀 (날짜 숫자 + 드롭 타깃) -->
         <div
           v-for="day in week.days"
           :key="day.date"
@@ -269,7 +334,6 @@ function eventsOnDay(iso) {
                 'main-cal__date--out': !day.isCurrentMonth,
               }"
             >{{ day.dayOfMonth }}</span>
-            <!-- + 버튼 (셀 우측 상단, hover 시 노출) -->
             <button
               v-if="day.isCurrentMonth"
               type="button"
@@ -280,65 +344,58 @@ function eventsOnDay(iso) {
           </div>
         </div>
 
-        <!-- 이벤트 막대 오버레이 (multi-day = single bar spanning cells) -->
-        <div class="main-cal__events">
-          <div
-            v-for="(ev, idx) in week.events"
-            :key="ev.id"
-            class="main-cal__event-row"
-            :style="{ top: (idx * 26) + 'px' }"
-          >
-            <div
-              v-if="ev.isVisible"
-              class="main-cal__event"
-              :class="[ev.customColor ? '' : ev.colorClass, { 'main-cal__event--dragging': dragState?.event?.id === ev.id }]"
-              :style="{
-                marginLeft: `calc(${(ev.startOffset / 7) * 100}% + 6px)`,
-                width: `calc(${(ev.span / 7) * 100}% - 12px)`,
-                ...(ev.customColor ? {
-                  background: ev.customColor,
-                  color: '#2D2649',
-                  borderColor: 'transparent',
-                } : {}),
-              }"
-              draggable="true"
-              @click.stop="emit('event-click', ev)"
-              @mouseenter="onEventHover(ev, $event)"
-              @mouseleave="onEventLeave"
-              @dragstart="onEventDragStart(ev, $event, 'move')"
-              @dragend="onDragEnd"
-            >
-              <!-- 좌측 리사이즈 핸들 -->
-              <span
-                class="main-cal__event-handle main-cal__event-handle--start"
-                draggable="true"
-                @dragstart.stop="onEventDragStart(ev, $event, 'resize-start')"
-                @dragend.stop="onDragEnd"
-                @click.stop
-              ></span>
-              <span v-if="ev.icon" class="main-cal__event-icon">{{ ev.icon }}</span>{{ ev.title }}
-              <!-- 우측 리사이즈 핸들 -->
-              <span
-                class="main-cal__event-handle main-cal__event-handle--end"
-                draggable="true"
-                @dragstart.stop="onEventDragStart(ev, $event, 'resize-end')"
-                @dragend.stop="onDragEnd"
-                @click.stop
-              ></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- "+N more" 칩 (셀 하단) -->
-        <div class="main-cal__extras">
+        <!-- 이벤트 오버레이 (막대 + 시간 줄) -->
+        <div class="main-cal__lanes">
           <button
-            v-for="(extra, di) in week.extraByDay"
-            :key="di"
+            v-for="it in week.items"
+            :key="it.ev.id"
+            type="button"
+            class="main-cal__ev"
+            :class="[
+              it.bar ? 'main-cal__ev--bar' : 'main-cal__ev--timed',
+              {
+                'is-cont-left': it.continuesLeft,
+                'is-cont-right': it.continuesRight,
+                'main-cal__ev--dragging': dragState?.event?.id === it.ev.id,
+              },
+            ]"
+            :style="{
+              top: itemTop(it) + 'px',
+              left: 'calc(' + itemLeftPct(it) + '% + 4px)',
+              width: 'calc(' + itemWidthPct(it) + '% - 8px)',
+              ...(it.bar ? { background: barBg(it.ev) } : {}),
+            }"
+            draggable="true"
+            @click.stop="emit('event-click', it.ev)"
+            @mouseenter="onEventHover(it.ev, $event)"
+            @mouseleave="onEventLeave"
+            @dragstart="onEventDragStart(it.ev, $event, 'move')"
+            @dragend="onDragEnd"
+          >
+            <template v-if="it.bar">
+              <span
+                v-if="it.isStartSegment && !isAllDayLike(it.ev)"
+                class="main-cal__ev-time"
+              >{{ fmtKoTime(it.ev.start) }}</span>
+              <span class="main-cal__ev-title">{{ it.ev.title }}</span>
+            </template>
+            <template v-else>
+              <span class="main-cal__ev-dot" :style="{ background: dotColor(it.ev) }" />
+              <span class="main-cal__ev-time">{{ fmtKoTime(it.ev.start) }}</span>
+              <span class="main-cal__ev-title">{{ displayTitle(it.ev) }}</span>
+            </template>
+          </button>
+
+          <!-- 컬럼별 "+N 더보기" -->
+          <button
+            v-for="(extra, di) in week.extraByCol"
             v-show="extra > 0"
+            :key="'more-' + di"
+            type="button"
             class="main-cal__more"
-            :style="{ left: `calc(${(di / 7) * 100}% + 6px)`, width: `calc(${(1 / 7) * 100}% - 12px)` }"
+            :style="{ top: moreTop() + 'px', left: 'calc(' + (di / 7) * 100 + '% + 6px)', width: 'calc(' + (1 / 7) * 100 + '% - 10px)' }"
             @click.stop="emit('more-click', { date: week.days[di].date, events: eventsOnDay(week.days[di].date) })"
-          >+{{ extra }} more</button>
+          >+{{ extra }} 더보기</button>
         </div>
       </div>
     </div>
@@ -462,63 +519,49 @@ function eventsOnDay(iso) {
 .main-cal__dow-cell--sun { color: #C0837A; }
 .main-cal__dow-cell--sat { color: var(--lp-primary-strong); }
 
-/* ═══ Grid: 7×6 rounded mini-cards ═══ */
+/* ═══ Grid: 구글식 7×N 플러시 셀 (얇은 격자선) ═══ */
 .main-cal__grid {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-top: 1px solid var(--lp-border);
+  border-left: 1px solid var(--lp-border);
+  border-radius: 10px;
 }
 .main-cal__week {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  /* gap intentionally 0: event bars use % of week width and must align to columns */
-  gap: 0;
-  border-bottom: 0;
+  grid-template-rows: 1fr;
   position: relative;
-  min-height: 0;
+  min-height: 132px;
 }
 
 .main-cal__cell {
-  padding: 3px;
-  border: 0;
-  background: transparent;
   position: relative;
-  transition: background 0.18s;
-  overflow: hidden;
-  min-height: 96px;
-}
-.main-cal__cell::before {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: 14px;
+  border-right: 1px solid var(--lp-border);
+  border-bottom: 1px solid var(--lp-border);
   background: var(--lp-surface);
-  box-shadow: inset 0 0 0 1px rgba(229, 221, 240, .55);
-  z-index: 0;
-  transition: box-shadow 0.18s ease, background 0.18s;
+  transition: background 0.15s;
+  overflow: hidden;
 }
-.main-cal__cell:hover::before {
-  box-shadow:
-    inset 0 0 0 1px rgba(229, 221, 240, .9),
-    0 6px 18px rgba(63,52,99,.10);
-}
+.main-cal__cell--today { background: var(--lp-lime-soft, rgba(216,235,117,.16)); }
+.main-cal__cell--past .main-cal__date { opacity: 0.55; }
+.main-cal__cell--out .main-cal__date { opacity: 0.4; }
+.main-cal__cell--drag-over { box-shadow: inset 0 0 0 2px var(--lp-primary-strong); background: color-mix(in srgb, var(--lp-primary) 10%, transparent); }
+
 .main-cal__cell-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px 0;
+  padding: 5px 8px 0;
   position: relative;
-  z-index: 2;
+  z-index: 1;
 }
 .main-cal__add {
-  position: relative;
-  top: auto;
-  right: auto;
-  width: 20px;
-  height: 20px;
+  width: 20px; height: 20px;
   border: 0;
   background: color-mix(in srgb, var(--lp-primary) 22%, transparent);
   color: var(--lp-primary-strong);
@@ -526,171 +569,64 @@ function eventsOnDay(iso) {
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s, background 0.15s, transform 0.1s;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 5;
-  padding: 0;
+  font-size: 14px; font-weight: 700; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 5; padding: 0;
 }
 .main-cal__cell:hover .main-cal__add { opacity: 1; }
-.main-cal__add:hover {
-  background: var(--lp-button-bg);
-  color: #fff;
-  transform: scale(1.10);
-}
+.main-cal__add:hover { background: var(--lp-button-bg); color: #fff; transform: scale(1.10); }
 
-/* Today cell: lime soft gradient + accent disc */
-.main-cal__cell--today::before {
-  background:
-    radial-gradient(circle at 14px 14px, rgba(216,235,117,.55) 0, rgba(216,235,117,.18) 24px, transparent 70px),
-    linear-gradient(180deg, var(--lp-lime-soft) 0%, var(--lp-surface) 65%);
-  box-shadow: inset 0 0 0 1px rgba(216, 235, 117, .9);
-}
-
-/* Past / adjacent-month — keep concepts, photo-style treatment */
-.main-cal__cell--past .main-cal__date { opacity: 0.55; }
-.main-cal__cell--out::before {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px rgba(229, 221, 240, .28);
-}
-.main-cal__cell--out .main-cal__date { opacity: 0.45; }
-
-.main-cal__cell--drag-over::before {
-  background: color-mix(in srgb, var(--lp-primary) 14%, transparent);
-  box-shadow: inset 0 0 0 2px var(--lp-primary-strong);
-}
-
-/* Date number: 14px weight 700, deep purple; today = 28px filled circle */
+/* Date number */
 .main-cal__date {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--lp-primary-deep);
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
-  padding: 0;
-  border-radius: 999px;
-  width: auto;
-  height: 22px;
-  min-width: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: var(--lp-text);
+  letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
+  padding: 0; border-radius: 999px;
+  width: auto; height: 22px; min-width: 22px;
   transition: background .2s, color .2s;
 }
 .main-cal__date--sun { color: #C0837A; }
 .main-cal__date--sat { color: var(--lp-primary-strong); }
 .main-cal__date--out { color: var(--lp-text-faint); }
 .main-cal__date--today {
-  background: var(--lp-button-bg);
-  color: #fff !important;
-  font-weight: 700;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  border-radius: 999px;
+  background: var(--lp-button-bg); color: #fff !important; font-weight: 700;
+  width: 26px; height: 26px; min-width: 26px; border-radius: 999px;
   box-shadow: 0 2px 6px rgba(63, 52, 99, 0.20);
 }
 
-/* ═══ Events overlay (Linear/Notion-style multi-day bars) ═══ */
-.main-cal__events {
-  position: absolute;
-  top: 32px;
-  left: 0;
-  right: 0;
-  bottom: 22px;
-  pointer-events: none;
-  overflow: hidden;
+/* ═══ 이벤트 오버레이 — 막대(bar) + 시간 줄(timed) ═══ */
+.main-cal__lanes { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.main-cal__ev {
+  position: absolute; height: 20px;
+  display: flex; align-items: center; gap: 5px;
+  padding: 0 7px;
+  font-size: 11px; font-weight: 600; line-height: 20px;
+  border: 0; border-radius: 5px; cursor: pointer; pointer-events: auto;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: transparent; color: var(--lp-text);
+  transition: filter 0.12s;
 }
-.main-cal__event-row {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 22px;
-}
-.main-cal__event {
-  display: block;
-  position: relative;
-  height: 22px;
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 14px;
-  border-radius: 8px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: auto;
-  cursor: pointer;
-  background: var(--lp-card-lavender-1);
-  color: var(--lp-violet-deep);
-  border: 0;
-  box-shadow: 0 1px 2px rgba(63,52,99,.05);
-  letter-spacing: -0.005em;
-  transition: margin-left 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.12s, box-shadow 0.15s;
-}
-.main-cal__event:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(63, 52, 99, 0.16);
-}
-.main-cal__event-icon { font-size: 11px; margin-right: 3px; }
-.main-cal__event--dragging { opacity: 0.45; }
+.main-cal__ev:hover { filter: brightness(0.95); }
+.main-cal__ev--bar { color: #2D2649; box-shadow: 0 1px 1px rgba(63,52,99,.10); }
+.main-cal__ev--bar.is-cont-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.main-cal__ev--bar.is-cont-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.main-cal__ev--dragging { opacity: 0.45; }
+.main-cal__ev-dot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
+.main-cal__ev-time { font-weight: 700; flex-shrink: 0; }
+.main-cal__ev--timed .main-cal__ev-time { color: var(--lp-text-muted); }
+.main-cal__ev--bar .main-cal__ev-time { opacity: 0.85; }
+.main-cal__ev-title { overflow: hidden; text-overflow: ellipsis; }
 
-/* 양쪽 리사이즈 핸들 */
-.main-cal__event-handle {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 6px;
-  cursor: ew-resize;
-  background: transparent;
-  z-index: 1;
-}
-.main-cal__event-handle--start {
-  left: 0;
-  border-top-left-radius: 8px;
-  border-bottom-left-radius: 8px;
-}
-.main-cal__event-handle--end {
-  right: 0;
-  border-top-right-radius: 8px;
-  border-bottom-right-radius: 8px;
-}
-.main-cal__event-handle:hover { background: rgba(63, 52, 99, 0.22); }
-
-/* +N more */
-.main-cal__extras {
-  position: absolute;
-  bottom: 4px;
-  left: 0;
-  right: 0;
-  height: 16px;
-  pointer-events: none;
-}
+/* +N 더보기 */
 .main-cal__more {
-  position: absolute;
-  height: 16px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--lp-primary-deep);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  pointer-events: auto;
-  border-radius: 6px;
-  text-align: left;
-  padding: 0 4px;
-  letter-spacing: 0.01em;
+  position: absolute; height: 18px;
+  font-size: 11px; font-weight: 600;
+  color: var(--lp-text-muted); background: transparent; border: 0;
+  cursor: pointer; pointer-events: auto;
+  padding: 0 4px; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.main-cal__more:hover {
-  background: color-mix(in srgb, var(--lp-primary) 14%, transparent);
-  color: var(--lp-violet-deep);
-}
+.main-cal__more:hover { color: var(--lp-primary-deep); }
 
 /* Hover preview tooltip */
 .hover-tip {
@@ -727,13 +663,13 @@ function eventsOnDay(iso) {
 .hover-fade-enter-from, .hover-fade-leave-to { opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .main-cal__cell, .main-cal__event { transition: none; }
+  .main-cal__cell, .main-cal__ev { transition: none; }
 }
 
 @media (max-width: 720px) {
   .main-cal { padding: 16px 14px 12px; border-radius: 18px; }
   .main-cal__title, .lp-range-label { font-size: 15px; }
-  .main-cal__cell { min-height: 72px; border-radius: 12px; }
+  .main-cal__week { min-height: 110px; }
   .main-cal__date { font-size: 12px; }
   .main-cal__date--today { width: 24px; height: 24px; min-width: 24px; }
 }

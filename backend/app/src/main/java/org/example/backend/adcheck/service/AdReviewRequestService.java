@@ -1,6 +1,7 @@
 package org.example.backend.adcheck.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.backend.activity.service.CampaignActivityService;
 import org.example.backend.adcheck.model.AdCheckDto;
 import org.example.backend.adcheck.model.AdReviewRequest;
 import org.example.backend.adcheck.repository.AdReviewRequestRepository;
@@ -39,6 +40,7 @@ public class AdReviewRequestService {
     private final CampaignParticipantRepository campaignParticipantRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final CampaignActivityService activityService;
 
     public List<AdCheckDto.ReviewRequestRes> list(Long campaignId, AuthUserDetails authUser) {
         User caller = findUser(authUser);
@@ -117,6 +119,7 @@ public class AdReviewRequestService {
                 .requesterOrganizationName(organization != null ? organization.getName() : null)
                 .build());
         notificationService.notifyReviewRequested(saved, requester, findFinalReviewers(campaignId));
+        activityService.record(campaign, requester, "REVIEW_SUBMIT", "검수 요청 제출: " + fileName);
 
         return toResponse(saved);
     }
@@ -138,6 +141,7 @@ public class AdReviewRequestService {
                 normalize(req != null ? req.memo() : null)
         );
         notificationService.notifyReviewDecision(request, reviewer, findRequester(request), true);
+        activityService.record(request.getCampaign(), reviewer, "REVIEW_APPROVE", "검수 승인: " + request.getFileName());
         return toResponse(request);
     }
 
@@ -162,6 +166,7 @@ public class AdReviewRequestService {
 
         request.reject(reviewer.getId(), reviewer.getName(), reason);
         notificationService.notifyReviewDecision(request, reviewer, findRequester(request), false);
+        activityService.record(request.getCampaign(), reviewer, "REVIEW_REJECT", "검수 반려: " + request.getFileName());
         return toResponse(request);
     }
 

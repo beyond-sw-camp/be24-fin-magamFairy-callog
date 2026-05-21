@@ -15,12 +15,11 @@ const emit = defineEmits(['close', 'submit'])
 const store = useOrganizationKpiStore()
 
 const CATEGORY_OPTIONS = [
-  { value: 'OTHER', label: '기타' },
-  { value: 'IMPRESSION', label: '노출' },
-  { value: 'ENGAGEMENT', label: '참여' },
-  { value: 'CONVERSION', label: '전환' },
-  { value: 'REVENUE', label: '매출' },
+  { value: 'GROWTH', label: '성장' },
+  { value: 'FINANCIAL', label: '재무' },
   { value: 'BRAND', label: '브랜드' },
+  { value: 'OPERATIONAL', label: '운영' },
+  { value: 'SUSTAINABILITY', label: '지속가능성' },
 ]
 const ESG_OPTIONS = [
   { value: 'ENVIRONMENTAL', label: '환경 (E)' },
@@ -93,21 +92,41 @@ function emptyForm() {
     periodEnd: dates.end,
     targetValue: null,
     unit: '',
-    category: 'OTHER',
+    category: 'OPERATIONAL',
     esgEnabled: false,
     esgCategory: '',
     kind: props.defaultOwnerOrgType === 'HQ' ? 'STRATEGIC' : 'TACTICAL',
     status: 'DRAFT',
     achievabilityNote: '',
     templateId: null,
+    visibleToAffiliate: false,
   }
 }
+
+// 소유 조직 유형 (토글/매핑 강제 분기)
+const isHqOwner = computed(() => props.defaultOwnerOrgType === 'HQ')
+const isAffiliateOwner = computed(() => props.defaultOwnerOrgType === 'AFFILIATE')
 
 const form = reactive(emptyForm())
 const showAdvanced = ref(false)
 const showTemplate = ref(false)
 const submitError = ref('')
 const isSubmitting = ref(false)
+
+/* ───── 기간: 연도 + 분기 버튼 선택 ───── */
+const pickerYear = ref(new Date().getFullYear())
+function pickPeriod(q) {
+  if (q === 'FY') {
+    form.periodCode = `${pickerYear.value}-FY`
+    form.periodType = 'ANNUAL'
+  } else {
+    form.periodCode = `${pickerYear.value}-Q${q}`
+    form.periodType = 'QUARTERLY'
+  }
+  const d = derivePeriodDates(form.periodCode)
+  form.periodStart = d.start
+  form.periodEnd = d.end
+}
 
 watch(
   () => [props.mode, props.initialValues],
@@ -134,8 +153,16 @@ watch(
       }
     } else {
       Object.assign(form, emptyForm())
+      // 계열사 상위 KPI는 상단에 별도 표시 → 더보기는 기본 접힘
       showAdvanced.value = false
     }
+    // 계열사면 상위(본사) KPI 후보 미리 로드
+    if (isAffiliateOwner.value && form.ownerOrgId) {
+      void store.fetchParentCandidates(form.ownerOrgId)
+    }
+    // 기간 버튼 UI 연도 동기화
+    const yr = parseInt(String(form.periodCode || '').slice(0, 4))
+    if (!Number.isNaN(yr)) pickerYear.value = yr
     submitError.value = ''
   },
   { immediate: true, deep: true },
@@ -184,6 +211,10 @@ const validation = computed(() => {
     if (!form.periodStart) errs.periodStart = '시작일을 선택해 주세요.'
     if (!form.periodEnd) errs.periodEnd = '종료일을 선택해 주세요.'
   }
+  // 계열사 KPI 는 반드시 본사(상위) KPI 에 매핑되어야 함
+  if (isAffiliateOwner.value && !form.parentKpiId) {
+    errs.parentKpiId = '계열사 KPI는 본사 KPI에 매핑해야 합니다.'
+  }
   return errs
 })
 
@@ -194,8 +225,8 @@ async function applyTemplate(template) {
   form.templateId = template.idx
   if (template.name && !form.name) form.name = template.name
   if (template.defaultUnit && !form.unit) form.unit = template.defaultUnit
-  // category는 default 'OTHER'라 사용자가 안 바꿨으면 템플릿 값으로 override
-  if (template.defaultCategory && (!form.category || form.category === 'OTHER')) {
+  // category는 default 'OPERATIONAL'라 사용자가 안 바꿨으면 템플릿 값으로 override
+  if (template.defaultCategory && (!form.category || form.category === 'OPERATIONAL')) {
     form.category = template.defaultCategory
   }
   if (template.defaultKind) form.kind = template.defaultKind
@@ -242,6 +273,8 @@ async function submit() {
       esgCategory: form.esgEnabled && form.esgCategory ? form.esgCategory : null,
       achievabilityNote: form.achievabilityNote?.trim() || null,
       templateId: form.templateId || null,
+      // HQ 소유일 때만 계열사 노출 토글 전송 (그 외는 false)
+      visibleToAffiliate: isHqOwner.value ? !!form.visibleToAffiliate : false,
     }
     emit('submit', payload)
   } finally {
@@ -296,6 +329,37 @@ const parentOptions = computed(() => store.parentCandidates ?? [])
         </div>
 
         <form class="kpi-modal__body" @submit.prevent="submit">
+          <!-- ─── 계열사: 상위 본사 KPI 매핑 (필수, 최상단) ─── -->
+          <div v-if="isAffiliateOwner" class="parent-map">
+            <div class="grid-2">
+              <div class="field-row">
+                <label class="lbl">
+                  <span>상위 본사 KPI <em class="hint-em" style="color: var(--danger-text-strong, #DC2626)">필수</em></span>
+                </label>
+                <select v-model="form.parentKpiId" class="fld">
+                  <option :value="null">— 본사 KPI 선택 —</option>
+                  <option v-for="p in parentOptions" :key="p.idx" :value="p.idx">
+                    {{ p.name }} ({{ p.periodCode }})
+                  </option>
+                </select>
+                <p v-if="validation.parentKpiId" class="err">{{ validation.parentKpiId }}</p>
+              </div>
+              <div class="field-row">
+                <label class="lbl"><span>약속 기여값 <em class="hint-em">상위에 기여하는 양</em></span></label>
+                <input
+                  v-model.number="form.contributionToParent"
+                  type="number"
+                  class="fld"
+                  :disabled="!form.parentKpiId"
+                  placeholder="예: 30"
+                />
+              </div>
+            </div>
+            <p v-if="!parentOptions.length" class="hint">
+              본사가 노출(ON)한 KPI가 없습니다. 본사에서 먼저 KPI를 만들고 "계열사에 노출"을 켜야 합니다.
+            </p>
+          </div>
+
           <!-- ─── 필수 4개 ─── -->
           <div class="field-row">
             <label class="lbl"><span>이름</span></label>
@@ -343,30 +407,41 @@ const parentOptions = computed(() => store.parentCandidates ?? [])
 
           <div class="field-row">
             <label class="lbl"><span>기간</span></label>
-            <select v-model="form.periodSelect" class="fld">
-              <option v-for="opt in PERIOD_OPTIONS" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
-            <!-- CUSTOM 모드일 때만 코드 + 날짜 입력 -->
-            <div v-if="isCustomPeriod" class="custom-period">
-              <input
-                v-model="form.periodCode"
-                type="text"
-                class="fld"
-                placeholder="기간 코드 (예: 2026-H1)"
-              />
-              <div class="dual-input">
-                <input v-model="form.periodStart" type="date" class="fld" />
-                <input v-model="form.periodEnd" type="date" class="fld" />
+            <div class="period-picker">
+              <div class="pp-year">
+                <button type="button" class="pp-step" aria-label="이전 연도" @click="pickerYear -= 1">‹</button>
+                <span class="pp-year__label">{{ pickerYear }}년</span>
+                <button type="button" class="pp-step" aria-label="다음 연도" @click="pickerYear += 1">›</button>
               </div>
-              <p v-if="validation.periodCode" class="err">{{ validation.periodCode }}</p>
-              <p v-if="validation.periodStart" class="err">{{ validation.periodStart }}</p>
-              <p v-if="validation.periodEnd" class="err">{{ validation.periodEnd }}</p>
+              <div class="pp-grid">
+                <button
+                  v-for="q in [1, 2, 3, 4]"
+                  :key="'q' + q"
+                  type="button"
+                  class="pp-cell"
+                  :class="{ 'is-active': form.periodCode === `${pickerYear}-Q${q}` }"
+                  @click="pickPeriod(q)"
+                >{{ q }}분기</button>
+                <button
+                  type="button"
+                  class="pp-cell pp-cell--fy"
+                  :class="{ 'is-active': form.periodCode === `${pickerYear}-FY` }"
+                  @click="pickPeriod('FY')"
+                >연간</button>
+              </div>
             </div>
-            <p v-else class="hint">
-              {{ form.periodStart }} ~ {{ form.periodEnd }} (자동 계산)
+            <p class="hint">
+              {{ form.periodCode }} · {{ form.periodStart }} ~ {{ form.periodEnd }}
             </p>
+          </div>
+
+          <!-- ─── HQ 전용: 계열사 노출 토글 ─── -->
+          <div v-if="isHqOwner" class="visible-toggle">
+            <label class="esg-toggle">
+              <input type="checkbox" v-model="form.visibleToAffiliate" />
+              <span>계열사에 노출</span>
+            </label>
+            <p class="hint">켜면 계열사가 이 본사 KPI를 자기 목표의 상위로 매핑할 수 있습니다.</p>
           </div>
 
           <!-- ─── 더보기 (옵션) ─── -->
@@ -384,8 +459,8 @@ const parentOptions = computed(() => store.parentCandidates ?? [])
           </button>
 
           <div v-if="showAdvanced" class="advanced">
-            <!-- 상위 KPI cascade -->
-            <div class="grid-2">
+            <!-- 상위 KPI cascade (계열사는 상단에 별도 표시하므로 여기선 비계열사만) -->
+            <div v-if="!isAffiliateOwner" class="grid-2">
               <div class="field-row">
                 <label class="lbl">
                   <span>상위 KPI <em class="hint-em">선택 — 자체 목표면 비워두세요</em></span>
@@ -616,6 +691,70 @@ const parentOptions = computed(() => store.parentCandidates ?? [])
 }
 .custom-period { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 
+/* 기간: 연도 + 분기 버튼 */
+.period-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--panel-muted);
+}
+.pp-year {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.pp-year__label {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 64px;
+  text-align: center;
+}
+.pp-step {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-color);
+  color: var(--color-primary-700);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+}
+.pp-step:hover { background: var(--color-primary-50); }
+.pp-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.pp-cell {
+  padding: 9px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.pp-cell:hover { background: var(--color-primary-50); color: var(--color-primary-700); }
+.pp-cell.is-active {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-500);
+  color: #fff;
+}
+@media (max-width: 480px) {
+  .pp-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
 .hint {
   font-size: 11px;
   color: var(--muted-text);
@@ -665,6 +804,24 @@ const parentOptions = computed(() => store.parentCandidates ?? [])
   font-weight: 700;
   color: var(--text-primary);
   cursor: pointer;
+}
+.visible-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--color-primary-50);
+  border: 1px solid color-mix(in srgb, var(--color-primary-500) 18%, transparent);
+  border-radius: 10px;
+}
+.parent-map {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  background: var(--color-primary-50);
+  border: 1px solid color-mix(in srgb, var(--color-primary-500) 22%, transparent);
+  border-radius: 12px;
 }
 .esg-toggle input { width: 14px; height: 14px; cursor: pointer; }
 
