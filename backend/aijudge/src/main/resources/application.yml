@@ -48,6 +48,7 @@ custom:
   layout:
     url: ${LAYOUT_SERVICE_URL:http://localhost:8001/v1/layout/analyze}
   mongodb:
+    analysis-enabled: ${MONGODB_STD_ENABLED:false}
     analysis-uri: ${MONGODB_STD_URL:}
     analysis-database: ${MONGODB_STD_DATABASE:}
     analysis-collection: ${MONGODB_STD_COLLECTION:ad_check_analysis_results}

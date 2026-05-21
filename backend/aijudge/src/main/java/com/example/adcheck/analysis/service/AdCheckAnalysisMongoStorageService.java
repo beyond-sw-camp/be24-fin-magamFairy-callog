@@ -26,6 +26,9 @@ public class AdCheckAnalysisMongoStorageService {
     @Value("${custom.mongodb.analysis-uri:}")
     private String analysisUri;
 
+    @Value("${custom.mongodb.analysis-enabled:false}")
+    private boolean analysisEnabled;
+
     @Value("${custom.mongodb.analysis-database:}")
     private String analysisDatabase;
 
@@ -57,7 +60,7 @@ public class AdCheckAnalysisMongoStorageService {
     }
 
     private boolean isEnabled() {
-        return StringUtils.hasText(analysisUri);
+        return analysisEnabled && StringUtils.hasText(analysisUri);
     }
 
     private synchronized MongoCollection<Document> collection() {
