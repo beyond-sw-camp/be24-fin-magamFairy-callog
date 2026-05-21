@@ -178,43 +178,10 @@ public class AdCheckService {
     }
 
     public AdCheckDto.FileCheckRes checkFileWithAiJudge(MultipartFile file) {
-        long totalStartedAt = System.nanoTime();
         try {
-            AdCheckFileStorageService.StoredFile storedFile = adCheckFileStorageService.upload(file);
-            TextExtractorService.ExtractResult extraction = textExtractorService.extractWithTiming(file);
-            long aiStartedAt = System.nanoTime();
-
-            try {
-                AdCheckDto.Res result = checkWithAiJudge(extraction.text());
-                long aiAnalysisMillis = elapsedMillis(aiStartedAt);
-                return AdCheckDto.FileCheckRes.of(
-                        file.getOriginalFilename(),
-                        storedFile.getObjectKey(),
-                        storedFile.getViewUrl(),
-                        storedFile.getContentType(),
-                        storedFile.getFileSize(),
-                        extraction.text(),
-                        result,
-                        extraction.extractionMode(),
-                        buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt)
-                );
-            } catch (RuntimeException e) {
-                long aiAnalysisMillis = elapsedMillis(aiStartedAt);
-                AdCheckDto.FileCheckRes partialResponse = AdCheckDto.FileCheckRes.builder()
-                        .fileName(file.getOriginalFilename())
-                        .fileObjectKey(storedFile.getObjectKey())
-                        .fileUrl(storedFile.getViewUrl())
-                        .fileContentType(storedFile.getContentType())
-                        .fileSize(storedFile.getFileSize())
-                        .extractedText(extraction.text())
-                        .extractionMode(extraction.extractionMode())
-                        .processingTimes(buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt))
-                        .errorMessage(e.getMessage())
-                        .build();
-                throw new FileCheckException(e.getMessage(), partialResponse, e);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("File processing failed.", e);
+            return aiJudgeClient.checkFile(file);
+        } catch (AiJudgeClient.FileCheckRemoteException e) {
+            throw new FileCheckException(e.getMessage(), e.getResponse(), e);
         }
     }
 

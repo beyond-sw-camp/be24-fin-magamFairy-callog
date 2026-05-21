@@ -4,6 +4,17 @@ server:
 spring:
   application:
     name: ai-judge
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+aws:
+  s3:
+    bucket-name: ${AWS_BUCKET_NAME:callog-local}
+    access-key: ${AWS_ACCESS_KEY:dummy-access-key}
+    secret-key: ${AWS_SECRET_KEY:dummy-secret-key}
+    region: ${AWS_REGION:ap-northeast-2}
 
 management:
   endpoints:
@@ -18,5 +29,17 @@ ai-judge:
   n8n:
     webhook-url: ${N8N_URL:}
     check-endpoint: ${CHECK_ENDPOINT:}
+
+custom:
   ocr:
-    url: ${OCR_SERVICE_URL:}
+    url: ${OCR_SERVICE_URL:http://localhost:8000}
+    async-enabled: ${OCR_ASYNC_ENABLED:true}
+    job-url: ${OCR_JOB_SERVICE_URL:}
+    job-poll-interval-ms: ${OCR_JOB_POLL_INTERVAL_MS:1000}
+    job-poll-timeout-ms: ${OCR_JOB_POLL_TIMEOUT_MS:180000}
+  layout:
+    url: ${LAYOUT_SERVICE_URL:http://localhost:8001/v1/layout/analyze}
+  mongodb:
+    analysis-uri: ${MONGODB_STD_URL:}
+    analysis-database: ${MONGODB_STD_DATABASE:}
+    analysis-collection: ${MONGODB_STD_COLLECTION:ad_check_analysis_results}
