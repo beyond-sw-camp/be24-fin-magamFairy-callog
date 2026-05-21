@@ -33,7 +33,7 @@ export default defineConfig({
 
       // matching-evaluation 모듈로 가는 요청
       '/matching-evaluation-api': {
-        target: 'http://localhost:10030',
+        target: 'http://localhost:8082',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/matching-evaluation-api/, ''),
         secure: false,

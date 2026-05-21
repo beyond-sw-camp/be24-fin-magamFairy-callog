@@ -62,6 +62,13 @@ public class DashboardController {
         return ResponseEntity.ok(BaseResponse.success(aggregateService.reviewQueue(user.getIdx())));
     }
 
+    /** ⭐NEW: Zone3 P2 — 광고검수 요청 큐(REQUESTED) — 실제 승인/반려 대상(requestId+campaignId). */
+    @GetMapping("/ad-review-requests")
+    public ResponseEntity<BaseResponse> adReviewRequests(@AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.adReviewQueue(user.getIdx())));
+    }
+
     @GetMapping("/blockers")
     public ResponseEntity<BaseResponse> blockers(@AuthenticationPrincipal AuthUserDetails user) {
         requireAuth(user);
@@ -78,6 +85,37 @@ public class DashboardController {
     public ResponseEntity<BaseResponse> kpiCategories(@AuthenticationPrincipal AuthUserDetails user) {
         requireAuth(user);
         return ResponseEntity.ok(BaseResponse.success(aggregateService.kpiCategories(user.getIdx())));
+    }
+
+    /** ⭐NEW: Zone1 P1 우 — 내 참여 캠페인의 최근 활동 피드 (최신순 ~20건). */
+    @GetMapping("/recent-activity")
+    public ResponseEntity<BaseResponse> recentActivity(@AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.recentActivity(user.getIdx())));
+    }
+
+    /** ⭐NEW: Zone4 P1 — 내 캠페인 status별 count 퍼널. */
+    @GetMapping("/campaign-pipeline")
+    public ResponseEntity<BaseResponse> campaignPipeline(@AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.campaignPipeline(user.getIdx())));
+    }
+
+    /** ⭐NEW: Zone2 — 내 캠페인 진척률 랭킹 (완료율 내림차순). */
+    @GetMapping("/campaign-progress")
+    public ResponseEntity<BaseResponse> campaignProgress(@AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.campaignProgress(user.getIdx())));
+    }
+
+    /** ⭐NEW: Zone4 P2 — 선택 연도/분기 월별 매출 YoY (올해 value + 전년 prev). */
+    @GetMapping("/revenue-yoy")
+    public ResponseEntity<BaseResponse> revenueYoY(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer quarter,
+            @AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.revenueYoY(user.getIdx(), year, quarter)));
     }
 
     private void requireAuth(AuthUserDetails user) {

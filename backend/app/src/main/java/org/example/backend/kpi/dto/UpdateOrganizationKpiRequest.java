@@ -22,5 +22,6 @@ public record UpdateOrganizationKpiRequest(
         KpiCategory category,
         EsgCategory esgCategory,
         GoalKind kind,
-        String achievabilityNote
+        String achievabilityNote,
+        Boolean visibleToAffiliate   // HQ KPI 계열사 노출 토글
 ) {}

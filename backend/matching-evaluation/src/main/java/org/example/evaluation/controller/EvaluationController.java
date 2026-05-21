@@ -23,7 +23,7 @@ public class EvaluationController {
             return ResponseEntity.ok(
                     BaseResponse.processing(
                             BaseResponseStatus.SUCCESS,
-                            evaluationService.getByCampaignIdx(campaignIdx)
+                            evaluationService.result(campaignIdx)
                     )
             );
         } catch (NoSuchElementException e) {
@@ -35,46 +35,27 @@ public class EvaluationController {
         }
     }
 
-    @GetMapping("/{sessionId}")
-    public ResponseEntity<BaseResponse> getEvaluationBySessionId(@PathVariable String sessionId) {
-        try {
-            EvaluationDocument document = evaluationService.getBySessionId(sessionId);
-            return ResponseEntity.ok(
-                    BaseResponse.processing(
-                            BaseResponseStatus.SUCCESS,
-                            EvaluationDto.MongoEvaluationRes.of(document)
-                    )
-            );
-        } catch (NoSuchElementException e) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT, e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        }
-    }
+//    @PostMapping("/collect")
+//    public ResponseEntity<BaseResponse> collect(@RequestBody EvaluationDto.SaveEvaluationReq dto) {
+//        try {
+//            EvaluationDocument saved = evaluationService.save(dto);
+//            return ResponseEntity.ok(
+//                    BaseResponse.processing(
+//                            BaseResponseStatus.SUCCESSFULY_EVALUATED,
+//                            EvaluationDto.MongoEvaluationRes.of(saved)
+//                    )
+//            );
+//        } catch (Exception e) {
+//            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
+//                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
+//        }
+//    }
 
-    @PostMapping("/collect")
-    public ResponseEntity<BaseResponse> collect(@RequestBody EvaluationDto.SaveEvaluationReq dto) {
-        try {
-            EvaluationDocument saved = evaluationService.save(dto);
-            return ResponseEntity.ok(
-                    BaseResponse.processing(
-                            BaseResponseStatus.SUCCESSFULY_EVALUATED,
-                            EvaluationDto.MongoEvaluationRes.of(saved)
-                    )
-            );
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        }
-    }
-
-    @PostMapping("/start")
-    public ResponseEntity<BaseResponse> start(@RequestBody EvaluationDto.StartEvaluationReq dto) {
-        evaluationService.startEvaluation(dto);
-
-        return ResponseEntity.accepted()
-                .body(BaseResponse.processing(BaseResponseStatus.EVLUATION_STARTED));
-    }
+//    @PostMapping("/start")
+//    public ResponseEntity<BaseResponse> start(@RequestBody EvaluationDto.StartEvaluationReq dto) {
+//        evaluationService.startEvaluation(dto);
+//
+//        return ResponseEntity.accepted()
+//                .body(BaseResponse.processing(BaseResponseStatus.EVLUATION_STARTED));
+//    }
 }

@@ -3,6 +3,7 @@ package org.example.backend.teamboard.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignParticipant;
 import org.example.backend.user.model.User;
 import org.springframework.data.annotation.CreatedDate;
@@ -27,10 +28,19 @@ public class Task {
     @Column(nullable = false, length = 200)
     private String name;
 
+    // 캠페인 직접 연결 (1급화) — taskPart/마일스톤 없이도 캠페인 소속 가능. 개인 업무는 null.
+    @Setter
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "campaign_id")
+    private Campaign campaign;
+
     // 참여사
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "participant_id")
     private CampaignParticipant participant;
+
+    // 시작일시 (선택) — 캘린더에서 시작~마감 시간 범위로 표시. null이면 dueDate 단일 시점.
+    private LocalDateTime startDate;
 
     // 마감일
     private LocalDateTime dueDate;
@@ -81,6 +91,7 @@ public class Task {
     public void update(
             String name,
             CampaignParticipant participant,
+            LocalDateTime startDate,
             LocalDateTime dueDate,
             TaskType taskType,
             TaskStatus status,
@@ -92,6 +103,7 @@ public class Task {
     ) {
         this.name = name;
         this.participant = participant;
+        this.startDate = startDate;
         this.dueDate = dueDate;
         this.taskType = taskType;
         this.status = status;

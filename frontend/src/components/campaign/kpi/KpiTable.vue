@@ -39,7 +39,7 @@
 defineProps({ items: Array, editable: Boolean })
 defineEmits(['editActual', 'editMeta', 'delete'])
 
-const CAT = { IMPRESSION: '노출도', ENGAGEMENT: '참여도', CONVERSION: '전환', REVENUE: '매출/ROI', BRAND: '브랜드', ESG: 'ESG', OTHER: '기타' }
+const CAT = { GROWTH: '성장', FINANCIAL: '재무', BRAND: '브랜드', OPERATIONAL: '운영', SUSTAINABILITY: '지속가능성' }
 const ST = { OVER: '초과달성', ACHIEVED: '달성', BEHIND: '미달', PENDING: '대기' }
 const categoryLabel = (c) => CAT[c] ?? c
 const statusLabel = (s) => ST[s] ?? s

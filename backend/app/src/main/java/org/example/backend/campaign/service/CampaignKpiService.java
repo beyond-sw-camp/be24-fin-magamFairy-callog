@@ -64,13 +64,14 @@ public class CampaignKpiService {
         int overall = measured.isEmpty() ? 0 :
                 (int) measured.stream().mapToInt(CampaignKpiDto.Res::achievementPercent).average().orElse(0);
 
+        // 상위범주 통합: 성장(GROWTH) 실적합 / 재무(FINANCIAL) 실적합
         BigDecimal totalImpression = items.stream()
-                .filter(r -> r.category() == KpiCategory.IMPRESSION && r.actualValue() != null)
+                .filter(r -> r.category() == KpiCategory.GROWTH && r.actualValue() != null)
                 .map(CampaignKpiDto.Res::actualValue)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal totalClicks = items.stream()
-                .filter(r -> r.category() == KpiCategory.ENGAGEMENT && r.actualValue() != null)
+                .filter(r -> r.category() == KpiCategory.FINANCIAL && r.actualValue() != null)
                 .map(CampaignKpiDto.Res::actualValue)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 

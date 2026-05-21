@@ -36,17 +36,23 @@ export const useTeamTaskStore = defineStore('teamTask', () => {
     return rate
   })
 
+  let inFlight = null
   async function fetch() {
-    if (loading.value) return
+    // 진행 중 요청이 있으면 그 Promise를 반환 (조용히 skip하지 않음 → awaiter가 최신값 보장)
+    if (inFlight) return inFlight
     loading.value = true
-    try {
-      const data = await ListAllTasks()
-      tasks.value = Array.isArray(data) ? data : []
-    } catch {
-      // 사이드바 카운트는 비필수 — 실패 시 무시
-    } finally {
-      loading.value = false
-    }
+    inFlight = (async () => {
+      try {
+        const data = await ListAllTasks()
+        tasks.value = Array.isArray(data) ? data : []
+      } catch {
+        // 사이드바 카운트는 비필수 — 실패 시 무시
+      } finally {
+        loading.value = false
+        inFlight = null
+      }
+    })()
+    return inFlight
   }
 
   return { tasks, loading, countByCampaignId, completionRateByCampaignId, fetch }

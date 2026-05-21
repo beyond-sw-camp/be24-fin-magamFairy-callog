@@ -72,8 +72,6 @@ spring:
       max-request-size: 20MB
 
   data:
-    mongodb:
-      uri: ${MONGODB_URL}
     # ─────────────────────────────────────────────────────────────────────
     # Redis (Bitnami Sentinel — callog-redis Service in redis-test namespace)
     #   - Sentinel 모드 전용 (master failover 자동 처리, HA)
@@ -155,3 +153,6 @@ management:
     tracing:
       endpoint: ${JAEGER_URL}
       transport: http
+msa:
+  matching-evaluation:
+    base-url: ${EVALUATION_URL}

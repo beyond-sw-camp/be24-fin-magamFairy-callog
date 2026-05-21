@@ -39,6 +39,16 @@ public class OrganizationKpi {
     @Column(precision = 18, scale = 4)
     private BigDecimal contributionToParent;
 
+    /**
+     * 본사(HQ) KPI 를 계열사에게 노출할지 여부 (Task #4).
+     * true: 계열사가 이 KPI 를 매핑 후보로 조회 가능. 본사가 KPI 생성 시 토글.
+     * AFFILIATE/EXTERNAL_PARTNER 소유 KPI는 무의미 (기본 false).
+     */
+    @Setter
+    @Builder.Default
+    @Column(name = "visible_to_affiliate", nullable = false, columnDefinition = "boolean default false")
+    private Boolean visibleToAffiliate = false;
+
     @Setter
     @Column(nullable = false, length = 200)
     private String name;

@@ -1,6 +1,8 @@
 server:
   port: 8082
-
+  tomcat:
+    keep-alive-timeout: 60000
+    max-keep-alive-requests: -1
 spring:
   application:
     name: ai-evaluation
@@ -11,6 +13,9 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+  data:
+    mongodb:
+      uri: ${MONGODB_URL}
 
 management:
   endpoints:

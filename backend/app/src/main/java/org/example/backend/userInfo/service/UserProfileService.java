@@ -40,11 +40,6 @@ public class UserProfileService {
     private final TransactionTemplate transactionTemplate;
 
     @Transactional
-    public void ensureProfilesForExistingUsers() {
-        userRepository.findAll().forEach(this::ensureProfile);
-    }
-
-    @Transactional
     public UserProfile ensureProfile(User user) {
         if (user == null || user.getIdx() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "persisted user is required.");

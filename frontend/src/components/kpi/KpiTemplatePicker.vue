@@ -27,12 +27,11 @@ function handleApply(template) {
 
 function categoryLabel(category) {
   const map = {
-    IMPRESSION: '노출',
-    ENGAGEMENT: '참여',
-    CONVERSION: '전환',
-    REVENUE: '매출',
+    GROWTH: '성장',
+    FINANCIAL: '재무',
     BRAND: '브랜드',
-    OTHER: '기타',
+    OPERATIONAL: '운영',
+    SUSTAINABILITY: '지속가능성',
   }
   return map[category] ?? category
 }
