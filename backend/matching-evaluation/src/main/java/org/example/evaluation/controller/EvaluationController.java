@@ -18,7 +18,7 @@ public class EvaluationController {
     private final EvaluationService evaluationService;
 
     @GetMapping("/result")
-    public ResponseEntity<BaseResponse> getEvaluation(@RequestParam Long campaignIdx) {
+    public ResponseEntity<BaseResponse> getEvaluation(@RequestParam String campaignIdx) {
         try {
             return ResponseEntity.ok(
                     BaseResponse.processing(

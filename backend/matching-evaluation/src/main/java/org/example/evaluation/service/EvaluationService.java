@@ -1,195 +1,88 @@
 package org.example.evaluation.service;
 
-import com.mongodb.client.result.UpdateResult;
+import java.util.List;
+import java.util.NoSuchElementException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.backend.campaign.model.Campaign;
-import org.example.backend.campaign.model.CampaignDto;
-import org.example.backend.campaign.repository.CampaignRepository;
-import org.example.backend.matching.model.*;
-import org.example.backend.matching.model.evaluation.EvaluationDocument;
-import org.example.backend.matching.model.evaluation.EvaluationDto;
-import org.example.backend.matching.repository.*;
+import org.example.evaluation.model.EvaluationDocument;
+import org.example.evaluation.model.EvaluationDto;
+import org.example.evaluation.repository.EvaluationMongoRepository;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class EvaluationService {
-    private final EvaluationRepository evaluationRepository;
-    private final BenefitRepository benefitRepository;
-    private final CampaignRepository campaignRepository;
+
+    private final EvaluationMongoRepository evaluationMongoRepository;
     private final RestClient restClient;
 
     @Value("${custom.n8n.webhook-url}${custom.n8n.evaluation-endpoint}")
-    String n8nWebhookUrl;
+    private String n8nWebhookUrl;
 
     public void startEvaluation(EvaluationDto.StartEvaluationReq dto) {
-
-        PartnerBenefits requiredBenefit = benefitRepository.findById(dto.getBenefitIdx())
-                .orElseThrow(() -> new EntityNotFoundException("해당 Benefit을 찾을 수 없습니다. Benefit ID: " + dto.getBenefitIdx()));
-        Long campaignIdx = requiredBenefit.getCampaign().getIdx();
-        Campaign campaign = campaignRepository.findById(campaignIdx)
-                .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + campaignIdx));
-
-        EvaluationDto.StartEvaluation eval;
-        eval = EvaluationDto.StartEvaluation.builder()
-                .campaign(CampaignDto.Res.from(campaign))
-                .benefit(MatchingDto.BenefitRes.toDto(requiredBenefit))
-                .build();
+        if (dto == null) {
+            throw new IllegalArgumentException("평가 시작 요청이 비어 있습니다.");
+        }
 
         try {
             restClient.post()
                     .uri(n8nWebhookUrl)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(eval)
+                    .body(dto)
                     .retrieve()
-                    // 1. 응답을 받았지만 실패한 경우 (상태 코드 기반 세밀한 번역)
                     .onStatus(status -> status == HttpStatus.NOT_FOUND, (request, response) -> {
-                        throw new RuntimeException("n8n 엔드포인트를 찾을 수 없습니다.");
+                        throw new RuntimeException("n8n 평가 웹훅을 찾을 수 없습니다.");
                     })
                     .onStatus(status -> status.is5xxServerError(), (request, response) -> {
-                        throw new RuntimeException("n8n 서버 내부 처리 중 오류가 발생했습니다.");
+                        throw new RuntimeException("n8n 서버에서 평가 처리 중 오류가 발생했습니다.");
                     })
                     .body(String.class);
 
+            log.info("[Evaluation] n8n evaluation requested. campaignIdx={}", dto.getCampaignIdx());
         } catch (RestClientException e) {
-            // 2. 서버가 꺼져있거나 타임아웃 등 아예 통신 자체가 실패한 경우 (또는 onStatus에서 잡지 못한 나머지 RestClient 예외)
             throw new RuntimeException("n8n 서버와 연결할 수 없습니다.", e);
         }
     }
 
-    private final MongoTemplate mongoTemplate;
-
-//    @Transactional
-//    public void collect(EvaluationDto.CollectDto dto) {
-//        PartnerBenefits benefits = benefitRepository.findById(dto.getBenefitIdx())
-//                .orElseThrow(EntityNotFoundException::new);
-//        Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
-//                .orElseThrow(EntityNotFoundException::new);
-//
-//        String targetField = "evaluations." + dto.getCategory().toLowerCase();
-//
-//        Object evalData = switch (dto.getCategory()){
-//            case "CUSTOMER" -> ((EvaluationDto.CollectDto.Customer) dto).toEntity();
-//            case "REVENUE" -> ((EvaluationDto.CollectDto.Revenue) dto).toEntity();
-//            case "COST" -> ((EvaluationDto.CollectDto.Cost) dto).toEntity();
-//            case "OPERATION" -> ((EvaluationDto.CollectDto.Operation) dto).toEntity();
-//            case "BRAND" -> ((EvaluationDto.CollectDto.Brand) dto).toEntity();
-//            default -> throw new IllegalArgumentException("지원하지 않는 평가 카테고리입니다.");
-//        };
-//
-//        Query query = new Query(Criteria.where("sessionID").is(dto.getUuid()));
-//
-//        Update update =  new Update()
-//                .set(targetField, evalData)
-//                .setOnInsert("sessionId", dto.getUuid())
-//                .setOnInsert("campaignIdx", dto.getCampaignIdx())
-//                .setOnInsert("benefitIdx", dto.getBenefitIdx())
-//                .setOnInsert("goal",campaign.getGoals())
-//                .setOnInsert("assetDescription",campaign.getAssetDescription())
-//                .setOnInsert("title",benefits.getName())
-//                .setOnInsert("target",benefits.getTargetAudience())
-//                .setOnInsert("offer",benefits.getDescription())
-//                .setOnInsert("partner", benefits.getOrganization().getName())
-//                .setOnInsert("startedAt", LocalDateTime.now());
-//
-//        mongoTemplate.updateFirst(query, update, EvaluationDocument.class);
-//
-//        log.info("[Evaluation Collected] Session: {}, Category: {} updated", dto.getUuid(), dto.getCategory());
-//
-//        UpdateResult result = mongoTemplate.upsert(query, update, EvaluationDocument.class);
-//
-//        log.info("[MongoDB Upsert 영수증] Acknowledged: {}, Matched: {}, Modified: {}, UpsertedId: {}",
-//                result.wasAcknowledged(),
-//                result.getMatchedCount(),
-//                result.getModifiedCount(),
-//                result.getUpsertedId());
-
-//        String category = dto.getCategory();
-//        // 1. 현재 세션(Evaluation) 조회
-//        Evaluation evaluation = evaluationRepository.findBySessionId(dto.getUuid())
-//                .orElseGet(() -> {
-//                    Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
-//                            .orElseThrow(() -> new EntityNotFoundException("해당 Campaign을 찾을 수 없습니다. Campaign ID: " + dto.getCampaignIdx()));
-//                    PartnerBenefits benefits = benefitRepository.findById(dto.getBenefitIdx())
-//                            .orElseThrow(() -> new EntityNotFoundException("해당 Benefit을 찾을 수 없습니다. Benefit ID: " + dto.getBenefitIdx()));
-//                    Evaluation newEval = Evaluation.builder()
-//                            .sessionId(dto.getUuid())
-//                            .campaign(campaign)
-//                            .benefits(benefits)
-//                            .build();
-//                    return evaluationRepository.save(newEval);
-//                });
-//
-//        // 2. DTO를 해당 카테고리의 엔티티로 변환
-//        Object evalEntity = switch (category) {
-//            case "CUSTOMER" -> ((EvaluationDto.CollectDto.Customer) dto).toEntity();
-//            case "REVENUE" -> ((EvaluationDto.CollectDto.Revenue) dto).toEntity();
-//            case "COST" -> ((EvaluationDto.CollectDto.Cost) dto).toEntity();
-//            case "OPERATION" -> ((EvaluationDto.CollectDto.Operation) dto).toEntity();
-//            case "BRAND" -> ((EvaluationDto.CollectDto.Brand) dto).toEntity();
-//            default -> throw new IllegalArgumentException("잘못된 카테고리입니다.");
-//        };
-//
-//        // 3. 세션 엔티티에 데이터 연결 (Dirty Checking에 의해 자동 업데이트)
-//        evaluation.updateEval(evalEntity, category);
-//    }
-
-    public List<EvaluationDto.MongoEvaluationRes> result(String publicId) {
-
-
-        Query query = new Query(Criteria.where("campaignIdx").is(campaignIdx));
-        List<EvaluationDocument> evalDocs = mongoTemplate.find(query, EvaluationDocument.class);
-
-        if (evalDocs.isEmpty()) {
-            throw new EntityNotFoundException("해당 캠페인에 대한 평가 정보가 없습니다. CampaignIdx: " + campaignIdx);
+    public EvaluationDocument save(EvaluationDto.SaveEvaluationReq dto) {
+        if (dto == null) {
+            throw new IllegalArgumentException("평가 저장 요청이 비어 있습니다.");
+        }
+        if (dto.getSessionId() == null || dto.getSessionId().isBlank()) {
+            throw new IllegalArgumentException("sessionId 값은 필수입니다.");
         }
 
-        return evalDocs.stream()
+        EvaluationDocument saved = evaluationMongoRepository.save(dto.toDocument());
+        log.info("[Evaluation] result saved. sessionId={}, campaignIdx={}",
+                saved.getSessionId(), saved.getCampaignIdx());
+        return saved;
+    }
+
+    public EvaluationDocument getBySessionId(String sessionId) {
+        return evaluationMongoRepository.findBySessionId(sessionId)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "해당 평가 세션을 찾을 수 없습니다. sessionId: " + sessionId
+                ));
+    }
+
+    public List<EvaluationDto.MongoEvaluationRes> getByCampaignIdx(String campaignIdx) {
+        List<EvaluationDocument> documents = evaluationMongoRepository.findAllByCampaignIdx(campaignIdx);
+
+        if (documents.isEmpty()) {
+            throw new NoSuchElementException(
+                    "해당 캠페인에 대한 평가 정보가 없습니다. campaignIdx: " + campaignIdx
+            );
+        }
+
+        return documents.stream()
                 .map(EvaluationDto.MongoEvaluationRes::of)
-                .collect(Collectors.toList());
-
-//        Long campaignIdx = campaignRepository.findByPublicId(publicId)
-//                .orElseThrow(() -> new EntityNotFoundException("해당 캠페인을 찾을 수 없습니다. publicId: " + publicId))
-//                .getIdx();
-//
-//       List<Evaluation> evaluations = evaluationRepository.findAllByCampaignIdx(campaignIdx);
-//
-//       if (evaluations.isEmpty()) {
-//           throw new EntityNotFoundException(("해당 캠페인에 대한 평가 정보가 없습니다. CampaignID: " + campaignIdx));
-//       }
-//
-//       return evaluations.stream()
-//               .map(evaluation -> {
-//                   PartnerBenefits benefits = evaluation.getBenefits();
-//                   Campaign campaign = benefits.getCampaign();
-//
-//                   return EvaluationDto.EvaluationRes.toDto(
-//                           campaign,
-//                           benefits,
-//                           evaluation,
-//                           user.getCompanyName()
-//                   );
-//               })
-//               .collect(Collectors.toList());
-
+                .toList();
     }
 }
-
-
-

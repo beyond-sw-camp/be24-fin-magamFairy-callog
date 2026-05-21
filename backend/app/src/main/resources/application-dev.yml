@@ -20,6 +20,13 @@ project:
 app:
   frontend-url: ${FRONTEND_URL}
   secure-cookie: ${SECURE_COOKIE}
+  kafka:
+    topics:
+      evaluation-start: evaluation.start
+      evaluation-collect: evaluation.collect
+msa:
+  matching-evaluation:
+    base-url: ${MATCHING_EVALUATION_BASE_URL:http://localhost:8082}
 aws:
   s3:
     bucket-name: ${AWS_BUCKET_NAME}
@@ -91,6 +98,9 @@ spring:
           min-idle: 2
           max-wait: 5000ms
         shutdown-timeout: 2000ms   # graceful shutdown 중 in-flight Redis 명령 정리 시간
+
+  kafka:
+    bootstrap-servers: localhost:9092
 
 logging:
   level:

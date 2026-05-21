@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: ai-evaluation
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: matching-evaluation
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 management:
   endpoints:
@@ -18,3 +25,9 @@ custom:
   n8n:
     webhook-url: ${N8N_URL}
     evaluation-endpoint: ${EVALUATION_ENDPOINT}
+
+app:
+  kafka:
+    topics:
+      evaluation-start: evaluation.start
+      evaluation-collect: evaluation.collect
