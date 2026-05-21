@@ -73,6 +73,25 @@ const props = defineProps({
     default: () => []
   }
 })
+const emit = defineEmits(['event-click'])
+
+// 항목(유형) 라벨 — 담당사명 대신 행이 무엇인지 표시
+function typeLabel(e) {
+  if (!e) return '항목'
+  if (e.type === 'milestone') return '마일스톤'
+  if (e.type === 'deadline') return '모집마감'
+  if (e.type === 'campaign') return '캠페인'
+  if (e.type === 'taskpart') return '업무파트'
+  if (e.type === 'task') return e.campaignId ? '업무' : '개인 업무'
+  return '항목'
+}
+const PRIO_LABEL = {
+  CRITICAL: '긴급', HIGH: '높음', MEDIUM: '보통', LOW: '낮음',
+  critical: '긴급', high: '높음', medium: '보통', low: '낮음',
+}
+function priorityLabel(e) {
+  return e?.priority ? (PRIO_LABEL[e.priority] ?? e.priority) : '—'
+}
 
 // events.value = props.eventsData;
 const events = computed(() => props.eventsData);
@@ -199,7 +218,7 @@ const getTodayLineStyle = () => {
             <div
               class="lp-frozen__head-cell lp-frozen__head-cell--manager"
               :style="{ width: leftColWidth + 'px' }"
-            >담당사명</div>
+            >항목</div>
             <div
               class="lp-frozen__head-cell lp-frozen__head-cell--name"
               :style="{ width: nameColWidth + 'px' }"
@@ -219,13 +238,13 @@ const getTodayLineStyle = () => {
               :style="{ width: leftColWidth + 'px' }"
             >
               <span class="lp-row__dot" :class="event.colorClass" aria-hidden="true"></span>
-              <span class="lp-row__manager-text truncate">{{ event.projectManager }}</span>
+              <span class="lp-row__manager-text truncate">{{ typeLabel(event) }}</span>
             </div>
             <div
               class="lp-row__name flex-shrink-0 flex items-center truncate"
               :style="{ width: nameColWidth + 'px' }"
             >
-              {{ event.title }}
+              {{ event.campaignName || event.title }}
             </div>
           </div>
 
@@ -291,11 +310,14 @@ const getTodayLineStyle = () => {
           <div
             v-for="(event, index) in events"
             :key="`bar-${event.id}`"
-            class="lp-bar absolute flex items-center px-3 z-10 overflow-hidden"
+            class="lp-bar absolute flex items-center px-3 z-10 overflow-hidden lp-bar--click"
             :class="event.colorClass"
             :style="getEventStyle(event, index)"
+            :title="`${event.title} · 우선순위: ${priorityLabel(event)}`"
+            @click="emit('event-click', event)"
           >
             <span class="lp-bar__title truncate">{{ event.title }}</span>
+            <span v-if="event.priority" class="lp-bar__prio">{{ priorityLabel(event) }}</span>
           </div>
 
           <!-- Today line -->
@@ -593,6 +615,21 @@ const getTodayLineStyle = () => {
   transform: translateY(-1px);
   box-shadow: var(--shadow-bar-hover);
   z-index: 12;
+}
+.lp-bar--click { cursor: pointer; }
+.lp-bar__prio {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--lp-violet-deep);
+  display: none;   /* 좁은 막대에선 숨김 (호버 title 로 확인) */
+}
+@container (min-width: 130px) {
+  .lp-bar__prio { display: inline-flex; }
 }
 .lp-bar__title {
   font-size: 12px;

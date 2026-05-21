@@ -39,7 +39,8 @@ public record OrganizationKpiDto(
         Long updatedBy,
         LocalDateTime updatedAt,
         Long approvedBy,
-        LocalDateTime approvedAt
+        LocalDateTime approvedAt,
+        Boolean visibleToAffiliate
 ) {
     public static OrganizationKpiDto from(OrganizationKpi k) {
         return new OrganizationKpiDto(
@@ -71,7 +72,8 @@ public record OrganizationKpiDto(
                 k.getUpdatedBy(),
                 k.getUpdatedAt(),
                 k.getApprovedBy(),
-                k.getApprovedAt()
+                k.getApprovedAt(),
+                k.getVisibleToAffiliate()
         );
     }
 }

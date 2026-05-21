@@ -10,6 +10,11 @@ import { ListCampaignMembers } from '@/api/campaigns'
 import VueApexCharts from 'vue3-apexcharts'
 import { gsap } from 'gsap'
 import { CountUp } from 'countup.js'
+import Zone1Today from '@/components/dashboard/Zone1Today.vue'
+import Zone2Ranking from '@/components/dashboard/Zone2Ranking.vue'
+import Zone3KpiReview from '@/components/dashboard/Zone3KpiReview.vue'
+import Zone4Flow from '@/components/dashboard/Zone4Flow.vue'
+import { useDashboardZonePrefs } from '@/composables/useDashboardZonePrefs'
 
 const ApexChart = VueApexCharts
 const notiStore = useNotificationsStore()
@@ -19,6 +24,9 @@ const router = useRouter()
 const authStore = useAuthStore()
 const dashboardStore = useDashboardStore()
 const teamTaskStore = useTeamTaskStore()
+
+/* Zone별 기본 페이지 개인설정 (localStorage dashboardZonePrefs) — 설정 패널에서 직접 편집 */
+const { prefs: zonePrefs } = useDashboardZonePrefs()
 
 /* ═══════════ 분기 헬퍼 ═══════════ */
 function currentQuarterCode() {
@@ -129,15 +137,15 @@ const orgScope = computed(() => {
   return 'HQ'
 })
 const orgScopeLabel = computed(() => ({
-  HQ: '본사 · 전사',
+  HQ: '본사 · 자기 조직',
   AFFILIATE: '계열사 · 자기 조직',
   EXTERNAL_PARTNER: '외부 파트너 · 참여 캠페인',
   STAFF: '실무자 · 본인 캠페인',
-}[orgScope.value] ?? '본사 · 전사'))
+}[orgScope.value] ?? '본사 · 자기 조직'))
 
 /* ═══════════ Row 1 — KPI 6-up (모든 value 0 default — 데이터 없으면 0 표시) ═══════════ */
 const TODAY_KPIS = [
-  { key: 'progress', label: '전사 진행률',   value: 0, unit: '%',  delta: '', deltaPositive: true,  icon: '📈', bg: '#E7E1FF', iconBg: '#9D85FF' },
+  { key: 'progress', label: '진행률',        value: 0, unit: '%',  delta: '', deltaPositive: true,  icon: '📈', bg: '#E7E1FF', iconBg: '#9D85FF' },
   { key: 'pass',     label: '검수 패스율',   value: 0, unit: '%',  delta: '', deltaPositive: true,  icon: '✅', bg: '#FFE8DD', iconBg: '#FF8A5C' },
   { key: 'match',    label: '매칭 평균 (5축)', value: 0, unit: '점', delta: '', deltaPositive: true,  icon: '🤝', bg: '#DCEEFA', iconBg: '#5DAFD8' },
   { key: 'asset',    label: '자산 LIVE',     value: 0, unit: '개',  delta: '', deltaPositive: true,  icon: '🛍', bg: '#D7EFDD', iconBg: '#6FBF87' },
@@ -158,14 +166,6 @@ const ROLE_KPI = computed(() => {
       const d = pctDelta(curr, cs?.progressPct ?? 0)
       delta = `${d >= 0 ? '+' : ''}${d}%`
       deltaPositive = d >= 0
-    } else if (
-      (orgScope.value === 'AFFILIATE' || orgScope.value === 'EXTERNAL_PARTNER')
-      && s?.companyAveragePct != null
-    ) {
-      // AFFILIATE/EXTERNAL GM: 전사 평균 대비 위치 표시
-      const diff = curr - s.companyAveragePct
-      delta = `전사 평균 ${s.companyAveragePct}% (${diff >= 0 ? '+' : ''}${diff}%p)`
-      deltaPositive = diff >= 0
     } else if (s?.trend != null && s.trend !== 0) {
       // Backend 가 실 비교 데이터 있을 때만 숫자 반환. null/0 이면 "지난주" 표시 생략.
       delta = `${s.trend >= 0 ? '+' : ''}${s.trend}%p 지난주`
@@ -295,7 +295,7 @@ const ROLE_CARD = computed(() => {
       }
     })
     const subtitleByScope = {
-      HQ:               `${currentPeriod.value} · 전사 OrgKpi 평균`,
+      HQ:               `${currentPeriod.value} · 본사 OrgKpi 평균`,
       AFFILIATE:        `${currentPeriod.value} · 우리 조직 OrgKpi 평균`,
       EXTERNAL_PARTNER: `${currentPeriod.value} · 참여 캠페인 KPI 평균`,
       STAFF:            `${currentPeriod.value} · 내 캠페인 KPI 평균`,
@@ -1180,7 +1180,7 @@ function buildSparklineOptions(direction) {
 
 
 const ZONE1_BY_SCOPE = computed(() => {
-  if (orgScope.value === 'HQ') return kpiCardsFromGoals(dashboardStore.quarterGoals, '전사 KPI')
+  if (orgScope.value === 'HQ') return kpiCardsFromGoals(dashboardStore.quarterGoals, '본사 KPI')
   if (orgScope.value === 'AFFILIATE') return kpiCardsFromGoals(dashboardStore.quarterGoals, '본사 KPI')
   if (orgScope.value === 'EXTERNAL_PARTNER') return kpiCardsFromGoals(dashboardStore.quarterGoals, '참여 KPI')
   return kpiCardsFromGoals(dashboardStore.quarterGoals, '내 KPI')
@@ -1461,11 +1461,11 @@ const ZONE4_SCOPE_SERIES = computed(() => {
 })
 
 const scopeLabelShort = computed(() => ({
-  HQ: '전사',
-  AFFILIATE: '본사',
+  HQ: '본사',
+  AFFILIATE: '우리 조직',
   EXTERNAL_PARTNER: '내 참여',
   STAFF: '내 담당',
-}[orgScope.value] ?? '전사'))
+}[orgScope.value] ?? '본사'))
 
 const ZONE4_TITLE = computed(() => ['성과 트래커', '캠페인 누적 추이', scopeLabelShort.value + ' 진행률'][zone4Page.value])
 const ZONE4_LEDE = computed(() => ['분기 매출 vs 목표 추이', '내 캠페인 누적 진행', '권한 스코프 평균 달성률'][zone4Page.value])
@@ -1866,48 +1866,47 @@ watch([zone3Page, zone3Granularity], () => {
             <!-- G. 섹션 표시/숨김 -->
             <div class="page-settings__h sub">표시할 섹션</div>
             <label class="page-settings__row tight">
-              <span class="page-settings__lbl">오늘의 작업 보드</span>
+              <span class="page-settings__lbl">오늘의 할 일 &amp; 활동</span>
               <input class="lp-switch" type="checkbox" v-model="sectionVisible.zone1" />
             </label>
             <label class="page-settings__row tight">
-              <span class="page-settings__lbl">Top5 협력사</span>
+              <span class="page-settings__lbl">내 캠페인 랭킹</span>
               <input class="lp-switch" type="checkbox" v-model="sectionVisible.zone2" />
             </label>
             <label class="page-settings__row tight">
-              <span class="page-settings__lbl">KPI 트래커</span>
+              <span class="page-settings__lbl">KPI &amp; 검수</span>
               <input class="lp-switch" type="checkbox" v-model="sectionVisible.zone3" />
             </label>
             <label class="page-settings__row tight">
-              <span class="page-settings__lbl">성과 트래커</span>
+              <span class="page-settings__lbl">흐름 (파이프라인 &amp; 매출)</span>
               <input class="lp-switch" type="checkbox" v-model="sectionVisible.zone4" />
             </label>
 
             <hr class="page-settings__div" />
 
-            <!-- H. 기본 페이지 -->
+            <!-- H. Zone별 기본 페이지 (localStorage dashboardZonePrefs) -->
             <div class="page-settings__h sub">기본 페이지</div>
+            <p class="page-settings__hint">각 Zone이 처음 열릴 때 보여줄 화면입니다.</p>
             <div class="page-settings__row tight">
-              <span class="page-settings__lbl">KPI 트래커</span>
-              <select v-model.number="defaultZone3Page" class="lp-select">
-                <option :value="0">막대</option>
-                <option :value="1">자산 도넛</option>
-                <option :value="2">스코프 KPI</option>
+              <span class="page-settings__lbl">Zone 1 시작</span>
+              <select v-model.number="zonePrefs.zone1" class="lp-select">
+                <option :value="0">오늘의 데스크</option>
+                <option :value="1">마감 임박</option>
               </select>
             </div>
             <div class="page-settings__row tight">
-              <span class="page-settings__lbl">성과 트래커</span>
-              <select v-model.number="defaultZone4Page" class="lp-select">
-                <option :value="0">매출 추이</option>
-                <option :value="1">캠페인 누적</option>
-                <option :value="2">스코프 평균</option>
+              <span class="page-settings__lbl">Zone 3 시작</span>
+              <select v-model.number="zonePrefs.zone3" class="lp-select">
+                <option :value="0">KPI 트래커</option>
+                <option :value="1">검수</option>
               </select>
             </div>
             <div class="page-settings__row tight">
-              <span class="page-settings__lbl">기본 시간 단위</span>
-              <div class="lp-mini-seg">
-                <button type="button" :class="{ 'is-on': defaultGranularity === 'week' }" @click="defaultGranularity = 'week'">주간</button>
-                <button type="button" :class="{ 'is-on': defaultGranularity === 'month' }" @click="defaultGranularity = 'month'">월간</button>
-              </div>
+              <span class="page-settings__lbl">Zone 4 시작</span>
+              <select v-model.number="zonePrefs.zone4" class="lp-select">
+                <option :value="0">캠페인 파이프라인</option>
+                <option :value="1">매출 추이</option>
+              </select>
             </div>
 
             <hr class="page-settings__div" />
@@ -1937,360 +1936,17 @@ watch([zone3Page, zone3Granularity], () => {
     </div>
 
     <div class="dash">
-      <!-- Zone 1 -->
-      <section v-if="sectionVisible.zone1" class="card zone-today" aria-label="오늘의 작업 보드">
-        <div class="card-h">
-          <div>
-            <h2>{{ ZONE1_TITLE }}</h2>
-            <p class="lede">{{ ZONE1_LEDE }}</p>
-          </div>
-          <div class="zone-nav">
-            <button class="nav-btn" aria-label="이전" @click="shiftZone1(-1)">‹</button>
-            <span class="nav-ind">{{ zone1Page + 1 }} / 3</span>
-            <button class="nav-btn" aria-label="다음" @click="shiftZone1(1)">›</button>
-          </div>
-        </div>
-        <Transition name="page-slide" mode="out-in">
-          <div
-            class="today-grid"
-            :class="{ 'today-grid--tall': zone1Page === 1 }"
-            :key="zone1Page"
-            v-if="ZONE1_RENDER.length"
-          >
-            <article
-              v-for="(t, i) in ZONE1_RENDER"
-              :key="t.id ?? i"
-              class="ptask"
-              :class="[t.tone, { 'ptask--clickable': t.clickable }]"
-              :role="t.clickable ? 'button' : null"
-              :tabindex="t.clickable ? 0 : null"
-              @click="openCampaign(t)"
-              @keydown.enter="openCampaign(t)"
-            >
-              <span class="pill" :class="{
-                'pill--urgent': t.pill === '긴급' || t.pill === '오늘 마감',
-                'pill--review': t.pill === '검수중',
-                'pill--tomorrow': t.pill === '내일 마감',
-              }">{{ t.pill }}</span>
+      <!-- Zone 1 — 오늘의 할 일 & 활동 -->
+      <Zone1Today v-if="sectionVisible.zone1" />
 
-              <!-- KPI 요약 카드 (Zone 1 page 3) -->
-              <template v-if="t.kind === 'kpi-summary'">
-                <h3 class="kpi-title-row">
-                  <span class="kpi-cat">{{ t.catName }}</span>
-                  <span class="kpi-num" :class="'kpi-num--' + t.direction">{{ t.valueLabel }}</span>
-                </h3>
-                <p class="kpi-delta" :class="'kpi-delta--' + t.direction">
-                  <span v-if="t.direction === 'up'">▲</span>
-                  <span v-else-if="t.direction === 'down'">▼</span>
-                  <span v-else>—</span>
-                  평균 대비 {{ t.delta > 0 ? '+' : '' }}{{ t.delta }}%p
-                </p>
-                <div class="kpi-spark">
-                  <ApexChart
-                    type="area"
-                    height="100%"
-                    :options="t.sparkOptions"
-                    :series="t.sparkSeries"
-                  />
-                </div>
-              </template>
-
-              <!-- 일반 작업 카드 -->
-              <template v-else>
-                <h3>
-                  <template v-for="(line, idx) in t.lines" :key="idx">
-                    {{ line }}<br v-if="idx < t.lines.length - 1" />
-                  </template>
-                </h3>
-                <p v-if="t.sub" class="ptask-sub">{{ t.sub }}</p>
-                <div class="meta">
-                  <div class="avs">
-                    <span
-                      v-for="(av, ai) in t.avatars"
-                      :key="ai"
-                      class="av"
-                      :class="av.cls"
-                      :style="av.imageUrl ? { backgroundImage: 'url(' + av.imageUrl + ')', backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : null"
-                      :title="av.name || av.initial"
-                    >{{ av.initial }}</span>
-                  </div>
-                  <span class="count">{{ t.progress }}</span>
-                </div>
-              </template>
-            </article>
-          </div>
-          <div v-else class="zone-empty" :key="'empty-' + zone1Page">표시할 데이터가 없습니다.</div>
-        </Transition>
-      </section>
-
-      <!-- Zone 2 + Zone 3 -->
+      <!-- Zone 2 (랭킹) + Zone 3 (KPI/검수) -->
       <div v-if="sectionVisible.zone2 || sectionVisible.zone3" class="zone-bottom">
-        <!-- Zone 2 -->
-        <section v-if="sectionVisible.zone2" class="card" aria-label="Top5 협력사">
-          <div class="card-h">
-            <div>
-              <h2>{{ ZONE2_TITLE }}</h2>
-              <p class="lede">{{ ZONE2_LEDE }}</p>
-            </div>
-            <div class="zone-nav">
-              <button class="nav-btn" aria-label="이전" @click="shiftZone2(-1)">‹</button>
-              <span class="nav-ind">{{ zone2Page + 1 }} / 3</span>
-              <button class="nav-btn" aria-label="다음" @click="shiftZone2(1)">›</button>
-            </div>
-          </div>
-          <Transition name="page-slide" mode="out-in">
-            <div class="ts-list" :key="zone2Page" v-if="ZONE2_RENDER.length">
-              <div
-                v-for="row in ZONE2_RENDER"
-                :key="row.rank"
-                class="ts-row"
-              >
-                <span class="av av-lg" :class="[row.cls, row.crown ? 'crown' : '']">{{ row.avatar }}</span>
-                <div class="ts-mid">
-                  <div class="name">{{ row.name }}</div>
-                  <div class="sub">
-                    <span v-for="(b, bi) in row.badges" :key="bi">{{ b }}</span>
-                  </div>
-                  <div class="ts-bar">
-                    <span class="ts-bar-fill" :data-pct="row.pct" :style="{ width: row.pct + '%' }"></span>
-                  </div>
-                </div>
-                <span class="score">{{ row.pct }}%</span>
-              </div>
-            </div>
-            <div v-else class="zone-empty" :key="'empty-z2-' + zone2Page">표시할 협력사가 없습니다.</div>
-          </Transition>
-        </section>
-
-        <!-- Zone 3 -->
-        <section v-if="sectionVisible.zone3" class="card" aria-label="KPI 트래커">
-          <div class="card-h">
-            <div>
-              <h2>{{ ZONE3_TITLE }}</h2>
-              <p class="lede">{{ ZONE3_LEDE }}</p>
-            </div>
-            <div class="z3-controls">
-              <div v-if="ZONE3_HAS_TOGGLE" class="gn-seg">
-                <button
-                  class="gn-btn"
-                  :class="{ 'is-on': zone3Granularity === 'week' }"
-                  @click="zone3Granularity = 'week'"
-                >주간</button>
-                <button
-                  class="gn-btn"
-                  :class="{ 'is-on': zone3Granularity === 'month' }"
-                  @click="zone3Granularity = 'month'"
-                >월간</button>
-              </div>
-              <div class="zone-nav">
-                <button class="nav-btn" aria-label="이전" @click="shiftZone3(-1)">‹</button>
-                <span class="nav-ind">{{ zone3Page + 1 }} / 3</span>
-                <button class="nav-btn" aria-label="다음" @click="shiftZone3(1)">›</button>
-              </div>
-            </div>
-          </div>
-          <Transition name="page-slide" mode="out-in">
-            <div :key="zone3Page" class="z3-body">
-              <!-- Page 0: KPI bars — Y축 % 라벨 + 100% clamp -->
-              <template v-if="zone3Page === 0">
-                <template v-if="ZONE3_BAR_DATA.length">
-                  <div class="kpi-legend">
-                    <span class="l-primary">달성</span>
-                    <span class="l-lime">참여</span>
-                  </div>
-                  <div class="kpi-bar-chart">
-                    <div class="kpi-y-axis">
-                      <span>100%</span>
-                      <span>75%</span>
-                      <span>50%</span>
-                      <span>25%</span>
-                      <span>0%</span>
-                    </div>
-                    <div class="bars bars--tall">
-                      <div
-                        v-for="(b, i) in ZONE3_BAR_DATA"
-                        :key="i"
-                        class="bar-col"
-                      >
-                        <div class="bar bar-primary" :style="{ height: Math.min(100, b.primary) + '%' }"></div>
-                        <div class="bar bar-lime" :style="{ height: Math.min(100, b.lime) + '%' }"></div>
-                        <span class="lbl">{{ b.lbl }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </template>
-                <div v-else class="zone-empty">KPI 데이터가 없습니다.</div>
-              </template>
-              <!-- Page 1: donut -->
-              <template v-else-if="zone3Page === 1">
-                <ApexChart
-                  v-if="hasZone3DonutData"
-                  type="donut"
-                  height="250"
-                  :options="apexDonutOptions"
-                  :series="ZONE3_DONUT_SERIES.series"
-                />
-                <div v-else class="zone-empty">자산 데이터가 없습니다.</div>
-              </template>
-              <!-- Page 2: scope KPI — Y축 % 라벨 + 100% clamp -->
-              <template v-else>
-                <template v-if="ZONE3_KPI_BY_SCOPE.some(b => b.primary > 0)">
-                  <div class="kpi-legend">
-                    <span class="l-primary">달성</span>
-                    <span class="l-lime">참여</span>
-                  </div>
-                  <div class="kpi-bar-chart">
-                    <div class="kpi-y-axis">
-                      <span>100%</span>
-                      <span>75%</span>
-                      <span>50%</span>
-                      <span>25%</span>
-                      <span>0%</span>
-                    </div>
-                    <div class="bars bars--tall">
-                      <div
-                        v-for="(b, i) in ZONE3_KPI_BY_SCOPE"
-                        :key="i"
-                        class="bar-col"
-                      >
-                        <div class="bar bar-primary" :style="{ height: Math.min(100, b.primary) + '%' }"></div>
-                        <div class="bar bar-lime" :style="{ height: Math.min(100, b.lime) + '%' }"></div>
-                        <span class="lbl">{{ b.lbl }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </template>
-                <div v-else class="zone-empty">스코프 KPI 데이터가 없습니다.</div>
-              </template>
-            </div>
-          </Transition>
-        </section>
+        <Zone2Ranking v-if="sectionVisible.zone2" />
+        <Zone3KpiReview v-if="sectionVisible.zone3" />
       </div>
 
-      <!-- Zone 4: 반원 게이지 + 라인 차트 (성과 트래커) -->
-      <aside v-if="sectionVisible.zone4" class="z4-stack zone-carousel" aria-label="성과 트래커">
-        <!-- 상단: 라벤더 그라데이션 + 반원 게이지 + 칩 -->
-        <div class="z4-top">
-          <div class="car-h">
-            <div>
-              <h2 class="title">{{ ZONE4_TITLE }}</h2>
-              <p class="csub">{{ ZONE4_LEDE }}</p>
-            </div>
-          </div>
-
-          <Transition name="chart-fade" mode="out-in">
-            <div class="z4-gauge-block" :key="'g-' + zone4Page + '-' + zone4Granularity">
-              <div class="gauge-wrap">
-                <svg width="200" height="120" viewBox="0 0 200 120">
-                  <path
-                    d="M 20 100 A 80 80 0 0 1 180 100"
-                    fill="none"
-                    stroke="rgba(255,255,255,0.20)"
-                    stroke-width="14"
-                    stroke-linecap="round"
-                  />
-                  <path
-                    d="M 20 100 A 80 80 0 0 1 180 100"
-                    fill="none"
-                    stroke="#fff"
-                    stroke-width="14"
-                    stroke-linecap="round"
-                    :stroke-dasharray="gaugeArcLength"
-                    style="transition: stroke-dasharray .8s cubic-bezier(.4,0,.2,1);"
-                  />
-                </svg>
-                <div class="gauge-pill">
-                  <span class="v">{{ gaugePct }}%</span>
-                  <span class="lbl">{{ gaugeLabel }}</span>
-                </div>
-              </div>
-
-              <div class="chips" v-if="gaugeChips.length">
-                <div v-for="(c, i) in gaugeChips" :key="i" class="chip">
-                  <span class="l">{{ c[0] }}</span>
-                  <span class="v">{{ c[1] }}</span>
-                </div>
-              </div>
-            </div>
-          </Transition>
-        </div>
-
-        <!-- 하단: 흰 카드 + Sales Target 라인 차트 -->
-        <div class="z4-bottom">
-          <div class="z4-bottom-h">
-            <div>
-              <h3 class="z4-bottom-title">{{ ZONE4_BOTTOM_TITLE }}</h3>
-              <p class="z4-bottom-sub">{{ zone4Granularity === 'week' ? '이번 분기 · 주간' : '이번 분기 · 월간' }}</p>
-            </div>
-            <div class="gn-seg">
-              <button
-                class="gn-btn"
-                :class="{ 'is-on': zone4Granularity === 'week' }"
-                @click="zone4Granularity = 'week'"
-              >주간</button>
-              <button
-                class="gn-btn"
-                :class="{ 'is-on': zone4Granularity === 'month' }"
-                @click="zone4Granularity = 'month'"
-              >월간</button>
-            </div>
-          </div>
-
-          <div class="z4-headline">
-            <span class="z4-total">
-              <span v-if="zone4UnitPrefix" class="z4-unit z4-unit--prefix">{{ zone4UnitPrefix }}</span>
-              <span ref="totalNumRef" class="z4-total-num">0</span>
-              <span v-if="zone4UnitSuffix" class="z4-unit z4-unit--suffix">{{ zone4UnitSuffix }}</span>
-            </span>
-            <span class="z4-delta" :class="totalRevenueDelta >= 0 ? 'up' : 'down'" v-if="hasZone4Data">
-              <svg v-if="totalRevenueDelta >= 0" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="18 15 12 9 6 15" />
-              </svg>
-              <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-              <span>{{ totalRevenueDelta >= 0 ? '+' : '' }}{{ totalRevenueDelta }}%</span>
-            </span>
-          </div>
-
-          <div class="z4-chart-wrap">
-            <Transition name="chart-fade" mode="out-in">
-              <ApexChart
-                v-if="hasZone4Data"
-                :key="zone4Page + '-' + zone4Granularity"
-                type="area"
-                height="100%"
-                :options="apexLineOptions"
-                :series="apexLineSeries"
-              />
-              <div v-else class="z4-empty">데이터가 없습니다.</div>
-            </Transition>
-          </div>
-        </div>
-
-        <!-- 페이지 네비게이션 -->
-        <div class="z4-pager">
-          <button class="z4-nav" aria-label="이전 지표" @click="shiftZone4(-1)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
-          <span class="page-dots">
-            <span
-              v-for="i in ZONE_PAGE_COUNT"
-              :key="i"
-              class="dot"
-              :class="{ 'is-active': zone4Page === i - 1 }"
-              @click="zone4Page = i - 1"
-            ></span>
-          </span>
-          <button class="z4-nav" aria-label="다음 지표" @click="shiftZone4(1)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-        </div>
-      </aside>
+      <!-- Zone 4 — 흐름 (퍼널 & 추세) -->
+      <Zone4Flow v-if="sectionVisible.zone4" class="zone-carousel" />
     </div>
   </div>
 </template>
@@ -2303,10 +1959,12 @@ watch([zone3Page, zone3Granularity], () => {
   --r-xl: 24px;
   --r-pill: 999px;
 
-  --shadow-card: 0 1px 2px rgba(63,52,99,.04), 0 6px 18px rgba(63,52,99,.06);
+  --shadow-card: 0 1px 2px rgba(63,52,99,.05), 0 8px 24px rgba(63,52,99,.09);
   --shadow-carousel: 0 14px 36px rgba(63,52,99,.18);
 
-  background: var(--lp-bg);
+  /* 대시보드 한정: 카드(흰색)가 떠 보이도록 옅은 라벤더 틴트 배경 (목업 #F5F1FA 톤).
+     전역 화이트 테마는 그대로 — 다크는 아래에서 --lp-bg 그라데이션으로 복원. */
+  background: #F4F0FA;
   color: var(--lp-text);
   font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-feature-settings: 'tnum' 1, 'ss01' 1;
@@ -2320,6 +1978,9 @@ watch([zone3Page, zone3Granularity], () => {
   flex-direction: column;
   gap: 16px;
   box-sizing: border-box;
+}
+:root[data-theme='dark'] .page[data-cycle="lavender-pop"] {
+  background: var(--lp-bg);
 }
 
 .page-h {

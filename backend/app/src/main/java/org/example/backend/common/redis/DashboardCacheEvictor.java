@@ -23,7 +23,15 @@ public class DashboardCacheEvictor {
             @CacheEvict(value = CacheNames.DASHBOARD_REVIEW_QUEUE,     allEntries = true),
             @CacheEvict(value = CacheNames.DASHBOARD_BLOCKERS,         allEntries = true),
             @CacheEvict(value = CacheNames.DASHBOARD_ASSET_CATEGORIES, allEntries = true),
-            @CacheEvict(value = CacheNames.DASHBOARD_KPI_CATEGORIES,   allEntries = true)
+            @CacheEvict(value = CacheNames.DASHBOARD_KPI_CATEGORIES,   allEntries = true),
+            // Zone 신규 캐시 — 데이터 변경 시 함께 무효화 (안 그러면 stale)
+            @CacheEvict(value = CacheNames.DASHBOARD_RECENT_ACTIVITY,  allEntries = true),
+            @CacheEvict(value = CacheNames.DASHBOARD_AD_REVIEW_QUEUE,  allEntries = true),
+            @CacheEvict(value = CacheNames.DASHBOARD_CAMPAIGN_PIPELINE,allEntries = true),
+            @CacheEvict(value = CacheNames.DASHBOARD_CAMPAIGN_PROGRESS,allEntries = true),
+            @CacheEvict(value = CacheNames.DASHBOARD_REVENUE_YOY,      allEntries = true),
+            // 캠페인 목록 — 캠페인/멤버 변경(이 evictor 호출 지점들)이 곧 "내 캠페인" 목록 변경이므로 함께 무효화
+            @CacheEvict(value = CacheNames.CAMPAIGN_LIST,              allEntries = true)
     })
     public void evictAll() {
         // 메서드 본문 없음 — Spring AOP 가 @Caching 어노테이션을 보고 evict 수행

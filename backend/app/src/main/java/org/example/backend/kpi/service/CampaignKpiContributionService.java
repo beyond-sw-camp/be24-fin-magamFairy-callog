@@ -21,8 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -64,7 +66,9 @@ public class CampaignKpiContributionService {
                 .actualValue(req.actualValue() == null ? BigDecimal.ZERO : req.actualValue())
                 .build();
 
-        return CampaignKpiContributionDto.from(contributionRepository.save(contribution));
+        CampaignKpiContribution saved = contributionRepository.save(contribution);
+        recomputeCascade(target);   // 조직 KPI actual 자동 합산 + 상위 전파
+        return CampaignKpiContributionDto.from(saved);
     }
 
     @Transactional
@@ -78,6 +82,7 @@ public class CampaignKpiContributionService {
         if (committedValue != null) contribution.setCommittedValue(committedValue);
         if (actualValue != null) contribution.setActualValue(actualValue);
 
+        recomputeCascade(contribution.getTargetOrgKpi());
         return CampaignKpiContributionDto.from(contribution);
     }
 
@@ -88,7 +93,10 @@ public class CampaignKpiContributionService {
         requireEditable(campaign, caller);
 
         CampaignKpiContribution contribution = findContribution(campaignId, contributionId);
+        OrganizationKpi target = contribution.getTargetOrgKpi();
         contributionRepository.delete(contribution);
+        contributionRepository.flush();   // 합산이 삭제분 반영하도록 먼저 반영
+        recomputeCascade(target);
     }
 
     /**
@@ -97,6 +105,7 @@ public class CampaignKpiContributionService {
     @Transactional
     public void bulkCreate(Campaign campaign, List<CreateContributionRequest> requests) {
         if (requests == null || requests.isEmpty()) return;
+        List<OrganizationKpi> touched = new java.util.ArrayList<>();
         for (CreateContributionRequest req : requests) {
             if (req == null || req.targetOrgKpiId() == null || req.committedValue() == null) {
                 continue;
@@ -110,7 +119,39 @@ public class CampaignKpiContributionService {
                     .actualValue(req.actualValue() == null ? BigDecimal.ZERO : req.actualValue())
                     .build();
             contributionRepository.save(contribution);
+            touched.add(target);
         }
+        contributionRepository.flush();
+        touched.forEach(this::recomputeCascade);
+    }
+
+    // ── Cascade 자동 합산 ────────────────────────────────────
+    /**
+     * 조직 KPI actualValue 를 cascade 로 재계산하고 상위로 전파.
+     *   actualValue = (이 KPI 를 타깃으로 한 캠페인 기여 actual 합) + (하위 조직 KPI actual 합)
+     * 본사 KPI ← 계열사 KPI ← 캠페인 KPI 경로로 위로 올라가며 갱신.
+     */
+    private void recomputeCascade(OrganizationKpi leaf) {
+        Set<Long> visited = new HashSet<>();
+        OrganizationKpi cur = leaf;
+        while (cur != null && visited.add(cur.getIdx())) {
+            BigDecimal contribSum = sumContributionActual(cur.getIdx());
+            BigDecimal childSum = orgKpiRepository.findAllByParentKpi_Idx(cur.getIdx()).stream()
+                    .map(c -> c.getActualValue() == null ? BigDecimal.ZERO : c.getActualValue())
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            cur.setActualValue(contribSum.add(childSum));   // 영속 엔티티 → dirty checking 으로 저장
+            cur = cur.getParentKpi();
+        }
+    }
+
+    private BigDecimal sumContributionActual(Long orgKpiId) {
+        for (Object[] row : contributionRepository.sumByOrgKpiIdxIn(List.of(orgKpiId))) {
+            if (row != null && row.length >= 3 && row[2] != null) {
+                Object v = row[2];
+                return v instanceof BigDecimal bd ? bd : new BigDecimal(v.toString());
+            }
+        }
+        return BigDecimal.ZERO;
     }
 
     // ── Helper ──────────────────────────────────────────────
