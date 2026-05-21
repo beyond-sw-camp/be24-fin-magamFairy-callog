@@ -15,6 +15,8 @@ import CalendarFilterChips from '@/components/overview/CalendarFilterChips.vue'
 import CalendarSidebar from '@/components/overview/CalendarSidebar.vue'
 import CommandPalette from '@/components/overview/CommandPalette.vue'
 import ShortcutCheatsheet from '@/components/overview/ShortcutCheatsheet.vue'
+import CalendarExportModal from '@/components/overview/CalendarExportModal.vue'
+import CalendarImportModal from '@/components/overview/CalendarImportModal.vue'
 import { usePlannerStore } from '@/stores/planner'
 import { usePartnershipsStore } from '@/stores/partnerships'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -23,7 +25,7 @@ import { useToastStore } from '@/stores/toast'
 import { useConfirmStore } from '@/stores/confirmDialog'
 import { useNotificationsStore } from '@/stores/notifications'
 import { ListCalendarEvents, UpdateCampaign, UpdateCampaignIntro } from '@/api/campaigns'
-import { UpdateMilestone, UpdateTask, CreatePersonalTask, CreateTask, CreateMilestone, CreateTaskPart } from '@/api/teamboard'
+import { UpdateMilestone, UpdateTask, CreatePersonalTask, CreateTask, CreateMilestone, CreateTaskPart, ExportCalendarIcs, ImportCalendarIcs } from '@/api/teamboard'
 
 const store = usePlannerStore()
 const partnershipStore = usePartnershipsStore()
@@ -226,8 +228,8 @@ const taskEvents = computed(() => {
         id: `tsk-${t.idx}`,
         type: 'task',
         title: `✅ ${t.name}`,
-        // Task 엔티티에는 startDate가 없음 → dueDate 단일 시점 (시각 포함)
-        start: t.dueDate,
+        // startDate가 있으면 시작~마감 범위, 없으면 dueDate 단일 시점
+        start: t.startDate ?? t.dueDate,
         end: t.dueDate,
         projectManager: t.assigneeName ?? '',
         campaignId: c?.id ?? c?.idx ?? t.campaignIdx ?? null,
@@ -465,24 +467,36 @@ async function updateTaskDate(event, newDate) {
   const taskIdx = Number(event.id.replace('tsk-', ''))
   const task = teamTaskStore.tasks.find(t => t.idx === taskIdx)
   if (!task) return
-  const prev = task.dueDate
-  task.dueDate = `${newDate}T23:59:59`
+  const prevStart = task.startDate
+  const prevDue = task.dueDate
+  // 날짜만 newDate로 이동, 시각(시작/마감)은 유지 → 시작·마감이 함께 같은 날로 이동
+  const dueTime = (prevDue && prevDue.length >= 19) ? prevDue.slice(11, 19) : '23:59:59'
+  const newDue = `${newDate}T${dueTime}`
+  let newStart = prevStart
+  if (prevStart && prevStart.length >= 19) {
+    newStart = `${newDate}T${prevStart.slice(11, 19)}`
+  }
+  task.dueDate = newDue
+  task.startDate = newStart
   try {
-    await UpdateTask(taskIdx, { dueDate: task.dueDate })
+    await UpdateTask(taskIdx, { startDate: newStart ?? null, dueDate: newDue })
     toast.success(`'${task.name}' 마감일 변경`, '내 업무')
   } catch (e) {
-    task.dueDate = prev
+    task.dueDate = prevDue
+    task.startDate = prevStart
     toast.error(e?.response?.data?.message || '업무 마감일 변경에 실패했습니다.')
   }
 }
 
 /* ─── Quick-add ─── */
 // 캘린더 빠른 추가 = 개인 업무 (캠페인 무관, 담당=본인)
-async function createTaskFromQuick({ title, date, time, priority }) {
-  const dueDate = `${date}T${time || '23:59'}:00`
+async function createTaskFromQuick({ title, date, startTime, endTime, priority }) {
+  const startDate = `${date}T${startTime || '09:00'}:00`
+  const dueDate = `${date}T${endTime || startTime || '23:59'}:00`
   try {
     const result = await CreatePersonalTask({
       name: title,
+      startDate,
       dueDate,
       status: 'TODO',
       priority: priority || 'MEDIUM',
@@ -492,6 +506,7 @@ async function createTaskFromQuick({ title, date, time, priority }) {
       teamTaskStore.tasks = [...teamTaskStore.tasks, {
         idx: result.idx,
         name: title,
+        startDate,
         dueDate,
         status: result.status ?? 'TODO',
         priority: priority || 'MEDIUM',
@@ -508,11 +523,13 @@ async function createTaskFromQuick({ title, date, time, priority }) {
   }
 }
 
-async function createCampaignTaskFromQuick({ title, date, time, priority, campaignId, milestoneId, taskPartId }) {
-  const dueDate = `${date}T${time || '23:59'}:00`
+async function createCampaignTaskFromQuick({ title, date, startTime, endTime, priority, campaignId, milestoneId, taskPartId }) {
+  const startDate = `${date}T${startTime || '09:00'}:00`
+  const dueDate = `${date}T${endTime || startTime || '23:59'}:00`
   try {
     const result = await CreateTask(campaignId, {
       name: title,
+      startDate,
       dueDate,
       status: 'BACKLOG',
       taskType: 'OTHER',
@@ -525,6 +542,7 @@ async function createCampaignTaskFromQuick({ title, date, time, priority, campai
       teamTaskStore.tasks = [...teamTaskStore.tasks, {
         idx: result.idx,
         name: title,
+        startDate,
         dueDate,
         status: result.status ?? 'BACKLOG',
         priority: priority || 'MEDIUM',
@@ -582,6 +600,75 @@ async function createTaskPartFromQuick({ title, campaignId, milestoneId, priorit
 function resetFilters() {
   filter.value = { mineOnly: false }
   toggles.value = { campaign: true, deadline: true, milestone: true, task: true }
+}
+
+/* ─── 캘린더 가져오기 / 내보내기 (.ics) ─── */
+const icsInputRef = ref(null)
+const exportOpen = ref(false)
+const exportBusy = ref(false)
+const exportRange = ref({ from: '', to: '' })
+const importOpen = ref(false)
+const importBusy = ref(false)
+const importFile = ref(null)
+
+function openExport() {
+  const d = anchorDate.value instanceof Date ? anchorDate.value : new Date()
+  const first = new Date(d.getFullYear(), d.getMonth(), 1)
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+  exportRange.value = { from: fmtIsoDate(first), to: fmtIsoDate(last) }
+  exportOpen.value = true
+}
+async function doExport({ from, to, types }) {
+  exportBusy.value = true
+  try {
+    const blob = await ExportCalendarIcs({ from, to, types })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `callog-${from.replaceAll('-', '')}-${to.replaceAll('-', '')}.ics`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    toast.success('캘린더를 내보냈습니다.', '내보내기')
+    exportOpen.value = false
+  } catch (e) {
+    toast.error(e?.response?.data?.message || '내보내기에 실패했습니다.')
+  } finally {
+    exportBusy.value = false
+  }
+}
+
+function triggerImport() { icsInputRef.value?.click() }
+function onIcsPicked(e) {
+  const f = e.target.files?.[0]
+  if (f) { importFile.value = f; importOpen.value = true }
+  e.target.value = '' // 같은 파일 다시 선택 가능하게 초기화
+}
+function closeImport() {
+  if (importBusy.value) return
+  importOpen.value = false
+  importFile.value = null
+}
+async function doImport(mode) {
+  if (!importFile.value) return
+  importBusy.value = true
+  try {
+    const r = await ImportCalendarIcs(importFile.value, mode)
+    const added = r?.importedCount ?? 0
+    const del = r?.deletedCount ?? 0
+    toast.success(
+      mode === 'overwrite' ? `${del}건 교체 · ${added}건 추가` : `${added}건 추가`,
+      '가져오기',
+    )
+    importOpen.value = false
+    importFile.value = null
+    scheduleLoadAll()
+  } catch (e) {
+    toast.error(e?.response?.data?.message || '가져오기에 실패했습니다.')
+  } finally {
+    importBusy.value = false
+  }
 }
 
 /* ─── 명령 팔레트 / 단축키 ─── */
@@ -661,6 +748,23 @@ onUnmounted(() => {
           <span class="material-symbols-outlined">{{ v.icon }}</span>
           {{ v.name }}
         </button>
+      </div>
+      <div class="overview__io">
+        <button class="overview__io-btn" @click="openExport">
+          <span class="material-symbols-outlined">download</span>
+          <span>캘린더 내보내기</span>
+        </button>
+        <button class="overview__io-btn" @click="triggerImport">
+          <span class="material-symbols-outlined">upload</span>
+          <span>캘린더 가져오기</span>
+        </button>
+        <input
+          ref="icsInputRef"
+          type="file"
+          accept=".ics,text/calendar"
+          class="overview__io-file"
+          @change="onIcsPicked"
+        />
       </div>
     </div>
 
@@ -769,6 +873,22 @@ onUnmounted(() => {
     />
     <ShortcutCheatsheet :open="cheatOpen" @close="cheatOpen = false" />
 
+    <CalendarExportModal
+      :open="exportOpen"
+      :default-from="exportRange.from"
+      :default-to="exportRange.to"
+      :busy="exportBusy"
+      @close="exportOpen = false"
+      @export="doExport"
+    />
+    <CalendarImportModal
+      :open="importOpen"
+      :file-name="importFile?.name || ''"
+      :busy="importBusy"
+      @close="closeImport"
+      @confirm="doImport"
+    />
+
   </div>
 </template>
 
@@ -833,6 +953,25 @@ onUnmounted(() => {
   background: var(--lp-surface);
   color: var(--lp-primary-deep);
   box-shadow: 0 1px 3px rgba(63,52,99,.12);
+}
+
+/* 캘린더 가져오기/내보내기 버튼 (상단바 우측) */
+.overview__io { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.overview__io-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; font-size: 12.5px; font-weight: 600;
+  color: var(--lp-text-muted); background: var(--lp-surface-soft);
+  border: 1px solid var(--lp-border); border-radius: 999px; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+}
+.overview__io-btn:hover {
+  color: var(--lp-primary-deep); background: var(--lp-surface);
+  border-color: var(--lp-primary); box-shadow: 0 1px 3px rgba(63,52,99,.12);
+}
+.overview__io-btn .material-symbols-outlined { font-size: 16px; }
+.overview__io-file { display: none; }
+@media (max-width: 720px) {
+  .overview__io-btn span:not(.material-symbols-outlined) { display: none; }
 }
 /* === Header === */
 .overview__header {

@@ -20,6 +20,10 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
      */
     List<Task> findAllByAssignee_IdxAndCampaignIsNullAndParticipantIsNullAndMilestoneIsNullAndTaskPartIsNullOrderByIdxDesc(Long assigneeIdx);
 
+    /** 캘린더 가져오기(덮어쓰기) — 특정 날짜 범위의 내 개인 업무 (마감일 기준). */
+    List<Task> findAllByAssignee_IdxAndCampaignIsNullAndParticipantIsNullAndMilestoneIsNullAndTaskPartIsNullAndDueDateBetween(
+            Long assigneeIdx, LocalDateTime from, LocalDateTime to);
+
     List<Task> findAllByTaskPart_Campaign_IdxInOrderByIdxDesc(Collection<Long> campaignIds);
 
     /** 1급화: 캠페인 직접 연결(campaign_id) · 업무파트 경유 · 참여사 경유 모두 커버 (단일 캠페인).

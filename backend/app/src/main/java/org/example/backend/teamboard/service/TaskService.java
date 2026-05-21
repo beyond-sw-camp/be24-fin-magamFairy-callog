@@ -136,10 +136,13 @@ public class TaskService {
         CampaignParticipant participant = req.participantId() != null
                 ? getParticipantOrThrow(req.participantId()) : task.getParticipant();
         TaskStatus nextStatus = req.status() != null ? req.status() : task.getStatus();
+        // startDate는 부분 수정(예: 드래그로 마감일만 변경) 시 기존 값 보존
+        java.time.LocalDateTime nextStartDate = req.startDate() != null ? req.startDate() : task.getStartDate();
 
         task.update(
                 req.name(),
                 participant,
+                nextStartDate,
                 req.dueDate(),
                 req.taskType(),
                 nextStatus,

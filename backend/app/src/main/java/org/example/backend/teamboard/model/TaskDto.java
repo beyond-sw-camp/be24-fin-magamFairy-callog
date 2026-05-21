@@ -10,6 +10,7 @@ public class TaskDto {
     public record ReqTask(
             String name,
             Long participantId,
+            LocalDateTime startDate,
             LocalDateTime dueDate,
             TaskType taskType,
             TaskStatus status,
@@ -28,6 +29,7 @@ public class TaskDto {
             return Task.builder()
                     .name(name)
                     .participant(participant)
+                    .startDate(startDate)
                     .dueDate(dueDate)
                     .taskType(taskType)
                     .status(status != null ? status : TaskStatus.BACKLOG)
@@ -44,6 +46,7 @@ public class TaskDto {
             Long idx,
             String name,
             Long participantIdx,
+            LocalDateTime startDate,
             LocalDateTime dueDate,
             TaskType taskType,
             TaskStatus status,
@@ -62,6 +65,7 @@ public class TaskDto {
                     entity.getIdx(),
                     entity.getName(),
                     entity.getParticipant() != null ? entity.getParticipant().getIdx() : null,
+                    entity.getStartDate(),
                     entity.getDueDate(),
                     entity.getTaskType(),
                     entity.getStatus(),
@@ -83,6 +87,7 @@ public class TaskDto {
             String name,
             TaskStatus status,
             TaskPriority priority,
+            LocalDateTime startDate,
             LocalDateTime dueDate,
             String milestoneName,
             String taskPartName,
@@ -107,6 +112,7 @@ public class TaskDto {
                     entity.getName(),
                     entity.getStatus(),
                     entity.getPriority(),
+                    entity.getStartDate(),
                     entity.getDueDate(),
                     entity.getMilestone() != null ? entity.getMilestone().getName() : null,
                     entity.getTaskPart() != null ? entity.getTaskPart().getName() : null,

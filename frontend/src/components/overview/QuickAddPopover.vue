@@ -18,7 +18,9 @@ const emit = defineEmits([
 // 개인 업무: 캠페인 없음 / 마일스톤·업무파트: 캠페인 필요
 const step = ref('pick')   // 'pick' | 'task' | 'milestone' | 'taskpart'
 const title = ref('')
-const time = ref('10:00')
+const dateValue = ref('')   // 날짜 (수정 가능, 기본 = 클릭한 셀 날짜)
+const startTime = ref('09:00')
+const endTime = ref('10:00')
 const priority = ref('MEDIUM')
 const isPersonal = ref(true)            // 업무: 개인 / 캠페인 구분
 const selectedCampaignId = ref(null)
@@ -61,7 +63,9 @@ async function reposition() {
 
 function resetForm() {
   title.value = ''
-  time.value = '10:00'
+  dateValue.value = props.date || ''
+  startTime.value = '09:00'
+  endTime.value = '10:00'
   priority.value = 'MEDIUM'
   isPersonal.value = true
   selectedCampaignId.value = props.campaigns[0]?.id ?? null
@@ -134,17 +138,23 @@ function submit() {
   const t = title.value.trim()
   if (!t) { emit('close'); return }
 
+  const date = dateValue.value || props.date
+  // 마감 시간이 시작보다 빠르면 시작과 동일하게 보정
+  const start = startTime.value || '09:00'
+  const end = (endTime.value && endTime.value >= start) ? endTime.value : start
+
   if (step.value === 'task') {
     if (isPersonal.value) {
       // 개인 업무 — 캠페인 없음
-      emit('create-task', { title: t, date: props.date, time: time.value || '23:59', priority: priority.value })
+      emit('create-task', { title: t, date, startTime: start, endTime: end, priority: priority.value })
     } else {
       // 캠페인 업무 — 마일스톤/업무파트는 선택 사항
       if (!selectedCampaignId.value) return
       emit('create-campaign-task', {
         title: t,
-        date: props.date,
-        time: time.value || '23:59',
+        date,
+        startTime: start,
+        endTime: end,
         priority: priority.value,
         campaignId: selectedCampaignId.value,
         milestoneId: selectedMilestoneId.value ?? null,
@@ -153,7 +163,7 @@ function submit() {
     }
   } else if (step.value === 'milestone') {
     if (!selectedCampaignId.value) return
-    emit('create-milestone', { title: t, date: props.date, campaignId: selectedCampaignId.value })
+    emit('create-milestone', { title: t, date, campaignId: selectedCampaignId.value })
   } else if (step.value === 'taskpart') {
     if (!selectedCampaignId.value || !selectedMilestoneId.value) return
     emit('create-taskpart', {
@@ -168,8 +178,9 @@ function submit() {
 
 const canSubmit = computed(() => {
   if (!title.value.trim()) return false
-  if (step.value === 'task') return isPersonal.value || !!selectedCampaignId.value
-  if (step.value === 'milestone') return !!selectedCampaignId.value
+  const hasDate = !!(dateValue.value || props.date)
+  if (step.value === 'task') return hasDate && (isPersonal.value || !!selectedCampaignId.value)
+  if (step.value === 'milestone') return hasDate && !!selectedCampaignId.value
   if (step.value === 'taskpart') return !!selectedCampaignId.value && !!selectedMilestoneId.value
   return true
 })
@@ -181,7 +192,7 @@ const canSubmit = computed(() => {
       <div ref="popoverRef" class="qa-popover" :style="posStyle" @click.stop>
         <div class="qa-popover__date">
           <span class="material-symbols-outlined">add_circle</span>
-          {{ date }}
+          {{ dateValue || date }}
         </div>
 
         <!-- Step 1: 종류 선택 -->
@@ -266,11 +277,21 @@ const canSubmit = computed(() => {
             <small v-if="!milestones.length && !loadingMs" class="qa-form__hint">이 캠페인엔 마일스톤이 없습니다. 먼저 마일스톤을 만드세요.</small>
           </label>
 
-          <!-- 업무: 시간 -->
-          <label v-if="step === 'task'" class="qa-form__field">
-            <span class="qa-form__lbl">시간</span>
-            <input v-model="time" type="time" class="qa-form__input" />
+          <!-- 업무 / 마일스톤: 날짜 -->
+          <label v-if="step === 'task' || step === 'milestone'" class="qa-form__field">
+            <span class="qa-form__lbl">날짜 <em>*</em></span>
+            <input v-model="dateValue" type="date" class="qa-form__input" />
           </label>
+
+          <!-- 업무: 시작 / 마감 시간 -->
+          <div v-if="step === 'task'" class="qa-form__field">
+            <span class="qa-form__lbl">시간 <small class="qa-form__opt">(시작 ~ 마감)</small></span>
+            <div class="qa-time-row">
+              <input v-model="startTime" type="time" class="qa-form__input" aria-label="시작 시간" />
+              <span class="qa-time-sep">~</span>
+              <input v-model="endTime" type="time" class="qa-form__input" aria-label="마감 시간" />
+            </div>
+          </div>
 
           <!-- 업무 / 업무파트: 우선순위 -->
           <label v-if="step === 'task' || step === 'taskpart'" class="qa-form__field">
@@ -373,6 +394,9 @@ const canSubmit = computed(() => {
 .qa-form__lbl { font-size: 11px; font-weight: 700; color: var(--muted-text); }
 .qa-form__lbl em { color: var(--lp-primary, #8B5CF6); font-style: normal; font-weight: 800; }
 .qa-form__opt { font-size: 10px; font-weight: 600; color: var(--muted-text); opacity: 0.7; }
+.qa-time-row { display: flex; align-items: center; gap: 8px; }
+.qa-time-row .qa-form__input { flex: 1; min-width: 0; }
+.qa-time-sep { color: var(--muted-text); font-weight: 700; flex-shrink: 0; }
 .qa-form__hint { font-size: 10.5px; color: #df5f75; }
 
 /* 개인/캠페인 구분 세그먼트 토글 */
