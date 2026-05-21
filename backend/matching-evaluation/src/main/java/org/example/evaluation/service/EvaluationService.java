@@ -10,7 +10,6 @@ import org.example.backend.matching.model.*;
 import org.example.backend.matching.model.evaluation.EvaluationDocument;
 import org.example.backend.matching.model.evaluation.EvaluationDto;
 import org.example.backend.matching.repository.*;
-import org.example.backend.user.model.AuthUserDetails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -76,50 +75,50 @@ public class EvaluationService {
 
     private final MongoTemplate mongoTemplate;
 
-    @Transactional
-    public void collect(EvaluationDto.CollectDto dto) {
-        PartnerBenefits benefits = benefitRepository.findById(dto.getBenefitIdx())
-                .orElseThrow(EntityNotFoundException::new);
-        Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
-                .orElseThrow(EntityNotFoundException::new);
-
-        String targetField = "evaluations." + dto.getCategory().toLowerCase();
-
-        Object evalData = switch (dto.getCategory()){
-            case "CUSTOMER" -> ((EvaluationDto.CollectDto.Customer) dto).toEntity();
-            case "REVENUE" -> ((EvaluationDto.CollectDto.Revenue) dto).toEntity();
-            case "COST" -> ((EvaluationDto.CollectDto.Cost) dto).toEntity();
-            case "OPERATION" -> ((EvaluationDto.CollectDto.Operation) dto).toEntity();
-            case "BRAND" -> ((EvaluationDto.CollectDto.Brand) dto).toEntity();
-            default -> throw new IllegalArgumentException("지원하지 않는 평가 카테고리입니다.");
-        };
-
-        Query query = new Query(Criteria.where("sessionID").is(dto.getUuid()));
-
-        Update update =  new Update()
-                .set(targetField, evalData)
-                .setOnInsert("sessionId", dto.getUuid())
-                .setOnInsert("campaignIdx", dto.getCampaignIdx())
-                .setOnInsert("benefitIdx", dto.getBenefitIdx())
-                .setOnInsert("goal",campaign.getGoals())
-                .setOnInsert("assetDescription",campaign.getAssetDescription())
-                .setOnInsert("title",benefits.getName())
-                .setOnInsert("target",benefits.getTargetAudience())
-                .setOnInsert("offer",benefits.getDescription())
-                .setOnInsert("partner", benefits.getOrganization().getName())
-                .setOnInsert("startedAt", LocalDateTime.now());
-
-        mongoTemplate.updateFirst(query, update, EvaluationDocument.class);
-
-        log.info("[Evaluation Collected] Session: {}, Category: {} updated", dto.getUuid(), dto.getCategory());
-
-        UpdateResult result = mongoTemplate.upsert(query, update, EvaluationDocument.class);
-
-        log.info("[MongoDB Upsert 영수증] Acknowledged: {}, Matched: {}, Modified: {}, UpsertedId: {}",
-                result.wasAcknowledged(),
-                result.getMatchedCount(),
-                result.getModifiedCount(),
-                result.getUpsertedId());
+//    @Transactional
+//    public void collect(EvaluationDto.CollectDto dto) {
+//        PartnerBenefits benefits = benefitRepository.findById(dto.getBenefitIdx())
+//                .orElseThrow(EntityNotFoundException::new);
+//        Campaign campaign = campaignRepository.findById(dto.getCampaignIdx())
+//                .orElseThrow(EntityNotFoundException::new);
+//
+//        String targetField = "evaluations." + dto.getCategory().toLowerCase();
+//
+//        Object evalData = switch (dto.getCategory()){
+//            case "CUSTOMER" -> ((EvaluationDto.CollectDto.Customer) dto).toEntity();
+//            case "REVENUE" -> ((EvaluationDto.CollectDto.Revenue) dto).toEntity();
+//            case "COST" -> ((EvaluationDto.CollectDto.Cost) dto).toEntity();
+//            case "OPERATION" -> ((EvaluationDto.CollectDto.Operation) dto).toEntity();
+//            case "BRAND" -> ((EvaluationDto.CollectDto.Brand) dto).toEntity();
+//            default -> throw new IllegalArgumentException("지원하지 않는 평가 카테고리입니다.");
+//        };
+//
+//        Query query = new Query(Criteria.where("sessionID").is(dto.getUuid()));
+//
+//        Update update =  new Update()
+//                .set(targetField, evalData)
+//                .setOnInsert("sessionId", dto.getUuid())
+//                .setOnInsert("campaignIdx", dto.getCampaignIdx())
+//                .setOnInsert("benefitIdx", dto.getBenefitIdx())
+//                .setOnInsert("goal",campaign.getGoals())
+//                .setOnInsert("assetDescription",campaign.getAssetDescription())
+//                .setOnInsert("title",benefits.getName())
+//                .setOnInsert("target",benefits.getTargetAudience())
+//                .setOnInsert("offer",benefits.getDescription())
+//                .setOnInsert("partner", benefits.getOrganization().getName())
+//                .setOnInsert("startedAt", LocalDateTime.now());
+//
+//        mongoTemplate.updateFirst(query, update, EvaluationDocument.class);
+//
+//        log.info("[Evaluation Collected] Session: {}, Category: {} updated", dto.getUuid(), dto.getCategory());
+//
+//        UpdateResult result = mongoTemplate.upsert(query, update, EvaluationDocument.class);
+//
+//        log.info("[MongoDB Upsert 영수증] Acknowledged: {}, Matched: {}, Modified: {}, UpsertedId: {}",
+//                result.wasAcknowledged(),
+//                result.getMatchedCount(),
+//                result.getModifiedCount(),
+//                result.getUpsertedId());
 
 //        String category = dto.getCategory();
 //        // 1. 현재 세션(Evaluation) 조회
@@ -149,13 +148,10 @@ public class EvaluationService {
 //
 //        // 3. 세션 엔티티에 데이터 연결 (Dirty Checking에 의해 자동 업데이트)
 //        evaluation.updateEval(evalEntity, category);
-    }
+//    }
 
     public List<EvaluationDto.MongoEvaluationRes> result(String publicId) {
 
-        Campaign campaign = campaignRepository.findByPublicId(publicId)
-                .orElseThrow(() -> new EntityNotFoundException("해당 캠페인을 찾을 수 없습니다."));
-        Long campaignIdx = campaign.getIdx();
 
         Query query = new Query(Criteria.where("campaignIdx").is(campaignIdx));
         List<EvaluationDocument> evalDocs = mongoTemplate.find(query, EvaluationDocument.class);
