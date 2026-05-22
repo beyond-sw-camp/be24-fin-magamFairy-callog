@@ -15,7 +15,35 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     List<Task> findAllByAssignee_IdxOrderByIdxDesc(Long assigneeIdx);
 
+    /**
+     * 개인 업무: 캠페인 연결(직접 campaign/참여사/마일스톤/업무파트)이 전혀 없고 담당자가 본인인 Task.
+     */
+    List<Task> findAllByAssignee_IdxAndCampaignIsNullAndParticipantIsNullAndMilestoneIsNullAndTaskPartIsNullOrderByIdxDesc(Long assigneeIdx);
+
+    /** 캘린더 가져오기(덮어쓰기) — 특정 날짜 범위의 내 개인 업무 (마감일 기준). */
+    List<Task> findAllByAssignee_IdxAndCampaignIsNullAndParticipantIsNullAndMilestoneIsNullAndTaskPartIsNullAndDueDateBetween(
+            Long assigneeIdx, LocalDateTime from, LocalDateTime to);
+
     List<Task> findAllByTaskPart_Campaign_IdxInOrderByIdxDesc(Collection<Long> campaignIds);
+
+    /** 1급화: 캠페인 직접 연결(campaign_id) · 업무파트 경유 · 참여사 경유 모두 커버 (단일 캠페인).
+     *  LEFT JOIN 으로 null 경로가 행을 배제하지 않게 함. */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT t FROM Task t "
+                    + "LEFT JOIN t.campaign c LEFT JOIN t.taskPart tp LEFT JOIN tp.campaign tpc "
+                    + "LEFT JOIN t.participant p LEFT JOIN p.campaign pc "
+                    + "WHERE c.idx = :cid OR tpc.idx = :cid OR pc.idx = :cid ORDER BY t.idx DESC")
+    List<Task> findAllByCampaignDirectOrViaTaskPart(
+            @org.springframework.data.repository.query.Param("cid") Long campaignIdx);
+
+    /** 1급화: 여러 캠페인 — 직접 · 업무파트 · 참여사 경유 (LEFT JOIN). */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT t FROM Task t "
+                    + "LEFT JOIN t.campaign c LEFT JOIN t.taskPart tp LEFT JOIN tp.campaign tpc "
+                    + "LEFT JOIN t.participant p LEFT JOIN p.campaign pc "
+                    + "WHERE c.idx IN :cids OR tpc.idx IN :cids OR pc.idx IN :cids ORDER BY t.idx DESC")
+    List<Task> findAllByCampaignIdsDirectOrViaTaskPart(
+            @org.springframework.data.repository.query.Param("cids") Collection<Long> campaignIds);
 
     List<Task> findAllByDueDateBetweenAndStatusNotIn(
             LocalDateTime start,
@@ -37,6 +65,23 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
             "GROUP BY t.taskPart.campaign.idx"
     )
     List<Object[]> countByCampaignIdxIn(
+            @org.springframework.data.repository.query.Param("campaignIds") Collection<Long> campaignIds
+    );
+
+    /**
+     * 캠페인별 총 task 수 / DONE task 수를 한 번의 GROUP BY 로 집계 (1급화: 직접 campaign · 업무파트 경유 · 참여사 경유).
+     * 결과: [campaignIdx, totalCount, doneCount]. task 가 없는 캠페인은 결과에 포함되지 않음.
+     * Dashboard Zone2 진척률 랭킹 / Zone4 progress 용 — N+1 회피.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT COALESCE(c.idx, tpc.idx, pc.idx), COUNT(t), "
+                    + "SUM(CASE WHEN t.status = org.example.backend.teamboard.model.TaskStatus.DONE THEN 1 ELSE 0 END) "
+                    + "FROM Task t "
+                    + "LEFT JOIN t.campaign c LEFT JOIN t.taskPart tp LEFT JOIN tp.campaign tpc "
+                    + "LEFT JOIN t.participant p LEFT JOIN p.campaign pc "
+                    + "WHERE c.idx IN :campaignIds OR tpc.idx IN :campaignIds OR pc.idx IN :campaignIds "
+                    + "GROUP BY COALESCE(c.idx, tpc.idx, pc.idx)")
+    List<Object[]> countTotalAndDoneByCampaignIdxIn(
             @org.springframework.data.repository.query.Param("campaignIds") Collection<Long> campaignIds
     );
 }

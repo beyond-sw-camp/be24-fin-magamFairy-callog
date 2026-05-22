@@ -99,7 +99,7 @@ public class CampaignExportService {
     }
 
     private void writeTasksSection(StringBuilder sb, Long campaignId) {
-        List<Task> tasks = taskRepository.findAllByTaskPart_Campaign_IdxOrderByIdxDesc(campaignId);
+        List<Task> tasks = taskRepository.findAllByCampaignDirectOrViaTaskPart(campaignId);
         sb.append("[업무 목록]\r\n");
         appendRow(sb, "ID", "업무명", "상태", "우선순위", "유형", "마감일", "담당자", "업무 파트", "마일스톤", "참여사", "메모");
         for (Task t : tasks) {

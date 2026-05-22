@@ -38,25 +38,25 @@ public class KpiTemplateSeeder implements ApplicationRunner {
 
         List<KpiTemplate> seeds = List.of(
                 // ── 노출 (IMPRESSION) ─────────────────────────────────
-                tpl("순도달 (Reach) 500만 UU",       "UU",       KpiCategory.IMPRESSION, GoalKind.STRATEGIC),
-                tpl("SOV (Share of Voice) 25%",      "%",        KpiCategory.IMPRESSION, GoalKind.STRATEGIC),
-                tpl("광고 노출 1,000만 회",           "회",       KpiCategory.IMPRESSION, GoalKind.TACTICAL),
+                tpl("순도달 (Reach) 500만 UU",       "UU",       KpiCategory.GROWTH, GoalKind.STRATEGIC),
+                tpl("SOV (Share of Voice) 25%",      "%",        KpiCategory.GROWTH, GoalKind.STRATEGIC),
+                tpl("광고 노출 1,000만 회",           "회",       KpiCategory.GROWTH, GoalKind.TACTICAL),
 
                 // ── 참여 (ENGAGEMENT) ──────────────────────────────────
-                tpl("CTR 1.5% 유지",                  "%",        KpiCategory.ENGAGEMENT, GoalKind.TACTICAL),
-                tpl("영상 완주율 (VTR) 50%",          "%",        KpiCategory.ENGAGEMENT, GoalKind.TACTICAL),
-                tpl("SNS 팔로워 순증 1만 명",          "명",       KpiCategory.ENGAGEMENT, GoalKind.TACTICAL),
-                tpl("UGC 생성 1,000건",               "건",       KpiCategory.ENGAGEMENT, GoalKind.TACTICAL),
+                tpl("CTR 1.5% 유지",                  "%",        KpiCategory.GROWTH, GoalKind.TACTICAL),
+                tpl("영상 완주율 (VTR) 50%",          "%",        KpiCategory.GROWTH, GoalKind.TACTICAL),
+                tpl("SNS 팔로워 순증 1만 명",          "명",       KpiCategory.GROWTH, GoalKind.TACTICAL),
+                tpl("UGC 생성 1,000건",               "건",       KpiCategory.GROWTH, GoalKind.TACTICAL),
 
                 // ── 전환 (CONVERSION) ─────────────────────────────────
-                tpl("CVR (전환율) 3%",                "%",        KpiCategory.CONVERSION, GoalKind.TACTICAL),
-                tpl("랜딩페이지 방문 10만 세션",        "Sessions", KpiCategory.CONVERSION, GoalKind.TACTICAL),
-                tpl("신규 회원가입 5,000명",           "명",       KpiCategory.CONVERSION, GoalKind.TACTICAL),
+                tpl("CVR (전환율) 3%",                "%",        KpiCategory.GROWTH, GoalKind.TACTICAL),
+                tpl("랜딩페이지 방문 10만 세션",        "Sessions", KpiCategory.GROWTH, GoalKind.TACTICAL),
+                tpl("신규 회원가입 5,000명",           "명",       KpiCategory.GROWTH, GoalKind.TACTICAL),
 
                 // ── 매출 (REVENUE) ────────────────────────────────────
-                tpl("ROAS 400%",                      "%",        KpiCategory.REVENUE,    GoalKind.STRATEGIC),
-                tpl("CPA 25,000원 이하",              "원",       KpiCategory.REVENUE,    GoalKind.TACTICAL),
-                tpl("LTV:CAC 3배",                    "배수",     KpiCategory.REVENUE,    GoalKind.STRATEGIC),
+                tpl("ROAS 400%",                      "%",        KpiCategory.FINANCIAL,  GoalKind.STRATEGIC),
+                tpl("CPA 25,000원 이하",              "원",       KpiCategory.FINANCIAL,  GoalKind.TACTICAL),
+                tpl("LTV:CAC 3배",                    "배수",     KpiCategory.FINANCIAL,  GoalKind.STRATEGIC),
 
                 // ── 브랜드 (BRAND) ─────────────────────────────────────
                 tpl("브랜드 인지도 +5%p",             "%p",       KpiCategory.BRAND,      GoalKind.STRATEGIC),
@@ -65,10 +65,10 @@ public class KpiTemplateSeeder implements ApplicationRunner {
                 tpl("NPS 50점 이상",                  "점",       KpiCategory.BRAND,      GoalKind.STRATEGIC),
 
                 // ── 운영·기타 (OTHER) ─────────────────────────────────
-                tpl("신규 협력사 25곳 확보",          "곳",       KpiCategory.OTHER,      GoalKind.STRATEGIC),
-                tpl("캠페인 12건 런칭",               "건",       KpiCategory.OTHER,      GoalKind.STRATEGIC),
-                tpl("자산 LIVE 100건 유지",           "건",       KpiCategory.OTHER,      GoalKind.TACTICAL),
-                tpl("검수 패스율 90%",                "%",        KpiCategory.OTHER,      GoalKind.TACTICAL),
+                tpl("신규 협력사 25곳 확보",          "곳",       KpiCategory.OPERATIONAL, GoalKind.STRATEGIC),
+                tpl("캠페인 12건 런칭",               "건",       KpiCategory.OPERATIONAL, GoalKind.STRATEGIC),
+                tpl("자산 LIVE 100건 유지",           "건",       KpiCategory.OPERATIONAL, GoalKind.TACTICAL),
+                tpl("검수 패스율 90%",                "%",        KpiCategory.OPERATIONAL, GoalKind.TACTICAL),
 
                 // ── ESG ─────────────────────────────────────────────────
                 tplEsg("탄소 배출 10% 절감",          "%",        EsgCategory.ENVIRONMENTAL),
@@ -95,7 +95,7 @@ public class KpiTemplateSeeder implements ApplicationRunner {
         return KpiTemplate.builder()
                 .name(name)
                 .defaultUnit(unit)
-                .defaultCategory(KpiCategory.OTHER)
+                .defaultCategory(KpiCategory.SUSTAINABILITY)
                 .defaultEsgCategory(esg)
                 .defaultKind(GoalKind.STRATEGIC)
                 .scope(TemplateScope.GLOBAL)

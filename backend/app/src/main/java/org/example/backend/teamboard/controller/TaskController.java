@@ -65,6 +65,18 @@ public class TaskController {
         ));
     }
 
+    /** 개인 업무 생성 — 캠페인 없이 본인 담당 Task. 누구나(인증된 사용자) 가능. */
+    @PostMapping("/tasks")
+    public ResponseEntity<BaseResponse> createPersonal(
+            @RequestBody TaskDto.ReqTask req,
+            @AuthenticationPrincipal AuthUserDetails user
+    ) {
+        RoleGuard.requireAuthenticated(user);
+        return ResponseEntity.ok(BaseResponse.success(
+                taskService.createPersonal(req, user)
+        ));
+    }
+
     @PutMapping("/tasks/{taskId}")
     public ResponseEntity<BaseResponse> update(
             @PathVariable Long taskId,
@@ -87,9 +99,16 @@ public class TaskController {
         return ResponseEntity.ok(BaseResponse.success(null));
     }
 
-    private Long toIdx(String publicId) {
-        return campaignRepository.findByPublicId(publicId)
+    private Long toIdx(String campaignId) {
+        return campaignRepository.findByPublicId(campaignId)
                 .map(Campaign::getIdx)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "캠페인을 찾을 수 없습니다."));
+                // publicId가 없는(legacy) 캠페인은 프론트가 idx 문자열을 보냄 → 숫자면 idx로 폴백 조회
+                .orElseGet(() -> {
+                    if (campaignId != null && campaignId.matches("\\d+")
+                            && campaignRepository.existsById(Long.parseLong(campaignId))) {
+                        return Long.parseLong(campaignId);
+                    }
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "캠페인을 찾을 수 없습니다.");
+                });
     }
 }

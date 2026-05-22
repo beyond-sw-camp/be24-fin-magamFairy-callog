@@ -5,11 +5,11 @@
       <span class="card__value">{{ summary?.overallAchievementPercent ?? 0 }}%</span>
     </div>
     <div class="card">
-      <span class="card__label">총 노출 (IMPRESSION)</span>
+      <span class="card__label">성장 KPI 실적합</span>
       <span class="card__value">{{ fmt(summary?.totalImpression) }}</span>
     </div>
     <div class="card">
-      <span class="card__label">총 클릭 (ENGAGEMENT)</span>
+      <span class="card__label">재무 KPI 실적합</span>
       <span class="card__value">{{ fmt(summary?.totalClicks) }}</span>
     </div>
     <div class="card">

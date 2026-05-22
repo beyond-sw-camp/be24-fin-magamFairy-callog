@@ -1,11 +1,14 @@
 package org.example.backend.teamboard.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.backend.activity.service.CampaignActivityService;
+import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignMember;
 import org.example.backend.campaign.model.CampaignMemberRole;
 import org.example.backend.campaign.model.CampaignParticipant;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
+import org.example.backend.campaign.repository.CampaignRepository;
 import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.notification.service.NotificationService;
 import org.example.backend.notification.service.NotificationSseService;
@@ -39,27 +42,45 @@ public class TaskService {
     private final UserRepository userRepository;
     private final CampaignParticipantRepository participantRepository;
     private final CampaignMemberRepository campaignMemberRepository;
+    private final CampaignRepository campaignRepository;
     private final NotificationService notificationService;
     private final NotificationSseService sseService;
     private final DashboardCacheEvictor dashboardCacheEvictor;
+    private final CampaignActivityService activityService;
 
-    /** 메인 팀 보드 - 내가 참여한 캠페인의 Task */
+    /** 메인 팀 보드 - 내가 참여한 캠페인의 Task + 내 개인 업무(캠페인 무관). */
     public List<TaskDto.ResList> listAll(Long userIdx) {
         List<Long> campaignIds = campaignMemberRepository.findAllWithCampaignByUserIdx(userIdx)
                 .stream()
                 .map(cm -> cm.getCampaign().getIdx())
                 .toList();
-        if (campaignIds.isEmpty()) {
-            return List.of();
-        }
-        return taskRepository.findAllByTaskPart_Campaign_IdxInOrderByIdxDesc(campaignIds).stream()
+        List<Task> campaignTasks = campaignIds.isEmpty()
+                ? List.of()
+                : taskRepository.findAllByCampaignIdsDirectOrViaTaskPart(campaignIds);
+        // 개인 업무: 캠페인 연결 전혀 없는 본인 담당 Task (캘린더 개인 일정)
+        List<Task> personalTasks = taskRepository
+                .findAllByAssignee_IdxAndCampaignIsNullAndParticipantIsNullAndMilestoneIsNullAndTaskPartIsNullOrderByIdxDesc(userIdx);
+        return java.util.stream.Stream.concat(campaignTasks.stream(), personalTasks.stream())
                 .map(TaskDto.ResList::from)
                 .toList();
     }
 
-    /** 캠페인 팀 보드 - 캠페인 종속 Task */
+    /** 개인 업무 생성 — 캠페인/참여사/마일스톤/업무파트 없이, 담당자는 항상 본인. */
+    @Transactional
+    public TaskDto.ResTask createPersonal(TaskDto.ReqTask req, AuthUserDetails authUser) {
+        if (authUser == null || authUser.getIdx() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        User assignee = getUserOrThrow(authUser.getIdx());
+        Task saved = taskRepository.save(req.toEntity(null, null, null, assignee));
+        sseService.broadcastCalendarRefresh(null, "task");
+        dashboardCacheEvictor.evictAll();
+        return TaskDto.ResTask.from(saved);
+    }
+
+    /** 캠페인 팀 보드 - 캠페인 종속 Task (직접 campaign_id 또는 업무파트 경유) */
     public List<TaskDto.ResList> listByCampaign(Long campaignIdx) {
-        return taskRepository.findAllByTaskPart_Campaign_IdxOrderByIdxDesc(campaignIdx).stream()
+        return taskRepository.findAllByCampaignDirectOrViaTaskPart(campaignIdx).stream()
                 .map(TaskDto.ResList::from)
                 .toList();
     }
@@ -80,8 +101,15 @@ public class TaskService {
         CampaignParticipant participant = req.participantId() != null
                 ? getParticipantOrThrow(req.participantId()) : null;
 
-        Task saved = taskRepository.save(req.toEntity(participant, taskPart, milestone, assignee));
-        notificationService.notifyTaskAssigned(saved, findActor(authUser));
+        Task entity = req.toEntity(participant, taskPart, milestone, assignee);
+        // 1급화: 캠페인을 직접 연결 (taskPart 없이도 캠페인 소속이 되도록)
+        campaignRepository.findById(campaignIdx).ifPresent(entity::setCampaign);
+        Task saved = taskRepository.save(entity);
+        User actor = findActor(authUser);
+        notificationService.notifyTaskAssigned(saved, actor);
+        // 활동 로그: 업무 생성
+        activityService.record(resolveCampaign(saved), actor,
+                "TASK_CREATE", "업무 '" + saved.getName() + "' 생성");
         sseService.broadcastCalendarRefresh(campaignIdx, "task");
         // Dashboard 캐시 무효화 (reviewQueue, summary.pending, blockers 영향)
         dashboardCacheEvictor.evictAll();
@@ -108,10 +136,13 @@ public class TaskService {
         CampaignParticipant participant = req.participantId() != null
                 ? getParticipantOrThrow(req.participantId()) : task.getParticipant();
         TaskStatus nextStatus = req.status() != null ? req.status() : task.getStatus();
+        // startDate는 부분 수정(예: 드래그로 마감일만 변경) 시 기존 값 보존
+        java.time.LocalDateTime nextStartDate = req.startDate() != null ? req.startDate() : task.getStartDate();
 
         task.update(
                 req.name(),
                 participant,
+                nextStartDate,
                 req.dueDate(),
                 req.taskType(),
                 nextStatus,
@@ -147,6 +178,14 @@ public class TaskService {
             notificationService.notifyTaskAssigned(task, actor);
         }
         notificationService.notifyTaskStatusChanged(task, previousStatus, nextStatus, actor);
+        // 활동 로그: 상태 변경 (DONE 전환은 TASK_DONE, 그 외는 STATUS_CHANGE)
+        if (isStatusChanged) {
+            String actType = nextStatus == TaskStatus.DONE ? "TASK_DONE" : "STATUS_CHANGE";
+            String desc = nextStatus == TaskStatus.DONE
+                    ? "업무 '" + task.getName() + "' 완료"
+                    : "업무 '" + task.getName() + "' 상태 변경 " + previousStatus + "→" + nextStatus;
+            activityService.record(resolveCampaign(task), actor, actType, desc);
+        }
         if (isGeneralUpdate && !isAssigneeChanged && !isStatusChanged) {
             notificationService.notifyTaskUpdated(task, actor, teamRecipients(task, actor));
         }
@@ -168,6 +207,20 @@ public class TaskService {
         sseService.broadcastCalendarRefresh(campaignIdxForSse, "task");
         // Dashboard 캐시 무효화 (reviewQueue/blockers 에서 제거)
         dashboardCacheEvictor.evictAll();
+    }
+
+    /** 활동 로그용 캠페인 해석: 직접 campaign → 업무파트 경유 → 참여사 경유. 없으면 null(개인 업무). */
+    private Campaign resolveCampaign(Task task) {
+        if (task.getCampaign() != null) {
+            return task.getCampaign();
+        }
+        if (task.getTaskPart() != null && task.getTaskPart().getCampaign() != null) {
+            return task.getTaskPart().getCampaign();
+        }
+        if (task.getParticipant() != null && task.getParticipant().getCampaign() != null) {
+            return task.getParticipant().getCampaign();
+        }
+        return null;
     }
 
     private Task getTaskOrThrow(Long taskIdx) {

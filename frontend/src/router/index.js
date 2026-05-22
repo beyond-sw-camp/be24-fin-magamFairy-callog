@@ -172,7 +172,8 @@ const routes = [
         meta: {
           title: '분기 목표',
           section: '본사·계열사 KPI cascade 관리',
-          blockExternalPartnerUser: true,
+          // 모든 EXTERNAL_PARTNER 차단 (role 무관) — KPI 완전 격리
+          blockExternalPartner: true,
         },
       },
     ],
@@ -246,12 +247,11 @@ router.beforeEach(async (to) => {
     return { name: 'dashboard' }
   }
 
-  // EXTERNAL_PARTNER + ROLE_USER: KPI 관리 페이지 접근 차단
-  const blockExternalPartnerUser = to.matched.some((record) => record.meta.blockExternalPartnerUser)
-  if (blockExternalPartnerUser) {
+  // EXTERNAL_PARTNER: KPI 관련 페이지 전면 차단 (role 무관 — 모든 파트너사 차단)
+  const blockExternalPartner = to.matched.some((record) => record.meta.blockExternalPartner)
+  if (blockExternalPartner) {
     const orgType = String(authStore.user?.organization?.type ?? authStore.user?.orgType ?? '').toUpperCase()
-    const role = String(authStore.user?.role ?? '').toUpperCase()
-    if (orgType === 'EXTERNAL_PARTNER' && role === 'ROLE_USER') {
+    if (orgType === 'EXTERNAL_PARTNER') {
       return { name: 'dashboard' }
     }
   }

@@ -14,12 +14,34 @@ const props = defineProps({
     default: () => []
   }
 })
+const emit = defineEmits(['event-click'])
 
 // props 데이터 동기화
 const events = ref(props.eventsData);
 watch(() => props.eventsData, (newVal) => {
   events.value = newVal;
 });
+
+// 항목(유형) 라벨
+function typeLabel(e) {
+  if (!e) return '항목'
+  if (e.type === 'milestone') return '마일스톤'
+  if (e.type === 'deadline') return '모집마감'
+  if (e.type === 'campaign') return '캠페인'
+  if (e.type === 'taskpart') return '업무파트'
+  if (e.type === 'task') return e.campaignId ? '업무' : '개인 업무'
+  return '항목'
+}
+const PRIO_LABEL = {
+  CRITICAL: '긴급', HIGH: '높음', MEDIUM: '보통', LOW: '낮음',
+  critical: '긴급', high: '높음', medium: '보통', low: '낮음',
+}
+function priorityLabel(e) {
+  return e?.priority ? (PRIO_LABEL[e.priority] ?? e.priority) : '—'
+}
+function priorityKey(e) {
+  return e?.priority ? String(e.priority).toLowerCase() : 'none'
+}
 </script>
 
 <template>
@@ -30,7 +52,7 @@ watch(() => props.eventsData, (newVal) => {
           <tr>
             <th scope="col" class="lp-th lp-th--frozen">
               <span class="lp-th__inner">
-                PM사명
+                캠페인명
                 <svg class="lp-sort-ic" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
@@ -38,7 +60,23 @@ watch(() => props.eventsData, (newVal) => {
             </th>
             <th scope="col" class="lp-th">
               <span class="lp-th__inner">
-                캠페인명
+                이름
+                <svg class="lp-sort-ic" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
+            </th>
+            <th scope="col" class="lp-th">
+              <span class="lp-th__inner">
+                항목
+                <svg class="lp-sort-ic" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
+            </th>
+            <th scope="col" class="lp-th">
+              <span class="lp-th__inner">
+                우선순위
                 <svg class="lp-sort-ic" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
@@ -64,12 +102,26 @@ watch(() => props.eventsData, (newVal) => {
         </thead>
 
         <tbody class="lp-tbody">
-          <tr v-for="event in events" :key="event.id" class="lp-row">
+          <tr
+            v-for="event in events"
+            :key="event.id"
+            class="lp-row lp-row--click"
+            @click="emit('event-click', event)"
+          >
             <td class="lp-td lp-td--frozen">
-              {{ event.projectManager }}
+              {{ event.campaignName || '—' }}
             </td>
             <td class="lp-td lp-td--title">
               {{ event.title }}
+            </td>
+            <td class="lp-td">
+              <span class="lp-type-chip">{{ typeLabel(event) }}</span>
+            </td>
+            <td class="lp-td">
+              <span v-if="event.priority" class="lp-prio" :class="`lp-prio--${priorityKey(event)}`">
+                {{ priorityLabel(event) }}
+              </span>
+              <span v-else class="lp-td--muted">—</span>
             </td>
             <td class="lp-td lp-td--num">
               {{ event.start }}
@@ -215,6 +267,37 @@ watch(() => props.eventsData, (newVal) => {
 .lp-row:hover {
   background: var(--lp-surface-soft);
 }
+.lp-row--click { cursor: pointer; }
+
+/* 항목(유형) 칩 */
+.lp-type-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--lp-surface-soft);
+  color: var(--lp-primary-deep);
+  border: 1px solid var(--lp-border);
+  white-space: nowrap;
+}
+
+/* 우선순위 배지 */
+.lp-prio {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.lp-prio--critical { background: #fde2e1; color: #c0392b; }
+.lp-prio--high     { background: #ffe7d6; color: #c05621; }
+.lp-prio--medium   { background: var(--lp-card-lavender-1); color: var(--lp-primary-deep); }
+.lp-prio--low      { background: var(--lp-surface-soft); color: var(--lp-text-muted); }
+.lp-td--muted { color: var(--lp-text-faint); }
 
 .lp-td {
   height: 56px;
