@@ -60,9 +60,9 @@ public class BenefitController {
 
     @PostMapping("/benefit/add")
     public ResponseEntity addBenefit(@RequestBody MatchingDto.AddBenefit dto,
-                                   @AuthenticationPrincipal AuthUserDetails user){
+                                   @RequestHeader("X-User-Idx") Long userIdx){
         try {
-            benefitService.addBenefit( dto, user);
+            benefitService.addBenefit(dto, userIdx);
             return  ResponseEntity.status(HttpStatus.CREATED)
                     .body(BaseResponse.success(BaseResponseStatus.BENEFIT_ADD_SUCCESS));
         }

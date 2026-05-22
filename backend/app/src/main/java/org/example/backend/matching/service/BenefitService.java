@@ -57,8 +57,8 @@ public class BenefitService {
     }
 
     @Transactional
-    public void addBenefit(MatchingDto.AddBenefit dto, AuthUserDetails user) {
-        User userEntity = userRepository.getReferenceById(user.getIdx());
+    public void addBenefit(MatchingDto.AddBenefit dto, Long userIdx) {
+        User userEntity = userRepository.getReferenceById(userIdx);
         Organization affiliate = userEntity.getOrganization();
         Campaign campaign = campaignRepository.findById(dto.getCampaignIdx()).orElseThrow();
 
