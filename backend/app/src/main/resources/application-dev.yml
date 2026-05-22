@@ -39,7 +39,7 @@ admin:
   password: ${ADMIN_PASSWORD}
 spring:
   application:
-    name: callog-dev
+    name: callog
   cache:
     type: redis   # 명시: Redis 미가용 시 부팅 실패(fail-fast) — silent NoOp fallback 방지
   datasource:
@@ -146,3 +146,10 @@ management:
 msa:
   matching-evaluation:
     base-url: ${EVALUATION_URL}
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_URI}

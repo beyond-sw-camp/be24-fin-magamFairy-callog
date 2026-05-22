@@ -1,12 +1,8 @@
-plugins {
-    id 'org.springframework.boot'
-    id 'io.spring.dependency-management'
-}
-
 description = 'app'
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
     implementation 'io.micrometer:micrometer-tracing-bridge-otel'
     implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
@@ -45,4 +41,8 @@ dependencies {
     implementation 'io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37'
     implementation 'io.github.openhtmltopdf:openhtmltopdf-slf4j:1.1.37'
     implementation 'software.amazon.awssdk:s3:2.25.70'
+
+
+    // 유레카
+    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
 }
