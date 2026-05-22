@@ -8,6 +8,7 @@ import { UpdateCampaign, UpdateCampaignStatus } from '@/api/campaigns'
 import ReviewApprovalView from '@/views/ReviewApprovalView.vue'
 import MatchOverview from '@/views/MatchOverview.vue'
 import CampaignMembersPanel from '@/components/campaign/CampaignMembersPanel.vue'
+import CampaignLibraryTab from '@/components/campaign/CampaignLibraryTab.vue'
 import CampaignKpiTab from '@/components/campaign/kpi/CampaignKpiTab.vue'
 import CampaignKpiCascadeView from '@/components/campaign/CampaignKpiCascadeView.vue'
 import CampaignExportModal from '@/components/campaign/CampaignExportModal.vue'
@@ -119,7 +120,7 @@ const isPartner = computed(() => {
   return t === 'EXTERNAL_PARTNER';
 });
 const tabs = computed(() => {
-  const base = ["캠페인 오버뷰", "팀 보드 보기", "검수/승인", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
+  const base = ["캠페인 오버뷰", "팀 보드 보기", "검수/승인", "자료실", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
   return isPartner.value ? base.filter((t) => t !== '캠페인 성과/KPI') : base;
 });
 
@@ -877,6 +878,7 @@ const TAB_QUERY_MAP = {
   overview: '캠페인 오버뷰',
   board: '팀 보드 보기',
   review: '검수/승인',
+  library: '자료실',
   members: '참여자 설정',
   kpi: '캠페인 성과/KPI',
   matching: '매칭 탭',
@@ -1348,6 +1350,10 @@ watch(() => route.query.tab, applyTabFromQuery)
 
     <section v-else-if="activeTab === '검수/승인'" class="tab-surface">
       <ReviewApprovalView :key="campaignId" :campaign-id="campaignId" />
+    </section>
+
+    <section v-else-if="activeTab === '자료실'" class="tab-surface">
+      <CampaignLibraryTab :key="campaignId" :campaign-id="campaignId" />
     </section>
 
     <section v-else-if="activeTab === '참여자 설정'" class="tab-surface">
