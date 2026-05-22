@@ -79,9 +79,16 @@ public class TaskPartsController {
         return ResponseEntity.ok(BaseResponse.success(null));
     }
 
-    private Long toIdx(String publicId) {
-        return campaignRepository.findByPublicId(publicId)
+    private Long toIdx(String campaignId) {
+        return campaignRepository.findByPublicId(campaignId)
                 .map(Campaign::getIdx)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "캠페인을 찾을 수 없습니다."));
+                // publicId가 없는(legacy) 캠페인은 프론트가 idx 문자열을 보냄 → 숫자면 idx로 폴백 조회
+                .orElseGet(() -> {
+                    if (campaignId != null && campaignId.matches("\\d+")
+                            && campaignRepository.existsById(Long.parseLong(campaignId))) {
+                        return Long.parseLong(campaignId);
+                    }
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "캠페인을 찾을 수 없습니다.");
+                });
     }
 }

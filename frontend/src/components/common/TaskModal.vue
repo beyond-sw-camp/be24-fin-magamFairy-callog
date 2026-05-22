@@ -115,6 +115,21 @@ watch(
   { immediate: true, deep: true },
 )
 
+/* 시간: 자유 텍스트 대신 시작/종료 time picker 로 분해해서 편집.
+   form.timeRange 문자열("HH:MM - HH:MM") 과 양방향 동기화. */
+function composeTimeRange(start, end) {
+  if (start && end) return `${start} - ${end}`
+  return start || end || ''
+}
+const startTime = computed({
+  get: () => (form.value?.timeRange?.split('-')[0] ?? '').trim(),
+  set: (v) => { if (form.value) form.value.timeRange = composeTimeRange(v, endTime.value) },
+})
+const endTime = computed({
+  get: () => (form.value?.timeRange?.split('-')[1] ?? '').trim(),
+  set: (v) => { if (form.value) form.value.timeRange = composeTimeRange(startTime.value, v) },
+})
+
 watch(
   [() => store.taskOpenToken, () => store.createTaskToken],
   ([taskToken, createToken], [prevTaskToken, prevCreateToken]) => {
@@ -310,8 +325,10 @@ function deleteTask() {
 
             <div class="task-modal__property">
               <span>시간</span>
-              <div class="task-modal__control">
-                <input v-model="form.timeRange" type="text" placeholder="10:00 - 13:00" />
+              <div class="task-modal__control task-modal__control--time">
+                <input v-model="startTime" type="time" aria-label="시작 시간" />
+                <span class="task-modal__time-sep">~</span>
+                <input v-model="endTime" type="time" aria-label="종료 시간" />
               </div>
             </div>
 
@@ -569,6 +586,15 @@ function deleteTask() {
 .task-modal__control--inline {
   grid-template-columns: minmax(0, 1fr) 170px;
   align-items: center;
+}
+
+.task-modal__control--time {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+}
+.task-modal__time-sep {
+  color: var(--muted-text);
+  text-align: center;
 }
 
 .task-modal__control input,
