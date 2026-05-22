@@ -38,8 +38,8 @@ spring:
           predicates:
             - Path=/evaluation/**
 
-        - id: callog
-          uri: lb://callog
+        - id: app
+          uri: lb://app
           predicates:
             - Path=/**
 

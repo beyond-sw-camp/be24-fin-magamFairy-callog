@@ -39,7 +39,7 @@ admin:
   password: ${ADMIN_PASSWORD}
 spring:
   application:
-    name: callog
+    name: app
   cache:
     type: redis   # 명시: Redis 미가용 시 부팅 실패(fail-fast) — silent NoOp fallback 방지
   datasource:
