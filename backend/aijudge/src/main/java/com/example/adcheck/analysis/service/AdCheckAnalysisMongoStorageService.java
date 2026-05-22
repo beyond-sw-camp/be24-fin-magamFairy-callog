@@ -5,6 +5,7 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.ReplaceOptions;
+import com.example.adcheck.service.AdCheckFileStorageService;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
@@ -17,6 +18,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Slf4j
@@ -34,10 +36,15 @@ public class AdCheckAnalysisMongoStorageService {
 
     private MongoClient mongoClient;
     private String resolvedDatabaseName;
+    private final AdCheckFileStorageService adCheckFileStorageService;
 
-    public void save(AdCheckDto.FileCheckRes response) {
+    public AdCheckAnalysisMongoStorageService(AdCheckFileStorageService adCheckFileStorageService) {
+        this.adCheckFileStorageService = adCheckFileStorageService;
+    }
+
+    public boolean save(AdCheckDto.FileCheckRes response) {
         if (!isEnabled() || response == null || !StringUtils.hasText(response.getAnalysisJobId())) {
-            return;
+            return false;
         }
 
         try {
@@ -50,10 +57,24 @@ public class AdCheckAnalysisMongoStorageService {
             );
             log.info("Saved ad check analysis result to MongoDB. analysisJobId={}, database={}, collection={}",
                     response.getAnalysisJobId(), resolvedDatabaseName, analysisCollection);
+            return true;
         } catch (Exception e) {
             log.warn("Ad check analysis MongoDB save failed. analysisJobId={}, errorType={}, message={}",
                     response.getAnalysisJobId(), e.getClass().getSimpleName(), sanitize(e.getMessage()));
+            return false;
         }
+    }
+
+    public Optional<AdCheckDto.FileCheckRes> findByAnalysisJobId(String analysisJobId) {
+        if (!isEnabled() || !StringUtils.hasText(analysisJobId)) {
+            return Optional.empty();
+        }
+
+        Document document = collection().find(new Document("_id", analysisJobId.trim())).first();
+        if (document == null) {
+            return Optional.empty();
+        }
+        return Optional.of(toResponse(document));
     }
 
     private boolean isEnabled() {
@@ -146,6 +167,110 @@ public class AdCheckAnalysisMongoStorageService {
                 .append("ocrMillis", processingTimes.getOcrMillis())
                 .append("aiAnalysisMillis", processingTimes.getAiAnalysisMillis())
                 .append("totalMillis", processingTimes.getTotalMillis());
+    }
+
+    private AdCheckDto.FileCheckRes toResponse(Document document) {
+        Document file = document.get("file", Document.class);
+        Document artifacts = document.get("artifacts", Document.class);
+        Document result = document.get("result", Document.class);
+        Document processingTimes = document.get("processingTimes", Document.class);
+
+        return AdCheckDto.FileCheckRes.builder()
+                .analysisJobId(text(document, "analysisJobId"))
+                .analysisObjectPrefix(text(document, "analysisObjectPrefix"))
+                .fileName(text(file, "name"))
+                .fileObjectKey(text(file, "objectKey"))
+                .fileUrl(viewUrl(text(file, "objectKey"), text(file, "contentType")))
+                .fileContentType(text(file, "contentType"))
+                .fileSize(longValue(file, "size"))
+                .extractedTextObjectKey(text(artifacts, "extractedTextObjectKey"))
+                .extractedTextUrl(viewUrl(text(artifacts, "extractedTextObjectKey"), "text/plain"))
+                .aiResultObjectKey(text(artifacts, "aiResultObjectKey"))
+                .aiResultUrl(viewUrl(text(artifacts, "aiResultObjectKey"), "application/json"))
+                .finalResultObjectKey(text(artifacts, "finalResultObjectKey"))
+                .finalResultUrl(viewUrl(text(artifacts, "finalResultObjectKey"), "application/json"))
+                .extractedImageAssets(imageArtifacts(artifacts))
+                .extractedText(text(document, "extractedText"))
+                .status(text(result, "status"))
+                .law(text(result, "law"))
+                .violationText(text(result, "violationText"))
+                .reason(text(result, "reason"))
+                .suggestion(text(result, "suggestion"))
+                .errorMessage(text(result, "errorMessage"))
+                .extractionMode(text(document, "extractionMode"))
+                .processingTimes(toProcessingTimes(processingTimes))
+                .build();
+    }
+
+    private List<AdCheckDto.FileArtifact> imageArtifacts(Document artifacts) {
+        if (artifacts == null) {
+            return List.of();
+        }
+        List<Document> images = artifacts.getList("images", Document.class, List.of());
+        if (images == null || images.isEmpty()) {
+            return List.of();
+        }
+
+        List<AdCheckDto.FileArtifact> imageArtifacts = new ArrayList<>();
+        for (Document image : images) {
+            imageArtifacts.add(AdCheckDto.FileArtifact.builder()
+                    .type(text(image, "type"))
+                    .targetId(text(image, "targetId"))
+                    .page(integerValue(image, "page"))
+                    .readingOrder(integerValue(image, "readingOrder"))
+                    .objectKey(text(image, "objectKey"))
+                    .url(viewUrl(text(image, "objectKey"), text(image, "contentType")))
+                    .contentType(text(image, "contentType"))
+                    .fileSize(longValue(image, "size"))
+                    .build());
+        }
+        return imageArtifacts;
+    }
+
+    private AdCheckDto.ProcessingTimes toProcessingTimes(Document processingTimes) {
+        if (processingTimes == null || processingTimes.isEmpty()) {
+            return null;
+        }
+        return AdCheckDto.ProcessingTimes.builder()
+                .textExtractionMillis(longValue(processingTimes, "textExtractionMillis"))
+                .layoutMillis(longValue(processingTimes, "layoutMillis"))
+                .ocrMillis(longValue(processingTimes, "ocrMillis"))
+                .aiAnalysisMillis(longValue(processingTimes, "aiAnalysisMillis"))
+                .totalMillis(longValue(processingTimes, "totalMillis"))
+                .build();
+    }
+
+    private String text(Document document, String name) {
+        if (document == null) {
+            return null;
+        }
+        Object value = document.get(name);
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private Integer integerValue(Document document, String name) {
+        Number value = number(document, name);
+        return value == null ? null : value.intValue();
+    }
+
+    private Long longValue(Document document, String name) {
+        Number value = number(document, name);
+        return value == null ? null : value.longValue();
+    }
+
+    private Number number(Document document, String name) {
+        if (document == null) {
+            return null;
+        }
+        Object value = document.get(name);
+        return value instanceof Number number ? number : null;
+    }
+
+    private String viewUrl(String objectKey, String contentType) {
+        if (!StringUtils.hasText(objectKey)) {
+            return null;
+        }
+        return adCheckFileStorageService.createViewUrl(objectKey, contentType);
     }
 
     private String sanitize(String message) {

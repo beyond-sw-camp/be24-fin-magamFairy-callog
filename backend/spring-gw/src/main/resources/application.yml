@@ -9,8 +9,6 @@ spring:
           uri: ${AIJUDGE_URI}
           predicates:
             - Path=/aijudge/**
-          filters:
-            - StripPrefix=1
 
         # Matching Evaluation ??
         - id: matching-evaluation-service
