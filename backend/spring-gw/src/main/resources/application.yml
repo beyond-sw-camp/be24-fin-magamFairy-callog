@@ -36,8 +36,8 @@ spring:
           filters:
             - StripPrefix=1
 
-        - id: ai-evaluation
-          uri: lb://ai-evaluation
+        - id: matching-evaluation
+          uri: lb://matching-evaluation
           predicates:
             - Path=/evaluation/**
 

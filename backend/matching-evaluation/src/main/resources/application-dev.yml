@@ -5,7 +5,7 @@ server:
     max-keep-alive-requests: -1
 spring:
   application:
-    name: ai-evaluation
+    name: matching-evaluation
   data:
     mongodb:
       uri: ${MONGODB_URL}
