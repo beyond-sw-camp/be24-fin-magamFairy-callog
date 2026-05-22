@@ -1,14 +1,14 @@
 <script setup>
 /**
- * Zone 4 — 흐름 (2 페이지)
- *  P1: 캠페인 파이프라인 — 도넛(4 segment) + 단계 리스트 (변형 F)
- *  P2: 매출 추이 — 연/분기 selector + YoY 가로 듀얼 막대 (변형 N)
+ * Zone 4 — 흐름 (2 페이지 캐러셀)
+ *  P1: 캠페인 파이프라인 — 도넛(4 segment) + 단계 리스트
+ *  P2: 성과 트래커 — 분기 달성률 반원 게이지 + 3스탯 + 매출 추이(월간/분기) 영역 차트
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useDashboardZonePrefs } from '@/composables/useDashboardZonePrefs'
-import { GetRevenueYoY } from '@/api/dashboard'
+import { GetRevenueQuarters } from '@/api/dashboard'
 
 const ApexChart = VueApexCharts
 const store = useDashboardStore()
@@ -48,7 +48,6 @@ const pipeTotal = computed(() => pipeline.value.reduce((s, p) => s + p.count, 0)
 const pipeMax = computed(() => Math.max(1, ...pipeline.value.map((p) => p.count)))
 const hasPipeline = computed(() => pipeTotal.value > 0)
 
-/* 단계별 점유율(%) */
 const pipeRows = computed(() => {
   const total = pipeTotal.value || 1
   const max = pipeMax.value
@@ -59,7 +58,6 @@ const pipeRows = computed(() => {
   }))
 })
 
-/* 도넛 호(arc) 분할 — r=76, stroke 18, viewBox 184 */
 const DONUT_R = 76
 const DONUT_C = 2 * Math.PI * DONUT_R
 const donutSegs = computed(() => {
@@ -76,75 +74,89 @@ const donutSegs = computed(() => {
     })
 })
 
-/* ─── P2: 매출 추이 (YoY 가로 듀얼 막대) ─── */
+/* ─── P2: 성과 트래커 (분기 달성률 게이지 + 3스탯) ─── */
 const now = new Date()
-const z4Year = ref(now.getFullYear())
-const z4Quarter = ref(Math.ceil((now.getMonth() + 1) / 3))
-const YEARS = [2024, 2025, 2026]
-const QUARTERS = [1, 2, 3, 4]
 
-const yoyData = ref([])
-const yoyLoading = ref(false)
-async function loadYoY() {
-  yoyLoading.value = true
+// 매출(FINANCIAL) 분기 목표 — store.quarterGoals 에서 합산
+const finGoal = computed(() => {
+  const fins = (store.quarterGoals ?? []).filter(
+    (g) => String(g.category ?? '').toUpperCase() === 'FINANCIAL',
+  )
+  if (!fins.length) return { target: 0, actual: 0, pct: 0, months: [0, 0, 0] }
+  const target = fins.reduce((s, g) => s + (Number(g.targetValue) || 0), 0)
+  const actual = fins.reduce((s, g) => s + (Number(g.actualValue) || 0), 0)
+  const pct = target > 0 ? Math.round((actual / target) * 100) : (actual > 0 ? 100 : 0)
+  const months = [0, 1, 2].map((i) =>
+    fins.reduce((s, g) => s + (Number(g.monthlyActuals?.[i]) || 0), 0),
+  )
+  return { target, actual, pct, months }
+})
+const achievePct = computed(() => Math.max(0, Math.min(100, finGoal.value.pct)))
+const revenueTotal = computed(() => finGoal.value.actual)
+const campaignCount = computed(() => (store.myCampaigns ?? []).length)
+const assetLive = computed(() =>
+  Object.values(store.assetCategories ?? {}).reduce((s, v) => s + (Number(v) || 0), 0),
+)
+
+// 반원 게이지 (viewBox 220×124, r=90)
+const GAUGE_R = 90
+const GAUGE_LEN = Math.PI * GAUGE_R
+const gaugeDash = computed(() => `${(achievePct.value / 100) * GAUGE_LEN} ${GAUGE_LEN}`)
+const gaugeKnob = computed(() => {
+  const th = ((180 - 1.8 * achievePct.value) * Math.PI) / 180
+  return { x: 110 + GAUGE_R * Math.cos(th), y: 110 - GAUGE_R * Math.sin(th) }
+})
+
+/* ─── P2: 매출 추이 차트 (월간 / 분기 토글) ─── */
+const revMode = ref('month') // 'month' | 'quarter'
+const quarterData = ref([])
+async function loadQuarters() {
   try {
-    const res = await GetRevenueYoY(z4Year.value, z4Quarter.value)
-    yoyData.value = Array.isArray(res) ? res : (Array.isArray(res?.items) ? res.items : [])
+    const res = await GetRevenueQuarters(now.getFullYear())
+    quarterData.value = Array.isArray(res) ? res : (Array.isArray(res?.items) ? res.items : [])
   } catch (e) {
-    yoyData.value = []
-    console.warn('[zone4] revenue-yoy 실패', e)
-  } finally {
-    yoyLoading.value = false
+    quarterData.value = []
+    console.warn('[zone4] revenue-quarters 실패', e)
   }
 }
-onMounted(loadYoY)
-watch([z4Year, z4Quarter], loadYoY)
+onMounted(loadQuarters)
 
-const yoyRows = computed(() =>
-  (yoyData.value ?? []).map((d) => ({
-    label: d.label,
-    value: Number(d.value) || 0,
-    prev: Number(d.prev) || 0,
-  })))
-const hasYoY = computed(() => yoyRows.value.some((r) => r.value > 0 || r.prev > 0))
-const yoyMax = computed(() => Math.max(1, ...yoyRows.value.flatMap((r) => [r.value, r.prev])))
-const yoyTotalCur = computed(() => yoyRows.value.reduce((s, r) => s + r.value, 0))
-const yoyTotalPrev = computed(() => yoyRows.value.reduce((s, r) => s + r.prev, 0))
-const yoyDelta = computed(() => {
-  const prev = yoyTotalPrev.value
-  if (prev === 0) return yoyTotalCur.value > 0 ? 100 : null
-  return Math.round(((yoyTotalCur.value - prev) / prev) * 100)
+const monthLabels = computed(() => {
+  const q = Math.ceil((now.getMonth() + 1) / 3)
+  const first = (q - 1) * 3 + 1
+  return [first, first + 1, first + 2].map((m) => `${m}월`)
 })
-function rowYoY(r) {
-  if (r.prev === 0) return r.value > 0 ? 100 : null
-  return Math.round(((r.value - r.prev) / r.prev) * 100)
-}
-const yy = (full) => String(full % 100).padStart(2, '0')
+const revView = computed(() => {
+  if (revMode.value === 'quarter') {
+    return {
+      labels: quarterData.value.map((p) => p.label),
+      data: quarterData.value.map((p) => Number(p.value) || 0),
+    }
+  }
+  return { labels: monthLabels.value, data: finGoal.value.months }
+})
+const revTotal = computed(() => revView.value.data.reduce((s, v) => s + v, 0))
+const hasRev = computed(() => revView.value.data.some((v) => v > 0))
 
-/* 월별 라인 차트 (올해 vs 작년) — 주식 차트 느낌 */
-const yoySeries = computed(() => [
-  { name: `올해(${z4Year.value})`, data: yoyRows.value.map((r) => r.value) },
-  { name: `작년(${z4Year.value - 1})`, data: yoyRows.value.map((r) => r.prev) },
-])
-const yoyChartOptions = computed(() => ({
+const revChartSeries = computed(() => [{ name: '매출', data: revView.value.data }])
+const revChartOptions = computed(() => ({
   chart: {
     type: 'area', toolbar: { show: false }, fontFamily: "'Pretendard Variable', sans-serif",
-    animations: { enabled: true, easing: 'easeinout', speed: 700 }, foreColor: '#9991AE',
+    animations: { enabled: true, easing: 'easeinout', speed: 800 }, foreColor: '#9991AE',
   },
-  colors: ['#3F3463', '#C6BAE6'],
-  stroke: { curve: 'smooth', width: [3, 2], dashArray: [0, 5] },
-  fill: { type: 'gradient', gradient: { shadeIntensity: 0.7, opacityFrom: 0.28, opacityTo: 0, stops: [0, 95] } },
-  markers: { size: 4, strokeColors: '#fff', strokeWidth: 2, hover: { size: 6 } },
+  colors: ['#9D85FF'],
+  stroke: { curve: 'smooth', width: 3 },
+  fill: { type: 'gradient', gradient: { shadeIntensity: 0.8, opacityFrom: 0.30, opacityTo: 0, stops: [0, 90] } },
+  markers: { size: 4, colors: ['#9D85FF'], strokeColors: '#fff', strokeWidth: 2, hover: { size: 6 } },
   grid: { borderColor: '#E5DDF0', strokeDashArray: 4, xaxis: { lines: { show: false } } },
   dataLabels: { enabled: false },
-  legend: { show: true, position: 'top', horizontalAlign: 'right', fontSize: '11px', markers: { width: 9, height: 9, radius: 3 }, labels: { colors: '#6B6582' } },
   xaxis: {
-    categories: yoyRows.value.map((r) => r.label),
+    categories: revView.value.labels,
     axisBorder: { show: false }, axisTicks: { show: false },
     labels: { style: { fontSize: '11px', colors: '#9991AE' } },
   },
   yaxis: { labels: { style: { fontSize: '10px', colors: '#9991AE' }, formatter: (v) => fmtWon(v) } },
-  tooltip: { theme: 'light', y: { formatter: (v) => fmtWon(v) } },
+  tooltip: { y: { formatter: (v) => '₩' + Number(v).toLocaleString() } },
 }))
 </script>
 
@@ -152,9 +164,9 @@ const yoyChartOptions = computed(() => ({
   <section class="card zone4" aria-label="캠페인 흐름">
     <div class="card-h">
       <div class="card-h-ttl">
-        <h2>{{ page === 0 ? '캠페인 파이프라인' : '매출 추이' }}</h2>
+        <h2>{{ page === 0 ? '캠페인 파이프라인' : '성과 트래커' }}</h2>
         <span class="card-dot" />
-        <p class="lede">{{ page === 0 ? '내 캠페인 단계별 분포' : '연/분기 YoY 비교' }}</p>
+        <p class="lede">{{ page === 0 ? '내 캠페인 단계별 분포' : '분기 매출 vs 목표 추이' }}</p>
       </div>
       <div class="z4-controls">
         <div class="zone-nav">
@@ -200,64 +212,43 @@ const yoyChartOptions = computed(() => ({
         <div v-else class="z4-empty">파이프라인 데이터가 없습니다.</div>
       </div>
 
-      <!-- P2: YoY 가로 듀얼 막대 -->
-      <div v-else :key="'yoy'" class="z4-body">
-        <div class="z4n-toggle">
-          <select v-model.number="z4Year" aria-label="연도 선택">
-            <option v-for="y in YEARS" :key="y" :value="y">{{ y }}년</option>
-          </select>
-          <select v-model.number="z4Quarter" aria-label="분기 선택">
-            <option v-for="q in QUARTERS" :key="q" :value="q">{{ q }}분기</option>
-          </select>
+      <!-- P2: 성과 트래커 (게이지 + 스탯) + 매출 추이 차트 -->
+      <div v-else :key="'tracker'" class="z4-body z4-rev">
+        <!-- 히어로: 반원 게이지 + 3스탯 -->
+        <div class="z4-hero">
+          <div class="z4-hero-gauge">
+            <svg width="220" height="120" viewBox="0 0 220 124" aria-hidden="true">
+              <path d="M 20 110 A 90 90 0 0 1 200 110" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="16" stroke-linecap="round" />
+              <path d="M 20 110 A 90 90 0 0 1 200 110" fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round" :stroke-dasharray="gaugeDash" class="z4-gauge-arc" />
+              <circle :cx="gaugeKnob.x" :cy="gaugeKnob.y" r="8" fill="#fff" />
+            </svg>
+            <div class="z4-hero-pill">
+              <span class="z4-hero-pct">{{ achievePct }}%</span>
+              <span class="z4-hero-pl">분기 달성률</span>
+            </div>
+          </div>
+          <div class="z4-hero-stats">
+            <div class="z4-stat"><span class="z4-stat-l">매출 합계</span><span class="z4-stat-v">{{ fmtWon(revenueTotal) }}</span></div>
+            <div class="z4-stat"><span class="z4-stat-l">캠페인</span><span class="z4-stat-v">{{ campaignCount }}건</span></div>
+            <div class="z4-stat"><span class="z4-stat-l">자산 LIVE</span><span class="z4-stat-v">{{ assetLive }}</span></div>
+          </div>
         </div>
 
-        <template v-if="hasYoY">
-          <div class="z4n-head">
-            <div class="z4n-total">
-              {{ fmtWon(yoyTotalCur) }}
-            </div>
-            <span class="z4n-delta" :class="{ down: (yoyDelta ?? 0) < 0 }">
-              {{ yoyDelta == null ? '–' : ((yoyDelta >= 0 ? '▲ ' : '▼ ') + Math.abs(yoyDelta) + '% YoY') }}
-            </span>
+        <!-- 매출 추이 차트 -->
+        <div class="z4-rev-h">
+          <div class="z4-rev-h-l">
+            <strong>매출 추이</strong>
+            <span>{{ revMode === 'month' ? '이번 분기 · 월간' : `${now.getFullYear()} · 분기` }}</span>
           </div>
-          <p class="z4n-sub">전년 동기 {{ fmtWon(yoyTotalPrev) }} · {{ z4Year }} Q{{ z4Quarter }} 기준</p>
-
-          <div class="z4n-legend">
-            <span class="z4n-leg z4n-leg--cur">올해 {{ z4Year }}년</span>
-            <span class="z4n-leg z4n-leg--prev">작년 {{ z4Year - 1 }}년</span>
+          <div class="z4-seg">
+            <button :class="{ on: revMode === 'month' }" @click="revMode = 'month'">월간</button>
+            <button :class="{ on: revMode === 'quarter' }" @click="revMode = 'quarter'">분기</button>
           </div>
-
-          <div class="z4n-rows">
-            <div v-for="(r, i) in yoyRows" :key="i" class="z4n-row">
-              <div class="z4n-row-h">
-                <span class="z4n-row-m">{{ r.label }}</span>
-                <span class="z4n-row-yoy" :class="{ down: (rowYoY(r) ?? 0) < 0 }">
-                  {{ rowYoY(r) == null ? '–' : ((rowYoY(r) >= 0 ? '▲' : '▼') + Math.abs(rowYoY(r)) + '% YoY') }}
-                </span>
-              </div>
-              <div class="z4n-bars">
-                <div class="z4n-bar-row">
-                  <span class="z4n-bar-tag">{{ yy(z4Year) }}</span>
-                  <div class="z4n-bar-track">
-                    <span class="z4n-bar-fill cur" :style="{ width: Math.round((r.value / yoyMax) * 100) + '%' }" />
-                  </div>
-                  <span class="z4n-bar-v">{{ fmtWon(r.value) }}</span>
-                </div>
-                <div class="z4n-bar-row">
-                  <span class="z4n-bar-tag">{{ yy(z4Year - 1) }}</span>
-                  <div class="z4n-bar-track">
-                    <span class="z4n-bar-fill prev" :style="{ width: Math.round((r.prev / yoyMax) * 100) + '%' }" />
-                  </div>
-                  <span class="z4n-bar-v">{{ fmtWon(r.prev) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- 월별 라인 차트 (올해 vs 작년) — 주식 차트 느낌 -->
-          <div class="z4n-chart">
-            <ApexChart type="area" height="100%" :options="yoyChartOptions" :series="yoySeries" />
-          </div>
-        </template>
+        </div>
+        <div class="z4-rev-total">{{ fmtWon(revTotal) }}</div>
+        <div v-if="hasRev" class="z4-rev-chart">
+          <ApexChart type="area" height="100%" :options="revChartOptions" :series="revChartSeries" />
+        </div>
         <div v-else class="z4-empty">매출 데이터가 없습니다.</div>
       </div>
     </Transition>
@@ -267,7 +258,6 @@ const yoyChartOptions = computed(() => ({
 <style scoped>
 .zone4 {
   display: flex; flex-direction: column; height: 100%;
-  /* base.css에 없는 urgent 톤 로컬 선언 (YoY 음수·마감 등) */
   --urgent: #E25B49; --urgent-soft: rgba(226,91,73,.14);
 }
 .card-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px; }
@@ -277,7 +267,6 @@ const yoyChartOptions = computed(() => ({
 .card-h .lede { margin: 0; font-size: 12px; font-weight: 500; color: var(--lp-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .z4-controls { display: inline-flex; align-items: center; gap: 10px; }
-
 .zone-nav { display: inline-flex; align-items: center; gap: 6px; }
 .nav-btn { width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--lp-border); background: var(--lp-surface); color: var(--lp-primary-deep); cursor: pointer; font-size: 14px; line-height: 1; transition: background .15s, transform .12s; }
 .nav-btn:hover { background: var(--lp-surface-soft); }
@@ -304,47 +293,43 @@ const yoyChartOptions = computed(() => ({
 .z4-stage-bar { grid-column: 1 / -1; height: 5px; border-radius: 999px; background: var(--lp-surface-soft); overflow: hidden; }
 .z4-stage-bar-fill { display: block; height: 100%; border-radius: 999px; transition: width .9s cubic-bezier(.4,0,.2,1); transform-origin: left; animation: lp-grow-x .7s cubic-bezier(.4,0,.2,1) both; }
 
-/* ── P2: YoY ── */
-.z4n-toggle { display: flex; gap: 6px; margin-bottom: 12px; }
-.z4n-toggle select {
-  flex: 1; padding: 6px 26px 6px 10px;
-  font-size: 11.5px; font-weight: 700;
-  color: var(--lp-primary-deep);
-  background-color: var(--lp-surface-soft);
-  border: 1px solid transparent; border-radius: var(--r-md, 14px);
-  cursor: pointer; font-family: inherit; appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%233F3463' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 10px center;
+/* ── P2: 성과 트래커 히어로 ── */
+.z4-rev { gap: 0; }
+.z4-hero {
+  /* 카드 패딩 밖으로 풀-블리드 */
+  margin: 0 -24px 14px;
+  padding: 16px 24px 18px;
+  background: linear-gradient(155deg, #BCA9EA 0%, #9D85FF 60%, #8E72F2 100%);
+  color: #fff;
+  position: relative; overflow: hidden;
+  animation: lp-rise .45s cubic-bezier(.4,0,.2,1) both;
 }
-.z4n-toggle select:focus { outline: none; border-color: var(--lp-primary); }
+.z4-hero::before { content:''; position:absolute; top:-60px; right:-40px; width:180px; height:180px; border-radius:999px; background:rgba(255,255,255,.10); }
+.z4-hero-gauge { position: relative; display: flex; justify-content: center; }
+.z4-gauge-arc { transition: stroke-dasharray .8s cubic-bezier(.4,0,.2,1); }
+.z4-hero-pill {
+  position: absolute; left: 50%; top: 68%; transform: translate(-50%, -50%);
+  background: rgba(255,255,255,.18); border-radius: 14px; padding: 8px 20px;
+  display: flex; flex-direction: column; align-items: center; line-height: 1.05;
+}
+.z4-hero-pct { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+.z4-hero-pl { font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,.85); margin-top: 2px; }
+.z4-hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; position: relative; }
+.z4-stat { background: rgba(255,255,255,.16); border-radius: 12px; padding: 10px 8px; text-align: center; }
+.z4-stat-l { display: block; font-size: 10.5px; font-weight: 600; color: rgba(255,255,255,.82); }
+.z4-stat-v { display: block; font-size: 16px; font-weight: 800; margin-top: 3px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 
-.z4n-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.z4n-total { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--lp-text); font-variant-numeric: tabular-nums; }
-.z4n-delta { padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 800; background: rgba(168,189,66,.20); color: #4F7A2E; white-space: nowrap; }
-.z4n-delta.down { background: var(--urgent-soft); color: var(--urgent); }
-.z4n-sub { font-size: 11px; color: var(--lp-text-muted); margin: 4px 0 12px; }
-
-.z4n-legend { display: flex; gap: 16px; margin-bottom: 12px; }
-.z4n-leg { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--lp-text-muted); }
-.z4n-leg::before { content: ''; width: 9px; height: 9px; border-radius: 3px; }
-.z4n-leg--cur::before { background: var(--lp-primary-deep); }
-.z4n-leg--prev::before { background: #C6BAE6; }
-
-.z4n-rows { flex: 0 0 auto; display: flex; flex-direction: column; gap: 12px; padding-right: 2px; }
-.z4n-chart { flex: 1; min-height: 150px; margin-top: 10px; }
-.z4n-chart :deep(.apexcharts-canvas) { margin: 0 auto; }
-.z4n-row-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
-.z4n-row-m { font-size: 11.5px; font-weight: 800; color: var(--lp-text); }
-.z4n-row-yoy { font-size: 10.5px; font-weight: 700; color: #4F7A2E; }
-.z4n-row-yoy.down { color: var(--urgent); }
-.z4n-bars { display: flex; flex-direction: column; gap: 3px; }
-.z4n-bar-row { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 8px; }
-.z4n-bar-tag { font-size: 9px; font-weight: 800; color: var(--lp-text-faint); font-variant-numeric: tabular-nums; }
-.z4n-bar-track { height: 10px; border-radius: 4px; background: var(--lp-surface-soft); overflow: hidden; }
-.z4n-bar-fill { display: block; height: 100%; border-radius: 4px; transition: width .9s cubic-bezier(.4,0,.2,1); transform-origin: left; animation: lp-grow-x .7s cubic-bezier(.4,0,.2,1) both; }
-.z4n-bar-fill.cur { background: var(--lp-primary-deep); }
-.z4n-bar-fill.prev { background: #C6BAE6; }
-.z4n-bar-v { font-size: 10.5px; font-weight: 700; color: var(--lp-text-muted); min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
+/* ── P2: 매출 추이 차트 ── */
+.z4-rev-h { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.z4-rev-h-l { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.z4-rev-h-l strong { font-size: 14px; font-weight: 800; color: var(--lp-text); }
+.z4-rev-h-l span { font-size: 11px; color: var(--lp-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.z4-seg { display: inline-flex; background: var(--lp-surface-soft); border-radius: 999px; padding: 3px; gap: 2px; flex-shrink: 0; }
+.z4-seg button { border: 0; background: transparent; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--lp-text-muted); padding: 5px 12px; border-radius: 999px; cursor: pointer; transition: background .15s, color .15s; }
+.z4-seg button.on { background: var(--lp-surface); color: var(--lp-primary-deep); box-shadow: 0 1px 3px rgba(63,52,99,.14); }
+.z4-rev-total { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: var(--lp-text); font-variant-numeric: tabular-nums; margin: 8px 0 2px; }
+.z4-rev-chart { flex: 1; min-height: 120px; }
+.z4-rev-chart :deep(.apexcharts-canvas) { margin: 0 auto; }
 
 .z4-empty { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12.5px; color: var(--lp-text-faint); padding: 24px; text-align: center; }
 

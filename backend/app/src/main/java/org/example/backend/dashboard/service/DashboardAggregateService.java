@@ -22,6 +22,7 @@ import org.example.backend.dashboard.dto.DashboardSummaryDto;
 import org.example.backend.dashboard.dto.PartnerProgressDto;
 import org.example.backend.dashboard.dto.PipelineStageDto;
 import org.example.backend.dashboard.dto.RevenueYoYPointDto;
+import org.example.backend.dashboard.dto.RevenuePointDto;
 import org.example.backend.dashboard.dto.QuarterGoalProgressDto;
 import org.example.backend.dashboard.dto.RecentActivityDto;
 import org.example.backend.dashboard.dto.ReviewQueueItemDto;
@@ -703,6 +704,34 @@ public class DashboardAggregateService {
             result.add(new RevenueYoYPointDto((first + i) + "월", cur[i], prev[i]));
         }
         return result;
+    }
+
+    /**
+     * 매출(FINANCIAL) KPI의 KpiMonthlySnapshot 을 해당 연도의 4개 분기로 합산.
+     * Zone4 매출 추이 "분기" 토글용.
+     */
+    @Cacheable(value = CacheNames.DASHBOARD_REVENUE_YOY,
+               key = "'q:' + #callerIdx + ':' + (#year ?: 0)")
+    public List<RevenuePointDto> revenueQuarters(Long callerIdx, Integer year) {
+        User caller = findUser(callerIdx);
+        Scope scope = resolveScope(caller);
+        int y = (year == null) ? LocalDate.now().getYear() : year;
+
+        List<OrganizationKpi> revenueKpis = orgKpiRepository.findRevenueKpis(
+                scope.allCampaigns ? null : scope.ownerOrgId);
+
+        BigDecimal[] q = {BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO};
+        for (OrganizationKpi kpi : revenueKpis) {
+            for (KpiMonthlySnapshot s : monthlySnapshotRepository
+                    .findAllByOrgKpi_IdxAndYearOrderByMonthAsc(kpi.getIdx(), y)) {
+                if (s.getActualValue() == null) continue;
+                int qi = (s.getMonth() - 1) / 3;
+                if (qi >= 0 && qi < 4) q[qi] = q[qi].add(s.getActualValue());
+            }
+        }
+        List<RevenuePointDto> out = new ArrayList<>(4);
+        for (int i = 0; i < 4; i++) out.add(new RevenuePointDto((i + 1) + "분기", q[i]));
+        return out;
     }
 
     /** 한 KPI 의 특정 연도, 분기 3개월 actual 을 acc[0..2] 에 누적. */

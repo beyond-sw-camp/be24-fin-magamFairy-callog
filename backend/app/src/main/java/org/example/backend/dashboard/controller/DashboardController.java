@@ -118,6 +118,15 @@ public class DashboardController {
         return ResponseEntity.ok(BaseResponse.success(aggregateService.revenueYoY(user.getIdx(), year, quarter)));
     }
 
+    /** ⭐NEW: Zone4 P2 매출 추이 "분기" 토글 — 선택 연도의 분기별(Q1~Q4) 매출 합계. */
+    @GetMapping("/revenue-quarters")
+    public ResponseEntity<BaseResponse> revenueQuarters(
+            @RequestParam(required = false) Integer year,
+            @AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.revenueQuarters(user.getIdx(), year)));
+    }
+
     private void requireAuth(AuthUserDetails user) {
         if (user == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증된 유저 정보가 없습니다.");
