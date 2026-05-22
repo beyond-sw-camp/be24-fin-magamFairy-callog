@@ -4,7 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.evaluation.model.EvaluationDto;
+import org.example.evaluation.event.EvaluationCollectRequestedEvent;
+import org.example.evaluation.event.EvaluationStartRequestedEvent;
 import org.example.evaluation.service.EvaluationService;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -13,8 +14,10 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class EvaluationKafkaConsumer {
+
     private final ObjectMapper objectMapper;
     private final EvaluationService evaluationService;
+    private final EvaluationKafkaProducer evaluationKafkaProducer;
 
     @KafkaListener(
             topics = "${app.kafka.topics.evaluation-start}",
@@ -24,12 +27,13 @@ public class EvaluationKafkaConsumer {
         log.info("[Kafka] evaluation.start received: {}", message);
 
         try {
-            EvaluationDto.StartEvaluationReq dto =
-                    objectMapper.readValue(message, EvaluationDto.StartEvaluationReq.class);
+            EvaluationStartRequestedEvent event =
+                    objectMapper.readValue(message, EvaluationStartRequestedEvent.class);
 
-            evaluationService.startEvaluation(dto);
+            evaluationService.startEvaluation(event.toServiceRequest());
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("evaluation.start 메시지 변환에 실패했습니다.", e);
+            log.error("[Kafka] evaluation.start deserialize failed.", e);
+            evaluationKafkaProducer.sendStartDeadLetter(null, message, e.getMessage());
         }
     }
 
@@ -39,5 +43,16 @@ public class EvaluationKafkaConsumer {
     )
     public void consumeCollectEvaluation(String message) {
         log.info("[Kafka] evaluation.collect received: {}", message);
+
+        try {
+            EvaluationCollectRequestedEvent event =
+                    objectMapper.readValue(message, EvaluationCollectRequestedEvent.class);
+
+            log.info("[Kafka] evaluation.collect parsed. sessionId={}, category={}",
+                    event.getSessionId(), event.getCategory());
+        } catch (JsonProcessingException e) {
+            log.error("[Kafka] evaluation.collect deserialize failed.", e);
+            evaluationKafkaProducer.sendCollectDeadLetter(null, message, e.getMessage());
+        }
     }
 }

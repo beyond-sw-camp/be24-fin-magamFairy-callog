@@ -8,6 +8,9 @@ spring:
     name: ai-evaluation
   kafka:
     bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
     consumer:
       group-id: matching-evaluation
       auto-offset-reset: earliest
@@ -51,6 +54,10 @@ app:
     topics:
       evaluation-start: evaluation.start
       evaluation-collect: evaluation.collect
+      evaluation-completed: evaluation.completed
+      evaluation-failed: evaluation.failed
+      evaluation-start-dlq: evaluation.start.dlq
+      evaluation-collect-dlq: evaluation.collect.dlq
 eureka:
   client:
     register-with-eureka: true
