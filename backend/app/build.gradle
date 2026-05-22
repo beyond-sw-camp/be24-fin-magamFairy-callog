@@ -9,6 +9,7 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus'
 
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+    implementation 'org.springframework.kafka:spring-kafka'
 
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'  // Redis (Lettuce client) — @Cacheable + RefreshTokenRedisService
     implementation 'org.apache.commons:commons-pool2'  // ⭐ Lettuce connection pool 사용 시 필수 (yml 의 lettuce.pool.enabled=true)

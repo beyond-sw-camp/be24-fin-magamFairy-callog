@@ -188,6 +188,7 @@ public class EvaluationDto {
     @Getter
     @Builder
     public static class StartEvaluation {
+        private String campaignIdx;
         private CampaignDto.Res campaign;
         private MatchingDto.BenefitRes benefit;
 
@@ -310,7 +311,7 @@ public class EvaluationDto {
         private Integer overallScore;
         private List<String> improvementDirections;
         private String uuid;
-        private Long campaignIdx;
+        private String campaignIdx;
         private Long benefitIdx;
 
         @Getter

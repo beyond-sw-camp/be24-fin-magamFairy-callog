@@ -43,6 +43,7 @@ public class EvaluationDto {
     @AllArgsConstructor
     @Builder
     public static class StartEvaluationReq {
+        private String campaignIdx;
         private Object campaign;
         private Object benefit;
     }
