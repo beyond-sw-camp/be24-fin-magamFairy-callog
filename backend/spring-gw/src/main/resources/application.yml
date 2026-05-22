@@ -1,6 +1,5 @@
 server:
   port: 8080
-  front-url: ${FRONTEND_URL}
 
 jwt:
   # JWT 서명에 사용할 비밀키 (보안 필수 변수)
