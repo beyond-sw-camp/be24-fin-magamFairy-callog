@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Gradle Imported" enabled="true">
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.projectlombok/lombok/1.18.44/503fd0b002dbb237fa4656cf4b8021666a8aebac/lombok-1.18.44.jar" />
+        </processorPath>
+        <module name="callog.aijudge.main" />
+        <module name="callog.app.test" />
+        <module name="callog.eureka.main" />
+        <module name="callog.matching-evaluation.test" />
+        <module name="callog.aijudge.test" />
+        <module name="callog.matching-evaluation.main" />
+        <module name="callog.app.main" />
+        <module name="callog.spring-gw.main" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel target="17" />
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="callog.aijudge" options="-parameters" />
+      <module name="callog.aijudge.main" options="-parameters" />
+      <module name="callog.aijudge.test" options="-parameters" />
+      <module name="callog.app" options="-parameters" />
+      <module name="callog.app.main" options="-parameters" />
+      <module name="callog.app.test" options="-parameters" />
+      <module name="callog.eureka" options="-parameters" />
+      <module name="callog.eureka.main" options="-parameters" />
+      <module name="callog.eureka.test" options="-parameters" />
+      <module name="callog.matching-evaluation" options="-parameters" />
+      <module name="callog.matching-evaluation.main" options="-parameters" />
+      <module name="callog.matching-evaluation.test" options="-parameters" />
+      <module name="callog.spring-gw" options="-parameters" />
+      <module name="callog.spring-gw.main" options="-parameters" />
+      <module name="callog.spring-gw.test" options="-parameters" />
+      <module name="eureka" options="-parameters" />
+      <module name="eureka.main" options="-parameters" />
+      <module name="eureka.test" options="-parameters" />
+      <module name="spring-gw" options="-parameters" />
+      <module name="spring-gw.main" options="-parameters" />
+      <module name="spring-gw.test" options="-parameters" />
+    </option>
+  </component>
+</project>

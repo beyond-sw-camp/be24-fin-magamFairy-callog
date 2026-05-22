@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/aijudge/callog.aijudge.main.iml" filepath="$PROJECT_DIR$/.idea/modules/aijudge/callog.aijudge.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/callog.app.main.iml" filepath="$PROJECT_DIR$/.idea/modules/app/callog.app.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/callog.app.test.iml" filepath="$PROJECT_DIR$/.idea/modules/app/callog.app.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/eureka/callog.eureka.main.iml" filepath="$PROJECT_DIR$/.idea/modules/eureka/callog.eureka.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/matching-evaluation/callog.matching-evaluation.main.iml" filepath="$PROJECT_DIR$/.idea/modules/matching-evaluation/callog.matching-evaluation.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/spring-gw/callog.spring-gw.main.iml" filepath="$PROJECT_DIR$/.idea/modules/spring-gw/callog.spring-gw.main.iml" />
+    </modules>
+  </component>
+</project>
