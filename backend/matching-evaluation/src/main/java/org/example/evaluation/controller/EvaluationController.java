@@ -22,8 +22,8 @@ public class EvaluationController {
         try {
             return ResponseEntity.ok(
                     BaseResponse.processing(
-                            BaseResponseStatus.SUCCESS,
-                            evaluationService.result(campaignIdx)
+                            BaseResponseStatus.SUCCESS
+//                            ,evaluationService.result(campaignIdx)
                     )
             );
         } catch (NoSuchElementException e) {

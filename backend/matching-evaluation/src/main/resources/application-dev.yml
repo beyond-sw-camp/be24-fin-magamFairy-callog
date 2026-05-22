@@ -6,6 +6,16 @@ server:
 spring:
   application:
     name: ai-evaluation
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: matching-evaluation
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   data:
     mongodb:
       uri: ${MONGODB_URL}
@@ -39,6 +49,15 @@ custom:
     webhook-url: ${N8N_URL}
     evaluation-endpoint: ${EVALUATION_ENDPOINT}
 
+app:
+  kafka:
+    topics:
+      evaluation-start: evaluation.start
+      evaluation-collect: evaluation.collect
+      evaluation-completed: evaluation.completed
+      evaluation-failed: evaluation.failed
+      evaluation-start-dlq: evaluation.start.dlq
+      evaluation-collect-dlq: evaluation.collect.dlq
 eureka:
   client:
     register-with-eureka: true
