@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8083
   error:
     whitelabel:
       enabled: false  # 기본 whitelabel 에러 페이지 비활성화
