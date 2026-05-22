@@ -5,7 +5,7 @@ spring:
   application:
     name: ai-judge
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -47,21 +47,21 @@ management:
 
 ai-judge:
   kafka:
-    enabled: ${AI_JUDGE_KAFKA_ENABLED:false}
-    completed-topic: ${AI_JUDGE_COMPLETED_TOPIC:ai-judge.completed}
+    enabled: ${AI_JUDGE_KAFKA_ENABLED}
+    completed-topic: ${AI_JUDGE_COMPLETED_TOPIC}
   n8n:
     webhook-url: ${N8N_URL:}
     check-endpoint: ${CHECK_ENDPOINT:}
 
 custom:
   ocr:
-    url: ${OCR_SERVICE_URL:http://localhost:8000}
+    url: ${OCR_SERVICE_URL}
     async-enabled: ${OCR_ASYNC_ENABLED:true}
     job-url: ${OCR_JOB_SERVICE_URL:}
     job-poll-interval-ms: ${OCR_JOB_POLL_INTERVAL_MS:1000}
     job-poll-timeout-ms: ${OCR_JOB_POLL_TIMEOUT_MS:180000}
   layout:
-    url: ${LAYOUT_SERVICE_URL:http://localhost:8001/v1/layout/analyze}
+    url: ${LAYOUT_SERVICE_URL}
   mongodb:
     analysis-uri: ${MONGODB_STD_URL:}
     analysis-database: ${MONGODB_STD_DATABASE:}

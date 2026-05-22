@@ -60,16 +60,32 @@ export const CheckAdFile = async (file) => {
   }
 }
 
-export const CheckAdFileWithAiJudge = async (file) => {
+export const CheckAdFileWithAiJudge = async (campaignId, file) => {
   const formData = new FormData()
   formData.append('file', file)
   try {
     return unwrapResponse(
-      await api.post('/ad/check/file/aijudge', formData, {
+      await api.post(`/campaigns/${campaignId}/ad-analyses/check/file`, formData, {
         timeout: AD_CHECK_TIMEOUT_MS,
         headers: { 'Content-Type': 'multipart/form-data' },
       }),
     )
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const ListAdAiAnalyses = async (campaignId) => {
+  try {
+    return unwrapResponse(await api.get(`/campaigns/${campaignId}/ad-analyses`))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const GetAdAiAnalysisDetail = async (campaignId, analysisId) => {
+  try {
+    return unwrapResponse(await api.get(`/campaigns/${campaignId}/ad-analyses/${analysisId}`))
   } catch (error) {
     throw toAdCheckError(error)
   }

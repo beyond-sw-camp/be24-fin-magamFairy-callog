@@ -47,10 +47,17 @@ public class AiJudgeFileCheckService {
     }
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file) {
+        return checkFile(file, null);
+    }
+
+    public AdCheckDto.FileCheckRes checkFile(MultipartFile file, String analysisJobId) {
         long totalStartedAt = System.nanoTime();
         try {
             AdCheckFileStorageService.AnalysisStorageContext storageContext =
-                    adCheckFileStorageService.createAnalysisStorageContext(file == null ? null : file.getOriginalFilename());
+                    adCheckFileStorageService.createAnalysisStorageContext(
+                            file == null ? null : file.getOriginalFilename(),
+                            analysisJobId
+                    );
             AdCheckFileStorageService.StoredFile storedFile =
                     adCheckFileStorageService.uploadOriginal(file, storageContext);
             TextExtractorService.ExtractResult extraction = textExtractorService.extractWithTiming(file);
@@ -82,8 +89,9 @@ public class AiJudgeFileCheckService {
                         null
                 );
                 response = storeFinalResult(storageContext, response);
-                adCheckAnalysisMongoStorageService.save(response);
-                aiJudgeKafkaEventPublisher.publishCompleted(response);
+                if (adCheckAnalysisMongoStorageService.save(response)) {
+                    aiJudgeKafkaEventPublisher.publishCompleted(response);
+                }
                 return response;
             } catch (RuntimeException e) {
                 long aiAnalysisMillis = elapsedMillis(aiStartedAt);
@@ -106,8 +114,9 @@ public class AiJudgeFileCheckService {
                         e.getMessage()
                 );
                 partialResponse = storeFinalResult(storageContext, partialResponse);
-                adCheckAnalysisMongoStorageService.save(partialResponse);
-                aiJudgeKafkaEventPublisher.publishFailed(partialResponse);
+                if (adCheckAnalysisMongoStorageService.save(partialResponse)) {
+                    aiJudgeKafkaEventPublisher.publishFailed(partialResponse);
+                }
                 throw new FileCheckException(e.getMessage(), partialResponse, e);
             }
         } catch (IOException e) {

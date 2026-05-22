@@ -3,6 +3,7 @@ package org.example.backend.adcheck.event;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.adcheck.service.AdAiAnalysisService;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -10,9 +11,11 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class AiJudgeKafkaEventListener {
     private final ObjectMapper objectMapper;
+    private final AdAiAnalysisService adAiAnalysisService;
 
-    public AiJudgeKafkaEventListener(ObjectMapper objectMapper) {
+    public AiJudgeKafkaEventListener(ObjectMapper objectMapper, AdAiAnalysisService adAiAnalysisService) {
         this.objectMapper = objectMapper;
+        this.adAiAnalysisService = adAiAnalysisService;
     }
 
     @KafkaListener(
@@ -30,6 +33,7 @@ public class AiJudgeKafkaEventListener {
                     text(event, "aiStatus"),
                     text(event, "fileName")
             );
+            adAiAnalysisService.applyAiJudgeEvent(event);
         } catch (Exception e) {
             log.warn("AI judge Kafka event cannot be parsed. payload={}", payload, e);
         }
