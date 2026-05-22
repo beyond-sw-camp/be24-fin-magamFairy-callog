@@ -1,0 +1,53 @@
+server:
+  port: 8080
+
+jwt:
+  # JWT 서명에 사용할 비밀키 (보안 필수 변수)
+  key: ${JWT_SECRET:default_development_jwt_secret_key_string_32_bytes_long}
+
+spring:
+  application:
+    name: spring-gw
+  cloud:
+    gateway:
+      routes:
+        # ai 판사
+        - id: ai-judge-actuator
+          uri: ${AI_JUDGE_URI:lb://ai-judge}
+          predicates:
+            - Path=/aijudge/actuator/**
+          filters:
+            - StripPrefix=1
+
+        - id: ai-judge
+          uri: ${AI_JUDGE_URI:lb://ai-judge}
+          predicates:
+            - Path=/aijudge/**
+
+        # ai 평가
+        - id: matching-evaluation-actuator
+          uri: ${MATCHING_EVALUATION_URI:lb://matching-evaluation}
+          predicates:
+            - Path=/evaluation/actuator/**
+          filters:
+            - StripPrefix=1
+
+        - id: matching-evaluation
+          uri: ${MATCHING_EVALUATION_URI:lb://matching-evaluation}
+          predicates:
+            - Path=/evaluation/**
+
+        - id: app
+          uri: ${APP_URI:lb://app}
+          predicates:
+            - Path=/**
+          filters:
+            - JwtFilter
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      # 유레카 서버의 접속 주소
+      defaultZone: ${EUREKA_URI:http://localhost:8761/eureka/}
