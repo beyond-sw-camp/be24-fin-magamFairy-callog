@@ -261,5 +261,5 @@ public class AiJudgeClient {
         public String getFilename() {
             return filename;
         }
-    }
+    }//
 }
