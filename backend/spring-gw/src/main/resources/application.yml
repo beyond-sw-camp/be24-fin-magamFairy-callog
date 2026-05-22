@@ -29,8 +29,8 @@ spring:
 
         # ai 평가
 
-        - id: ai-evaluation-actuator
-          uri: lb://ai-evaluation
+        - id: matching-evaluation-actuator
+          uri: lb://matching-evaluation
           predicates:
             - Path=/evaluation/actuator/**
           filters:
