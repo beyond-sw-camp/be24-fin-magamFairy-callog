@@ -9,17 +9,22 @@ import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.lettuce.core.ReadFrom;
 import org.example.backend.common.redis.CacheNames;
+import org.example.backend.notification.service.NotificationSseService;
+import org.example.backend.notification.service.SseMessage;
 import org.springframework.boot.autoconfigure.data.redis.LettuceClientConfigurationBuilderCustomizer;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -122,5 +127,29 @@ public class RedisConfig {
                 JsonTypeInfo.As.PROPERTY
         );
         return new GenericJackson2JsonRedisSerializer(om);
+    }
+
+    /**
+     * Notification Redis에 등록
+     */
+    @Bean
+    public RedisMessageListenerContainer sseListenerContainer(
+            RedisConnectionFactory cf,
+            NotificationSseService sseService,
+            ObjectMapper objectMapper) {
+
+        var container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(cf);
+
+        MessageListener listener = (message, pattern) -> {
+            try {
+                SseMessage msg = objectMapper.readValue(message.getBody(), SseMessage.class);
+                sseService.deliverLocally(msg);           // ⬅ 각 Pod이 자기 연결로 전송
+            } catch (Exception ignored) { }
+        };
+
+        container.addMessageListener(listener,
+                new ChannelTopic(NotificationSseService.SSE_Channel));
+        return container;
     }
 }
