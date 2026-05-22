@@ -397,6 +397,21 @@ async function handleNotificationDetail(item) {
   })
 }
 
+function getReviewOutcomeMeta(item) {
+  return notificationStore.getReviewOutcomeMeta(item?.reviewOutcome)
+}
+
+async function handleNotificationTarget(item) {
+  if (!item?.targetUrl) {
+    await handleNotificationDetail(item)
+    return
+  }
+
+  await notificationStore.markAsRead(item)
+  closeFloatingMenus()
+  router.push(item.targetUrl)
+}
+
 function handleDocumentClick(event) {
   const path = typeof event.composedPath === 'function' ? event.composedPath() : []
   const inside = path.some(
@@ -577,6 +592,23 @@ onBeforeUnmount(() => {
                     <p class="callog-notif-item__meta">
                       {{ formatRelativeTime(item.created_at) }} · {{ item.message }}
                     </p>
+                    <div v-if="getReviewOutcomeMeta(item)" class="callog-notif-item__review">
+                      <span
+                        class="callog-review-chip"
+                        :class="`callog-review-chip--${getReviewOutcomeMeta(item).tone}`"
+                      >
+                        <span class="material-symbols-outlined">{{ getReviewOutcomeMeta(item).icon }}</span>
+                        {{ getReviewOutcomeMeta(item).label }}
+                      </span>
+                      <button
+                        v-if="item.targetUrl"
+                        type="button"
+                        class="callog-notif-item__target"
+                        @click.stop="handleNotificationTarget(item)"
+                      >
+                        검수 결과 보기
+                      </button>
+                    </div>
                     <div
                       v-if="isCampaignInvitationActionable(item)"
                       class="callog-notif-item__actions"
@@ -700,6 +732,23 @@ onBeforeUnmount(() => {
               <p class="callog-notif-item__meta">
                 {{ formatRelativeTime(item.created_at) }} · {{ item.message }}
               </p>
+              <div v-if="getReviewOutcomeMeta(item)" class="callog-notif-item__review">
+                <span
+                  class="callog-review-chip"
+                  :class="`callog-review-chip--${getReviewOutcomeMeta(item).tone}`"
+                >
+                  <span class="material-symbols-outlined">{{ getReviewOutcomeMeta(item).icon }}</span>
+                  {{ getReviewOutcomeMeta(item).label }}
+                </span>
+                <button
+                  v-if="item.targetUrl"
+                  type="button"
+                  class="callog-notif-item__target"
+                  @click.stop="handleNotificationTarget(item)"
+                >
+                  검수 결과 보기
+                </button>
+              </div>
               <div
                 v-if="isCampaignInvitationActionable(item)"
                 class="callog-notif-item__actions"
@@ -1320,6 +1369,62 @@ onBeforeUnmount(() => {
 .callog-notif-item__meta {
   font-size: 12px;
   color: var(--subtle-text);
+}
+
+.callog-notif-item__review {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.callog-review-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.callog-review-chip .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.callog-review-chip--completed {
+  border-color: rgba(16, 185, 129, 0.32);
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.callog-review-chip--review-required {
+  border-color: rgba(217, 119, 6, 0.32);
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+}
+
+.callog-review-chip--failed {
+  border-color: rgba(220, 38, 38, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+
+.callog-notif-item__target {
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-600);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.callog-notif-item__target:hover {
+  text-decoration: underline;
 }
 
 .callog-notif-item__actions { display: flex; gap: 6px; margin-top: 6px; }

@@ -6,7 +6,9 @@ import org.example.backend.adcheck.model.AdCheckDto;
 import org.example.backend.adcheck.service.AdCheckService;
 import org.example.backend.common.model.BaseResponse;
 import org.example.backend.common.model.BaseResponseStatus;
+import org.example.backend.user.model.AuthUserDetails;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -57,9 +59,13 @@ public class AdCheckController {
     }
 
     @PostMapping("/check/file/aijudge")
-    public ResponseEntity<BaseResponse<?>> checkFileWithAiJudge(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<BaseResponse<?>> checkFileWithAiJudge(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "campaignId", required = false) String campaignId,
+            @AuthenticationPrincipal AuthUserDetails user
+    ) {
         try {
-            return ResponseEntity.ok(BaseResponse.success(adCheckService.checkFileWithAiJudge(file)));
+            return ResponseEntity.ok(BaseResponse.success(adCheckService.checkFileWithAiJudge(file, user, campaignId)));
         } catch (AdCheckService.FileCheckException e) {
             log.error("Ad file check via ai-judge failed with partial response. fileName={}, size={}",
                     file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize(), e);

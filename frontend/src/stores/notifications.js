@@ -4,6 +4,12 @@ import { confirm, confirmAll, getNoti } from '@/api/notifications/index.js'
 
 const SSE_RETRY_DELAY_MS = 5000
 
+const REVIEW_OUTCOME_META = {
+  completed: { label: '검수 완료', tone: 'completed', icon: 'task_alt' },
+  review_required: { label: '확인 필요', tone: 'review-required', icon: 'policy_alert' },
+  failed: { label: '검수 실패', tone: 'failed', icon: 'error' },
+}
+
 function extractListPayload(response) {
   const payload = response?.data?.data ?? response?.data ?? response ?? {}
 
@@ -23,7 +29,12 @@ function extractListPayload(response) {
 function normalizeCategory(type, category) {
   const value = String(category || type || '').toLowerCase()
 
-  if (value.includes('review') || value.includes('qa')) {
+  if (
+    value.includes('review') ||
+    value.includes('qa') ||
+    value.includes('judge') ||
+    value.includes('ad_check')
+  ) {
     return 'qa'
   }
 
@@ -42,8 +53,9 @@ function normalizeCategory(type, category) {
   return 'system'
 }
 
-function normalizeSeverity(value, category) {
+function normalizeSeverity(value, category, type) {
   const normalized = String(value || '').toLowerCase()
+  const normalizedType = String(type || '').toUpperCase()
 
   if (['critical', 'urgent'].includes(normalized)) {
     return 'critical'
@@ -57,7 +69,29 @@ function normalizeSeverity(value, category) {
     return 'low'
   }
 
+  if (['AI_JUDGE_REVIEW_REQUIRED', 'AI_JUDGE_FAILED'].includes(normalizedType)) {
+    return 'high'
+  }
+
   return category === 'schedule' ? 'high' : 'normal'
+}
+
+function resolveReviewOutcome(type) {
+  const normalizedType = String(type || '').toUpperCase()
+
+  if (normalizedType === 'AI_JUDGE_COMPLETED') {
+    return 'completed'
+  }
+
+  if (normalizedType === 'AI_JUDGE_REVIEW_REQUIRED') {
+    return 'review_required'
+  }
+
+  if (normalizedType === 'AI_JUDGE_FAILED') {
+    return 'failed'
+  }
+
+  return ''
 }
 
 function normalizeDate(value) {
@@ -67,9 +101,10 @@ function normalizeDate(value) {
 
 function normalizeNotification(item, index = 0) {
   const category = normalizeCategory(item.type, item.category)
-  const severity = normalizeSeverity(item.severity ?? item.priority, category)
+  const severity = normalizeSeverity(item.severity ?? item.priority, category, item.type)
   const idx = item.idx ?? item.id ?? null
   const createdAt = normalizeDate(item.createdAt ?? item.created_at ?? item.createDate ?? item.time)
+  const reviewOutcome = resolveReviewOutcome(item.type)
 
   return {
     id: String(idx ?? `${category}-${index}`),
@@ -89,6 +124,8 @@ function normalizeNotification(item, index = 0) {
     referenceType: item.referenceType ?? '',
     referenceId: item.referenceId ?? null,
     referenceStatus: item.referenceStatus ?? '',
+    groupPreview: item.groupPreview ?? null,
+    reviewOutcome,
   }
 }
 
@@ -108,6 +145,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
   let reconnectTimer = null
 
   const recentNotifications = computed(() => notifications.value.slice(0, 3))
+
+  function getReviewOutcomeMeta(outcome) {
+    return REVIEW_OUTCOME_META[outcome] ?? null
+  }
 
   function setNotifications(items, nextUnreadCount = null) {
     notifications.value = items.map((item, index) => normalizeNotification(item, index))
@@ -286,5 +327,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
     markAsRead,
     markAllAsRead,
     upsertNotification,
+    getReviewOutcomeMeta,
   }
 })

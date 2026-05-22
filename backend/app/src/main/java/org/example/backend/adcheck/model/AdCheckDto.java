@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 public class AdCheckDto {
 
@@ -59,6 +60,7 @@ public class AdCheckDto {
         private String extractionMode;
         private ProcessingTimes processingTimes;
         private String errorMessage;
+        private Map<String, Object> context;
 
         public static FileCheckRes of(String fileName, String extractedText, Res res) {
             return of(fileName, null, null, null, null, extractedText, res, null, null);

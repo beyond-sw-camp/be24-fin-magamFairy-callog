@@ -22,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 @Component
 @Slf4j
@@ -78,6 +79,10 @@ public class AiJudgeClient {
     }
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file) {
+        return checkFile(file, Map.of());
+    }
+
+    public AdCheckDto.FileCheckRes checkFile(MultipartFile file, Map<String, Object> context) {
         String url = normalizeBaseUrl(aiJudgeBaseUrl) + CHECK_FILE_PATH;
 
         try {
@@ -88,7 +93,7 @@ public class AiJudgeClient {
                     .uri(url)
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .accept(MediaType.APPLICATION_JSON)
-                    .body(createMultipartBody(file))
+                    .body(createMultipartBody(file, context))
                     .retrieve()
                     .body(AdCheckDto.FileCheckRes.class);
 
@@ -120,7 +125,7 @@ public class AiJudgeClient {
         }
     }
 
-    private MultiValueMap<String, Object> createMultipartBody(MultipartFile file) {
+    private MultiValueMap<String, Object> createMultipartBody(MultipartFile file, Map<String, Object> context) {
         if (file == null || file.isEmpty()) {
             throw new RuntimeException("ad check file is required.");
         }
@@ -141,6 +146,11 @@ public class AiJudgeClient {
 
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
             body.add("file", filePart);
+            if (context != null && !context.isEmpty()) {
+                HttpHeaders contextHeaders = new HttpHeaders();
+                contextHeaders.setContentType(MediaType.APPLICATION_JSON);
+                body.add("context", new HttpEntity<>(objectMapper.writeValueAsString(context), contextHeaders));
+            }
             return body;
         } catch (IOException e) {
             throw new RuntimeException("ad check file cannot be read.", e);

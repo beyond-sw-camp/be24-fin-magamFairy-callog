@@ -37,8 +37,11 @@ public class AiJudgeController {
     }
 
     @PostMapping(value = "/check/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public AdCheckDto.FileCheckRes checkFile(@RequestParam("file") MultipartFile file) {
-        return aiJudgeFileCheckService.checkFile(file);
+    public AdCheckDto.FileCheckRes checkFile(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "context", required = false) String context
+    ) {
+        return aiJudgeFileCheckService.checkFile(file, context);
     }
 
     @ExceptionHandler(AiJudgeFileCheckService.FileCheckException.class)

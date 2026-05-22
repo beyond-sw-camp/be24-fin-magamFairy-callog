@@ -76,7 +76,9 @@ public class NotificationPreferenceResolver {
         return switch (type) {
             case TASK_ASSIGNED -> Boolean.TRUE.equals(setting.getTaskAssignedEnabled());
             case TASK_STATUS_CHANGED, TASK_UPDATED -> Boolean.TRUE.equals(setting.getTaskStatusChangedEnabled());
-            case REVIEW_REQUESTED, REVIEW_APPROVED, REVIEW_REJECTED -> Boolean.TRUE.equals(setting.getQaReviewEnabled());
+            case REVIEW_REQUESTED, REVIEW_APPROVED, REVIEW_REJECTED,
+                    AI_JUDGE_COMPLETED, AI_JUDGE_REVIEW_REQUIRED, AI_JUDGE_FAILED ->
+                    Boolean.TRUE.equals(setting.getQaReviewEnabled());
             case DEADLINE_24H, DEADLINE_1H, DEADLINE_OVERDUE -> Boolean.TRUE.equals(setting.getDeadlineEnabled());
             case CAMPAIGN_INVITED, CAMPAIGN_INVITATION_ACCEPTED, CAMPAIGN_INVITATION_REJECTED,
                     CAMPAIGN_MEMBER_ADDED -> Boolean.TRUE.equals(setting.getCampaignEnabled());

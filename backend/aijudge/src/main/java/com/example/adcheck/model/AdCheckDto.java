@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 public class AdCheckDto {
 
@@ -55,6 +56,7 @@ public class AdCheckDto {
         private String extractionMode;
         private ProcessingTimes processingTimes;
         private String errorMessage;
+        private Map<String, Object> context;
     }
 
     @Getter

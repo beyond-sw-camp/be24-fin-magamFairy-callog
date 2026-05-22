@@ -80,6 +80,7 @@ public class AiJudgeKafkaEventPublisher {
         event.put("extractionMode", response.getExtractionMode());
         event.put("finalResultObjectKey", response.getFinalResultObjectKey());
         event.put("errorMessage", response.getErrorMessage());
+        event.put("context", response.getContext());
         return event;
     }
 }

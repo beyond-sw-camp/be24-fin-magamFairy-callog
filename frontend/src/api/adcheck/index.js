@@ -60,9 +60,12 @@ export const CheckAdFile = async (file) => {
   }
 }
 
-export const CheckAdFileWithAiJudge = async (file) => {
+export const CheckAdFileWithAiJudge = async (file, options = {}) => {
   const formData = new FormData()
   formData.append('file', file)
+  if (options.campaignId) {
+    formData.append('campaignId', options.campaignId)
+  }
   try {
     return unwrapResponse(
       await api.post('/ad/check/file/aijudge', formData, {

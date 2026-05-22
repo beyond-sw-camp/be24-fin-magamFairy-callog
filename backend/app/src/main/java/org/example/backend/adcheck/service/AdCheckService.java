@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.backend.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
 import org.example.backend.adcheck.client.AiJudgeClient;
 import org.example.backend.adcheck.model.AdCheckDto;
+import org.example.backend.notification.service.NotificationService;
+import org.example.backend.user.model.AuthUserDetails;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -43,6 +45,7 @@ public class AdCheckService {
     private final TextExtractorService textExtractorService;
     private final AdCheckFileStorageService adCheckFileStorageService;
     private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
+    private final NotificationService notificationService;
 
     @Value("${custom.n8n.webhook-url}${custom.n8n.check-endpoint}")
     private String adCheckUrl;
@@ -53,7 +56,8 @@ public class AdCheckService {
             ObjectMapper objectMapper,
             TextExtractorService textExtractorService,
             AdCheckFileStorageService adCheckFileStorageService,
-            AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService
+            AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService,
+            NotificationService notificationService
     ) {
         this.aiRestClient = aiRestClient;
         this.aiJudgeClient = aiJudgeClient;
@@ -61,6 +65,7 @@ public class AdCheckService {
         this.textExtractorService = textExtractorService;
         this.adCheckFileStorageService = adCheckFileStorageService;
         this.adCheckAnalysisMongoStorageService = adCheckAnalysisMongoStorageService;
+        this.notificationService = notificationService;
     }
 
     public AdCheckDto.Res check(String copy) {
@@ -178,11 +183,49 @@ public class AdCheckService {
     }
 
     public AdCheckDto.FileCheckRes checkFileWithAiJudge(MultipartFile file) {
+        return checkFileWithAiJudge(file, null, null);
+    }
+
+    public AdCheckDto.FileCheckRes checkFileWithAiJudge(
+            MultipartFile file,
+            AuthUserDetails requester,
+            String campaignId
+    ) {
         try {
-            return aiJudgeClient.checkFile(file);
+            AdCheckDto.FileCheckRes response = aiJudgeClient.checkFile(file, aiJudgeContext(requester, campaignId));
+            notifyAiJudgeResult(requester, response);
+            return response;
         } catch (AiJudgeClient.FileCheckRemoteException e) {
+            notifyAiJudgeResult(requester, e.getResponse());
             throw new FileCheckException(e.getMessage(), e.getResponse(), e);
         }
+    }
+
+    private void notifyAiJudgeResult(AuthUserDetails requester, AdCheckDto.FileCheckRes response) {
+        if (requester == null || requester.getIdx() == null) {
+            return;
+        }
+
+        notificationService.notifyAiJudgeResult(requester.getIdx(), response);
+    }
+
+    private Map<String, Object> aiJudgeContext(AuthUserDetails requester, String campaignId) {
+        Map<String, Object> context = new HashMap<>();
+        if (requester != null) {
+            if (requester.getIdx() != null) {
+                context.put("requesterUserIdx", requester.getIdx());
+            }
+            if (requester.getId() != null && !requester.getId().isBlank()) {
+                context.put("requesterLoginId", requester.getId());
+            }
+            if (requester.getName() != null && !requester.getName().isBlank()) {
+                context.put("requesterName", requester.getName());
+            }
+        }
+        if (campaignId != null && !campaignId.isBlank()) {
+            context.put("campaignId", campaignId.trim());
+        }
+        return context;
     }
 
     private AdCheckDto.ProcessingTimes buildProcessingTimes(

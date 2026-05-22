@@ -2,6 +2,7 @@ package com.example.adcheck.service;
 
 import com.example.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
 import com.example.adcheck.model.AdCheckDto;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -47,7 +48,12 @@ public class AiJudgeFileCheckService {
     }
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file) {
+        return checkFile(file, null);
+    }
+
+    public AdCheckDto.FileCheckRes checkFile(MultipartFile file, String rawContext) {
         long totalStartedAt = System.nanoTime();
+        Map<String, Object> context = parseContext(rawContext);
         try {
             AdCheckFileStorageService.AnalysisStorageContext storageContext =
                     adCheckFileStorageService.createAnalysisStorageContext(file == null ? null : file.getOriginalFilename());
@@ -79,7 +85,8 @@ public class AiJudgeFileCheckService {
                         extraction.text(),
                         extraction.extractionMode(),
                         buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt),
-                        null
+                        null,
+                        context
                 );
                 response = storeFinalResult(storageContext, response);
                 adCheckAnalysisMongoStorageService.save(response);
@@ -103,7 +110,8 @@ public class AiJudgeFileCheckService {
                         extraction.text(),
                         extraction.extractionMode(),
                         buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt),
-                        e.getMessage()
+                        e.getMessage(),
+                        context
                 );
                 partialResponse = storeFinalResult(storageContext, partialResponse);
                 adCheckAnalysisMongoStorageService.save(partialResponse);
@@ -183,7 +191,8 @@ public class AiJudgeFileCheckService {
             String extractedText,
             String extractionMode,
             AdCheckDto.ProcessingTimes processingTimes,
-            String errorMessage
+            String errorMessage,
+            Map<String, Object> context
     ) {
         AdCheckDto.FileCheckRes.FileCheckResBuilder builder = AdCheckDto.FileCheckRes.builder()
                 .analysisJobId(storageContext.getWorkId())
@@ -201,7 +210,8 @@ public class AiJudgeFileCheckService {
                 .extractedText(extractedText)
                 .extractionMode(extractionMode)
                 .processingTimes(processingTimes)
-                .errorMessage(errorMessage);
+                .errorMessage(errorMessage)
+                .context(context == null ? Map.of() : Map.copyOf(context));
 
         if (result != null) {
             builder.status(result.status())
@@ -238,6 +248,20 @@ public class AiJudgeFileCheckService {
             return objectMapper.writeValueAsString(value);
         } catch (Exception e) {
             throw new RuntimeException("S3 artifact JSON cannot be serialized.", e);
+        }
+    }
+
+    private Map<String, Object> parseContext(String rawContext) {
+        if (!hasText(rawContext)) {
+            return Map.of();
+        }
+
+        try {
+            Map<String, Object> context = objectMapper.readValue(rawContext, new TypeReference<Map<String, Object>>() {});
+            return context == null ? Map.of() : context;
+        } catch (Exception e) {
+            log.warn("AI judge context cannot be parsed. context={}", rawContext, e);
+            return Map.of();
         }
     }
 

@@ -3,6 +3,8 @@ package org.example.backend.adcheck.event;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.adcheck.model.AdCheckDto;
+import org.example.backend.notification.service.NotificationService;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -10,9 +12,11 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class AiJudgeKafkaEventListener {
     private final ObjectMapper objectMapper;
+    private final NotificationService notificationService;
 
-    public AiJudgeKafkaEventListener(ObjectMapper objectMapper) {
+    public AiJudgeKafkaEventListener(ObjectMapper objectMapper, NotificationService notificationService) {
         this.objectMapper = objectMapper;
+        this.notificationService = notificationService;
     }
 
     @KafkaListener(
@@ -30,9 +34,45 @@ public class AiJudgeKafkaEventListener {
                     text(event, "aiStatus"),
                     text(event, "fileName")
             );
+            Long requesterIdx = longValue(event.path("context").path("requesterUserIdx"));
+            if (requesterIdx == null) {
+                log.warn(
+                        "AI judge Kafka event has no requester context. eventType={}, analysisJobId={}",
+                        text(event, "eventType"),
+                        text(event, "analysisJobId")
+                );
+                return;
+            }
+
+            notificationService.notifyAiJudgeResult(requesterIdx, toFileCheckResponse(event));
         } catch (Exception e) {
             log.warn("AI judge Kafka event cannot be parsed. payload={}", payload, e);
         }
+    }
+
+    private AdCheckDto.FileCheckRes toFileCheckResponse(JsonNode event) {
+        String eventType = text(event, "eventType");
+        String errorMessage = text(event, "errorMessage");
+        if ("AI_JUDGE_FAILED".equals(eventType) && errorMessage.isBlank()) {
+            errorMessage = "AI judge processing failed.";
+        }
+
+        return AdCheckDto.FileCheckRes.builder()
+                .analysisJobId(text(event, "analysisJobId"))
+                .analysisObjectPrefix(text(event, "analysisObjectPrefix"))
+                .fileName(text(event, "fileName"))
+                .fileObjectKey(text(event, "fileObjectKey"))
+                .fileContentType(text(event, "fileContentType"))
+                .fileSize(longValue(event.path("fileSize")))
+                .status(text(event, "aiStatus"))
+                .law(text(event, "law"))
+                .violationText(text(event, "violationText"))
+                .reason(text(event, "reason"))
+                .suggestion(text(event, "suggestion"))
+                .extractionMode(text(event, "extractionMode"))
+                .finalResultObjectKey(text(event, "finalResultObjectKey"))
+                .errorMessage(errorMessage)
+                .build();
     }
 
     private String text(JsonNode node, String name) {
@@ -41,5 +81,20 @@ public class AiJudgeKafkaEventListener {
             return "";
         }
         return value.asText("");
+    }
+
+    private Long longValue(JsonNode value) {
+        if (value == null || value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        if (value.canConvertToLong()) {
+            return value.asLong();
+        }
+        try {
+            String raw = value.asText("");
+            return raw.isBlank() ? null : Long.parseLong(raw);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 }

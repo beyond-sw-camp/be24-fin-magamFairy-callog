@@ -197,7 +197,7 @@ const adminPolicyOptions = [
   {
     type: 'REVIEW_REQUESTED',
     label: 'QA 검수',
-    description: '검수 요청, 승인, 반려 알림을 허용합니다.',
+    description: '검수 요청, 승인, 반려, AI 검수 완료/확인 필요/실패 알림을 허용합니다.',
   },
   {
     type: 'DEADLINE_24H',
@@ -214,7 +214,14 @@ const adminPolicyOptions = [
 const adminPolicyTypeGroups = {
   TASK_ASSIGNED: ['TASK_ASSIGNED'],
   TASK_STATUS_CHANGED: ['TASK_STATUS_CHANGED', 'TASK_UPDATED'],
-  REVIEW_REQUESTED: ['REVIEW_REQUESTED', 'REVIEW_APPROVED', 'REVIEW_REJECTED'],
+  REVIEW_REQUESTED: [
+    'REVIEW_REQUESTED',
+    'REVIEW_APPROVED',
+    'REVIEW_REJECTED',
+    'AI_JUDGE_COMPLETED',
+    'AI_JUDGE_REVIEW_REQUIRED',
+    'AI_JUDGE_FAILED',
+  ],
   DEADLINE_24H: ['DEADLINE_24H', 'DEADLINE_1H', 'DEADLINE_OVERDUE'],
   CAMPAIGN_INVITED: [
     'CAMPAIGN_INVITED',
@@ -274,7 +281,7 @@ const notificationConditionOptions = [
   {
     key: 'qaReview',
     label: 'QA 검수',
-    description: '검수 요청, 승인, 반려, 수정 요청 결과를 알림으로 받습니다.',
+    description: '검수 요청, 승인, 반려, AI 검수 완료/확인 필요/실패 결과를 알림으로 받습니다.',
   },
   {
     key: 'deadline',
