@@ -1,6 +1,7 @@
 plugins {
     id 'org.springframework.boot' version '3.5.13' apply false
     id 'io.spring.dependency-management' version '1.1.7' apply false
+    id 'java'
 }
 
 allprojects {
@@ -10,10 +11,41 @@ allprojects {
     repositories {
         mavenCentral()
     }
+
+    ext {
+        set('springCloudVersion', "2025.0.0")
+    }
+
 }
 
 subprojects {
+    apply plugin: 'org.springframework.boot'
+    apply plugin: 'io.spring.dependency-management'
     apply plugin: 'java'
+
+    group = 'com.callog' // 성재님 프로젝트의 실제 그룹명으로 지정
+    version = '0.0.1-SNAPSHOT'
+
+    repositories {
+        mavenCentral()
+    }
+
+    // Spring Cloud 공통 버전 정의
+    ext {
+        set('springCloudVersion', "2025.0.0")
+    }
+    dependencies {
+        implementation 'org.springframework.cloud:spring-cloud-starter-loadbalancer'
+        compileOnly 'org.projectlombok:lombok'
+        annotationProcessor 'org.projectlombok:lombok'
+    }
+
+    // 💡 모든 자식 모듈이 Cloud 라이브러리 버전을 알아서 매칭할 수 있게 BOM 전역 상속
+    dependencyManagement {
+        imports {
+            mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+        }
+    }
 
     java {
         toolchain {
