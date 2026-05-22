@@ -36,6 +36,8 @@ subprojects {
     }
     dependencies {
         implementation 'org.springframework.cloud:spring-cloud-starter-loadbalancer'
+        compileOnly 'org.projectlombok:lombok'
+        annotationProcessor 'org.projectlombok:lombok'
     }
 
     // 💡 모든 자식 모듈이 Cloud 라이브러리 버전을 알아서 매칭할 수 있게 BOM 전역 상속

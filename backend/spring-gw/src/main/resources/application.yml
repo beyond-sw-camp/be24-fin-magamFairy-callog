@@ -1,3 +1,6 @@
+jwt:
+  key: ${JWT_SECRET}
+
 spring:
   application:
     name: spring-gw
@@ -42,6 +45,8 @@ spring:
           uri: lb://app
           predicates:
             - Path=/**
+          filters:
+            - JwtFilter
 
 eureka:
   client:
