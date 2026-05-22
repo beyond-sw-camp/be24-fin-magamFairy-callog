@@ -221,7 +221,7 @@ public class AiJudgeClient {
 
     private String normalizeBaseUrl(String baseUrl) {
         if (baseUrl == null || baseUrl.isBlank()) {
-            return "http://localhost:8082";
+            return "http://localhost:8081";
         }
         return baseUrl.replaceAll("/+$", "");
     }
