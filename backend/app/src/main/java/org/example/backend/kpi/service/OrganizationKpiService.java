@@ -84,21 +84,40 @@ public class OrganizationKpiService {
             // 인증 정보 없을 때는 본사 KPI만 노출 (방어적 default)
             return ownerIsHq;
         }
-        OrganizationType callerType = caller.getOrganization().getType();
-        if (callerType == OrganizationType.HQ) {
+        // EXTERNAL_PARTNER: KPI 조회 전면 차단 (Task #3 — KPI 탭/데이터 완전 격리)
+        if (caller.getOrganization().getType() == OrganizationType.EXTERNAL_PARTNER) {
+            return false;
+        }
+        // 자기 조직 KPI는 항상 조회 가능 (HQ 자기 KPI, 계열사 자기 KPI)
+        if (Objects.equals(owner.getIdx(), caller.getOrganization().getIdx())) {
             return true;
         }
-        // AFFILIATE / EXTERNAL_PARTNER: 본사 KPI 또는 자기 조직 KPI만
-        return ownerIsHq
-                || Objects.equals(owner.getIdx(), caller.getOrganization().getIdx());
+        // 본사(HQ) caller: 자기 본사 KPI 에 매핑된(자식) 계열사 KPI 도 조회 가능 (읽기 전용 모니터링).
+        // → "매핑 시킨 계열사 KPI만" 보임. 수정은 백엔드 requireOwnOrganization 으로 차단됨.
+        if (caller.getOrganization().getType() == OrganizationType.HQ
+                && kpi.getParentKpi() != null
+                && kpi.getParentKpi().getOwner() != null
+                && Objects.equals(kpi.getParentKpi().getOwner().getIdx(), caller.getOrganization().getIdx())) {
+            return true;
+        }
+        // 본사(HQ) KPI는 '계열사 노출 ON(visibleToAffiliate)'인 것만 계열사에게 노출 (Task #4).
+        // → HQ 전사 조회 제거 + 계열사는 매핑 가능한 본사 KPI만 봄.
+        return ownerIsHq && Boolean.TRUE.equals(kpi.getVisibleToAffiliate());
     }
 
     public OrganizationKpiDto get(Long id) {
         return OrganizationKpiDto.from(findKpi(id));
     }
 
-    public List<OrganizationKpiDto> listParentCandidates(Long orgId) {
-        return kpiRepository.findActiveParentCandidates(orgId).stream()
+    public List<OrganizationKpiDto> listParentCandidates(Long callerIdx, Long orgId) {
+        User caller = findUser(callerIdx);
+        OrganizationType callerType = caller.getOrganization() != null
+                ? caller.getOrganization().getType() : null;
+        // 계열사: 본사가 노출(ON)한 HQ KPI 만 매핑 대상으로 제공
+        List<OrganizationKpi> candidates = callerType == OrganizationType.AFFILIATE
+                ? kpiRepository.findVisibleHqParentCandidates()
+                : kpiRepository.findActiveParentCandidates(orgId);
+        return candidates.stream()
                 .map(OrganizationKpiDto::from)
                 .toList();
     }
@@ -156,7 +175,7 @@ public class OrganizationKpiService {
             if (periodStart == null) periodStart = inferred[0];
             if (periodEnd == null) periodEnd = inferred[1];
         }
-        KpiCategory category = req.category() != null ? req.category() : KpiCategory.OTHER;
+        KpiCategory category = req.category() != null ? req.category() : KpiCategory.OPERATIONAL;
         GoalKind kind = req.kind() != null ? req.kind() : defaultKindFor(owner);
 
         OrganizationKpi kpi = OrganizationKpi.builder()
@@ -176,6 +195,10 @@ public class OrganizationKpiService {
                 .status(req.status() == null ? GoalStatus.DRAFT : req.status())
                 .achievabilityNote(normalize(req.achievabilityNote()))
                 .templateId(req.templateId())
+                // 계열사 노출: HQ 소유 KPI에서만 의미 (그 외는 false 고정)
+                .visibleToAffiliate(
+                        owner.getType() == OrganizationType.HQ
+                                && Boolean.TRUE.equals(req.visibleToAffiliate()))
                 .createdBy(caller.getIdx())
                 .updatedBy(caller.getIdx())
                 .build();
@@ -236,6 +259,10 @@ public class OrganizationKpiService {
         if (req.esgCategory() != null) kpi.setEsgCategory(req.esgCategory());
         if (req.kind() != null) kpi.setKind(req.kind());
         if (req.achievabilityNote() != null) kpi.setAchievabilityNote(req.achievabilityNote());
+        // 계열사 노출 토글 — HQ 소유 KPI에서만 의미
+        if (req.visibleToAffiliate() != null && kpi.getOwner().getType() == OrganizationType.HQ) {
+            kpi.setVisibleToAffiliate(req.visibleToAffiliate());
+        }
         kpi.setUpdatedBy(caller.getIdx());
 
         // Dashboard 캐시 무효화 (target 변경 시 quarterGoals 의 퍼센트 계산 영향)

@@ -10,6 +10,7 @@ import org.example.backend.campaign.model.CampaignRole;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.common.redis.CacheNames;
 import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.kpi.service.CampaignKpiContributionService;
 import org.example.backend.notification.service.NotificationSseService;
@@ -17,6 +18,7 @@ import org.example.backend.organization.model.OrganizationType;
 import org.example.backend.teamboard.repository.TaskRepository;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -85,6 +87,7 @@ public class CampaignService {
      * scope = "org"  → 내 조직이 참여하는 캠페인 (CampaignParticipant 기준)
      * Campaign.tags / partners 는 @BatchSize(50) 으로 배치 로딩되어 N+1 회피.
      */
+    @Cacheable(value = CacheNames.CAMPAIGN_LIST, key = "#userIdx + ':' + #scope")
     public List<CampaignDto.Res> listCampaigns(Long userIdx, String scope) {
         User user = userRepository.findById(userIdx).orElse(null);
         List<Campaign> campaigns;

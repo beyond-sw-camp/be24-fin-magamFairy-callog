@@ -97,18 +97,16 @@ const emit = defineEmits(['close', 'submit'])
 const orgKpiStore = useOrganizationKpiStore()
 
 const CATEGORIES = {
-  IMPRESSION: '노출도',
-  ENGAGEMENT: '참여도',
-  CONVERSION: '전환',
-  REVENUE: '매출/ROI',
+  GROWTH: '성장',
+  FINANCIAL: '재무',
   BRAND: '브랜드',
-  ESG: 'ESG',
-  OTHER: '기타'
+  OPERATIONAL: '운영',
+  SUSTAINABILITY: '지속가능성'
 }
 
 const form = reactive({
   name: props.editTarget?.name ?? '',
-  category: props.editTarget?.category ?? 'IMPRESSION',
+  category: props.editTarget?.category ?? 'GROWTH',
   targetValue: props.editTarget?.targetValue ?? null,
   unit: props.editTarget?.unit ?? '',
   ownerLabel: props.editTarget?.ownerLabel ?? '',

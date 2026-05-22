@@ -1718,6 +1718,7 @@ onBeforeUnmount(() => {
   gap: 4px;
   padding: 10px 12px 14px;
   border-bottom: 1px solid var(--border-color);
+  min-width: 0;            /* 자식이 줄어들 수 있도록 (ellipsis 동작 전제) */
 }
 
 .campaign-list__context-head p {
@@ -1730,6 +1731,11 @@ onBeforeUnmount(() => {
   color: var(--text-primary);
   font-size: 15px;
   font-weight: 700;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;     /* 긴 캠페인명 → ... 로 자름 */
 }
 
 .campaign-list__context-list {
@@ -1786,11 +1792,15 @@ onBeforeUnmount(() => {
 .campaign-list__status {
   display: inline-flex;
   align-items: center;
+  justify-self: start;     /* grid stretch 방지 — 이름 길이만큼 늘어나던 배지 고정 */
+  width: fit-content;
+  max-width: 100%;
   min-height: 22px;
   padding: 2px 8px;
   border-radius: var(--radius-full);
   font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .campaign-list__status--gray    { background: var(--color-gray-100, #f1f5f9); color: var(--color-gray-700, #374151); }

@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: spring-gw
+  cloud:
+    gateway:
+      routes:
+        # AI Judge ?? (??? ???? ???? ??? ??)
+        - id: aijudge-service
+          uri: ${AIJUDGE_URI}
+          predicates:
+            - Path=/aijudge/**
+          filters:
+            - StripPrefix=1
+
+        # Matching Evaluation ??
+        - id: matching-evaluation-service
+          uri: ${EVALUATION_URI}
+          predicates:
+            - Path=/evaluation/**
+
+        # ?? App ?? (??? ?? /api/** ??? ???? ?????)
+        - id: app-service
+          uri: ${APP_URI}
+          predicates:
+            - Path=/** # ?? ? ??? ??? ?? ?? /api/ ??? ??? ???.

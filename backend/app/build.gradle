@@ -37,6 +37,9 @@ dependencies {
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
+    // iCalendar(.ics) 생성/파싱 — 구글 캘린더 가져오기/내보내기 (RFC 5545)
+    implementation 'org.mnode.ical4j:ical4j:3.2.14'
+
     implementation 'org.apache.pdfbox:pdfbox:3.0.3'
     implementation 'io.github.openhtmltopdf:openhtmltopdf-core:1.1.37'
     implementation 'io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37'

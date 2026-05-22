@@ -90,8 +90,35 @@ export const CreateTask = async (campaignId, payload) => {
   return unwrapResponse(await api.post(`/campaigns/${campaignId}/tasks`, payload))
 }
 
+// 개인 업무 생성 (캠페인 없이, 담당=본인)
+export const CreatePersonalTask = async (payload) => {
+  return unwrapResponse(await api.post('/tasks', payload))
+}
+
 export const UpdateTask = async (taskId, payload) => {
   return unwrapResponse(await api.put(`/tasks/${taskId}`, payload))
+}
+
+// ===== 캘린더 가져오기/내보내기 (.ics) =====
+// 내보내기 — Blob 반환 (호출 측에서 다운로드 처리)
+export const ExportCalendarIcs = async ({ from, to, types }) => {
+  const res = await api.get('/calendar/export', {
+    params: { from, to, types: Array.isArray(types) ? types.join(',') : types },
+    responseType: 'blob',
+    timeout: 30000,
+  })
+  return res.data
+}
+
+// 가져오기 — .ics 파일 업로드 (mode: 'overwrite' | 'append')
+// Content-Type은 지정하지 않음 → axios가 multipart boundary를 자동 설정.
+export const ImportCalendarIcs = async (file, mode) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return unwrapResponse(await api.post('/calendar/import', fd, {
+    params: { mode },
+    timeout: 30000,
+  }))
 }
 
 export const DeleteTask = async (taskId) => {
@@ -113,6 +140,7 @@ export default {
   ListTasksByCampaign,
   GetTask,
   CreateTask,
+  CreatePersonalTask,
   UpdateTask,
   DeleteTask,
 }
