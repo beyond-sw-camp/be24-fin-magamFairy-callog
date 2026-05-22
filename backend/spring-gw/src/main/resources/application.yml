@@ -1,3 +1,7 @@
+server:
+  port: 8080
+  front-url: ${FRONTEND_URL}
+
 jwt:
   # JWT 서명에 사용할 비밀키 (보안 필수 변수)
   key: ${JWT_SECRET:default_development_jwt_secret_key_string_32_bytes_long}
@@ -40,21 +44,21 @@ spring:
             - Path=/**
           filters:
             - JwtFilter
-      server:
-        webflux:
-          globalcors:
-            cors-configurations:
-              '[/**]':
-                allowedOrigins: "${FRONTEND_URL}"
-                allowedMethods:
-                  - GET
-                  - POST
-                  - PUT
-                  - DELETE
-                  - OPTIONS
-                allowedHeaders: "*"
-                allowCredentials: true
-                max-age: 3600
+#      server:
+#        webflux:
+#          globalcors:
+#            cors-configurations:
+#              '[/**]':
+#                allowedOrigins: "${FRONTEND_URL}"
+#                allowedMethods:
+#                  - GET
+#                  - POST
+#                  - PUT
+#                  - DELETE
+#                  - OPTIONS
+#                allowedHeaders: "*"
+#                allowCredentials: true
+#                max-age: 3600
 
 eureka:
   client:
