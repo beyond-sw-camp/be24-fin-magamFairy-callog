@@ -26,7 +26,7 @@ app:
       evaluation-collect: evaluation.collect
 msa:
   matching-evaluation:
-    base-url: ${MATCHING_EVALUATION_BASE_URL:http://localhost:8082}
+    base-url: ${EVALUATION_URL}
 aws:
   s3:
     bucket-name: ${AWS_BUCKET_NAME}
@@ -153,6 +153,3 @@ management:
     tracing:
       endpoint: ${JAEGER_URL}
       transport: http
-msa:
-  matching-evaluation:
-    base-url: ${EVALUATION_URL}
