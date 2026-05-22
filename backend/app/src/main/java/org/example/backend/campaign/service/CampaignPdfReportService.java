@@ -136,7 +136,7 @@ public class CampaignPdfReportService {
     /** ─── HTML 빌드 ─────────────────────────────────────── */
     private String buildHtml(Campaign campaign, boolean fullReport) {
         Long campaignId = campaign.getIdx();
-        List<Task> tasks = taskRepository.findAllByTaskPart_Campaign_IdxOrderByIdxDesc(campaignId);
+        List<Task> tasks = taskRepository.findAllByCampaignDirectOrViaTaskPart(campaignId);
         List<CampaignKpi> kpis = campaignKpiRepository.findAllByCampaignIdxOrderByIdxAsc(campaignId);
         List<CampaignMember> members = campaignMemberRepository.findAllByCampaignIdx(campaignId);
 

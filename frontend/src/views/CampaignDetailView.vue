@@ -113,7 +113,15 @@ const CAMPAIGN_PALETTE = [
   '#2F5D3D', '#FCD34D', '#67E8F9', '#475569', '#D946EF', // 16–20 sage · buttercream · glacier · slate · magenta
 ]
 
-const tabs = ["캠페인 오버뷰", "팀 보드 보기", "검수/승인", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
+// EXTERNAL_PARTNER 는 KPI 탭 차단 (회사 격리 — Task #3)
+const isPartner = computed(() => {
+  const t = String(authStore.user?.organization?.type ?? authStore.user?.orgType ?? '').toUpperCase();
+  return t === 'EXTERNAL_PARTNER';
+});
+const tabs = computed(() => {
+  const base = ["캠페인 오버뷰", "팀 보드 보기", "검수/승인", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
+  return isPartner.value ? base.filter((t) => t !== '캠페인 성과/KPI') : base;
+});
 
 const handleTabClick = (tabName) => {
   activeTab.value = tabName
@@ -864,12 +872,27 @@ async function loadCampaignTeamboard(campaignId) {
   }
 }
 
+/* URL ?tab=... 로 초기 탭 지정 (예: 대시보드 검수 모달 → /campaigns/:id?tab=review) */
+const TAB_QUERY_MAP = {
+  overview: '캠페인 오버뷰',
+  board: '팀 보드 보기',
+  review: '검수/승인',
+  members: '참여자 설정',
+  kpi: '캠페인 성과/KPI',
+  matching: '매칭 탭',
+}
+function applyTabFromQuery() {
+  const label = TAB_QUERY_MAP[route.query.tab]
+  if (label && tabs.value.includes(label)) activeTab.value = label
+}
+
 onMounted(() => {
   const initialCampaignId = route.params.campaignId
   if (initialCampaignId) {
     loadCampaignTeamboard(String(initialCampaignId))
     kpiStore.fetch(String(initialCampaignId))
   }
+  applyTabFromQuery()
 })
 
 watch(
@@ -881,6 +904,7 @@ watch(
     }
   },
 )
+watch(() => route.query.tab, applyTabFromQuery)
 </script>
 
 <template>
@@ -1323,14 +1347,15 @@ watch(
     </section>
 
     <section v-else-if="activeTab === '검수/승인'" class="tab-surface">
-      <ReviewApprovalView :campaign-id="campaignId" />
+      <ReviewApprovalView :key="campaignId" :campaign-id="campaignId" />
     </section>
 
     <section v-else-if="activeTab === '참여자 설정'" class="tab-surface">
-      <CampaignMembersPanel :campaign-id="campaignId" />
+      <!-- :key — 캠페인 전환 시 재마운트 강제 (stale 데이터 버그 수정) -->
+      <CampaignMembersPanel :key="campaignId" :campaign-id="campaignId" />
     </section>
 
-    <section v-else-if="activeTab === '캠페인 성과/KPI'" class="tab-surface">
+    <section v-else-if="activeTab === '캠페인 성과/KPI' && !isPartner" class="tab-surface">
       <div class="kpi-tab-legend">
         <span class="kpi-tab-legend__chip kpi-tab-legend__chip--cascade">🟣 cascade</span>
         <span class="kpi-tab-legend__text">상위 KPI(본사·계열사)에 기여하는 매핑</span>
@@ -1343,11 +1368,11 @@ watch(
         :loading="kpiCascadeLoading"
         style="margin-bottom: 16px;"
       />
-      <CampaignKpiTab :campaign-id="campaignId" />
+      <CampaignKpiTab :key="campaignId" :campaign-id="campaignId" />
     </section>
 
     <section v-else-if="activeTab === '매칭 탭'" class="tab-surface">
-      <MatchOverview :campaign-id="campaignId" />
+      <MatchOverview :key="campaignId" :campaign-id="campaignId" />
     </section>
 
     <Teleport to="body">
@@ -1383,7 +1408,7 @@ watch(
 
           <form class="team-task-form" @submit.prevent="addTeamTask">
             <label class="team-task-form__wide">
-              <span>업무명</span>
+              <span>업무명 <i class="req-star">*</i></span>
               <input v-model.trim="taskForm.title" type="text" placeholder="예: SNS 배너 1차 시안 검수" />
             </label>
 
@@ -1534,13 +1559,13 @@ watch(
           <!-- 업무 파트 폼 -->
           <form v-if="partCreateType === 'part'" class="team-task-form" @submit.prevent="addTaskPart">
             <label class="team-task-form__wide">
-              <span>업무 파트명</span>
+              <span>업무 파트명 <i class="req-star">*</i></span>
               <input v-model.trim="partForm.name" type="text" placeholder="예: 예약/결제 연동, 인플루언서 운영" />
             </label>
 
             <div class="team-task-form__grid">
               <label>
-                <span>기준 마일스톤</span>
+                <span>기준 마일스톤 <i class="req-star">*</i></span>
                 <select v-model="partForm.milestone">
                   <option v-for="milestone in milestoneRows" :key="milestone.id" :value="milestone.id">
                     {{ milestone.label }} ({{ milestone.sub }})
@@ -1620,7 +1645,7 @@ watch(
           <!-- 마일스톤 폼 -->
           <form v-else class="team-task-form" @submit.prevent="addMilestone">
             <label class="team-task-form__wide">
-              <span>마일스톤명</span>
+              <span>마일스톤명 <i class="req-star">*</i></span>
               <input v-model.trim="milestoneForm.label" type="text" placeholder="예: 기획 확정, 런칭 준비, 운영 완료" />
             </label>
 
@@ -3328,6 +3353,14 @@ textarea:disabled {
 
 .team-task-form__wide {
   min-width: 0;
+}
+
+/* 필수 입력 표시 — 보라색 별표 */
+.req-star {
+  color: var(--lp-primary, var(--color-primary-500, #8B5CF6));
+  font-style: normal;
+  font-weight: 800;
+  margin-left: 2px;
 }
 
 .team-task-form__checkbox {

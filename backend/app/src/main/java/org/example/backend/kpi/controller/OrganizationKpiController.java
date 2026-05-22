@@ -35,7 +35,7 @@ public class OrganizationKpiController {
             @RequestParam(required = false) Long orgId,
             @AuthenticationPrincipal AuthUserDetails user) {
         requireAuth(user);
-        return ResponseEntity.ok(BaseResponse.success(kpiService.listParentCandidates(orgId)));
+        return ResponseEntity.ok(BaseResponse.success(kpiService.listParentCandidates(user.getIdx(), orgId)));
     }
 
     @GetMapping("/{id}")

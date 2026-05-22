@@ -328,7 +328,8 @@ function avatarInitial(value) {
 
 <template>
   <Teleport to="body">
-    <div class="cm-overlay" role="presentation" @click.self="emit('close')">
+    <!-- 바깥(overlay) 클릭으로는 닫지 않음 — 입력 보존. 닫기는 X 버튼으로만. -->
+    <div class="cm-overlay" role="presentation">
       <section
         class="modal-shell"
         role="dialog"

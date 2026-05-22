@@ -15,6 +15,8 @@ import CalendarFilterChips from '@/components/overview/CalendarFilterChips.vue'
 import CalendarSidebar from '@/components/overview/CalendarSidebar.vue'
 import CommandPalette from '@/components/overview/CommandPalette.vue'
 import ShortcutCheatsheet from '@/components/overview/ShortcutCheatsheet.vue'
+import CalendarExportModal from '@/components/overview/CalendarExportModal.vue'
+import CalendarImportModal from '@/components/overview/CalendarImportModal.vue'
 import { usePlannerStore } from '@/stores/planner'
 import { usePartnershipsStore } from '@/stores/partnerships'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -23,7 +25,7 @@ import { useToastStore } from '@/stores/toast'
 import { useConfirmStore } from '@/stores/confirmDialog'
 import { useNotificationsStore } from '@/stores/notifications'
 import { ListCalendarEvents, UpdateCampaign, UpdateCampaignIntro } from '@/api/campaigns'
-import { UpdateMilestone, UpdateTask, CreateMilestone, CreateTask } from '@/api/teamboard'
+import { UpdateMilestone, UpdateTask, CreatePersonalTask, CreateTask, CreateMilestone, CreateTaskPart, ExportCalendarIcs, ImportCalendarIcs } from '@/api/teamboard'
 
 const store = usePlannerStore()
 const partnershipStore = usePartnershipsStore()
@@ -35,12 +37,12 @@ const notiStore = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
 
-/* SSE — 캘린더 / 내 캠페인 변경 시 자동 재로드 */
+/* SSE — 캘린더 / 내 캠페인 변경 시 자동 재로드 (디바운스로 합침) */
 watch(() => notiStore.lastCalendarRefresh, () => {
-  loadAll()
+  scheduleLoadAll()
 })
 watch(() => notiStore.lastMyCampaignsRefresh, () => {
-  loadAll()
+  scheduleLoadAll()
 })
 
 /* ─── URL 쿼리 동기화 + localStorage 토글 ─── */
@@ -58,8 +60,7 @@ function readToggles() {
 }
 const isDark = computed(() => store.theme === 'dark')
 
-/* ─── 뷰 / 검색 / 필터 (URL 쿼리에서 초기값 복원) ─── */
-const searchQuery = ref(readQueryString('q'))
+/* ─── 뷰 / 필터 (URL 쿼리에서 초기값 복원) ─── */
 const currentView = ref(readQueryString('view', 'week'))
 const anchorDate = ref(readQueryString('date') ? new Date(readQueryString('date')) : new Date())
 const filter = ref({ mineOnly: readQueryString('mine') === '1' })
@@ -94,12 +95,11 @@ function fmtIsoDate(d) {
   if (!(d instanceof Date) || Number.isNaN(d.getTime())) return ''
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
-watch([currentView, anchorDate, searchQuery, () => filter.value.mineOnly], () => {
+watch([currentView, anchorDate, () => filter.value.mineOnly], () => {
   const q = {}
   if (currentView.value && currentView.value !== 'week') q.view = currentView.value
   const dStr = fmtIsoDate(anchorDate.value)
   if (dStr) q.date = dStr
-  if (searchQuery.value) q.q = searchQuery.value
   if (filter.value.mineOnly) q.mine = '1'
   router.replace({ query: q }).catch(() => { /* ignore navigation duplication */ })
 }, { deep: true })
@@ -139,7 +139,7 @@ async function loadAll() {
       campaignIdx: m.campaignIdx,
       campaignName: m.campaignName,
     }))
-    teamTaskStore.fetch()
+    await teamTaskStore.fetch()
   } catch (error) {
     console.error('캘린더 데이터 로드 실패', error)
     loadError.value = error?.response?.data?.message || error?.message || '캘린더 데이터를 불러오지 못했습니다.'
@@ -152,7 +152,16 @@ async function loadAll() {
   }
 }
 
+/* 재로드 디바운스 — 생성 직후 명시적 호출과 SSE 알림이 겹쳐도
+   커밋 이후 한 번만 (가장 최신 데이터로) 재로드되도록 합침. 스테일 덮어쓰기 방지. */
+let loadAllTimer = null
+function scheduleLoadAll(delay = 150) {
+  clearTimeout(loadAllTimer)
+  loadAllTimer = setTimeout(() => { loadAll() }, delay)
+}
+
 onMounted(loadAll)
+onUnmounted(() => clearTimeout(loadAllTimer))
 
 /* ─── 4종 이벤트로 변환 ─── */
 function colorByType(type) {
@@ -190,6 +199,8 @@ const deadlineEvents = computed(() => intros.value
     start: isoOf(i.recruitDeadline),
     end: isoOf(i.recruitDeadline),
     campaignId: i.campaignId,
+    campaignName: i.campaignName ?? '',
+    projectManager: '',
     colorClass: colorByType('deadline'),
   })))
 
@@ -202,7 +213,8 @@ const milestoneEvents = computed(() => milestones.value
     start: isoOf(m.startDate ?? m.endDate),
     end: isoOf(m.endDate ?? m.startDate),
     campaignId: m.campaignId,
-    projectManager: m.campaignName,
+    campaignName: m.campaignName ?? '',
+    projectManager: '',
     colorClass: colorByType('milestone'),
   })))
 
@@ -216,13 +228,14 @@ const taskEvents = computed(() => {
         id: `tsk-${t.idx}`,
         type: 'task',
         title: `✅ ${t.name}`,
-        // Task 엔티티에는 startDate가 없음 → dueDate 단일 시점 (시각 포함)
-        start: t.dueDate,
+        // startDate가 있으면 시작~마감 범위, 없으면 dueDate 단일 시점
+        start: t.startDate ?? t.dueDate,
         end: t.dueDate,
         projectManager: t.assigneeName ?? '',
         campaignId: c?.id ?? c?.idx ?? t.campaignIdx ?? null,
         campaignIdx: t.campaignIdx,
-        campaignName: c?.title ?? c?.name ?? '',
+        // 캠페인 없는 개인 업무는 캠페인명 칸에 "개인 업무" 로 표기
+        campaignName: c?.title ?? c?.name ?? (t.campaignIdx ? '' : '개인 업무'),
         customColor: c?.color || '#8B5CF6',
         status: t.status,
         priority: t.priority,
@@ -238,11 +251,21 @@ const taskEvents = computed(() => {
  * dueDate 시점으로 바를 만든다 (사용자 요청: "캠페인 단위 말고 업무 단위").
  * campaignEvents 는 색/이름 매핑용 메타데이터로만 사용되며 더 이상 렌더되지 않는다.
  */
-const formattedEvents = computed(() => [
-  ...deadlineEvents.value,
-  ...milestoneEvents.value,
-  ...taskEvents.value,
-])
+const formattedEvents = computed(() => {
+  const all = [
+    ...deadlineEvents.value,
+    ...milestoneEvents.value,
+    ...taskEvents.value,
+  ]
+  // id 기준 중복 제거 (같은 항목이 여러 번 들어오는 경우 방어)
+  const seen = new Set()
+  return all.filter((e) => {
+    if (e.id == null) return true
+    if (seen.has(e.id)) return false
+    seen.add(e.id)
+    return true
+  })
+})
 
 const filteredEvents = computed(() => {
   let arr = formattedEvents.value
@@ -262,14 +285,27 @@ const filteredEvents = computed(() => {
       (e.type === 'task' && myName && e.projectManager === myName)
     )
   }
-  // 검색
-  const q = searchQuery.value.trim().toLowerCase()
-  if (q) {
-    arr = arr.filter(e =>
-      (e.title ?? '').toLowerCase().includes(q) ||
-      (e.projectManager ?? '').toLowerCase().includes(q),
-    )
-  }
+  return arr
+})
+
+// 월간(calendar) 뷰: 업무(task) + 마일스톤(milestone) 표시 — 모집마감/업무파트는 숨김.
+// 마일스톤은 시작~종료일이 있는 일정이므로 캘린더에 노출 (사이드바 토글로 on/off).
+const monthEvents = computed(() =>
+  filteredEvents.value.filter(e => e.type === 'task' || e.type === 'milestone'),
+)
+
+// 타임라인/테이블 서브탭: 캠페인 일정 vs 개인 업무 분리
+const BOARD_TABS = [
+  { key: 'all', label: '전체' },
+  { key: 'campaign', label: '캠페인' },
+  { key: 'personal', label: '개인 업무' },
+]
+const boardTab = ref('all')
+const isPersonalEvent = (e) => e.type === 'task' && !e.campaignId
+const boardEvents = computed(() => {
+  const arr = filteredEvents.value
+  if (boardTab.value === 'personal') return arr.filter(isPersonalEvent)
+  if (boardTab.value === 'campaign') return arr.filter((e) => !isPersonalEvent(e))
   return arr
 })
 
@@ -431,61 +467,213 @@ async function updateTaskDate(event, newDate) {
   const taskIdx = Number(event.id.replace('tsk-', ''))
   const task = teamTaskStore.tasks.find(t => t.idx === taskIdx)
   if (!task) return
-  const prev = task.dueDate
-  task.dueDate = `${newDate}T23:59:59`
+  const prevStart = task.startDate
+  const prevDue = task.dueDate
+  // 날짜만 newDate로 이동, 시각(시작/마감)은 유지 → 시작·마감이 함께 같은 날로 이동
+  const dueTime = (prevDue && prevDue.length >= 19) ? prevDue.slice(11, 19) : '23:59:59'
+  const newDue = `${newDate}T${dueTime}`
+  let newStart = prevStart
+  if (prevStart && prevStart.length >= 19) {
+    newStart = `${newDate}T${prevStart.slice(11, 19)}`
+  }
+  task.dueDate = newDue
+  task.startDate = newStart
   try {
-    await UpdateTask(taskIdx, { dueDate: task.dueDate })
+    await UpdateTask(taskIdx, { startDate: newStart ?? null, dueDate: newDue })
     toast.success(`'${task.name}' 마감일 변경`, '내 업무')
   } catch (e) {
-    task.dueDate = prev
+    task.dueDate = prevDue
+    task.startDate = prevStart
     toast.error(e?.response?.data?.message || '업무 마감일 변경에 실패했습니다.')
   }
 }
 
 /* ─── Quick-add ─── */
-async function createTaskFromQuick({ title, date, campaignId }) {
+// 캘린더 빠른 추가 = 개인 업무 (캠페인 무관, 담당=본인)
+async function createTaskFromQuick({ title, date, startTime, endTime, priority }) {
+  const startDate = `${date}T${startTime || '09:00'}:00`
+  const dueDate = `${date}T${endTime || startTime || '23:59'}:00`
   try {
-    await CreateTask(campaignId, {
+    const result = await CreatePersonalTask({
       name: title,
-      dueDate: `${date}T23:59:59`,
+      startDate,
+      dueDate,
       status: 'TODO',
+      priority: priority || 'MEDIUM',
     })
-    toast.success(`'${title}' 업무 생성`, '업무 추가')
-    teamTaskStore.fetch()
+    // 낙관적 반영 — 새로고침/네트워크 대기 없이 즉시 캘린더에 표시
+    if (result?.idx != null) {
+      teamTaskStore.tasks = [...teamTaskStore.tasks, {
+        idx: result.idx,
+        name: title,
+        startDate,
+        dueDate,
+        status: result.status ?? 'TODO',
+        priority: priority || 'MEDIUM',
+        campaignIdx: null,
+        assigneeName: authStore.user?.name ?? '',
+        milestoneName: null,
+        taskPartName: null,
+      }]
+    }
+    toast.success(`'${title}' 개인 업무 생성`, '업무 추가')
+    scheduleLoadAll()   // 백그라운드 정합성 동기화
   } catch (e) {
     toast.error(e?.response?.data?.message || '업무 생성에 실패했습니다.')
   }
 }
 
-async function createMilestoneFromQuick({ title, date, campaignId }) {
+async function createCampaignTaskFromQuick({ title, date, startTime, endTime, priority, campaignId, milestoneId, taskPartId }) {
+  const startDate = `${date}T${startTime || '09:00'}:00`
+  const dueDate = `${date}T${endTime || startTime || '23:59'}:00`
   try {
-    await CreateMilestone(campaignId, {
+    const result = await CreateTask(campaignId, {
       name: title,
-      startDate: `${date}T00:00:00`,
-      endDate: `${date}T23:59:59`,
+      startDate,
+      dueDate,
+      status: 'BACKLOG',
+      taskType: 'OTHER',
+      priority: priority || 'MEDIUM',
+      milestoneId: milestoneId ?? null,
+      taskPartId: taskPartId ?? null,
     })
+    const camp = campaigns.value.find(c => c.id === campaignId)
+    if (result?.idx != null) {
+      teamTaskStore.tasks = [...teamTaskStore.tasks, {
+        idx: result.idx,
+        name: title,
+        startDate,
+        dueDate,
+        status: result.status ?? 'BACKLOG',
+        priority: priority || 'MEDIUM',
+        campaignIdx: camp?.idx ?? null,
+        assigneeName: authStore.user?.name ?? '',
+        milestoneName: null,
+        taskPartName: null,
+      }]
+    }
+    toast.success(`'${title}' 캠페인 업무 생성`, '업무 추가')
+    scheduleLoadAll()
+  } catch (e) {
+    toast.error(e?.response?.data?.message || '캠페인 업무 생성에 실패했습니다.')
+  }
+}
+
+async function createMilestoneFromQuick({ title, date, campaignId }) {
+  const startDate = `${date}T00:00:00`
+  const endDate = `${date}T23:59:59`
+  try {
+    const result = await CreateMilestone(campaignId, { name: title, startDate, endDate })
+    const camp = campaigns.value.find(c => c.id === campaignId)
+    if (result?.idx != null) {
+      milestones.value = [...milestones.value, {
+        idx: result.idx,
+        name: result.name ?? title,
+        startDate: result.startDate ?? startDate,
+        endDate: result.endDate ?? endDate,
+        campaignId,
+        campaignIdx: camp?.idx ?? null,
+        campaignName: camp?.title ?? camp?.name ?? '',
+      }]
+    }
     toast.success(`'${title}' 마일스톤 생성`, '마일스톤 추가')
-    loadAll()  // milestones 재로드
+    scheduleLoadAll()
   } catch (e) {
     toast.error(e?.response?.data?.message || '마일스톤 생성에 실패했습니다.')
   }
 }
 
-function openCampaignFullModal({ date }) {
-  // 캠페인 생성 모달 라우팅 — 별도 페이지/모달이 있다면 여기서 호출
-  toast.info(`${date}에 시작하는 새 캠페인 만들기 — 상세 모달은 캠페인 페이지에서 진행하세요.`)
+async function createTaskPartFromQuick({ title, campaignId, milestoneId, priority }) {
+  try {
+    // 업무파트는 날짜가 없는 보드 개념 — 캘린더(날짜 격자)에는 표시되지 않고 팀 보드에서 확인.
+    await CreateTaskPart(campaignId, milestoneId, {
+      name: title,
+      taskPriority: priority || 'MEDIUM',
+    })
+    toast.success(`'${title}' 업무파트 생성`, '업무파트 추가')
+    scheduleLoadAll()
+  } catch (e) {
+    toast.error(e?.response?.data?.message || '업무파트 생성에 실패했습니다.')
+  }
 }
 
 function resetFilters() {
   filter.value = { mineOnly: false }
-  searchQuery.value = ''
   toggles.value = { campaign: true, deadline: true, milestone: true, task: true }
+}
+
+/* ─── 캘린더 가져오기 / 내보내기 (.ics) ─── */
+const icsInputRef = ref(null)
+const exportOpen = ref(false)
+const exportBusy = ref(false)
+const exportRange = ref({ from: '', to: '' })
+const importOpen = ref(false)
+const importBusy = ref(false)
+const importFile = ref(null)
+
+function openExport() {
+  const d = anchorDate.value instanceof Date ? anchorDate.value : new Date()
+  const first = new Date(d.getFullYear(), d.getMonth(), 1)
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+  exportRange.value = { from: fmtIsoDate(first), to: fmtIsoDate(last) }
+  exportOpen.value = true
+}
+async function doExport({ from, to, types }) {
+  exportBusy.value = true
+  try {
+    const blob = await ExportCalendarIcs({ from, to, types })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `callog-${from.replaceAll('-', '')}-${to.replaceAll('-', '')}.ics`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    toast.success('캘린더를 내보냈습니다.', '내보내기')
+    exportOpen.value = false
+  } catch (e) {
+    toast.error(e?.response?.data?.message || '내보내기에 실패했습니다.')
+  } finally {
+    exportBusy.value = false
+  }
+}
+
+function triggerImport() { icsInputRef.value?.click() }
+function onIcsPicked(e) {
+  const f = e.target.files?.[0]
+  if (f) { importFile.value = f; importOpen.value = true }
+  e.target.value = '' // 같은 파일 다시 선택 가능하게 초기화
+}
+function closeImport() {
+  if (importBusy.value) return
+  importOpen.value = false
+  importFile.value = null
+}
+async function doImport(mode) {
+  if (!importFile.value) return
+  importBusy.value = true
+  try {
+    const r = await ImportCalendarIcs(importFile.value, mode)
+    const added = r?.importedCount ?? 0
+    const del = r?.deletedCount ?? 0
+    toast.success(
+      mode === 'overwrite' ? `${del}건 교체 · ${added}건 추가` : `${added}건 추가`,
+      '가져오기',
+    )
+    importOpen.value = false
+    importFile.value = null
+    scheduleLoadAll()
+  } catch (e) {
+    toast.error(e?.response?.data?.message || '가져오기에 실패했습니다.')
+  } finally {
+    importBusy.value = false
+  }
 }
 
 /* ─── 명령 팔레트 / 단축키 ─── */
 const cmdkOpen = ref(false)
 const cheatOpen = ref(false)
-const searchInputRef = ref(null)
 
 function shiftAnchor(deltaUnits) {
   const d = new Date(anchorDate.value)
@@ -520,7 +708,6 @@ function onKeyDown(e) {
     case 'm': currentView.value = 'calendar'; break
     case 'w': currentView.value = 'week'; break
     case 'a': currentView.value = 'agenda'; break
-    case '/': e.preventDefault(); searchInputRef.value?.focus(); break
     case '?': cheatOpen.value = true; break
   }
 }
@@ -562,17 +749,22 @@ onUnmounted(() => {
           {{ v.name }}
         </button>
       </div>
-      <div class="overview__top-actions">
-        <div class="overview__search">
-          <span class="material-symbols-outlined">search</span>
-          <input
-            ref="searchInputRef"
-            v-model="searchQuery"
-            type="text"
-            placeholder="검색... (/)"
-            class="overview__search-input"
-          />
-        </div>
+      <div class="overview__io">
+        <button class="overview__io-btn" @click="openExport">
+          <span class="material-symbols-outlined">download</span>
+          <span>캘린더 내보내기</span>
+        </button>
+        <button class="overview__io-btn" @click="triggerImport">
+          <span class="material-symbols-outlined">upload</span>
+          <span>캘린더 가져오기</span>
+        </button>
+        <input
+          ref="icsInputRef"
+          type="file"
+          accept=".ics,text/calendar"
+          class="overview__io-file"
+          @change="onIcsPicked"
+        />
       </div>
     </div>
 
@@ -598,6 +790,27 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <!-- 타임라인/테이블 전용 서브탭: 캠페인 / 개인 업무 분리 -->
+        <div
+          v-else-if="currentView === 'timeline' || currentView === 'table'"
+          class="board-shell"
+        >
+          <div class="board-subtabs" role="tablist">
+            <button
+              v-for="t in BOARD_TABS"
+              :key="t.key"
+              type="button"
+              role="tab"
+              class="board-subtab"
+              :class="{ 'is-on': boardTab === t.key }"
+              :aria-selected="boardTab === t.key"
+              @click="boardTab = t.key"
+            >{{ t.label }}</button>
+          </div>
+          <MainTimeline v-if="currentView === 'timeline'" :events-data="boardEvents" @event-click="onEventClick" />
+          <MainTable v-else :events-data="boardEvents" @event-click="onEventClick" />
+        </div>
+
         <transition v-else name="view-fade" mode="out-in">
           <LavenderWeekCalendar
             v-if="currentView === 'week'"
@@ -613,7 +826,7 @@ onUnmounted(() => {
           <MainCalendar
             v-else-if="currentView === 'calendar'"
             key="calendar"
-            :events-data="filteredEvents"
+            :events-data="monthEvents"
             :anchor-date="anchorDate"
             @event-click="onEventClick"
             @day-click="onDayClick"
@@ -627,16 +840,6 @@ onUnmounted(() => {
             :events-data="filteredEvents"
             :anchor-date="anchorDate"
             @event-click="onEventClick"
-          />
-          <MainTimeline
-            v-else-if="currentView === 'timeline'"
-            key="timeline"
-            :events-data="filteredEvents"
-          />
-          <MainTable
-            v-else-if="currentView === 'table'"
-            key="table"
-            :events-data="filteredEvents"
           />
         </transition>
       </main>
@@ -656,8 +859,9 @@ onUnmounted(() => {
       :campaigns="campaigns"
       @close="closeQuickAdd"
       @create-task="createTaskFromQuick"
+      @create-campaign-task="createCampaignTaskFromQuick"
       @create-milestone="createMilestoneFromQuick"
-      @open-campaign-modal="openCampaignFullModal"
+      @create-taskpart="createTaskPartFromQuick"
     />
     <CommandPalette
       :open="cmdkOpen"
@@ -668,6 +872,22 @@ onUnmounted(() => {
       @select-event="onEventClick"
     />
     <ShortcutCheatsheet :open="cheatOpen" @close="cheatOpen = false" />
+
+    <CalendarExportModal
+      :open="exportOpen"
+      :default-from="exportRange.from"
+      :default-to="exportRange.to"
+      :busy="exportBusy"
+      @close="exportOpen = false"
+      @export="doExport"
+    />
+    <CalendarImportModal
+      :open="importOpen"
+      :file-name="importFile?.name || ''"
+      :busy="importBusy"
+      @close="closeImport"
+      @confirm="doImport"
+    />
 
   </div>
 </template>
@@ -734,13 +954,25 @@ onUnmounted(() => {
   color: var(--lp-primary-deep);
   box-shadow: 0 1px 3px rgba(63,52,99,.12);
 }
-.overview__top-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 
+/* 캘린더 가져오기/내보내기 버튼 (상단바 우측) */
+.overview__io { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.overview__io-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; font-size: 12.5px; font-weight: 600;
+  color: var(--lp-text-muted); background: var(--lp-surface-soft);
+  border: 1px solid var(--lp-border); border-radius: 999px; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+}
+.overview__io-btn:hover {
+  color: var(--lp-primary-deep); background: var(--lp-surface);
+  border-color: var(--lp-primary); box-shadow: 0 1px 3px rgba(63,52,99,.12);
+}
+.overview__io-btn .material-symbols-outlined { font-size: 16px; }
+.overview__io-file { display: none; }
+@media (max-width: 720px) {
+  .overview__io-btn span:not(.material-symbols-outlined) { display: none; }
+}
 /* === Header === */
 .overview__header {
   display: flex;
@@ -810,28 +1042,6 @@ onUnmounted(() => {
   margin-left: auto;
   flex-wrap: wrap;
 }
-.overview__search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border: 1px solid var(--lp-border);
-  border-radius: 999px;
-  background: var(--lp-surface);
-  transition: border-color 0.15s, background 0.15s;
-}
-.overview__search:focus-within { border-color: var(--lp-primary-strong); background: var(--lp-surface-soft); }
-.overview__search .material-symbols-outlined { font-size: 14px; color: var(--lp-text-faint); flex-shrink: 0; }
-.overview__search-input {
-  border: none;
-  background: none;
-  outline: none;
-  font-size: 12.5px;
-  color: var(--lp-text);
-  width: 160px;
-}
-.overview__search-input::placeholder { color: var(--lp-text-faint); }
-
 .overview__icon-btn {
   display: flex;
   align-items: center;
@@ -902,6 +1112,41 @@ onUnmounted(() => {
   }
 }
 .overview--lp-week { overflow: hidden; }
+
+/* === 타임라인/테이블 서브탭 (캠페인/개인 업무) === */
+.board-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 10px;
+}
+.board-shell > :last-child { flex: 1; min-height: 0; }
+.board-subtabs {
+  display: inline-flex;
+  align-self: flex-start;
+  background: var(--lp-surface-soft);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.board-subtab {
+  padding: 7px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--lp-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+.board-subtab:hover { color: var(--lp-text); }
+.board-subtab.is-on {
+  background: var(--lp-surface);
+  color: var(--lp-primary-deep);
+  box-shadow: 0 1px 3px rgba(63, 52, 99, .12);
+}
 
 /* === View Transition === */
 .view-fade-enter-active,

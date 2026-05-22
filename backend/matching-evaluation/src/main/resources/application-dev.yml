@@ -1,20 +1,47 @@
 server:
   port: 8082
-
+  tomcat:
+    keep-alive-timeout: 60000
+    max-keep-alive-requests: -1
 spring:
   application:
     name: ai-evaluation
+  data:
+    mongodb:
+      uri: ${MONGODB_URL}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health, prometheus
   endpoint:
     health:
       show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    #    enabled: false
+    sampling:
+      probability: 1.0   # 모든 요청에 대한 데이터를 수집하겠다.
+  otlp:
+    tracing:
+      endpoint: ${JAEGER_URL}
+      transport: http
 
 custom:
   n8n:
     webhook-url: ${N8N_URL}
     evaluation-endpoint: ${EVALUATION_ENDPOINT}
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_URI}
