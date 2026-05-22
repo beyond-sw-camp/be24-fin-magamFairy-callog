@@ -1,25 +1,56 @@
+jwt:
+  key: ${JWT_SECRET}
+
 spring:
   application:
     name: spring-gw
   cloud:
     gateway:
       routes:
-        # AI Judge ?? (??? ???? ???? ??? ??)
-        - id: aijudge-service
-          uri: ${AIJUDGE_URI}
+        - id: gateway-local-info
+          uri: noop://localhost
           predicates:
-            - Path=/aijudge/**
+            - Path=/gw/**
           filters:
             - StripPrefix=1
 
-        # Matching Evaluation ??
-        - id: matching-evaluation-service
-          uri: ${EVALUATION_URI}
+        # ai 판사
+        - id: ai-judge-actuator
+          uri: lb://ai-judge
+          predicates:
+            - Path=/aijudge/actuator/**
+          filters:
+            - StripPrefix=1
+
+        - id: ai-judge
+          uri: lb://ai-judge
+          predicates:
+            - Path=/aijudge/**
+
+        # ai 평가
+
+        - id: ai-evaluation-actuator
+          uri: lb://ai-evaluation
+          predicates:
+            - Path=/evaluation/actuator/**
+          filters:
+            - StripPrefix=1
+
+        - id: ai-evaluation
+          uri: lb://ai-evaluation
           predicates:
             - Path=/evaluation/**
 
-        # ?? App ?? (??? ?? /api/** ??? ???? ?????)
-        - id: app-service
-          uri: ${APP_URI}
+        - id: app
+          uri: lb://app
           predicates:
-            - Path=/** # ?? ? ??? ??? ?? ?? /api/ ??? ??? ???.
+            - Path=/**
+          filters:
+            - JwtFilter
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_URI}
