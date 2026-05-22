@@ -91,6 +91,7 @@ custom:
     job-poll-timeout-ms: ${OCR_JOB_POLL_TIMEOUT_MS:180000}
   layout:
     url: ${LAYOUT_SERVICE_URL:http://localhost:8001/v1/layout/analyze}
+    api-key: ${LAYOUT_SERVICE_API_KEY:}
   mongodb:
     analysis-enabled: ${MONGODB_STD_ENABLED:false}
     analysis-uri: ${MONGODB_STD_URL:}
