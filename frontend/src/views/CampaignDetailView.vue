@@ -124,8 +124,27 @@ const tabs = computed(() => {
   return isPartner.value ? base.filter((t) => t !== '캠페인 성과/KPI') : base;
 });
 
+const TAB_TO_QUERY_MAP = {
+  '캠페인 오버뷰': 'overview',
+  '팀 보드 보기': 'board',
+  '검수/승인': 'review',
+  '자료실': 'library',
+  '참여자 설정': 'members',
+  '캠페인 성과/KPI': 'kpi',
+  '매칭 탭': 'matching',
+}
+
 const handleTabClick = (tabName) => {
   activeTab.value = tabName
+  const queryTab = TAB_TO_QUERY_MAP[tabName]
+  if (queryTab && route.query.tab !== queryTab) {
+    router.replace({
+      query: {
+        ...route.query,
+        tab: queryTab,
+      },
+    })
+  }
 }
 
 const campaignId = computed(() => route.params.campaignId)

@@ -1,6 +1,7 @@
 import api from '/plugins/interceptor.js'
 
 const AD_CHECK_TIMEOUT_MS = 180000
+const AD_CHECK_JOB_TIMEOUT_MS = 60000
 
 function createAdCheckError(message, data) {
   const error = new Error(message)
@@ -73,6 +74,48 @@ export const CheckAdFileWithAiJudge = async (file, options = {}) => {
         headers: { 'Content-Type': 'multipart/form-data' },
       }),
     )
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const CreateAdCheckJob = async (file, options = {}) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (options.campaignId) {
+    formData.append('campaignId', options.campaignId)
+  }
+  try {
+    return unwrapResponse(
+      await api.post('/ad/check/jobs', formData, {
+        timeout: AD_CHECK_JOB_TIMEOUT_MS,
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    )
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const GetAdCheckJob = async (jobId) => {
+  try {
+    return unwrapResponse(await api.get(`/ad/check/jobs/${jobId}`))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const ListActiveAdCheckJobs = async () => {
+  try {
+    return unwrapResponse(await api.get('/ad/check/jobs/active'))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const CancelAdCheckJob = async (jobId) => {
+  try {
+    return unwrapResponse(await api.post(`/ad/check/jobs/${jobId}/cancel`))
   } catch (error) {
     throw toAdCheckError(error)
   }

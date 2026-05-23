@@ -1,13 +1,15 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   ApproveAdReviewRequest,
-  CheckAdFileWithAiJudge, //CheckAdFileWithAiJudge 로 변경시 8081
   CreateAdReviewRequest,
   ListAdReviewRequests,
   RejectAdReviewRequest,
 } from '@/api/adcheck/index.js'
 import { getCampaignMembers } from '@/api/campaignMembers'
+import AdCheckJobProgress from '@/components/adcheck/AdCheckJobProgress.vue'
+import { isTerminalJobStatus, useAdCheckJobsStore } from '@/stores/adCheckJobs'
 
 const props = defineProps({
   campaignId: {
@@ -16,12 +18,16 @@ const props = defineProps({
   },
 })
 
+const route = useRoute()
+const router = useRouter()
+const adCheckJobsStore = useAdCheckJobsStore()
 const isAnalysisOpen = ref(false)
 const selectedAnalysisFile = ref(null)
 const analysisFileInput = ref(null)
 const isUploadDragOver = ref(false)
 const uploadDragDepth = ref(0)
 const isAnalyzing = ref(false)
+const activeAnalysisJobId = ref('')
 const analysisResult = ref(null)
 const analysisError = ref('')
 const reviewRequestMemo = ref('')
@@ -48,6 +54,9 @@ const canFinalReview = computed(() =>
 const normalizedAnalysisStatus = computed(() => normalizeAnalysisStatus(analysisResult.value?.status))
 const normalizedAnalysisPassed = computed(() =>
   normalizedAnalysisStatus.value === 'pass' && !analysisError.value,
+)
+const activeAnalysisJob = computed(() =>
+  activeAnalysisJobId.value ? adCheckJobsStore.findJob(activeAnalysisJobId.value) : null,
 )
 
 const analysisFileInfo = computed(() => {
@@ -245,7 +254,7 @@ async function createReviewRequest() {
 
     replaceReviewRequest(result)
     resetAnalysisForm()
-    isAnalysisOpen.value = false
+    closeAnalysisRequest()
   } catch (error) {
     requestSubmitError.value = error?.message ?? '검수 요청 생성에 실패했습니다.'
   } finally {
@@ -303,10 +312,20 @@ function openAnalysisRequest() {
 
 function closeAnalysisRequest() {
   isAnalysisOpen.value = false
+  if (route.query.adCheckJobId) {
+    router.replace({
+      query: {
+        ...route.query,
+        adCheckJobId: undefined,
+      },
+    })
+  }
 }
 
 function resetAnalysisForm() {
   selectedAnalysisFile.value = null
+  activeAnalysisJobId.value = ''
+  isAnalyzing.value = false
   analysisResult.value = null
   analysisError.value = ''
   requestSubmitError.value = ''
@@ -351,6 +370,48 @@ async function handleUploadDrop(event) {
   await processAnalysisFile(file)
 }
 
+function applyAnalysisJobResult(job) {
+  if (!job) return
+
+  if (job.status === 'SUCCEEDED') {
+    analysisResult.value = job.result
+    analysisError.value = normalizeAnalysisStatus(job.result?.status)
+      ? ''
+      : 'AI 검수 결과 형식이 올바르지 않습니다. 서버 응답을 확인해주세요.'
+    isAnalyzing.value = false
+    return
+  }
+
+  if (job.status === 'FAILED') {
+    if (job.result) {
+      analysisResult.value = job.result
+    }
+    analysisError.value = job.errorMessage || 'AI 검수 요청에 실패했습니다.'
+    isAnalyzing.value = false
+    return
+  }
+
+  if (job.status === 'CANCELED') {
+    analysisError.value = job.errorMessage || '대기 중 검수 작업이 취소되었습니다.'
+    isAnalyzing.value = false
+    return
+  }
+
+  analysisError.value = ''
+  isAnalyzing.value = true
+}
+
+function openAnalysisJobResult(job) {
+  const targetUrl = job?.targetUrl
+    || (job?.result?.analysisJobId
+      ? `/references?analysisJobId=${encodeURIComponent(job.result.analysisJobId)}`
+      : '')
+
+  if (targetUrl) {
+    router.push(targetUrl)
+  }
+}
+
 async function processAnalysisFile(file) {
   resetAnalysisForm()
   if (!file) return
@@ -363,19 +424,39 @@ async function processAnalysisFile(file) {
   selectedAnalysisFile.value = file
   isAnalyzing.value = true
   try {
-    const result = await CheckAdFileWithAiJudge(file, { campaignId: props.campaignId }) //CheckAdFileWithAiJudge 로 변경시 8081
-    analysisResult.value = result
-    if (!normalizeAnalysisStatus(result?.status)) {
-      analysisError.value = 'AI 검수 결과 형식이 올바르지 않습니다. 서버 응답을 확인해주세요.'
-    }
+    const job = await adCheckJobsStore.startJob(file, { campaignId: props.campaignId })
+    activeAnalysisJobId.value = job?.jobId ?? ''
+    applyAnalysisJobResult(job)
   } catch (error) {
     if (error?.data && typeof error.data === 'object') {
       analysisResult.value = error.data
     }
     analysisError.value = error?.message ?? 'AI 검수 요청에 실패했습니다.'
-  } finally {
     isAnalyzing.value = false
   }
+}
+
+async function openAnalysisJobFromRoute() {
+  const jobId = String(route.query.adCheckJobId || '').trim()
+  if (!jobId) {
+    return
+  }
+
+  isAnalysisOpen.value = true
+  activeAnalysisJobId.value = jobId
+
+  let job = adCheckJobsStore.findJob(jobId)
+  if (!job) {
+    try {
+      job = await adCheckJobsStore.fetchJob(jobId)
+    } catch (error) {
+      analysisError.value = error?.message ?? '진행 중인 검수 작업을 불러오지 못했습니다.'
+      isAnalyzing.value = false
+      return
+    }
+  }
+
+  applyAnalysisJobResult(job)
 }
 
 function isSupportedAnalysisFile(file) {
@@ -397,7 +478,16 @@ async function loadPageData() {
   ])
 }
 
-onMounted(loadPageData)
+onMounted(async () => {
+  await loadPageData()
+  await openAnalysisJobFromRoute()
+})
+
+watch(activeAnalysisJob, (job) => {
+  if (job) {
+    applyAnalysisJobResult(job)
+  }
+})
 
 watch(
   () => props.campaignId,
@@ -406,6 +496,13 @@ watch(
     isAnalysisOpen.value = false
     reviewRequests.value = []
     loadPageData()
+  },
+)
+
+watch(
+  () => route.query.adCheckJobId,
+  () => {
+    void openAnalysisJobFromRoute()
   },
 )
 </script>
@@ -420,6 +517,19 @@ watch(
         </div>
         <button type="button" class="ghost-button" @click="closeAnalysisRequest">목록으로</button>
       </header>
+
+      <section v-if="activeAnalysisJob" class="analysis-job-stage">
+        <AdCheckJobProgress :job="activeAnalysisJob" />
+        <button
+          v-if="isTerminalJobStatus(activeAnalysisJob.status)
+            && (activeAnalysisJob.targetUrl || activeAnalysisJob.result?.analysisJobId)"
+          type="button"
+          class="ghost-button"
+          @click="openAnalysisJobResult(activeAnalysisJob)"
+        >
+          검수 결과 보기
+        </button>
+      </section>
 
       <div class="analysis-layout">
         <section class="analysis-upload">
@@ -834,6 +944,17 @@ watch(
 
 .analysis-verdict--empty {
   border-color: var(--border-color);
+}
+
+.analysis-job-stage {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.analysis-job-stage :deep(.ad-check-progress) {
+  width: 100%;
+  max-width: 1040px;
 }
 
 .analysis-timing {

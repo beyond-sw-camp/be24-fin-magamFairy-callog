@@ -1,8 +1,16 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { confirm, confirmAll, getNoti } from '@/api/notifications/index.js'
+import { useAdCheckJobsStore } from '@/stores/adCheckJobs'
 
 const SSE_RETRY_DELAY_MS = 5000
+const AD_CHECK_JOB_EVENTS = [
+  'ad-check.job.created',
+  'ad-check.job.updated',
+  'ad-check.step.changed',
+  'ad-check.completed',
+  'ad-check.failed',
+]
 
 const REVIEW_OUTCOME_META = {
   completed: { label: '검수 완료', tone: 'completed', icon: 'task_alt' },
@@ -138,6 +146,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const sseError = ref('')
   const eventSource = ref(null)
   const currentToken = ref('')
+  const lastIncomingNotification = ref(null)
+  const incomingNotificationSequence = ref(0)
 
   // SSE — 캘린더/내 캠페인 실시간 갱신 신호 (구독자가 watch로 수신)
   const lastCalendarRefresh = ref(0)
@@ -166,14 +176,17 @@ export const useNotificationsStore = defineStore('notifications', () => {
       notifications.value.splice(existingIndex, 1, notification)
       if (wasUnread && notification.isRead) {
         unreadCount.value = Math.max(0, unreadCount.value - 1)
+      } else if (!wasUnread && !notification.isRead) {
+        unreadCount.value += 1
       }
-      return
+      return notification
     }
 
     notifications.value.unshift(notification)
     if (!notification.isRead) {
       unreadCount.value += 1
     }
+    return notification
   }
 
   async function loadNotifications(options = {}) {
@@ -276,14 +289,31 @@ export const useNotificationsStore = defineStore('notifications', () => {
       isSseConnected.value = true
       sseError.value = ''
       void loadNotifications()
+      void useAdCheckJobsStore().loadActiveJobs()
     }
 
     source.addEventListener('notification.created', (event) => {
       try {
-        upsertNotification(JSON.parse(event.data))
+        const notification = upsertNotification(JSON.parse(event.data))
+        if (notification && !notification.isRead) {
+          lastIncomingNotification.value = notification
+          incomingNotificationSequence.value += 1
+        }
       } catch (error) {
         console.warn('Notification SSE payload parsing failed.', error)
       }
+    })
+
+    const handleAdCheckJobEvent = (event) => {
+      try {
+        useAdCheckJobsStore().handleJobEvent(JSON.parse(event.data))
+      } catch (error) {
+        console.warn('Ad check job SSE payload parsing failed.', error)
+      }
+    }
+
+    AD_CHECK_JOB_EVENTS.forEach((eventName) => {
+      source.addEventListener(eventName, handleAdCheckJobEvent)
     })
 
     source.addEventListener('heartbeat', () => {
@@ -319,6 +349,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
     loadError,
     isSseConnected,
     sseError,
+    lastIncomingNotification,
+    incomingNotificationSequence,
     lastCalendarRefresh,
     lastMyCampaignsRefresh,
     connect,
