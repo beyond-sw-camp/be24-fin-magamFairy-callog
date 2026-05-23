@@ -9,7 +9,7 @@ import {
 } from '@/api/adcheck/index.js'
 import { getCampaignMembers } from '@/api/campaignMembers'
 import AdCheckJobProgress from '@/components/adcheck/AdCheckJobProgress.vue'
-import { isTerminalJobStatus, useAdCheckJobsStore } from '@/stores/adCheckJobs'
+import { adCheckStatusLabel, isTerminalJobStatus, useAdCheckJobsStore } from '@/stores/adCheckJobs'
 
 const props = defineProps({
   campaignId: {
@@ -38,6 +38,8 @@ const reviewRequests = ref([])
 const reviewLoadError = ref('')
 const reviewDecisionError = ref('')
 const submittingDecisionId = ref(null)
+const selectedDetailJobId = ref('')
+const analysisDetailLoadingJobId = ref('')
 
 const memberContext = ref(null)
 const memberContextError = ref('')
@@ -88,6 +90,14 @@ const analysisIssues = computed(() => {
 })
 
 const analysisProcessingTimes = computed(() => analysisResult.value?.processingTimes ?? null)
+const adCheckSummaries = computed(() => adCheckJobsStore.jobSummaries ?? [])
+const selectedJobDetail = computed(() =>
+  selectedDetailJobId.value ? adCheckJobsStore.findJobDetail(selectedDetailJobId.value) : null,
+)
+const selectedRawDocument = computed(() => selectedJobDetail.value?.rawDocument ?? {})
+const isSelectedDetailLoading = computed(() =>
+  Boolean(selectedDetailJobId.value && adCheckJobsStore.detailLoadingJobId === selectedDetailJobId.value),
+)
 
 const canCreateReviewRequest = computed(() =>
   Boolean(
@@ -174,9 +184,54 @@ function reviewStatusTone(status) {
   return 'approval'
 }
 
+function aiResultStatusLabel(status) {
+  const normalized = String(status ?? '').toLowerCase()
+  if (normalized === 'pass') return '검수 완료'
+  if (normalized === 'warning') return '확인 필요'
+  if (normalized === 'violation') return '위반 의심'
+  if (normalized === 'failed') return '검수 실패'
+  return '결과 대기'
+}
+
+function riskLevelLabel(level) {
+  const normalized = String(level ?? '').toUpperCase()
+  if (normalized === 'LOW') return '낮음'
+  if (normalized === 'MEDIUM') return '중간'
+  if (normalized === 'HIGH') return '높음'
+  if (normalized === 'NORMAL') return '보통'
+  return '미정'
+}
+
+function riskLevelTone(level) {
+  const normalized = String(level ?? '').toUpperCase()
+  if (normalized === 'LOW') return 'ready'
+  if (normalized === 'MEDIUM') return 'approval'
+  if (normalized === 'HIGH') return 'danger'
+  return 'neutral'
+}
+
 function formatDate(value) {
   if (!value) return '요청일 없음'
   return String(value).slice(0, 10)
+}
+
+function formatDateTime(value) {
+  if (!value) return '기록 없음'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function formatFileSize(bytes) {
+  const size = Number(bytes)
+  if (!Number.isFinite(size) || size <= 0) return '-'
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)}KB`
+  return `${(size / 1024 / 1024).toFixed(1)}MB`
 }
 
 function extractionModeLabel(mode) {
@@ -195,6 +250,22 @@ function formatDuration(millis) {
   if (millis === null || millis === undefined) return '-'
   if (millis < 1000) return `${millis}ms`
   return `${(millis / 1000).toFixed(2)}s`
+}
+
+function formatJson(value) {
+  if (!value || (typeof value === 'object' && !Object.keys(value).length)) {
+    return ''
+  }
+
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+function detailValue(path, fallback = '') {
+  return path.reduce((current, key) => current?.[key], selectedRawDocument.value) ?? fallback
 }
 
 async function loadMemberContext() {
@@ -322,6 +393,11 @@ function closeAnalysisRequest() {
   }
 }
 
+async function loadAdCheckSummaries() {
+  if (!props.campaignId) return
+  await adCheckJobsStore.loadJobSummaries({ campaignId: props.campaignId })
+}
+
 function resetAnalysisForm() {
   selectedAnalysisFile.value = null
   activeAnalysisJobId.value = ''
@@ -374,11 +450,19 @@ function applyAnalysisJobResult(job) {
   if (!job) return
 
   if (job.status === 'SUCCEEDED') {
+    if (!job.result) {
+      analysisError.value = ''
+      isAnalyzing.value = true
+      void loadAnalysisJobDetail(job)
+      return
+    }
+
     analysisResult.value = job.result
     analysisError.value = normalizeAnalysisStatus(job.result?.status)
       ? ''
       : 'AI 검수 결과 형식이 올바르지 않습니다. 서버 응답을 확인해주세요.'
     isAnalyzing.value = false
+    void loadAdCheckSummaries()
     return
   }
 
@@ -388,6 +472,7 @@ function applyAnalysisJobResult(job) {
     }
     analysisError.value = job.errorMessage || 'AI 검수 요청에 실패했습니다.'
     isAnalyzing.value = false
+    void loadAdCheckSummaries()
     return
   }
 
@@ -459,6 +544,40 @@ async function openAnalysisJobFromRoute() {
   applyAnalysisJobResult(job)
 }
 
+async function loadAnalysisJobDetail(job) {
+  if (!job?.jobId || analysisDetailLoadingJobId.value === job.jobId) {
+    return
+  }
+
+  analysisDetailLoadingJobId.value = job.jobId
+  try {
+    const detail = await adCheckJobsStore.loadJobDetail(job.jobId)
+    analysisResult.value = detail?.detail ?? null
+    analysisError.value = normalizeAnalysisStatus(analysisResult.value?.status)
+      ? ''
+      : adCheckJobsStore.detailLoadError || '상세 자료를 불러오지 못했습니다.'
+    void loadAdCheckSummaries()
+  } finally {
+    isAnalyzing.value = false
+    analysisDetailLoadingJobId.value = ''
+  }
+}
+
+async function openAdCheckDetail(summary) {
+  if (!summary?.jobId) {
+    return
+  }
+
+  selectedDetailJobId.value = summary.jobId
+  if (!adCheckJobsStore.findJobDetail(summary.jobId)) {
+    await adCheckJobsStore.loadJobDetail(summary.jobId)
+  }
+}
+
+function closeAdCheckDetail() {
+  selectedDetailJobId.value = ''
+}
+
 function isSupportedAnalysisFile(file) {
   const name = String(file?.name ?? '').toLowerCase()
   const type = String(file?.type ?? '').toLowerCase()
@@ -475,6 +594,7 @@ async function loadPageData() {
   await Promise.all([
     loadMemberContext(),
     loadReviewRequests(),
+    loadAdCheckSummaries(),
   ])
 }
 
@@ -495,6 +615,7 @@ watch(
     resetAnalysisForm()
     isAnalysisOpen.value = false
     reviewRequests.value = []
+    selectedDetailJobId.value = ''
     loadPageData()
   },
 )
@@ -684,6 +805,164 @@ watch(
       <p v-if="reviewLoadError" class="form-error">{{ reviewLoadError }}</p>
       <p v-if="reviewDecisionError" class="form-error">{{ reviewDecisionError }}</p>
 
+      <section class="ad-check-results">
+        <header class="ad-check-results__head">
+          <div>
+            <p>AI Check Results</p>
+            <h4>AI 검수 자료</h4>
+          </div>
+          <button type="button" class="ghost-button" @click="loadAdCheckSummaries">
+            새로고침
+          </button>
+        </header>
+
+        <p v-if="adCheckJobsStore.summaryLoadError" class="form-error">
+          {{ adCheckJobsStore.summaryLoadError }}
+        </p>
+
+        <div v-if="adCheckJobsStore.isLoadingSummaries" class="ad-check-summary-list">
+          <article v-for="index in 2" :key="index" class="ad-check-summary-card ad-check-summary-card--loading">
+            <span></span>
+            <strong></strong>
+            <p></p>
+          </article>
+        </div>
+
+        <div v-else-if="adCheckSummaries.length" class="ad-check-summary-list">
+          <article
+            v-for="summary in adCheckSummaries"
+            :key="summary.jobId"
+            class="ad-check-summary-card"
+          >
+            <div class="ad-check-summary-card__main">
+              <span>{{ adCheckStatusLabel(summary.status) }}</span>
+              <strong>{{ summary.fileName }}</strong>
+              <p>{{ summary.summaryMessage || '검수 결과 요약을 준비 중입니다.' }}</p>
+            </div>
+
+            <dl class="ad-check-summary-card__meta">
+              <div>
+                <dt>판정</dt>
+                <dd>{{ aiResultStatusLabel(summary.resultStatus) }}</dd>
+              </div>
+              <div>
+                <dt>위험도</dt>
+                <dd>
+                  <em :class="`status-chip status-chip--${riskLevelTone(summary.riskLevel)}`">
+                    {{ riskLevelLabel(summary.riskLevel) }}
+                  </em>
+                </dd>
+              </div>
+              <div>
+                <dt>요청</dt>
+                <dd>{{ formatDateTime(summary.createdAt) }}</dd>
+              </div>
+              <div>
+                <dt>완료</dt>
+                <dd>{{ formatDateTime(summary.finishedAt) }}</dd>
+              </div>
+            </dl>
+
+            <button
+              type="button"
+              class="ghost-button"
+              :disabled="adCheckJobsStore.detailLoadingJobId === summary.jobId"
+              @click="openAdCheckDetail(summary)"
+            >
+              {{ adCheckJobsStore.detailLoadingJobId === summary.jobId ? '불러오는 중...' : '상세 보기' }}
+            </button>
+          </article>
+        </div>
+
+        <article v-else class="empty-state empty-state--compact">
+          <strong>저장된 AI 검수 자료가 없습니다.</strong>
+          <p>파일 검수를 완료하면 결과 요약이 이곳에 표시됩니다.</p>
+        </article>
+
+        <section v-if="selectedDetailJobId" class="ad-check-detail-panel">
+          <header class="ad-check-detail-panel__head">
+            <div>
+              <p>Mongo Detail</p>
+              <h4>{{ selectedJobDetail?.summary?.fileName || '상세 자료' }}</h4>
+            </div>
+            <button type="button" class="ghost-button" @click="closeAdCheckDetail">닫기</button>
+          </header>
+
+          <p
+            v-if="adCheckJobsStore.detailLoadError && !selectedJobDetail && !isSelectedDetailLoading"
+            class="form-error"
+          >
+            {{ adCheckJobsStore.detailLoadError }}
+          </p>
+
+          <div v-if="isSelectedDetailLoading" class="ad-check-detail-panel__loading">
+            상세 자료를 불러오고 있습니다.
+          </div>
+
+          <div v-else-if="selectedJobDetail" class="ad-check-detail-panel__body">
+            <dl class="ad-check-detail-meta">
+              <div>
+                <dt>원본 파일</dt>
+                <dd>{{ selectedJobDetail.detail?.fileName || selectedJobDetail.summary.fileName }}</dd>
+              </div>
+              <div>
+                <dt>콘텐츠 타입</dt>
+                <dd>{{ selectedJobDetail.detail?.fileContentType || '-' }}</dd>
+              </div>
+              <div>
+                <dt>파일 크기</dt>
+                <dd>{{ formatFileSize(selectedJobDetail.detail?.fileSize) }}</dd>
+              </div>
+              <div>
+                <dt>Mongo ID</dt>
+                <dd>{{ selectedJobDetail.mongoDocumentId }}</dd>
+              </div>
+            </dl>
+
+            <details class="ad-check-detail-section" open>
+              <summary>추출된 전체 텍스트</summary>
+              <pre>{{ selectedJobDetail.detail?.extractedText || '추출된 텍스트가 없습니다.' }}</pre>
+            </details>
+
+            <details
+              v-if="formatJson(detailValue(['documentStructureResult']))"
+              class="ad-check-detail-section"
+            >
+              <summary>문서 구조 분석 결과</summary>
+              <pre>{{ formatJson(detailValue(['documentStructureResult'])) }}</pre>
+            </details>
+
+            <details
+              v-if="formatJson(detailValue(['recognizedTextResult']))"
+              class="ad-check-detail-section"
+            >
+              <summary>글자 인식 결과</summary>
+              <pre>{{ formatJson(detailValue(['recognizedTextResult'])) }}</pre>
+            </details>
+
+            <details
+              v-if="formatJson(detailValue(['textRiskAnalysisResult']))"
+              class="ad-check-detail-section"
+            >
+              <summary>문구 위험도 분석 결과</summary>
+              <pre>{{ formatJson(detailValue(['textRiskAnalysisResult'])) }}</pre>
+            </details>
+
+            <details
+              v-if="formatJson(detailValue(['finalResult']))"
+              class="ad-check-detail-section"
+            >
+              <summary>최종 상세 판정</summary>
+              <pre>{{ formatJson(detailValue(['finalResult'])) }}</pre>
+            </details>
+
+            <p v-if="detailValue(['errorDetail'])" class="form-error">
+              오류 상세: {{ detailValue(['errorDetail']) }}
+            </p>
+          </div>
+        </section>
+      </section>
+
       <div v-if="reviewRequests.length" class="review-list">
         <article v-for="request in reviewRequests" :key="request.idx" class="review-card">
           <div class="review-card__main">
@@ -791,6 +1070,171 @@ watch(
   font-weight: 950;
 }
 
+.ad-check-results {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ad-check-results__head,
+.ad-check-detail-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ad-check-results__head p,
+.ad-check-detail-panel__head p,
+.ad-check-summary-card__main span,
+.ad-check-summary-card__meta dt,
+.ad-check-detail-meta dt {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.ad-check-results__head h4,
+.ad-check-detail-panel__head h4 {
+  margin-top: 3px;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.ad-check-summary-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ad-check-summary-card {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+}
+
+.ad-check-summary-card__main {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.ad-check-summary-card__main strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-check-summary-card__main p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ad-check-summary-card__meta,
+.ad-check-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.ad-check-summary-card__meta div,
+.ad-check-detail-meta div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.ad-check-summary-card__meta dd,
+.ad-check-detail-meta dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-check-summary-card--loading span,
+.ad-check-summary-card--loading strong,
+.ad-check-summary-card--loading p {
+  display: block;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--border-color) 80%, var(--panel-color));
+}
+
+.ad-check-summary-card--loading strong {
+  width: 62%;
+  height: 16px;
+}
+
+.ad-check-summary-card--loading p {
+  width: 82%;
+}
+
+.ad-check-detail-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+}
+
+.ad-check-detail-panel__body {
+  display: grid;
+  gap: 10px;
+}
+
+.ad-check-detail-panel__loading {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.ad-check-detail-section {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
+}
+
+.ad-check-detail-section summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.ad-check-detail-section pre {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: 0 12px 12px;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .primary-button,
 .ghost-button,
 .review-card__actions a,
@@ -823,6 +1267,7 @@ watch(
 }
 
 .primary-button:disabled,
+.ghost-button:disabled,
 .review-card__actions button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -1132,6 +1577,11 @@ watch(
   color: var(--color-danger-dark);
 }
 
+.status-chip--neutral {
+  background: var(--panel-color);
+  color: var(--text-secondary);
+}
+
 .review-card__text,
 .review-card__reason {
   grid-column: 1 / -1;
@@ -1164,18 +1614,30 @@ watch(
   text-align: center;
 }
 
+.empty-state--compact {
+  padding: 18px;
+}
+
 @media (max-width: 1180px) {
   .analysis-layout,
-  .review-card {
+  .review-card,
+  .ad-check-summary-list {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 720px) {
   .review-panel__head,
+  .ad-check-results__head,
+  .ad-check-detail-panel__head,
   .review-card__actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .ad-check-summary-card__meta,
+  .ad-check-detail-meta {
+    grid-template-columns: 1fr;
   }
 
   .analysis-timing dl {

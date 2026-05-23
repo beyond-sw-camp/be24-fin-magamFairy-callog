@@ -4,6 +4,8 @@ import {
   CancelAdCheckJob,
   CreateAdCheckJob,
   GetAdCheckJob,
+  GetAdCheckJobDetail,
+  ListAdCheckJobs,
   ListActiveAdCheckJobs,
 } from '@/api/adcheck/index.js'
 
@@ -143,6 +145,37 @@ function normalizeJob(rawJob) {
   }
 }
 
+function normalizeJobSummary(rawSummary) {
+  const summary = rawSummary ?? {}
+  return {
+    ...summary,
+    jobId: String(summary.jobId ?? ''),
+    requesterId: summary.requesterId ?? null,
+    campaignId: summary.campaignId ?? null,
+    fileName: summary.fileName ?? 'upload',
+    status: String(summary.status || 'QUEUED').toUpperCase(),
+    resultStatus: String(summary.resultStatus || '').toLowerCase(),
+    riskLevel: String(summary.riskLevel || '').toUpperCase(),
+    summaryMessage: summary.summaryMessage ?? '',
+    mongoDocumentId: summary.mongoDocumentId ?? '',
+    targetUrl: summary.targetUrl ?? '',
+    createdAt: normalizeDateValue(summary.createdAt),
+    updatedAt: normalizeDateValue(summary.updatedAt),
+    finishedAt: normalizeDateValue(summary.finishedAt),
+  }
+}
+
+function normalizeJobDetail(rawDetail) {
+  const detail = rawDetail ?? {}
+  return {
+    ...detail,
+    summary: normalizeJobSummary(detail.summary),
+    mongoDocumentId: detail.mongoDocumentId ?? detail.summary?.mongoDocumentId ?? '',
+    detail: detail.detail ?? null,
+    rawDocument: detail.rawDocument ?? {},
+  }
+}
+
 function resolveCurrentStepLabel(status, stepMeta, fallbackLabel) {
   if (status === 'FAILED') {
     return fallbackLabel ?? '실패'
@@ -180,9 +213,15 @@ function sortJobs(items) {
 
 export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
   const jobs = ref([])
+  const jobSummaries = ref([])
+  const jobDetailsById = ref({})
   const dismissedJobIds = ref(new Set())
   const isLoadingActive = ref(false)
+  const isLoadingSummaries = ref(false)
+  const detailLoadingJobId = ref('')
   const loadError = ref('')
+  const summaryLoadError = ref('')
+  const detailLoadError = ref('')
   const pollingTimers = new Map()
 
   const visibleJobs = computed(() =>
@@ -229,6 +268,48 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
     return upsertJob(job)
   }
 
+  async function loadJobSummaries(options = {}) {
+    isLoadingSummaries.value = true
+    summaryLoadError.value = ''
+
+    try {
+      const summaries = await ListAdCheckJobs(options)
+      const normalizedSummaries = Array.isArray(summaries)
+        ? summaries.map((summary) => normalizeJobSummary(summary)).filter((summary) => summary.jobId)
+        : []
+      jobSummaries.value = normalizedSummaries
+      return normalizedSummaries
+    } catch (error) {
+      summaryLoadError.value = error?.message ?? '검수 자료 목록을 불러오지 못했습니다.'
+      return []
+    } finally {
+      isLoadingSummaries.value = false
+    }
+  }
+
+  async function loadJobDetail(jobId) {
+    if (!jobId) {
+      return null
+    }
+
+    detailLoadingJobId.value = jobId
+    detailLoadError.value = ''
+
+    try {
+      const detail = normalizeJobDetail(await GetAdCheckJobDetail(jobId))
+      jobDetailsById.value = {
+        ...jobDetailsById.value,
+        [detail.summary.jobId || jobId]: detail,
+      }
+      return detail
+    } catch (error) {
+      detailLoadError.value = error?.message ?? '상세 자료를 불러오지 못했습니다.'
+      return null
+    } finally {
+      detailLoadingJobId.value = ''
+    }
+  }
+
   async function loadActiveJobs() {
     isLoadingActive.value = true
     loadError.value = ''
@@ -268,6 +349,13 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
 
   function findJob(jobId) {
     return jobs.value.find((job) => job.jobId === jobId) ?? null
+  }
+
+  function findJobDetail(jobId) {
+    if (!jobId) {
+      return null
+    }
+    return jobDetailsById.value[jobId] ?? null
   }
 
   function scheduleJobPoll(jobId) {
@@ -314,6 +402,8 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
 
   return {
     jobs,
+    jobSummaries,
+    jobDetailsById,
     visibleJobs,
     activeJobs,
     runningJobs,
@@ -321,14 +411,21 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
     terminalJobs,
     floatingJob,
     isLoadingActive,
+    isLoadingSummaries,
+    detailLoadingJobId,
     loadError,
+    summaryLoadError,
+    detailLoadError,
     upsertJob,
     handleJobEvent,
     startJob,
     fetchJob,
+    loadJobSummaries,
+    loadJobDetail,
     loadActiveJobs,
     cancelJob,
     dismissJob,
     findJob,
+    findJobDetail,
   }
 })

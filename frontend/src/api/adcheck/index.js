@@ -105,6 +105,27 @@ export const GetAdCheckJob = async (jobId) => {
   }
 }
 
+export const ListAdCheckJobs = async (options = {}) => {
+  const params = {}
+  if (options.campaignId) {
+    params.campaignId = options.campaignId
+  }
+
+  try {
+    return unwrapResponse(await api.get('/ad/check/jobs', { params }))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const GetAdCheckJobDetail = async (jobId) => {
+  try {
+    return unwrapResponse(await api.get(`/ad/check/jobs/${jobId}/detail`))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
 export const ListActiveAdCheckJobs = async () => {
   try {
     return unwrapResponse(await api.get('/ad/check/jobs/active'))
