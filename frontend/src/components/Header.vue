@@ -20,10 +20,12 @@ const notifications = computed(() => notificationStore.recentNotifications)
 const unreadCount = computed(() => notificationStore.unreadCount)
 const notificationsOpen = ref(false)
 const notificationsButton = ref(null)
+const notificationBubble = ref(null)
 const appsMenuOpen = ref(false)
 
 const inlineActionLoading = reactive({})
 const inlineActionError = ref('')
+let notificationBubbleTimer = null
 
 function isCampaignInvitationActionable(item) {
   return (
@@ -94,12 +96,18 @@ const profileCardButton = ref(null)
 const APP_MENU_MARGIN = 12
 const NOTIFICATION_MENU_WIDTH = 360
 const NOTIFICATION_MENU_HEIGHT_ESTIMATE = 390
+const NOTIFICATION_BUBBLE_WIDTH = 340
+const NOTIFICATION_BUBBLE_DURATION_MS = 5600
 const APP_MENU_WIDTH = 220
 const APP_MENU_HEIGHT_ESTIMATE = 260
 const PROFILE_CARD_WIDTH = 320
 const PROFILE_CARD_HEIGHT_ESTIMATE = 350
 
 const notificationsPosition = reactive({
+  top: 0,
+  left: 0,
+})
+const notificationBubblePosition = reactive({
   top: 0,
   left: 0,
 })
@@ -142,6 +150,13 @@ const notificationsStyle = computed(() => ({
   top: `${notificationsPosition.top}px`,
   left: `${notificationsPosition.left}px`,
 }))
+const notificationBubbleStyle = computed(() => ({
+  top: `${notificationBubblePosition.top}px`,
+  left: `${notificationBubblePosition.left}px`,
+}))
+const notificationBubbleReviewMeta = computed(() =>
+  notificationBubble.value ? getReviewOutcomeMeta(notificationBubble.value) : null,
+)
 const appsMenuStyle = computed(() => ({
   top: `${appsMenuPosition.top}px`,
   left: `${appsMenuPosition.left}px`,
@@ -253,9 +268,53 @@ function closeFloatingMenus() {
   profileCardOpen.value = false
 }
 
+function clearNotificationBubbleTimer() {
+  if (notificationBubbleTimer) {
+    window.clearTimeout(notificationBubbleTimer)
+    notificationBubbleTimer = null
+  }
+}
+
+function dismissNotificationBubble() {
+  clearNotificationBubbleTimer()
+  notificationBubble.value = null
+}
+
+function showNotificationBubble(item) {
+  if (!shouldShowNotificationBubble(item) || notificationsOpen.value) {
+    return
+  }
+
+  notificationBubble.value = item
+  positionNotificationBubble()
+  void nextTick(positionNotificationBubble)
+
+  clearNotificationBubbleTimer()
+  notificationBubbleTimer = window.setTimeout(() => {
+    dismissNotificationBubble()
+  }, NOTIFICATION_BUBBLE_DURATION_MS)
+}
+
+async function openNotificationBubbleDetail() {
+  const item = notificationBubble.value
+  if (!item) return
+
+  dismissNotificationBubble()
+  await handleNotificationDetail(item)
+}
+
+async function openNotificationBubbleTarget() {
+  const item = notificationBubble.value
+  if (!item) return
+
+  dismissNotificationBubble()
+  await handleNotificationTarget(item)
+}
+
 function toggleNotifications() {
   appsMenuOpen.value = false
   profileCardOpen.value = false
+  dismissNotificationBubble()
 
   if (notificationsOpen.value) {
     notificationsOpen.value = false
@@ -275,6 +334,75 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value))
 }
 
+function resolveNotificationConditionKey(item) {
+  const type = String(item?.type ?? '').toUpperCase()
+  const category = String(item?.category ?? '').toLowerCase()
+
+  if (type === 'TASK_ASSIGNED') return 'taskAssigned'
+  if (['TASK_STATUS_CHANGED', 'TASK_UPDATED'].includes(type)) return 'taskStatusChanged'
+  if (
+    ['REVIEW_REQUESTED', 'REVIEW_APPROVED', 'REVIEW_REJECTED'].includes(type) ||
+    type.startsWith('AI_JUDGE_') ||
+    category === 'qa'
+  ) {
+    return 'qaReview'
+  }
+  if (type.startsWith('DEADLINE_')) return 'deadline'
+  if (type.startsWith('CAMPAIGN_') || category === 'campaign') return 'campaign'
+  if (category === 'task') return 'taskStatusChanged'
+  if (category === 'schedule') return 'schedule'
+
+  return ''
+}
+
+function isNotificationAllowedByLevel(item) {
+  const severity = String(item?.severity ?? 'normal').toLowerCase()
+
+  if (severity === 'critical') {
+    return true
+  }
+
+  const level = String(userSettingsStore.notifications.level || 'normal').toLowerCase()
+
+  if (level === 'essential') {
+    return severity === 'high'
+  }
+
+  if (level === 'normal') {
+    return severity !== 'low'
+  }
+
+  return true
+}
+
+function shouldShowNotificationBubble(item) {
+  if (!item || item.isRead) {
+    return false
+  }
+
+  const notificationSettings = userSettingsStore.notifications
+
+  if (!notificationSettings.enabled || !notificationSettings.methods.inApp) {
+    return false
+  }
+
+  if (String(item.severity ?? '').toLowerCase() === 'critical') {
+    return true
+  }
+
+  const conditionKey = resolveNotificationConditionKey(item)
+
+  if (
+    conditionKey &&
+    Object.prototype.hasOwnProperty.call(notificationSettings.conditions, conditionKey) &&
+    !notificationSettings.conditions[conditionKey]
+  ) {
+    return false
+  }
+
+  return isNotificationAllowedByLevel(item)
+}
+
 function positionNotifications() {
   const button = notificationsButton.value
 
@@ -288,6 +416,26 @@ function positionNotifications() {
 
   notificationsPosition.left = clamp(rect.right - NOTIFICATION_MENU_WIDTH, APP_MENU_MARGIN, maxLeft)
   notificationsPosition.top = clamp(rect.bottom + 8, APP_MENU_MARGIN, maxTop)
+}
+
+function positionNotificationBubble() {
+  const button = notificationsButton.value
+  const maxLeft = window.innerWidth - NOTIFICATION_BUBBLE_WIDTH - APP_MENU_MARGIN
+
+  if (!(button instanceof HTMLElement)) {
+    notificationBubblePosition.left = clamp(
+      window.innerWidth - NOTIFICATION_BUBBLE_WIDTH - APP_MENU_MARGIN,
+      APP_MENU_MARGIN,
+      maxLeft,
+    )
+    notificationBubblePosition.top = APP_MENU_MARGIN
+    return
+  }
+
+  const rect = button.getBoundingClientRect()
+
+  notificationBubblePosition.left = clamp(rect.right - NOTIFICATION_BUBBLE_WIDTH, APP_MENU_MARGIN, maxLeft)
+  notificationBubblePosition.top = rect.bottom + 10
 }
 
 function positionAppsMenu() {
@@ -432,6 +580,10 @@ function handleViewportChange() {
     positionNotifications()
   }
 
+  if (notificationBubble.value) {
+    positionNotificationBubble()
+  }
+
   if (appsMenuOpen.value) {
     positionAppsMenu()
   }
@@ -458,9 +610,27 @@ watch(
       return
     }
 
+    dismissNotificationBubble()
     notificationStore.disconnect()
   },
   { immediate: true },
+)
+
+watch(
+  () => notificationStore.incomingNotificationSequence,
+  () => {
+    showNotificationBubble(notificationStore.lastIncomingNotification)
+  },
+)
+
+watch(
+  () => userSettingsStore.notifications,
+  () => {
+    if (notificationBubble.value && !shouldShowNotificationBubble(notificationBubble.value)) {
+      dismissNotificationBubble()
+    }
+  },
+  { deep: true },
 )
 
 onMounted(() => {
@@ -474,6 +644,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('click', handleDocumentClick)
   window.removeEventListener('resize', handleViewportChange)
   window.removeEventListener('scroll', handleViewportChange, true)
+  dismissNotificationBubble()
   notificationStore.disconnect()
 })
 </script>
@@ -689,6 +860,63 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </header>
+
+  <Teleport to="body">
+    <Transition name="callog-notif-bubble">
+      <article
+        v-if="notificationBubble"
+        data-notifications-menu-root="true"
+        class="callog-notification-bubble"
+        :class="`callog-notification-bubble--${notificationBubble.severity}`"
+        :style="notificationBubbleStyle"
+        role="status"
+        aria-live="polite"
+      >
+        <button
+          type="button"
+          class="callog-notification-bubble__close"
+          aria-label="알림 말풍선 닫기"
+          @click.stop="dismissNotificationBubble"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+        <button
+          type="button"
+          class="callog-notification-bubble__content"
+          @click="openNotificationBubbleDetail"
+        >
+          <span class="callog-notification-bubble__icon material-symbols-outlined">
+            {{ notificationBubbleReviewMeta?.icon || 'notifications_active' }}
+          </span>
+          <span class="callog-notification-bubble__body">
+            <span class="callog-notification-bubble__eyebrow">
+              {{ notificationBubble.source || 'Callog 알림' }}
+            </span>
+            <strong>{{ notificationBubble.title }}</strong>
+            <span>{{ notificationBubble.message }}</span>
+          </span>
+        </button>
+        <div class="callog-notification-bubble__actions">
+          <span
+            v-if="notificationBubbleReviewMeta"
+            class="callog-review-chip"
+            :class="`callog-review-chip--${notificationBubbleReviewMeta.tone}`"
+          >
+            <span class="material-symbols-outlined">{{ notificationBubbleReviewMeta.icon }}</span>
+            {{ notificationBubbleReviewMeta.label }}
+          </span>
+          <button
+            v-if="notificationBubble.targetUrl"
+            type="button"
+            class="callog-notification-bubble__target"
+            @click.stop="openNotificationBubbleTarget"
+          >
+            {{ notificationBubbleReviewMeta ? '검수 결과 보기' : (notificationBubble.targetLabel || '관련 화면 보기') }}
+          </button>
+        </div>
+      </article>
+    </Transition>
+  </Teleport>
 
   <Teleport to="body">
     <Transition name="callog-dropdown">
@@ -1315,6 +1543,149 @@ onBeforeUnmount(() => {
   text-align: center;
   font-size: 13px;
   color: var(--subtle-text);
+}
+
+.callog-notification-bubble {
+  position: fixed;
+  z-index: 1300;
+  width: min(340px, calc(100vw - 24px));
+  border: 1px solid color-mix(in srgb, var(--color-primary-500) 22%, var(--border-color));
+  border-radius: var(--radius-lg);
+  background: var(--panel-color);
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.2);
+  padding: 10px;
+}
+
+.callog-notification-bubble::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  right: 22px;
+  width: 13px;
+  height: 13px;
+  border-top: 1px solid color-mix(in srgb, var(--color-primary-500) 22%, var(--border-color));
+  border-left: 1px solid color-mix(in srgb, var(--color-primary-500) 22%, var(--border-color));
+  background: var(--panel-color);
+  transform: rotate(45deg);
+}
+
+.callog-notification-bubble__content {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0 28px 0 0;
+  text-align: left;
+}
+
+.callog-notification-bubble__icon {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary-500) 14%, transparent);
+  color: var(--color-primary-600);
+  font-size: 21px;
+}
+
+.callog-notification-bubble__body {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.callog-notification-bubble__eyebrow {
+  overflow: hidden;
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.callog-notification-bubble__body strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.callog-notification-bubble__body > span:last-child {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.callog-notification-bubble__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-text);
+  cursor: pointer;
+}
+
+.callog-notification-bubble__close:hover {
+  background: var(--panel-muted);
+  color: var(--text-primary);
+}
+
+.callog-notification-bubble__close .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.callog-notification-bubble__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding-left: 46px;
+}
+
+.callog-notification-bubble__target {
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-600);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.callog-notification-bubble__target:hover {
+  text-decoration: underline;
+}
+
+.callog-notif-bubble-enter-active,
+.callog-notif-bubble-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+  transform-origin: top right;
+}
+
+.callog-notif-bubble-enter-from,
+.callog-notif-bubble-leave-to {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.98);
 }
 
 /* 알림 목록 */
