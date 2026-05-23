@@ -1,6 +1,7 @@
 package org.example.backend.user.repository;
 
 import org.example.backend.user.model.User;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -24,4 +25,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findAllByCompanyNameAndAccountStatus(String companyName, org.example.backend.user.model.UserAccountStatus accountStatus);
 
     List<User> findAllByRole(String role);
+
+    @EntityGraph(attributePaths = {"organization"})
+    Optional<User> findWithOrganizationByIdx(Long idx);
+    // ↑ @EntityGraph 가 "organization 필드를 같이 fetch해" 라고 JPA에 지시
 }

@@ -66,7 +66,9 @@ public class RedisConfig {
             Map.entry(CacheNames.CAMPAIGN_LIST,             Duration.ofMinutes(2)),  // 캠페인 목록 — 변경 잦아 짧게
             Map.entry(CacheNames.CAMPAIGN_MEMBER_ROLE,      Duration.ofMinutes(2)),  // ★ 짧게, evict 보강
             Map.entry(CacheNames.KPI_TEMPLATES,             Duration.ofHours(1)),
-            Map.entry(CacheNames.NOTIFICATION_SETTING,      Duration.ofMinutes(30))
+            Map.entry(CacheNames.NOTIFICATION_SETTING,      Duration.ofMinutes(30)),
+            Map.entry(CacheNames.USER_AUTH,                 Duration.ofSeconds(60))   // 기존 in-memory와 동일 TTL
+
     );
 
     @Bean

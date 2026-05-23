@@ -45,4 +45,7 @@ public final class CacheNames {
 
     // ── 알림 ──
     public static final String NOTIFICATION_SETTING       = "notification:setting";
+
+    // ── 인증 user 캐시 (Pod 간 공유) ──
+    public static final String USER_AUTH            = "user:auth";
 }
