@@ -5,12 +5,15 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
 import org.example.backend.adcheck.model.AdCheckDto;
 import org.example.backend.adcheck.model.AdCheckJob;
 import org.example.backend.adcheck.model.AdCheckJobDto;
+import org.example.backend.adcheck.model.AdCheckOutboxEvent;
 import org.example.backend.adcheck.model.AdCheckJobStatus;
 import org.example.backend.adcheck.model.AdCheckJobStep;
 import org.example.backend.adcheck.repository.AdCheckJobRepository;
+import org.example.backend.adcheck.repository.AdCheckOutboxEventRepository;
 import org.example.backend.notification.service.NotificationSseService;
 import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.model.User;
@@ -29,6 +32,7 @@ import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
@@ -55,6 +59,8 @@ public class AdCheckJobService {
     private final AdCheckJobRepository adCheckJobRepository;
     private final UserRepository userRepository;
     private final AdCheckService adCheckService;
+    private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
+    private final AdCheckOutboxEventRepository adCheckOutboxEventRepository;
     private final ObjectMapper objectMapper;
     private final NotificationSseService notificationSseService;
     private final TransactionTemplate transactionTemplate;
@@ -175,6 +181,38 @@ public class AdCheckJobService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "검수 작업을 찾을 수 없습니다.")));
     }
 
+    public AdCheckJobDto.JobSummaryRes getJobSummary(String jobId, AuthUserDetails requester) {
+        Long requesterIdx = requesterIdx(requester);
+        return transactionTemplate.execute(status -> adCheckJobRepository
+                .findByJobIdAndRequester_Idx(jobId, requesterIdx)
+                .map(job -> AdCheckJobDto.JobSummaryRes.from(job, objectMapper))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "검수 작업을 찾을 수 없습니다.")));
+    }
+
+    public List<AdCheckJobDto.JobSummaryRes> listJobs(AuthUserDetails requester, String campaignId) {
+        Long requesterIdx = requesterIdx(requester);
+        return transactionTemplate.execute(status -> {
+            List<AdCheckJob> jobs = campaignId == null || campaignId.isBlank()
+                    ? adCheckJobRepository.findAllByRequester_IdxOrderByCreatedAtDesc(requesterIdx)
+                    : adCheckJobRepository.findAllByRequester_IdxAndCampaignIdOrderByCreatedAtDesc(
+                            requesterIdx,
+                            campaignId.trim()
+                    );
+            return jobs.stream()
+                    .map(job -> AdCheckJobDto.JobSummaryRes.from(job, objectMapper))
+                    .toList();
+        });
+    }
+
+    public AdCheckJobDto.JobDetailRes getJobDetail(String jobId, AuthUserDetails requester) {
+        AdCheckJobDto.JobSummaryRes summary = getJobSummary(jobId, requester);
+        AdCheckDto.FileCheckRes detail = findMongoDetail(summary, jobId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "상세 자료를 불러오지 못했습니다."));
+        Map<String, Object> rawDocument = findRawMongoDocument(summary, jobId).orElse(Map.of());
+        String documentId = firstText(summary.mongoDocumentId(), detail.getAnalysisJobId(), jobId);
+        return new AdCheckJobDto.JobDetailRes(summary, documentId, detail, rawDocument);
+    }
+
     public List<AdCheckJobDto.JobRes> getActiveJobs(AuthUserDetails requester) {
         Long requesterIdx = requesterIdx(requester);
         return transactionTemplate.execute(status -> adCheckJobRepository
@@ -271,8 +309,22 @@ public class AdCheckJobService {
     }
 
     private void completeJob(String jobId, AdCheckDto.FileCheckRes result) {
-        String payload = serializeResult(result);
-        AdCheckJobDto.JobRes completedJob = updateJob(jobId, job -> job.markSucceeded(payload));
+        String mongoDocumentId = adCheckAnalysisMongoStorageService.saveDetailOrThrow(result);
+        AdCheckJobDto.JobRes completedJob = transactionTemplate.execute(status -> {
+            AdCheckJob job = adCheckJobRepository.findByJobId(jobId).orElse(null);
+            if (job == null) {
+                return null;
+            }
+            job.markSucceeded(
+                    null,
+                    mongoDocumentId,
+                    normalizeResultStatus(result == null ? null : result.getStatus()),
+                    resolveRiskLevel(result, null),
+                    resolveSummaryMessage(result, null)
+            );
+            saveOutboxEvents(job, result, "ad-check.detail-saved", "ad-check.summary-created", "ad-check.result-ready");
+            return toDto(job);
+        });
         emitJobEvent(completedJob, "ad-check.completed");
     }
 
@@ -287,8 +339,32 @@ public class AdCheckJobService {
                 error == null ? null : error.getMessage(),
                 "검수 중 오류가 발생했습니다."
         );
-        String payload = serializeResult(partialResponse);
-        AdCheckJobDto.JobRes failedJob = updateJob(jobId, job -> job.markFailed(errorMessage, payload));
+        String mongoDocumentId = null;
+        if (partialResponse != null && partialResponse.getAnalysisJobId() != null && !partialResponse.getAnalysisJobId().isBlank()) {
+            try {
+                mongoDocumentId = adCheckAnalysisMongoStorageService.saveDetailOrThrow(partialResponse);
+            } catch (Exception e) {
+                log.warn("Ad check failed detail MongoDB save failed. jobId={}", jobId, e);
+            }
+        }
+        String finalMongoDocumentId = mongoDocumentId;
+        AdCheckDto.FileCheckRes finalPartialResponse = partialResponse;
+        AdCheckJobDto.JobRes failedJob = transactionTemplate.execute(status -> {
+            AdCheckJob job = adCheckJobRepository.findByJobId(jobId).orElse(null);
+            if (job == null) {
+                return null;
+            }
+            job.markFailed(
+                    errorMessage,
+                    null,
+                    finalMongoDocumentId,
+                    normalizeResultStatus(finalPartialResponse == null ? "failed" : finalPartialResponse.getStatus()),
+                    resolveRiskLevel(finalPartialResponse, errorMessage),
+                    resolveSummaryMessage(finalPartialResponse, errorMessage)
+            );
+            saveOutboxEvents(job, finalPartialResponse, "ad-check.summary-updated");
+            return toDto(job);
+        });
         emitJobEvent(failedJob, "ad-check.failed");
     }
 
@@ -369,9 +445,17 @@ public class AdCheckJobService {
         AdCheckJobDto.JobRes failedJob = transactionTemplate.execute(status -> adCheckJobRepository.findByJobId(jobId)
                 .filter(job -> !job.isTerminal())
                 .map(job -> {
+                    String errorMessage = firstText(
+                            error == null ? null : error.getMessage(),
+                            "검수 작업 처리 중 오류가 발생했습니다."
+                    );
                     job.markFailed(
-                            firstText(error == null ? null : error.getMessage(), "검수 작업 처리 중 오류가 발생했습니다."),
-                            null
+                            errorMessage,
+                            null,
+                            null,
+                            "failed",
+                            "HIGH",
+                            errorMessage
                     );
                     return toDto(job);
                 })
@@ -389,7 +473,15 @@ public class AdCheckJobService {
                 .filter(job -> !job.isTerminal())
                 .filter(job -> job.getFileBytes() == null || job.getFileBytes().length == 0)
                 .map(job -> {
-                    job.markFailed("검수 파일 데이터가 없어 작업을 시작할 수 없습니다.", null);
+                    String errorMessage = "검수 파일 데이터가 없어 작업을 시작할 수 없습니다.";
+                    job.markFailed(
+                            errorMessage,
+                            null,
+                            null,
+                            "failed",
+                            "HIGH",
+                            errorMessage
+                    );
                     return toDto(job);
                 })
                 .orElse(null));
@@ -433,6 +525,115 @@ public class AdCheckJobService {
         } catch (Exception e) {
             log.warn("Ad check job result serialization failed.", e);
             return null;
+        }
+    }
+
+    private String normalizeResultStatus(String status) {
+        String normalized = firstText(status);
+        if (normalized.isBlank()) {
+            return null;
+        }
+        return normalized.trim().toLowerCase();
+    }
+
+    private String resolveRiskLevel(AdCheckDto.FileCheckRes result, String errorMessage) {
+        if (errorMessage != null && !errorMessage.isBlank()) {
+            return "HIGH";
+        }
+
+        String status = normalizeResultStatus(result == null ? null : result.getStatus());
+        if ("pass".equals(status)) {
+            return "LOW";
+        }
+        if ("warning".equals(status)) {
+            return "MEDIUM";
+        }
+        if ("violation".equals(status) || "failed".equals(status)) {
+            return "HIGH";
+        }
+        return "NORMAL";
+    }
+
+    private String resolveSummaryMessage(AdCheckDto.FileCheckRes result, String errorMessage) {
+        if (errorMessage != null && !errorMessage.isBlank()) {
+            return errorMessage.trim();
+        }
+
+        String status = normalizeResultStatus(result == null ? null : result.getStatus());
+        if ("pass".equals(status)) {
+            return "AI 검수가 완료되었습니다.";
+        }
+        if ("warning".equals(status) || "violation".equals(status)) {
+            return firstText(
+                    result == null ? null : result.getReason(),
+                    result == null ? null : result.getViolationText(),
+                    "AI 검수 결과 확인이 필요합니다."
+            );
+        }
+        return "AI 검수 결과를 확인해 주세요.";
+    }
+
+    private Optional<AdCheckDto.FileCheckRes> findMongoDetail(AdCheckJobDto.JobSummaryRes summary, String jobId) {
+        String mongoDocumentId = summary == null ? null : summary.mongoDocumentId();
+        Optional<AdCheckDto.FileCheckRes> byDocumentId = adCheckAnalysisMongoStorageService.findDetail(mongoDocumentId);
+        if (byDocumentId.isPresent()) {
+            return byDocumentId;
+        }
+        return adCheckAnalysisMongoStorageService.findDetailByJobId(jobId);
+    }
+
+    private Optional<Map<String, Object>> findRawMongoDocument(AdCheckJobDto.JobSummaryRes summary, String jobId) {
+        String mongoDocumentId = summary == null ? null : summary.mongoDocumentId();
+        Optional<Map<String, Object>> byDocumentId = adCheckAnalysisMongoStorageService.findRawDocument(mongoDocumentId);
+        if (byDocumentId.isPresent()) {
+            return byDocumentId;
+        }
+        return adCheckAnalysisMongoStorageService.findRawDocumentByJobId(jobId);
+    }
+
+    private void saveOutboxEvents(AdCheckJob job, AdCheckDto.FileCheckRes result, String... eventTypes) {
+        if (job == null || eventTypes == null || eventTypes.length == 0) {
+            return;
+        }
+
+        for (String eventType : eventTypes) {
+            if (eventType == null || eventType.isBlank()) {
+                continue;
+            }
+            adCheckOutboxEventRepository.save(AdCheckOutboxEvent.pending(
+                    job.getJobId(),
+                    eventType,
+                    serializeOutboxPayload(job, result, eventType)
+            ));
+        }
+    }
+
+    private String serializeOutboxPayload(AdCheckJob job, AdCheckDto.FileCheckRes result, String eventType) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("eventType", eventType);
+        payload.put("jobId", job.getJobId());
+        payload.put("campaignId", job.getCampaignId());
+        payload.put("requesterId", job.getRequester() == null ? null : job.getRequester().getIdx());
+        payload.put("fileName", job.getFileName());
+        payload.put("status", job.getStatus() == null ? null : job.getStatus().name());
+        payload.put("resultStatus", job.getResultStatus());
+        payload.put("riskLevel", job.getRiskLevel());
+        payload.put("summaryMessage", job.getSummaryMessage());
+        payload.put("mongoDocumentId", job.getMongoDocumentId());
+        payload.put("analysisJobId", firstText(
+                job.getMongoDocumentId(),
+                result == null ? null : result.getAnalysisJobId()
+        ));
+        payload.put("errorMessage", job.getErrorMessage());
+        payload.put("createdAt", job.getCreatedAt());
+        payload.put("finishedAt", job.getFinishedAt());
+
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            log.warn("Ad check outbox payload serialization failed. jobId={}, eventType={}",
+                    job.getJobId(), eventType, e);
+            return "{}";
         }
     }
 

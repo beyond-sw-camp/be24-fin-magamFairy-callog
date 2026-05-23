@@ -99,6 +99,21 @@ public class AdCheckController {
         return ResponseEntity.ok(BaseResponse.success(adCheckJobService.updateProgress(request)));
     }
 
+    @GetMapping("/check/jobs")
+    public ResponseEntity<BaseResponse<?>> listCheckJobs(
+            @RequestParam(value = "campaignId", required = false) String campaignId,
+            @AuthenticationPrincipal AuthUserDetails user
+    ) {
+        RoleGuard.requireAuthenticated(user);
+        return ResponseEntity.ok(BaseResponse.success(adCheckJobService.listJobs(user, campaignId)));
+    }
+
+    @GetMapping("/check/jobs/active")
+    public ResponseEntity<BaseResponse<?>> getActiveCheckJobs(@AuthenticationPrincipal AuthUserDetails user) {
+        RoleGuard.requireAuthenticated(user);
+        return ResponseEntity.ok(BaseResponse.success(adCheckJobService.getActiveJobs(user)));
+    }
+
     @GetMapping("/check/jobs/{jobId}")
     public ResponseEntity<BaseResponse<AdCheckJobDto.JobRes>> getCheckJob(
             @PathVariable String jobId,
@@ -108,10 +123,13 @@ public class AdCheckController {
         return ResponseEntity.ok(BaseResponse.success(adCheckJobService.getJob(jobId, user)));
     }
 
-    @GetMapping("/check/jobs/active")
-    public ResponseEntity<BaseResponse<?>> getActiveCheckJobs(@AuthenticationPrincipal AuthUserDetails user) {
+    @GetMapping("/check/jobs/{jobId}/detail")
+    public ResponseEntity<BaseResponse<AdCheckJobDto.JobDetailRes>> getCheckJobDetail(
+            @PathVariable String jobId,
+            @AuthenticationPrincipal AuthUserDetails user
+    ) {
         RoleGuard.requireAuthenticated(user);
-        return ResponseEntity.ok(BaseResponse.success(adCheckJobService.getActiveJobs(user)));
+        return ResponseEntity.ok(BaseResponse.success(adCheckJobService.getJobDetail(jobId, user)));
     }
 
     @PostMapping("/check/jobs/{jobId}/cancel")

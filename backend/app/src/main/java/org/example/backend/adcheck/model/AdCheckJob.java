@@ -80,6 +80,19 @@ public class AdCheckJob extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Column(length = 30)
+    private String resultStatus;
+
+    @Column(length = 20)
+    private String riskLevel;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String summaryMessage;
+
+    @Column(length = 120)
+    private String mongoDocumentId;
+
     @Lob
     @Column(columnDefinition = "LONGTEXT")
     private String resultPayload;
@@ -139,20 +152,45 @@ public class AdCheckJob extends BaseEntity {
         }
     }
 
-    public void markSucceeded(String resultPayload) {
+    public void markSucceeded(
+            String resultPayload,
+            String mongoDocumentId,
+            String resultStatus,
+            String riskLevel,
+            String summaryMessage
+    ) {
         this.status = AdCheckJobStatus.SUCCEEDED;
         this.currentStep = AdCheckJobStep.COMPLETED;
         this.progressPercent = AdCheckJobStep.COMPLETED.getProgressPercent();
         this.resultPayload = resultPayload;
+        this.mongoDocumentId = trimToNull(mongoDocumentId);
+        this.resultStatus = trimToNull(resultStatus);
+        this.riskLevel = trimToNull(riskLevel);
+        this.summaryMessage = trimToNull(summaryMessage);
         this.errorMessage = null;
         this.finishedAt = LocalDateTime.now();
         clearFileBytes();
     }
 
     public void markFailed(String errorMessage, String resultPayload) {
+        markFailed(errorMessage, resultPayload, null, null, "HIGH", errorMessage);
+    }
+
+    public void markFailed(
+            String errorMessage,
+            String resultPayload,
+            String mongoDocumentId,
+            String resultStatus,
+            String riskLevel,
+            String summaryMessage
+    ) {
         this.status = AdCheckJobStatus.FAILED;
         this.currentStep = AdCheckJobStep.FAILED;
         this.errorMessage = errorMessage;
+        this.mongoDocumentId = trimToNull(mongoDocumentId);
+        this.resultStatus = trimToNull(resultStatus);
+        this.riskLevel = trimToNull(riskLevel);
+        this.summaryMessage = trimToNull(summaryMessage);
         if (resultPayload != null && !resultPayload.isBlank()) {
             this.resultPayload = resultPayload;
         }

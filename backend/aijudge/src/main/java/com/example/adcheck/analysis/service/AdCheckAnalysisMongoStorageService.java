@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Slf4j
@@ -85,15 +86,27 @@ public class AdCheckAnalysisMongoStorageService {
 
     private Document toDocument(AdCheckDto.FileCheckRes response) {
         Date now = Date.from(Instant.now());
+        String jobId = textValue(response.getContext(), "adCheckJobId");
         return new Document("_id", response.getAnalysisJobId())
+                .append("jobId", jobId)
                 .append("analysisJobId", response.getAnalysisJobId())
                 .append("analysisObjectPrefix", response.getAnalysisObjectPrefix())
+                .append("originalFileKey", response.getFileObjectKey())
+                .append("originalFileName", response.getFileName())
+                .append("originalContentType", response.getFileContentType())
+                .append("originalFileUrl", response.getFileUrl())
                 .append("file", fileDocument(response))
                 .append("artifacts", artifactDocument(response))
+                .append("documentStructureResult", documentStructureDocument(response))
                 .append("result", resultDocument(response))
+                .append("recognizedTextResult", recognizedTextDocument(response))
+                .append("textRiskAnalysisResult", resultDocument(response))
+                .append("finalResult", resultDocument(response))
+                .append("errorDetail", response.getErrorMessage())
                 .append("extractionMode", response.getExtractionMode())
                 .append("extractedText", response.getExtractedText())
                 .append("processingTimes", processingTimesDocument(response.getProcessingTimes()))
+                .append("context", response.getContext() == null ? Map.of() : response.getContext())
                 .append("createdAt", now)
                 .append("updatedAt", now);
     }
@@ -101,14 +114,18 @@ public class AdCheckAnalysisMongoStorageService {
     private Document fileDocument(AdCheckDto.FileCheckRes response) {
         return new Document("name", response.getFileName())
                 .append("objectKey", response.getFileObjectKey())
+                .append("url", response.getFileUrl())
                 .append("contentType", response.getFileContentType())
                 .append("size", response.getFileSize());
     }
 
     private Document artifactDocument(AdCheckDto.FileCheckRes response) {
         return new Document("extractedTextObjectKey", response.getExtractedTextObjectKey())
+                .append("extractedTextUrl", response.getExtractedTextUrl())
                 .append("aiResultObjectKey", response.getAiResultObjectKey())
+                .append("aiResultUrl", response.getAiResultUrl())
                 .append("finalResultObjectKey", response.getFinalResultObjectKey())
+                .append("finalResultUrl", response.getFinalResultUrl())
                 .append("images", imageDocuments(response.getExtractedImageAssets()));
     }
 
@@ -124,6 +141,7 @@ public class AdCheckAnalysisMongoStorageService {
                     .append("page", image.getPage())
                     .append("readingOrder", image.getReadingOrder())
                     .append("objectKey", image.getObjectKey())
+                    .append("url", image.getUrl())
                     .append("contentType", image.getContentType())
                     .append("size", image.getFileSize()));
         }
@@ -137,6 +155,23 @@ public class AdCheckAnalysisMongoStorageService {
                 .append("reason", response.getReason())
                 .append("suggestion", response.getSuggestion())
                 .append("errorMessage", response.getErrorMessage());
+    }
+
+    private Document recognizedTextDocument(AdCheckDto.FileCheckRes response) {
+        return new Document("extractedText", response.getExtractedText())
+                .append("extractionMode", response.getExtractionMode())
+                .append("images", imageDocuments(response.getExtractedImageAssets()));
+    }
+
+    private Document documentStructureDocument(AdCheckDto.FileCheckRes response) {
+        return new Document("extractionMode", response.getExtractionMode())
+                .append("analysisObjectPrefix", response.getAnalysisObjectPrefix())
+                .append("layoutMillis", response.getProcessingTimes() == null
+                        ? null
+                        : response.getProcessingTimes().getLayoutMillis())
+                .append("extractedImageCount", response.getExtractedImageAssets() == null
+                        ? 0
+                        : response.getExtractedImageAssets().size());
     }
 
     private Document processingTimesDocument(AdCheckDto.ProcessingTimes processingTimes) {
@@ -156,6 +191,14 @@ public class AdCheckAnalysisMongoStorageService {
             return "";
         }
         return message.replaceAll("mongodb://[^\\s]+", "mongodb://<redacted>");
+    }
+
+    private String textValue(Map<String, Object> context, String key) {
+        if (context == null || key == null) {
+            return null;
+        }
+        Object value = context.get(key);
+        return value == null ? null : String.valueOf(value);
     }
 
     @PreDestroy
