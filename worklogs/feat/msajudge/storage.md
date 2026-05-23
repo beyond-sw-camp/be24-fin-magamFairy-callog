@@ -223,3 +223,20 @@
 - backend `AdCheckJobStep` enum의 label/message/progress도 같은 기준으로 맞췄다.
 - `.\gradlew.bat :app:compileJava` 성공.
 - `npm run build` 성공.
+
+### 검수 자료 보여주기
+- AI 검수 Job 완료 시 상세 결과를 MongoDB에 먼저 저장하고, 성공한 경우에만 RDB Job 요약을 `SUCCEEDED`로 갱신하도록 했다.
+- RDB 요약에는 `resultStatus`, `riskLevel`, `summaryMessage`, `mongoDocumentId`를 저장해 목록/카드 조회에 필요한 정보만 빠르게 제공한다.
+- Mongo 상세 문서에는 `jobId`, 원본 파일 메타데이터, 추출 텍스트, 문서 구조 요약, OCR/인식 결과, 문구 위험도 결과, 최종 판정, 오류 상세, context를 저장하도록 app/aijudge 저장 포맷을 맞췄다.
+- `GET /ad/check/jobs`, `GET /ad/check/jobs/{jobId}`, `GET /ad/check/jobs/{jobId}/detail` 경로를 정리했다.
+  - 목록은 RDB 요약을 반환한다.
+  - 상세는 인증 사용자 소유 Job인지 확인한 뒤 `mongoDocumentId` 또는 `jobId`로 Mongo 상세를 조회한다.
+- RDB transaction 안에서 요약 갱신과 Outbox 이벤트 저장을 함께 처리하고, 별도 `AdCheckOutboxPublisher`가 Kafka 발행을 담당하도록 했다.
+- Outbox 이벤트 타입은 `ad-check.detail-saved`, `ad-check.summary-created`, `ad-check.summary-updated`, `ad-check.result-ready`를 사용한다.
+- 프론트 `adCheckJobs` store에 RDB 요약 목록과 Mongo 상세 조회 상태를 추가했다.
+- `ReviewApprovalView`에 AI 검수 자료 목록/카드와 상세 패널을 추가했다.
+  - 카드에는 파일명, 상태, 판정, 위험도, 요약 메시지, 요청/완료 시각을 표시한다.
+  - 상세 보기 시 Mongo 상세를 조회하고 로딩/실패 상태를 표시한다.
+  - 상세 패널에는 원본 파일 메타데이터, 추출 텍스트, 문서 구조 분석, 글자 인식, 문구 위험도, 최종 판정, 오류 상세를 표시한다.
+- `.\gradlew.bat :app:compileJava :aijudge:compileJava` 성공.
+- `npm run build` 성공.
