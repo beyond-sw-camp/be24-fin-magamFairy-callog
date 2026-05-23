@@ -63,7 +63,7 @@ public class NotificationSseService {
                 userEmitters.forEach(emitter -> sendEvent(userIdx, emitter, "heartbeat", "ping")));
     }
 
-    private void sendToUser(Long userIdx, String eventName, Object data) {
+    public void sendToUser(Long userIdx, String eventName, Object data) {
         List<SseEmitter> userEmitters = emitters.get(userIdx);
         if (userEmitters == null || userEmitters.isEmpty()) {
             return;

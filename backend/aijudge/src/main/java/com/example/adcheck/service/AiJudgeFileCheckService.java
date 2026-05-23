@@ -30,6 +30,7 @@ public class AiJudgeFileCheckService {
     private final AdCheckFileStorageService adCheckFileStorageService;
     private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
     private final AiJudgeKafkaEventPublisher aiJudgeKafkaEventPublisher;
+    private final AiJudgeProgressCallbackClient aiJudgeProgressCallbackClient;
 
     public AiJudgeFileCheckService(
             AiJudgeService aiJudgeService,
@@ -37,7 +38,8 @@ public class AiJudgeFileCheckService {
             TextExtractorService textExtractorService,
             AdCheckFileStorageService adCheckFileStorageService,
             AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService,
-            AiJudgeKafkaEventPublisher aiJudgeKafkaEventPublisher
+            AiJudgeKafkaEventPublisher aiJudgeKafkaEventPublisher,
+            AiJudgeProgressCallbackClient aiJudgeProgressCallbackClient
     ) {
         this.aiJudgeService = aiJudgeService;
         this.objectMapper = objectMapper;
@@ -45,6 +47,7 @@ public class AiJudgeFileCheckService {
         this.adCheckFileStorageService = adCheckFileStorageService;
         this.adCheckAnalysisMongoStorageService = adCheckAnalysisMongoStorageService;
         this.aiJudgeKafkaEventPublisher = aiJudgeKafkaEventPublisher;
+        this.aiJudgeProgressCallbackClient = aiJudgeProgressCallbackClient;
     }
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file) {
@@ -61,6 +64,7 @@ public class AiJudgeFileCheckService {
                     adCheckFileStorageService.uploadOriginal(file, storageContext);
             TextExtractorService.ExtractResult extraction;
             try {
+                aiJudgeProgressCallbackClient.notify(context, "DATA_EXTRACTION");
                 extraction = textExtractorService.extractWithTiming(file);
             } catch (RuntimeException e) {
                 AdCheckDto.FileCheckRes partialResponse = buildExtractionErrorResponse(
@@ -83,8 +87,10 @@ public class AiJudgeFileCheckService {
             long aiStartedAt = System.nanoTime();
 
             try {
+                aiJudgeProgressCallbackClient.notify(context, "DATA_ANALYSIS");
                 AdCheckDto.Res result = aiJudgeService.check(extraction.text());
                 long aiAnalysisMillis = elapsedMillis(aiStartedAt);
+                aiJudgeProgressCallbackClient.notify(context, "RESULT_BUILDING");
                 AdCheckFileStorageService.StoredFile aiResultFile =
                         uploadJsonArtifact(storageContext, AI_RESULT_PATH, result);
                 AdCheckDto.FileCheckRes response = buildFileCheckResponse(

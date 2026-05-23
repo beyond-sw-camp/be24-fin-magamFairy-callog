@@ -191,8 +191,22 @@ public class AdCheckService {
             AuthUserDetails requester,
             String campaignId
     ) {
+        return checkFileWithAiJudge(file, requester, campaignId, Map.of());
+    }
+
+    public AdCheckDto.FileCheckRes checkFileWithAiJudge(
+            MultipartFile file,
+            AuthUserDetails requester,
+            String campaignId,
+            Map<String, Object> extraContext
+    ) {
         try {
-            AdCheckDto.FileCheckRes response = aiJudgeClient.checkFile(file, aiJudgeContext(requester, campaignId));
+            Map<String, Object> context = aiJudgeContext(requester, campaignId);
+            if (extraContext != null && !extraContext.isEmpty()) {
+                context.putAll(extraContext);
+            }
+
+            AdCheckDto.FileCheckRes response = aiJudgeClient.checkFile(file, context);
             notifyAiJudgeResult(requester, response);
             return response;
         } catch (AiJudgeClient.FileCheckRemoteException e) {
