@@ -38,6 +38,7 @@ import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Supplier;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +56,7 @@ public class AdCheckJobService {
             AdCheckJobStep.DATA_ANALYSIS,
             AdCheckJobStep.RESULT_BUILDING
     );
+    private static final int SUMMARY_SAVE_RETRY_COUNT = 3;
 
     private final AdCheckJobRepository adCheckJobRepository;
     private final UserRepository userRepository;
@@ -310,7 +312,7 @@ public class AdCheckJobService {
 
     private void completeJob(String jobId, AdCheckDto.FileCheckRes result) {
         String mongoDocumentId = adCheckAnalysisMongoStorageService.saveDetailOrThrow(result);
-        AdCheckJobDto.JobRes completedJob = transactionTemplate.execute(status -> {
+        AdCheckJobDto.JobRes completedJob = executeWithRetry(jobId, "ad check summary save", () -> transactionTemplate.execute(status -> {
             AdCheckJob job = adCheckJobRepository.findByJobId(jobId).orElse(null);
             if (job == null) {
                 return null;
@@ -324,7 +326,7 @@ public class AdCheckJobService {
             );
             saveOutboxEvents(job, result, "ad-check.detail-saved", "ad-check.summary-created", "ad-check.result-ready");
             return toDto(job);
-        });
+        }));
         emitJobEvent(completedJob, "ad-check.completed");
     }
 
@@ -525,6 +527,33 @@ public class AdCheckJobService {
         } catch (Exception e) {
             log.warn("Ad check job result serialization failed.", e);
             return null;
+        }
+    }
+
+    private <T> T executeWithRetry(String jobId, String action, Supplier<T> supplier) {
+        RuntimeException lastError = null;
+        for (int attempt = 1; attempt <= SUMMARY_SAVE_RETRY_COUNT; attempt++) {
+            try {
+                return supplier.get();
+            } catch (RuntimeException e) {
+                lastError = e;
+                log.warn("Ad check {} failed. jobId={}, attempt={}/{}",
+                        action, jobId, attempt, SUMMARY_SAVE_RETRY_COUNT, e);
+                sleepBeforeRetry(attempt);
+            }
+        }
+
+        throw lastError == null
+                ? new IllegalStateException("Ad check " + action + " failed.")
+                : lastError;
+    }
+
+    private void sleepBeforeRetry(int attempt) {
+        try {
+            Thread.sleep(Math.min(1000L, 150L * attempt));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Ad check retry interrupted.", e);
         }
     }
 

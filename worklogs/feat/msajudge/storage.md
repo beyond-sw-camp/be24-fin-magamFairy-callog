@@ -232,6 +232,7 @@
   - 목록은 RDB 요약을 반환한다.
   - 상세는 인증 사용자 소유 Job인지 확인한 뒤 `mongoDocumentId` 또는 `jobId`로 Mongo 상세를 조회한다.
 - RDB transaction 안에서 요약 갱신과 Outbox 이벤트 저장을 함께 처리하고, 별도 `AdCheckOutboxPublisher`가 Kafka 발행을 담당하도록 했다.
+- Mongo 저장 이후 RDB 요약/Outbox 저장 트랜잭션은 짧은 retry를 거쳐 일시 실패 시 재처리할 수 있게 했다.
 - Outbox 이벤트 타입은 `ad-check.detail-saved`, `ad-check.summary-created`, `ad-check.summary-updated`, `ad-check.result-ready`를 사용한다.
 - 프론트 `adCheckJobs` store에 RDB 요약 목록과 Mongo 상세 조회 상태를 추가했다.
 - `ReviewApprovalView`에 AI 검수 자료 목록/카드와 상세 패널을 추가했다.
