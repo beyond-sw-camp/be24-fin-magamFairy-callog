@@ -8,25 +8,25 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DashboardCacheVersionService {
 
-    private static final String DASHBOARD_PAGE_GLOBAL_VERSION = "cache_ver:dashboard:page:global";
+    private static final String DASHBOARD_GLOBAL_VERSION = "cache_ver:dashboard:global";
     private static final String DASHBOARD_USER_VERSION = "cache_ver:dashboard:user:";
 
     private final StringRedisTemplate redis;
 
-    public String getPageVersion(Long userIdx) {
+    public String getVersion(Long userIdx) {
         return getGlobalVersion() + ":" + getUserVersion(userIdx);
     }
 
     public long getGlobalVersion() {
-        return getVersion(DASHBOARD_PAGE_GLOBAL_VERSION);
+        return getVersionValue(DASHBOARD_GLOBAL_VERSION);
     }
 
     public long getUserVersion(Long userIdx) {
-        return getVersion(DASHBOARD_USER_VERSION + userIdx);
+        return getVersionValue(DASHBOARD_USER_VERSION + userIdx);
     }
 
     public void increaseGlobalVersion() {
-        redis.opsForValue().increment(DASHBOARD_PAGE_GLOBAL_VERSION);
+        redis.opsForValue().increment(DASHBOARD_GLOBAL_VERSION);
     }
 
     public void increaseUserVersion(Long userIdx) {
@@ -37,7 +37,7 @@ public class DashboardCacheVersionService {
         redis.opsForValue().increment(DASHBOARD_USER_VERSION + userIdx);
     }
 
-    private long getVersion(String key) {
+    private long getVersionValue(String key) {
         String value = redis.opsForValue().get(key);
 
         if (value == null) {

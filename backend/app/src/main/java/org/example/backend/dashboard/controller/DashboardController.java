@@ -22,7 +22,7 @@ public class DashboardController {
 
     /**
      * ⚡ B4: Dashboard 페이지 통합 endpoint.
-     * 이전 5개 endpoint (summary, quarter-goals, partner-progress, asset-categories, kpi-categories)
+     * 이전 핵심 endpoint (summary, quarter-goals, partner-progress, asset-categories)
      * 를 한 번의 호출로 묶음. 응답 = DashboardPageDto.
      *
      * Frontend dashboardStore.loadAll() 이 이 endpoint 하나만 호출하도록 변경됨.

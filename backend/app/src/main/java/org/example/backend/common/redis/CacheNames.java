@@ -23,7 +23,7 @@ public final class CacheNames {
      * ⚡ Fix A: 통합 endpoint /dashboard 의 응답 (DashboardPageDto) 통째 캐시.
      * key = "{callerIdx}:{periodCode}"
      * cache hit 시 sub-method 들의 @Cacheable 거치지 않고 즉시 응답 (self-invocation 우회).
-     * 5종 캐시 데이터의 직렬화/역직렬화도 1회로 감소.
+     * Frontend loadAll aggregate cache.
      */
     public static final String DASHBOARD_PAGE             = "dashboard:page";
 
