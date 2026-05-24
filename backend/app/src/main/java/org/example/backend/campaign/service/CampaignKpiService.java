@@ -124,7 +124,7 @@ public class CampaignKpiService {
         }
 
         // Dashboard 캐시 무효화 (kpiCategories, summary.matchAvg 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
         return CampaignKpiDto.Res.from(saved);
     }
 
@@ -151,7 +151,7 @@ public class CampaignKpiService {
         kpi.setOwnerLabel(req.ownerLabel());
         kpi.setOwnerUser(ownerUser);
         // Dashboard 캐시 무효화 (category 변경 시 kpiCategories, target 변경 시 평균 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
         return CampaignKpiDto.Res.from(kpi);
     }
 
@@ -179,7 +179,7 @@ public class CampaignKpiService {
         }
 
         // Dashboard 캐시 무효화 (quarterGoals, partnerProgress.avgPct, summary.matchAvg 모두 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
         return CampaignKpiDto.Res.from(kpi);
     }
 
@@ -194,7 +194,7 @@ public class CampaignKpiService {
         requireOpen(kpi.getCampaign());
         kpiRepository.delete(kpi);
         // Dashboard 캐시 무효화 (kpiCategories, summary.matchAvg 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
     }
 
     // ── 성과 분석 메모 ────────────────────────────────────────
@@ -238,7 +238,7 @@ public class CampaignKpiService {
         ).toList();
         List<CampaignKpiDto.Res> result = kpiRepository.saveAll(created).stream().map(CampaignKpiDto.Res::from).toList();
         // Dashboard 캐시 무효화 (대량 KPI 추가 — kpiCategories, summary.matchAvg 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
         return result;
     }
 

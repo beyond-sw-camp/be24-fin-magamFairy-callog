@@ -1,11 +1,16 @@
 package org.example.backend.user.repository;
 
 import org.example.backend.user.model.User;
+import org.example.backend.user.model.UserAccountStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findUserById(String id);
@@ -25,6 +30,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findAllByCompanyNameAndAccountStatus(String companyName, org.example.backend.user.model.UserAccountStatus accountStatus);
 
     List<User> findAllByRole(String role);
+
+    @Query("SELECT u.idx FROM User u " +
+           "WHERE u.organization.idx IN :organizationIdxs " +
+           "AND u.role IN :roles " +
+           "AND u.accountStatus = :accountStatus")
+    Set<Long> findUserIdxByOrganizationIdxInAndRoleInAndAccountStatus(
+            @Param("organizationIdxs") Collection<Long> organizationIdxs,
+            @Param("roles") Collection<String> roles,
+            @Param("accountStatus") UserAccountStatus accountStatus);
 
     @EntityGraph(attributePaths = {"organization"})
     Optional<User> findWithOrganizationByIdx(Long idx);
