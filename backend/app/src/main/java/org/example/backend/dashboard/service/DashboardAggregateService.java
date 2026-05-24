@@ -102,7 +102,8 @@ public class DashboardAggregateService {
      * Invalidation: 캠페인/KPI/Task 변경 시 @CacheEvict(DASHBOARD_PAGE, allEntries=true) 필요.
      */
     @Cacheable(value = CacheNames.DASHBOARD_PAGE,
-            key = "#callerIdx + ':' + (#periodCode == null ? '' : #periodCode)",
+            key = "#callerIdx + ':' + (#periodCode == null ? '' : #periodCode) " +
+                    "+ ':v' + @dashboardCacheVersionService.getPageVersion(#callerIdx)",
             sync = true)   // ⚡ Cache Stampede 방지: 동일 키 DB 로딩을 한 스레드만 수행 (cold-start DB 폭주 차단)
     public org.example.backend.dashboard.dto.DashboardPageDto loadAll(Long callerIdx, String periodCode) {
         return new org.example.backend.dashboard.dto.DashboardPageDto(

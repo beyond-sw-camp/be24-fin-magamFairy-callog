@@ -153,9 +153,6 @@ management:
     tracing:
       endpoint: ${JAEGER_URL}
       transport: http
-msa:
-  matching-evaluation:
-    base-url: ${EVALUATION_URL}
 
 eureka:
   client:
