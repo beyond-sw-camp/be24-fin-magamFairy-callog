@@ -4,6 +4,8 @@ public record NotificationEvent(
         String eventId,
         NotificationEventType eventType,
         Long recipientUserId,
+        Long organizationId,
+        String recipientRole,
         Long senderUserId,
         String senderName,
         String title,

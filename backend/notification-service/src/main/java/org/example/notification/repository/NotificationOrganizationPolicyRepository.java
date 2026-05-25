@@ -4,6 +4,8 @@ import org.example.notification.event.NotificationEventType;
 import org.example.notification.model.NotificationOrganizationPolicy;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface NotificationOrganizationPolicyRepository
@@ -13,5 +15,11 @@ public interface NotificationOrganizationPolicyRepository
             Long organizationId,
             String roleName,
             NotificationEventType notificationEventType
+    );
+
+    List<NotificationOrganizationPolicy> findAllByOrganizationIdAndRoleNameInAndNotificationType(
+            Long organizationId,
+            Collection<String> roleNames,
+            NotificationEventType notificationType
     );
 }

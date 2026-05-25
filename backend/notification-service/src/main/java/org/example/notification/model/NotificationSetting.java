@@ -12,6 +12,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.example.notification.model.dto.NotificationSettingDto;
 
 @Table(
         name = "notification_settings",
@@ -63,5 +64,13 @@ public class NotificationSetting {
         return NotificationSetting.builder()
                 .userId(userId)
                 .build();
+    }
+
+    public void update(NotificationSettingDto.Req req) {
+        if (req.enabled() != null) this.enabled = req.enabled();
+        if (req.taskEnabled() != null) this.taskEnabled = req.taskEnabled();
+        if (req.campaignEnabled() != null) this.campaignEnabled = req.campaignEnabled();
+        if (req.reviewEnabled() != null) this.reviewEnabled = req.reviewEnabled();
+        if (req.deadlineEnabled() != null) this.deadlineEnabled = req.deadlineEnabled();
     }
 }

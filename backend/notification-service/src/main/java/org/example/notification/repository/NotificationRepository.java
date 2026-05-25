@@ -18,4 +18,7 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     List<Notification> findAllByRecipientUserIdAndIsReadFalse(Long recipientUserId);
 
     long countByRecipientUserIdAndIsReadFalse(Long recipientUserId);
+
+    // eventId로 중복 저장 막기 (멱등성)
+    Optional<Notification> findByEventId(String eventId);
 }

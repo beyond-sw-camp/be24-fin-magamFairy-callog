@@ -48,4 +48,10 @@ public class NotificationOrganizationPolicy {
     @Builder.Default
     @Column(nullable = false)
     private Boolean enabled = true;
+
+    public static final String ROLE_ALL = "ALL";
+
+    public void updateEnabled(Boolean nextEnabled) {
+        this.enabled = nextEnabled == null || nextEnabled;
+    }
 }
