@@ -20,7 +20,7 @@ public class JwtUtil {
         this.encodeKey = Keys.hmacShaKeyFor(Decoders.BASE64URL.decode(key));
     }
 
-    public String createToken(String category, Long idx, String id, String email, String name, String role, String companyName, String department, Long expiredMs, OrganizationType type) {
+    public String createToken(String category, Long idx, String id, String email, String name, String role, String companyName, String department, Long expiredMs, Long organizationId, OrganizationType type) {
         JwtBuilder builder = Jwts.builder()
                 .claim("category", category)
                 .claim("idx", idx)
@@ -40,6 +40,9 @@ public class JwtUtil {
         }
         if (department != null && !department.isBlank()) {
             builder.claim("department", department);
+        }
+        if (organizationId != null) {
+            builder.claim("organizationId", organizationId);
         }
 
         return builder.compact();
@@ -107,6 +110,23 @@ public class JwtUtil {
                 .getPayload()
                 .get("orgType");
         return raw == null ? null : raw.toString();
+    }
+
+    public Long getOrganizationId(String token) {
+        Object raw = Jwts.parser()
+                .verifyWith(encodeKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("organizationId");
+
+        if (raw instanceof Number number) {
+            return number.longValue();
+        }
+        if (raw instanceof String text && !text.isBlank()) {
+            return Long.parseLong(text);
+        }
+        return null;
     }
 
     public Boolean isExpired(String token) {

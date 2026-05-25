@@ -4,6 +4,7 @@ public class TokenDto {
     public record AuthTokenResponse(
             String accessToken,
             String refreshToken,
-            String orgType
+            String orgType,
+            Long organizationId
     ) {}
 }

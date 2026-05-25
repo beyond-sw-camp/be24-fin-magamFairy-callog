@@ -109,6 +109,10 @@ public class JwtFilter extends OncePerRequestFilter {
         if (id == null || id.isBlank()) {
             id = email;
         }
+        Long organizationId = jwtUtil.getOrganizationId(token);
+        if (organizationId == null && userEntity.getOrganization() != null) {
+            organizationId = userEntity.getOrganization().getIdx();
+        }
 
         AuthUserDetails user = AuthUserDetails.builder()
                 .idx(idx)
@@ -118,6 +122,7 @@ public class JwtFilter extends OncePerRequestFilter {
                 .name(userEntity.getName())
                 .enable(userEntity.getEnable())
                 .accountStatus(resolveStatus(userEntity))
+                .organizationId(organizationId)
                 .build();
 
         String orgType = jwtUtil.getOrgType(token);

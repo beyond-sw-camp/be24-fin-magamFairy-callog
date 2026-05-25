@@ -76,6 +76,7 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
         body.put("name", user.getName());
         body.put("role", user.getRole());
         if (tokens.orgType() != null) body.put("orgType", tokens.orgType());
+        if (tokens.organizationId() != null) body.put("organizationId", tokens.organizationId());
         if (user.getCompanyName() != null) body.put("companyName", user.getCompanyName());
         if (user.getDepartment() != null) body.put("department", user.getDepartment());
         new ObjectMapper().writeValue(response.getWriter(), body);

@@ -21,6 +21,7 @@ public class AuthUserDetails implements UserDetails {
     private String name;
     private String companyName;
     private String department;
+    private Long organizationId;
     private UserAccountStatus accountStatus;
 
     public static AuthUserDetails from(User entity) {
@@ -31,6 +32,7 @@ public class AuthUserDetails implements UserDetails {
                 .name(entity.getName())
                 .companyName(entity.getCompanyName())
                 .department(entity.getDepartment())
+                .organizationId(entity.getOrganization() == null ? null : entity.getOrganization().getIdx())
                 .password(entity.getPassword())
                 .enable(entity.getEnable())
                 .role(entity.getRole())

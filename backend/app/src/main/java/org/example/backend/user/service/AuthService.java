@@ -28,15 +28,16 @@ public class AuthService {
         String userId = requireId(id, email);
         User userEntity = userRepository.findById(userIdx).orElseThrow(NoSuchElementException::new);
         OrganizationType organizationType = (userEntity.getOrganization() != null) ? userEntity.getOrganization().getType() : null;
+        Long organizationId = (userEntity.getOrganization() != null) ? userEntity.getOrganization().getIdx() : null;
         String orgTypeName = (organizationType != null) ? organizationType.name() : null;
 
-        String access = jwtUtil.createToken("access", userIdx, userId, email, name, role, companyName, department, 600000000L, organizationType);
-        String refresh = jwtUtil.createToken("refresh", userIdx, userId, email, name, role, companyName, department, 1209600000L, organizationType);
+        String access = jwtUtil.createToken("access", userIdx, userId, email, name, role, companyName, department, 600000000L, organizationId, organizationType);
+        String refresh = jwtUtil.createToken("refresh", userIdx, userId, email, name, role, companyName, department, 1209600000L, organizationId, organizationType);
 
         // Redis 저장 — TTL 14일 자동, RefreshTokenRedisService.save() 내부에서 기존 토큰 로테이션 처리
         refreshTokenRedisService.save(userId, refresh);
 
-        return new TokenDto.AuthTokenResponse(access, refresh, orgTypeName);
+        return new TokenDto.AuthTokenResponse(access, refresh, orgTypeName, organizationId);
     }
 
     @Transactional(readOnly = true)
@@ -70,6 +71,7 @@ public class AuthService {
         }
         User reissueUser = userRepository.findById(userIdx).orElseThrow(NoSuchElementException::new);
         OrganizationType organizationType = (reissueUser.getOrganization() != null) ? reissueUser.getOrganization().getType() : null;
+        Long organizationId = (reissueUser.getOrganization() != null) ? reissueUser.getOrganization().getIdx() : null;
         String newAccess = jwtUtil.createToken(
                 "access",
                 user.getIdx(),
@@ -80,9 +82,10 @@ public class AuthService {
                 user.getCompanyName(),
                 user.getDepartment(),
                 60000L,
+                organizationId,
                 organizationType
         );
-        return new TokenDto.AuthTokenResponse(newAccess, refreshToken, (organizationType != null) ? organizationType.name() : null);
+        return new TokenDto.AuthTokenResponse(newAccess, refreshToken, (organizationType != null) ? organizationType.name() : null, organizationId);
     }
 
     public void logout(String refreshToken) {

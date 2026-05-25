@@ -67,6 +67,10 @@ public class NotificationSetting {
     }
 
     public void update(NotificationSettingDto.Req req) {
+        if (req == null) {
+            return;
+        }
+
         if (req.enabled() != null) this.enabled = req.enabled();
         if (req.taskEnabled() != null) this.taskEnabled = req.taskEnabled();
         if (req.campaignEnabled() != null) this.campaignEnabled = req.campaignEnabled();
