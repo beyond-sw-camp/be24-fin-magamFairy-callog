@@ -1,6 +1,7 @@
 package com.example.adcheck.analysis.service;
 
 import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -35,6 +37,15 @@ public class AdCheckAnalysisMongoStorageService {
 
     @Value("${custom.mongodb.analysis-collection:" + DEFAULT_COLLECTION + "}")
     private String analysisCollection;
+
+    @Value("${custom.mongodb.analysis-server-selection-timeout-ms:5000}")
+    private long serverSelectionTimeoutMillis;
+
+    @Value("${custom.mongodb.analysis-connect-timeout-ms:5000}")
+    private long connectTimeoutMillis;
+
+    @Value("${custom.mongodb.analysis-read-timeout-ms:10000}")
+    private long readTimeoutMillis;
 
     private MongoClient mongoClient;
     private String resolvedDatabaseName;
@@ -74,7 +85,18 @@ public class AdCheckAnalysisMongoStorageService {
                 throw new IllegalStateException("custom.mongodb.analysis-database is required when URI has no database.");
             }
 
-            mongoClient = MongoClients.create(connectionString);
+            MongoClientSettings settings = MongoClientSettings.builder()
+                    .applyConnectionString(connectionString)
+                    .applyToClusterSettings(builder -> builder.serverSelectionTimeout(
+                            Math.max(1000L, serverSelectionTimeoutMillis),
+                            TimeUnit.MILLISECONDS
+                    ))
+                    .applyToSocketSettings(builder -> builder
+                            .connectTimeout(Math.max(1000L, connectTimeoutMillis), TimeUnit.MILLISECONDS)
+                            .readTimeout(Math.max(1000L, readTimeoutMillis), TimeUnit.MILLISECONDS))
+                    .build();
+
+            mongoClient = MongoClients.create(settings);
             resolvedDatabaseName = databaseName;
         }
 

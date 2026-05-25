@@ -241,3 +241,13 @@
   - 상세 패널에는 원본 파일 메타데이터, 추출 텍스트, 문서 구조 분석, 글자 인식, 문구 위험도, 최종 판정, 오류 상세를 표시한다.
 - `.\gradlew.bat :app:compileJava :aijudge:compileJava` 성공.
 - `npm run build` 성공.
+
+### 검수 결과 저장/알림 불일치 수정
+- async Job 경로에서는 ai-judge 원격 응답 시점에 완료 알림을 만들지 않도록 했다.
+- Mongo 상세 저장과 RDB 요약/Outbox 저장이 완료된 뒤 app Job 서비스가 완료 알림을 만들도록 알림 생성 시점을 옮겼다.
+- Mongo 상세 저장 실패 등 Job 실패 시에는 완료 알림 대신 실패 알림을 만들고, 검수 진행 UI도 실패 상태로 맞춰 표시하도록 했다.
+- Kafka consumer는 app이 관리하는 `adCheckJobId` context가 있는 ai-judge 이벤트를 알림 생성 대상에서 제외해 중복/선행 완료 알림을 방지한다.
+- MongoDB 상세 저장소 연결 실패 메시지를 `MONGODB_STD_URL`, 포트, 인증 정보를 확인하라는 명확한 오류로 감싸고, 연결 대기 timeout을 짧게 제한했다.
+- 실제 처리 시간 비중에 맞춰 진행률을 `대기 5% → 데이터 추출 20% → 데이터 분석 35% → 결과 도출 95% → 완료 100%`로 재조정했다.
+- `.\gradlew.bat :app:compileJava :aijudge:compileJava` 성공.
+- `npm run build` 성공.

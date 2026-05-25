@@ -1,6 +1,7 @@
 package org.example.backend.adcheck.analysis.service;
 
 import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
@@ -21,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -38,6 +40,15 @@ public class AdCheckAnalysisMongoStorageService {
 
     @Value("${custom.mongodb.analysis-collection:" + DEFAULT_COLLECTION + "}")
     private String analysisCollection;
+
+    @Value("${custom.mongodb.analysis-server-selection-timeout-ms:5000}")
+    private long serverSelectionTimeoutMillis;
+
+    @Value("${custom.mongodb.analysis-connect-timeout-ms:5000}")
+    private long connectTimeoutMillis;
+
+    @Value("${custom.mongodb.analysis-read-timeout-ms:10000}")
+    private long readTimeoutMillis;
 
     private MongoClient mongoClient;
     private String resolvedDatabaseName;
@@ -60,10 +71,19 @@ public class AdCheckAnalysisMongoStorageService {
             throw new IllegalArgumentException("analysisJobId is required to save ad check detail.");
         }
         if (!isEnabled()) {
-            throw new IllegalStateException("Ad check analysis MongoDB is disabled.");
+            throw new IllegalStateException("MongoDB 상세 저장소가 비활성화되어 있습니다. MONGODB_STD_ENABLED/MONGODB_STD_URL을 확인해주세요.");
         }
 
-        saveInternal(response);
+        try {
+            saveInternal(response);
+        } catch (Exception e) {
+            log.warn("Ad check detail MongoDB save failed. analysisJobId={}, errorType={}, message={}",
+                    response.getAnalysisJobId(), e.getClass().getSimpleName(), sanitize(e.getMessage()));
+            throw new IllegalStateException(
+                    "MongoDB 상세 저장소에 연결할 수 없습니다. MONGODB_STD_URL, 포트, 인증 정보를 확인해주세요.",
+                    e
+            );
+        }
         return response.getAnalysisJobId();
     }
 
@@ -97,7 +117,18 @@ public class AdCheckAnalysisMongoStorageService {
                 throw new IllegalStateException("custom.mongodb.analysis-database is required when URI has no database.");
             }
 
-            mongoClient = MongoClients.create(connectionString);
+            MongoClientSettings settings = MongoClientSettings.builder()
+                    .applyConnectionString(connectionString)
+                    .applyToClusterSettings(builder -> builder.serverSelectionTimeout(
+                            Math.max(1000L, serverSelectionTimeoutMillis),
+                            TimeUnit.MILLISECONDS
+                    ))
+                    .applyToSocketSettings(builder -> builder
+                            .connectTimeout(Math.max(1000L, connectTimeoutMillis), TimeUnit.MILLISECONDS)
+                            .readTimeout(Math.max(1000L, readTimeoutMillis), TimeUnit.MILLISECONDS))
+                    .build();
+
+            mongoClient = MongoClients.create(settings);
             resolvedDatabaseName = databaseName;
         }
 

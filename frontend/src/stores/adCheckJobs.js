@@ -32,7 +32,7 @@ export const AD_CHECK_JOB_STEPS = [
     currentMessage: '분석 서버에서 파일 데이터를 추출하고 있습니다.',
     doneMessage: '데이터 추출이 완료되었습니다.',
     pendingMessage: '작업이 시작되면 데이터를 추출합니다.',
-    progressPercent: 25,
+    progressPercent: 20,
   },
   {
     key: 'DATA_ANALYSIS',
@@ -44,7 +44,7 @@ export const AD_CHECK_JOB_STEPS = [
     currentMessage: 'AI 텍스트 분석을 진행하고 있습니다.',
     doneMessage: '데이터 분석이 완료되었습니다.',
     pendingMessage: '데이터 추출 후 AI 분석을 진행합니다.',
-    progressPercent: 45,
+    progressPercent: 35,
   },
   {
     key: 'RESULT_BUILDING',
@@ -56,7 +56,7 @@ export const AD_CHECK_JOB_STEPS = [
     currentMessage: '검수 결과를 정리하고 있습니다.',
     doneMessage: '검수 결과 정리가 완료되었습니다.',
     pendingMessage: 'AI 분석 후 결과를 정리합니다.',
-    progressPercent: 90,
+    progressPercent: 95,
   },
   {
     key: 'COMPLETED',

@@ -391,6 +391,41 @@ public class NotificationService {
     }
 
     @Transactional
+    public void notifyAiJudgeJobFailure(
+            Long requesterIdx,
+            String jobId,
+            String fileName,
+            String errorMessage,
+            String targetUrl
+    ) {
+        if (requesterIdx == null) {
+            return;
+        }
+
+        User requester = userRepository.findById(requesterIdx).orElse(null);
+        if (requester == null) {
+            return;
+        }
+
+        create(
+                requester,
+                null,
+                NotificationType.AI_JUDGE_FAILED,
+                NotificationSeverity.HIGH,
+                "AI 검수 처리에 실패했습니다",
+                nonBlank(fileName, "업로드 파일"),
+                nonBlank(errorMessage, "AI 검수 처리 중 오류가 발생했습니다."),
+                "검수 결과 보기",
+                nonBlank(targetUrl, "/references"),
+                aiJudgeDedupeKey(nonBlank(jobId, null), requesterIdx),
+                "AI_JUDGE_ANALYSIS",
+                null,
+                NotificationType.AI_JUDGE_FAILED.name(),
+                false
+        );
+    }
+
+    @Transactional
     public void notifyDeadline(Task task, Collection<User> recipients, NotificationType type, String dedupePrefix) {
         if (task == null || type == null) {
             return;

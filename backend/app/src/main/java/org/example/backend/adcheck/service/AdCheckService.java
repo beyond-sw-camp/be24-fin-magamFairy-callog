@@ -33,6 +33,7 @@ import java.util.regex.Pattern;
 @Slf4j
 public class AdCheckService {
 
+    private static final String CONTEXT_AD_CHECK_JOB_ID = "adCheckJobId";
     private final RestClient aiRestClient;
     private final AiJudgeClient aiJudgeClient;
     private static final Pattern JSON_FENCE_PATTERN = Pattern.compile("(?s)```(?:json)?\\s*(\\{.*?})\\s*```");
@@ -205,14 +206,27 @@ public class AdCheckService {
             if (extraContext != null && !extraContext.isEmpty()) {
                 context.putAll(extraContext);
             }
+            boolean shouldNotify = !isAsyncJobContext(context);
 
             AdCheckDto.FileCheckRes response = aiJudgeClient.checkFile(file, context);
-            notifyAiJudgeResult(requester, response);
+            if (shouldNotify) {
+                notifyAiJudgeResult(requester, response);
+            }
             return response;
         } catch (AiJudgeClient.FileCheckRemoteException e) {
-            notifyAiJudgeResult(requester, e.getResponse());
+            if (!isAsyncJobContext(extraContext)) {
+                notifyAiJudgeResult(requester, e.getResponse());
+            }
             throw new FileCheckException(e.getMessage(), e.getResponse(), e);
         }
+    }
+
+    private boolean isAsyncJobContext(Map<String, Object> context) {
+        if (context == null || context.isEmpty()) {
+            return false;
+        }
+        Object jobId = context.get(CONTEXT_AD_CHECK_JOB_ID);
+        return jobId != null && !String.valueOf(jobId).isBlank();
     }
 
     private void notifyAiJudgeResult(AuthUserDetails requester, AdCheckDto.FileCheckRes response) {

@@ -14,6 +14,7 @@ import org.example.backend.adcheck.model.AdCheckJobStatus;
 import org.example.backend.adcheck.model.AdCheckJobStep;
 import org.example.backend.adcheck.repository.AdCheckJobRepository;
 import org.example.backend.adcheck.repository.AdCheckOutboxEventRepository;
+import org.example.backend.notification.service.NotificationService;
 import org.example.backend.notification.service.NotificationSseService;
 import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.model.User;
@@ -64,6 +65,7 @@ public class AdCheckJobService {
     private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
     private final AdCheckOutboxEventRepository adCheckOutboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final NotificationService notificationService;
     private final NotificationSseService notificationSseService;
     private final TransactionTemplate transactionTemplate;
     private final BlockingQueue<String> queue = new LinkedBlockingQueue<>();
@@ -328,6 +330,7 @@ public class AdCheckJobService {
             return toDto(job);
         }));
         emitJobEvent(completedJob, "ad-check.completed");
+        notifyCompletedJob(completedJob, result);
     }
 
     private void failJob(String jobId, Throwable error) {
@@ -368,6 +371,7 @@ public class AdCheckJobService {
             return toDto(job);
         });
         emitJobEvent(failedJob, "ad-check.failed");
+        notifyFailedJob(failedJob);
     }
 
     private WorkItem loadWorkItem(String jobId) {
@@ -464,6 +468,7 @@ public class AdCheckJobService {
                 .orElse(null));
 
         emitJobEvent(failedJob, "ad-check.failed");
+        notifyFailedJob(failedJob);
     }
 
     private void failMissingWorkItem(String jobId) {
@@ -489,6 +494,7 @@ public class AdCheckJobService {
                 .orElse(null));
 
         emitJobEvent(failedJob, "ad-check.failed");
+        notifyFailedJob(failedJob);
     }
 
     private void emitJobEvent(AdCheckJobDto.JobRes job, String eventName) {
@@ -496,6 +502,36 @@ public class AdCheckJobService {
             return;
         }
         notificationSseService.sendToUser(job.requesterId(), eventName, job);
+    }
+
+    private void notifyCompletedJob(AdCheckJobDto.JobRes job, AdCheckDto.FileCheckRes result) {
+        if (job == null || job.requesterId() == null || result == null) {
+            return;
+        }
+        notificationService.notifyAiJudgeResult(job.requesterId(), result);
+    }
+
+    private void notifyFailedJob(AdCheckJobDto.JobRes job) {
+        if (job == null || job.requesterId() == null) {
+            return;
+        }
+        notificationService.notifyAiJudgeJobFailure(
+                job.requesterId(),
+                job.jobId(),
+                job.fileName(),
+                firstText(job.errorMessage(), job.summaryMessage(), "AI 검수 처리 중 오류가 발생했습니다."),
+                jobTargetUrl(job)
+        );
+    }
+
+    private String jobTargetUrl(AdCheckJobDto.JobRes job) {
+        if (job == null) {
+            return "/references";
+        }
+        if (job.campaignId() != null && !job.campaignId().isBlank()) {
+            return "/campaigns/" + job.campaignId() + "?tab=review&adCheckJobId=" + job.jobId();
+        }
+        return firstText(job.targetUrl(), "/references");
     }
 
     private AdCheckJobDto.JobRes toDto(AdCheckJob job) {

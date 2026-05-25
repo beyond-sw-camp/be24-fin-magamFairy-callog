@@ -35,6 +35,14 @@ public class AiJudgeKafkaEventListener {
                     text(event, "fileName")
             );
             Long requesterIdx = longValue(event.path("context").path("requesterUserIdx"));
+            if (hasText(event.path("context").path("adCheckJobId"))) {
+                log.info(
+                        "Skip ai-judge Kafka notification for app-managed ad check job. jobId={}, analysisJobId={}",
+                        text(event.path("context"), "adCheckJobId"),
+                        text(event, "analysisJobId")
+                );
+                return;
+            }
             if (requesterIdx == null) {
                 log.warn(
                         "AI judge Kafka event has no requester context. eventType={}, analysisJobId={}",
@@ -96,5 +104,9 @@ public class AiJudgeKafkaEventListener {
         } catch (NumberFormatException ignored) {
             return null;
         }
+    }
+
+    private boolean hasText(JsonNode value) {
+        return value != null && !value.isMissingNode() && !value.isNull() && !value.asText("").isBlank();
     }
 }
