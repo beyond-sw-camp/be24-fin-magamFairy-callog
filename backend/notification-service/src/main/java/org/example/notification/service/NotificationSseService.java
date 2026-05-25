@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.example.notification.model.dto.SseMessage;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -20,6 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class NotificationSseService {
     public static final String NOTIFICATION_SSE_CHANNEL = "notification:sse";
     private static final long SSE_TIMEOUT_MILLIS = 60L * 60L * 1000L;
+    private static final long HEARTBEAT_INTERVAL_MILLIS = 25_000L;
 
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
@@ -37,9 +39,9 @@ public class NotificationSseService {
         return emitter;
     }
 
-    // 특정 사용자에게 알림 이벤트를 전송합니다.
+    // 특정 사용자에게 알림 생성 이벤트를 전송합니다.
     public void publishToUser(Long userId, Object data) {
-        publish(SseMessage.toUser(userId, "notification", data));
+        publish(SseMessage.toUser(userId, "notification.created", data));
     }
 
     // 모든 Pod에 브로드캐스트 이벤트를 전파합니다.
@@ -54,6 +56,14 @@ public class NotificationSseService {
             return;
         }
         sendToLocalUser(message.userId(), message);
+    }
+
+    // 연결이 유휴 상태로 끊기지 않도록 모든 로컬 SSE 연결에 주기적으로 heartbeat를 보냅니다.
+    @Scheduled(fixedRate = HEARTBEAT_INTERVAL_MILLIS)
+    public void sendHeartbeat() {
+        emitters.forEach((userId, userEmitters) ->
+                userEmitters.forEach(emitter ->
+                        sendToEmitter(userId, emitter, SseMessage.toUser(userId, "heartbeat", "ping"))));
     }
 
     // SSE 메시지를 Redis 채널로 발행해서 모든 notification-service Pod가 받게 합니다.
@@ -85,7 +95,7 @@ public class NotificationSseService {
         }
     }
 
-    // 끊어진 SSE 연결을 사용자 연결 목록에서 제거합니다.
+    // 닫힌 SSE 연결을 사용자 연결 목록에서 제거합니다.
     private void remove(Long userId, SseEmitter emitter) {
         List<SseEmitter> userEmitters = emitters.get(userId);
         if (userEmitters == null) {
