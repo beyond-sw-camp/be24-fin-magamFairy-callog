@@ -5,12 +5,13 @@ import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.user.model.UserAccountStatus;
 import org.example.backend.user.repository.UserRepository;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Caching;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 @Component
@@ -22,47 +23,42 @@ public class DashboardCacheEvictor {
             "ROLE_GENERAL_MANAGER",
             "ROLE_MANAGER"
     );
+    private static final List<String> CAMPAIGN_LIST_SCOPES = List.of("mine", "org");
 
     private final DashboardCacheVersionService dashboardCacheVersionService;
     private final CampaignMemberRepository campaignMemberRepository;
     private final CampaignParticipantRepository campaignParticipantRepository;
     private final UserRepository userRepository;
+    private final CacheManager cacheManager;
 
-    @Caching(evict = {
-            @CacheEvict(value = CacheNames.CAMPAIGN_LIST,              allEntries = true)
-    })
     public void evictAll() {
         dashboardCacheVersionService.increaseGlobalVersion();
     }
 
-    @Caching(evict = {
-            @CacheEvict(value = CacheNames.CAMPAIGN_LIST,              allEntries = true)
-    })
     public void evictUser(Long userIdx) {
         if (userIdx == null) {
             return;
         }
 
         dashboardCacheVersionService.increaseUserVersion(userIdx);
+        evictCampaignList(userIdx);
     }
 
-    @Caching(evict = {
-            @CacheEvict(value = CacheNames.CAMPAIGN_LIST,              allEntries = true)
-    })
     public void evictUsers(Collection<Long> userIdxs) {
         if (userIdxs == null || userIdxs.isEmpty()) {
             return;
         }
 
-        userIdxs.stream()
+        Set<Long> distinctUserIdxs = userIdxs.stream()
                 .filter(userIdx -> userIdx != null)
-                .distinct()
-                .forEach(dashboardCacheVersionService::increaseUserVersion);
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
+        distinctUserIdxs.forEach(userIdx -> {
+            dashboardCacheVersionService.increaseUserVersion(userIdx);
+            evictCampaignList(userIdx);
+        });
     }
 
-    @Caching(evict = {
-            @CacheEvict(value = CacheNames.CAMPAIGN_LIST,              allEntries = true)
-    })
     public void evictCampaign(Long campaignIdx) {
         if (campaignIdx == null) {
             return;
@@ -71,9 +67,6 @@ public class DashboardCacheEvictor {
         evictUsers(resolveCampaignDashboardUsers(campaignIdx));
     }
 
-    @Caching(evict = {
-            @CacheEvict(value = CacheNames.CAMPAIGN_LIST,              allEntries = true)
-    })
     public void evictCampaigns(Collection<Long> campaignIdxs) {
         if (campaignIdxs == null || campaignIdxs.isEmpty()) {
             return;
@@ -103,5 +96,14 @@ public class DashboardCacheEvictor {
         }
 
         return affectedUserIdxs;
+    }
+
+    private void evictCampaignList(Long userIdx) {
+        Cache cache = cacheManager.getCache(CacheNames.CAMPAIGN_LIST);
+        if (cache == null) {
+            return;
+        }
+
+        CAMPAIGN_LIST_SCOPES.forEach(scope -> cache.evict(userIdx + ":" + scope));
     }
 }
