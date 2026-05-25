@@ -487,6 +487,20 @@ function applyAnalysisJobResult(job) {
 }
 
 function openAnalysisJobResult(job) {
+  if (job?.campaignId && job?.jobId) {
+    router.push({
+      name: 'campaign-detail',
+      params: {
+        campaignId: job.campaignId,
+      },
+      query: {
+        tab: 'library',
+        adCheckJobId: job.jobId,
+      },
+    })
+    return
+  }
+
   const targetUrl = job?.targetUrl
     || (job?.result?.analysisJobId
       ? `/references?analysisJobId=${encodeURIComponent(job.result.analysisJobId)}`

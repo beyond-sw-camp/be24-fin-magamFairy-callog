@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { ListAdReviewRequests } from '@/api/adcheck/index.js'
+import { useRoute } from 'vue-router'
+import { GetAdCheckJobDetail, ListAdCheckJobs } from '@/api/adcheck/index.js'
 
 const props = defineProps({
   campaignId: {
@@ -9,29 +10,39 @@ const props = defineProps({
   },
 })
 
+const route = useRoute()
 const records = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
-const activeFilter = ref('processed')
+const detailLoadingJobId = ref('')
+const detailErrorMessage = ref('')
+const detailsByJobId = ref({})
+const activeFilter = ref('all')
 const searchQuery = ref('')
 const selectedRecordId = ref(null)
 
 const filterOptions = [
-  { id: 'processed', label: '처리 완료' },
-  { id: 'APPROVED', label: '검수 통과' },
-  { id: 'REJECTED', label: '반려' },
-  { id: 'REQUESTED', label: '진행중' },
   { id: 'all', label: '전체' },
+  { id: 'completed', label: '완료' },
+  { id: 'review', label: '확인 필요' },
+  { id: 'failed', label: '실패' },
+  { id: 'active', label: '진행중' },
 ]
 
 function normalizeStatus(status) {
   const value = String(status ?? '').trim().toUpperCase()
-  if (['REQUESTED', 'APPROVED', 'REJECTED'].includes(value)) return value
-  return 'REQUESTED'
+  if (['QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELED'].includes(value)) return value
+  return 'QUEUED'
+}
+
+function normalizeResultStatus(status) {
+  const value = String(status ?? '').trim().toLowerCase()
+  if (['pass', 'warning', 'violation', 'failed'].includes(value)) return value
+  return ''
 }
 
 function recordKey(record) {
-  return String(record?.idx ?? record?.fileObjectKey ?? record?.fileName ?? '')
+  return String(record?.jobId ?? record?.mongoDocumentId ?? record?.fileName ?? '')
 }
 
 function normalizeText(value) {
@@ -40,16 +51,56 @@ function normalizeText(value) {
 
 function statusLabel(status) {
   const normalized = normalizeStatus(status)
-  if (normalized === 'APPROVED') return '검수 통과'
-  if (normalized === 'REJECTED') return '반려'
-  return '진행중'
+  if (normalized === 'QUEUED') return '대기 중'
+  if (normalized === 'RUNNING') return '처리 중'
+  if (normalized === 'SUCCEEDED') return '완료'
+  if (normalized === 'FAILED') return '실패'
+  if (normalized === 'CANCELED') return '취소'
+  return '대기 중'
 }
 
-function statusTone(status) {
-  const normalized = normalizeStatus(status)
-  if (normalized === 'APPROVED') return 'approved'
-  if (normalized === 'REJECTED') return 'rejected'
+function resultStatusLabel(status) {
+  const normalized = normalizeResultStatus(status)
+  if (normalized === 'pass') return '검수 완료'
+  if (normalized === 'warning') return '확인 필요'
+  if (normalized === 'violation') return '위반 의심'
+  if (normalized === 'failed') return '검수 실패'
+  return '결과 대기'
+}
+
+function riskLevelLabel(level) {
+  const normalized = String(level ?? '').toUpperCase()
+  if (normalized === 'LOW') return '낮음'
+  if (normalized === 'MEDIUM') return '중간'
+  if (normalized === 'HIGH') return '높음'
+  if (normalized === 'NORMAL') return '보통'
+  return '미정'
+}
+
+function statusTone(record) {
+  const normalizedStatus = normalizeStatus(record?.normalizedStatus ?? record?.status)
+  const normalizedResult = normalizeResultStatus(record?.normalizedResultStatus ?? record?.resultStatus)
+  if (normalizedStatus === 'FAILED' || normalizedStatus === 'CANCELED' || normalizedResult === 'failed') {
+    return 'rejected'
+  }
+  if (normalizedStatus === 'QUEUED' || normalizedStatus === 'RUNNING') {
+    return 'requested'
+  }
+  if (normalizedResult === 'pass') return 'approved'
+  if (normalizedResult === 'violation') return 'rejected'
   return 'requested'
+}
+
+function recordBadgeLabel(record) {
+  if (!record) return '대기 중'
+  if (['QUEUED', 'RUNNING', 'FAILED', 'CANCELED'].includes(record.normalizedStatus)) {
+    return statusLabel(record.normalizedStatus)
+  }
+  return resultStatusLabel(record.normalizedResultStatus)
+}
+
+function isActiveStatus(status) {
+  return ['QUEUED', 'RUNNING'].includes(normalizeStatus(status))
 }
 
 function formatDateTime(value) {
@@ -76,22 +127,28 @@ function formatFileSize(size) {
 const normalizedRecords = computed(() =>
   records.value.map((record) => ({
     ...record,
-    normalizedStatus: normalizeStatus(record.requestStatus),
+    normalizedStatus: normalizeStatus(record.status),
+    normalizedResultStatus: normalizeResultStatus(record.resultStatus),
     archiveId: recordKey(record),
   })),
 )
 
 const summary = computed(() => {
   const total = normalizedRecords.value.length
-  const approved = normalizedRecords.value.filter((record) => record.normalizedStatus === 'APPROVED').length
-  const rejected = normalizedRecords.value.filter((record) => record.normalizedStatus === 'REJECTED').length
-  const requested = normalizedRecords.value.filter((record) => record.normalizedStatus === 'REQUESTED').length
+  const completed = normalizedRecords.value.filter((record) => record.normalizedStatus === 'SUCCEEDED').length
+  const review = normalizedRecords.value.filter((record) =>
+    ['warning', 'violation'].includes(record.normalizedResultStatus),
+  ).length
+  const failed = normalizedRecords.value.filter((record) =>
+    record.normalizedStatus === 'FAILED' || record.normalizedResultStatus === 'failed',
+  ).length
+  const active = normalizedRecords.value.filter((record) => isActiveStatus(record.normalizedStatus)).length
   return {
     total,
-    processed: approved + rejected,
-    approved,
-    rejected,
-    requested,
+    completed,
+    review,
+    failed,
+    active,
   }
 })
 
@@ -100,25 +157,25 @@ const filteredRecords = computed(() => {
 
   return normalizedRecords.value
     .filter((record) => {
-      if (activeFilter.value === 'processed') {
-        return ['APPROVED', 'REJECTED'].includes(record.normalizedStatus)
-      }
       if (activeFilter.value === 'all') return true
-      return record.normalizedStatus === activeFilter.value
+      if (activeFilter.value === 'completed') return record.normalizedStatus === 'SUCCEEDED'
+      if (activeFilter.value === 'review') return ['warning', 'violation'].includes(record.normalizedResultStatus)
+      if (activeFilter.value === 'failed') {
+        return record.normalizedStatus === 'FAILED' || record.normalizedResultStatus === 'failed'
+      }
+      if (activeFilter.value === 'active') return isActiveStatus(record.normalizedStatus)
+      return true
     })
     .filter((record) => {
       if (!query) return true
       const haystack = [
         record.fileName,
-        record.requestMemo,
-        record.requesterName,
-        record.requesterLoginId,
-        record.extractedText,
-        record.law,
-        record.violationText,
-        record.reason,
-        record.suggestion,
-        record.rejectReason,
+        record.summaryMessage,
+        record.resultStatus,
+        record.riskLevel,
+        record.status,
+        record.jobId,
+        record.mongoDocumentId,
       ]
         .map(normalizeText)
         .join(' ')
@@ -134,18 +191,50 @@ const selectedRecord = computed(() => {
   return filteredRecords.value.find((record) => record.archiveId === selectedId) ?? filteredRecords.value[0] ?? null
 })
 
+const selectedDetail = computed(() => {
+  const selectedId = selectedRecord.value?.archiveId
+  return selectedId ? detailsByJobId.value[selectedId] ?? null : null
+})
+
+const selectedRawDocument = computed(() => selectedDetail.value?.rawDocument ?? {})
+const selectedDetailData = computed(() => selectedDetail.value?.detail ?? null)
+const selectedOriginalUrl = computed(() =>
+  selectedDetailData.value?.fileUrl || detailValue(['file', 'url']) || '',
+)
+const isSelectedActive = computed(() => isActiveStatus(selectedRecord.value?.normalizedStatus))
+const isSelectedDetailLoading = computed(() => detailLoadingJobId.value === selectedRecord.value?.archiveId)
+
 const selectedAiSummary = computed(() => {
   const record = selectedRecord.value
   if (!record) return []
 
   return [
-    { label: '관련 법령', value: record.law },
-    { label: '문제 표현', value: record.violationText },
-    { label: '검수 사유', value: record.reason },
-    { label: '수정 제안', value: record.suggestion },
-    { label: '반려 사유', value: record.rejectReason },
+    { label: '최종 판정', value: resultStatusLabel(record.normalizedResultStatus) },
+    { label: '위험도', value: riskLevelLabel(record.riskLevel) },
+    { label: '요약', value: record.summaryMessage },
+    { label: '관련 법령', value: selectedDetailData.value?.law },
+    { label: '문제 표현', value: selectedDetailData.value?.violationText },
+    { label: '검수 사유', value: selectedDetailData.value?.reason },
+    { label: '수정 제안', value: selectedDetailData.value?.suggestion },
+    { label: '오류 상세', value: detailValue(['errorDetail']) },
   ].filter((item) => normalizeText(item.value))
 })
+
+function detailValue(path, fallback = '') {
+  return path.reduce((current, key) => current?.[key], selectedRawDocument.value) ?? fallback
+}
+
+function formatJson(value) {
+  if (!value || (typeof value === 'object' && !Object.keys(value).length)) {
+    return ''
+  }
+
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
 
 async function loadLibrary() {
   if (!props.campaignId) return
@@ -153,8 +242,9 @@ async function loadLibrary() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const response = await ListAdReviewRequests(props.campaignId)
+    const response = await ListAdCheckJobs({ campaignId: props.campaignId })
     records.value = Array.isArray(response) ? response : []
+    applyRouteSelection()
   } catch (error) {
     records.value = []
     errorMessage.value = error?.message ?? '자료실 목록을 불러오지 못했습니다.'
@@ -163,8 +253,35 @@ async function loadLibrary() {
   }
 }
 
+async function loadDetail(jobId) {
+  if (!jobId || detailsByJobId.value[jobId] || isSelectedActive.value) {
+    return
+  }
+
+  detailLoadingJobId.value = jobId
+  detailErrorMessage.value = ''
+  try {
+    const detail = await GetAdCheckJobDetail(jobId)
+    detailsByJobId.value = {
+      ...detailsByJobId.value,
+      [jobId]: detail,
+    }
+  } catch (error) {
+    detailErrorMessage.value = error?.message ?? '상세 자료를 불러오지 못했습니다.'
+  } finally {
+    detailLoadingJobId.value = ''
+  }
+}
+
 function selectRecord(record) {
   selectedRecordId.value = record.archiveId
+}
+
+function applyRouteSelection() {
+  const routeJobId = String(route.query.adCheckJobId || '').trim()
+  if (routeJobId && normalizedRecords.value.some((record) => record.archiveId === routeJobId)) {
+    selectedRecordId.value = routeJobId
+  }
 }
 
 watch(
@@ -178,12 +295,29 @@ watch(
 )
 
 watch(
+  () => selectedRecord.value?.archiveId,
+  (jobId) => {
+    if (jobId) {
+      void loadDetail(jobId)
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => route.query.adCheckJobId,
+  applyRouteSelection,
+)
+
+watch(
   () => props.campaignId,
   () => {
     records.value = []
     searchQuery.value = ''
-    activeFilter.value = 'processed'
+    activeFilter.value = 'all'
     selectedRecordId.value = null
+    detailsByJobId.value = {}
+    detailErrorMessage.value = ''
     void loadLibrary()
   },
 )
@@ -205,19 +339,19 @@ onMounted(loadLibrary)
 
     <div class="library-stats" aria-label="자료실 요약">
       <article>
-        <span>처리 완료</span>
-        <strong>{{ summary.processed }}</strong>
+        <span>완료</span>
+        <strong>{{ summary.completed }}</strong>
       </article>
       <article>
-        <span>검수 통과</span>
-        <strong>{{ summary.approved }}</strong>
+        <span>확인 필요</span>
+        <strong>{{ summary.review }}</strong>
       </article>
       <article>
-        <span>반려</span>
-        <strong>{{ summary.rejected }}</strong>
+        <span>실패</span>
+        <strong>{{ summary.failed }}</strong>
       </article>
       <article>
-        <span>전체 요청</span>
+        <span>전체 자료</span>
         <strong>{{ summary.total }}</strong>
       </article>
     </div>
@@ -241,7 +375,7 @@ onMounted(loadLibrary)
           v-model="searchQuery"
           type="search"
           autocomplete="off"
-          placeholder="파일명, 요청자, OCR 텍스트"
+          placeholder="파일명, 요약, 판정"
         />
       </label>
     </div>
@@ -265,14 +399,14 @@ onMounted(loadLibrary)
           @keydown.enter="selectRecord(record)"
         >
           <div class="library-item__main">
-            <span :class="['library-status', `library-status--${statusTone(record.normalizedStatus)}`]">
-              {{ statusLabel(record.normalizedStatus) }}
+            <span :class="['library-status', `library-status--${statusTone(record)}`]">
+              {{ recordBadgeLabel(record) }}
             </span>
             <strong>{{ record.fileName || '광고 소재' }}</strong>
-            <p>{{ record.requestMemo || normalizeText(record.extractedText) || '검수 자료' }}</p>
+            <p>{{ record.summaryMessage || '검수 결과 요약을 준비 중입니다.' }}</p>
           </div>
           <div class="library-item__meta">
-            <span>{{ record.requesterName || record.requesterLoginId || '요청자 미상' }}</span>
+            <span>{{ riskLevelLabel(record.riskLevel) }}</span>
             <time>{{ formatDateTime(record.createdAt) }}</time>
           </div>
         </article>
@@ -281,15 +415,15 @@ onMounted(loadLibrary)
       <aside v-if="selectedRecord" class="library-detail">
         <header class="library-detail__head">
           <div>
-            <span :class="['library-status', `library-status--${statusTone(selectedRecord.normalizedStatus)}`]">
-              {{ statusLabel(selectedRecord.normalizedStatus) }}
+            <span :class="['library-status', `library-status--${statusTone(selectedRecord)}`]">
+              {{ recordBadgeLabel(selectedRecord) }}
             </span>
             <h4>{{ selectedRecord.fileName || '광고 소재' }}</h4>
-            <p>{{ selectedRecord.requesterName || selectedRecord.requesterLoginId || '요청자 미상' }} · {{ formatDateTime(selectedRecord.createdAt) }}</p>
+            <p>요청 {{ formatDateTime(selectedRecord.createdAt) }} · 완료 {{ formatDateTime(selectedRecord.finishedAt) }}</p>
           </div>
           <a
-            v-if="selectedRecord.fileUrl"
-            :href="selectedRecord.fileUrl"
+            v-if="selectedOriginalUrl"
+            :href="selectedOriginalUrl"
             target="_blank"
             rel="noopener noreferrer"
             class="library-file-link"
@@ -301,29 +435,39 @@ onMounted(loadLibrary)
         <dl class="library-detail__grid">
           <div>
             <dt>콘텐츠 유형</dt>
-            <dd>{{ selectedRecord.fileContentType || '-' }}</dd>
+            <dd>{{ selectedDetailData?.fileContentType || detailValue(['file', 'contentType'], '-') }}</dd>
           </div>
           <div>
             <dt>파일 크기</dt>
-            <dd>{{ formatFileSize(selectedRecord.fileSize) }}</dd>
+            <dd>{{ formatFileSize(selectedDetailData?.fileSize || detailValue(['file', 'size'])) }}</dd>
           </div>
           <div>
             <dt>상태</dt>
             <dd>{{ statusLabel(selectedRecord.normalizedStatus) }}</dd>
           </div>
           <div>
-            <dt>요청 번호</dt>
-            <dd>{{ selectedRecord.idx ?? '-' }}</dd>
+            <dt>Mongo ID</dt>
+            <dd>{{ selectedRecord.mongoDocumentId || selectedDetail?.mongoDocumentId || '-' }}</dd>
           </div>
         </dl>
 
-        <section v-if="selectedRecord.requestMemo" class="library-detail__section">
-          <h5>요청 메모</h5>
-          <p>{{ selectedRecord.requestMemo }}</p>
+        <section v-if="isSelectedActive" class="library-detail__section">
+          <h5>진행 상태</h5>
+          <p>검수 작업이 아직 진행 중입니다. 완료되면 상세 분석 자료가 이곳에 표시됩니다.</p>
+        </section>
+
+        <section v-else-if="isSelectedDetailLoading" class="library-detail__section">
+          <h5>상세 자료</h5>
+          <p>상세 자료를 불러오고 있습니다.</p>
+        </section>
+
+        <section v-else-if="detailErrorMessage && !selectedDetail" class="library-detail__section">
+          <h5>상세 자료</h5>
+          <p class="library-error">{{ detailErrorMessage }}</p>
         </section>
 
         <section v-if="selectedAiSummary.length" class="library-detail__section">
-          <h5>검수 기록</h5>
+          <h5>검수 요약</h5>
           <dl class="library-review-note">
             <div v-for="item in selectedAiSummary" :key="item.label">
               <dt>{{ item.label }}</dt>
@@ -332,16 +476,36 @@ onMounted(loadLibrary)
           </dl>
         </section>
 
-        <section v-if="selectedRecord.extractedText" class="library-detail__section">
-          <h5>OCR 텍스트</h5>
-          <pre>{{ selectedRecord.extractedText }}</pre>
+        <section v-if="selectedDetailData?.extractedText" class="library-detail__section">
+          <h5>추출된 전체 텍스트</h5>
+          <pre>{{ selectedDetailData.extractedText }}</pre>
+        </section>
+
+        <section v-if="formatJson(detailValue(['documentStructureResult']))" class="library-detail__section">
+          <h5>문서 구조 분석 결과</h5>
+          <pre>{{ formatJson(detailValue(['documentStructureResult'])) }}</pre>
+        </section>
+
+        <section v-if="formatJson(detailValue(['recognizedTextResult']))" class="library-detail__section">
+          <h5>글자 인식 결과</h5>
+          <pre>{{ formatJson(detailValue(['recognizedTextResult'])) }}</pre>
+        </section>
+
+        <section v-if="formatJson(detailValue(['textRiskAnalysisResult']))" class="library-detail__section">
+          <h5>문구 위험도 분석 결과</h5>
+          <pre>{{ formatJson(detailValue(['textRiskAnalysisResult'])) }}</pre>
+        </section>
+
+        <section v-if="formatJson(detailValue(['finalResult']))" class="library-detail__section">
+          <h5>최종 상세 판정</h5>
+          <pre>{{ formatJson(detailValue(['finalResult'])) }}</pre>
         </section>
       </aside>
     </section>
 
     <article v-else class="library-empty">
       <strong>표시할 자료가 없습니다.</strong>
-      <p>{{ activeFilter === 'processed' ? '검수 통과 또는 반려 처리된 자료가 생기면 여기에 정리됩니다.' : '필터나 검색어를 조정해 보세요.' }}</p>
+      <p>{{ activeFilter === 'all' ? '검사하기를 완료하면 AI 검수 자료가 여기에 정리됩니다.' : '필터나 검색어를 조정해 보세요.' }}</p>
     </article>
   </section>
 </template>

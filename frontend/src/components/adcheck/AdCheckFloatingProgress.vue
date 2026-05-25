@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAdCheckJobsStore } from '@/stores/adCheckJobs'
+import { isTerminalJobStatus, useAdCheckJobsStore } from '@/stores/adCheckJobs'
 import { useAuthStore } from '@/stores/useAuthStore'
 
 const route = useRoute()
@@ -26,7 +26,9 @@ const stepLabel = computed(() =>
   job.value?.currentStepLabel || (job.value?.status === 'SUCCEEDED' ? '완료' : '진행 중'),
 )
 const canOpenReviewPanel = computed(() => Boolean(job.value?.campaignId && job.value?.jobId))
-const actionLabel = computed(() => (canOpenReviewPanel.value ? '진행 화면' : '결과 확인'))
+const actionLabel = computed(() =>
+  canOpenReviewPanel.value && !isTerminalJobStatus(job.value?.status) ? '진행 화면' : '결과 확인',
+)
 
 async function loadActiveJobs() {
   if (authStore.isAuthenticated) {
@@ -40,13 +42,14 @@ function openJobWindow(currentJob) {
   }
 
   if (currentJob.campaignId) {
+    const isTerminal = isTerminalJobStatus(currentJob.status)
     router.push({
       name: 'campaign-detail',
       params: {
         campaignId: currentJob.campaignId,
       },
       query: {
-        tab: 'review',
+        tab: isTerminal ? 'library' : 'review',
         adCheckJobId: currentJob.jobId,
       },
     })

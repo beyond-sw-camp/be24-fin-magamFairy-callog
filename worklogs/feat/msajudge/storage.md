@@ -251,3 +251,9 @@
 - 실제 처리 시간 비중에 맞춰 진행률을 `대기 5% → 데이터 추출 20% → 데이터 분석 35% → 결과 도출 95% → 완료 100%`로 재조정했다.
 - `.\gradlew.bat :app:compileJava :aijudge:compileJava` 성공.
 - `npm run build` 성공.
+
+### 캠페인 자료실 검수 자료 정합성 수정
+- 캠페인 `자료실` 탭이 기존 수동 검수 요청 목록(`ad-review-requests`)을 조회해 `검사하기`로 생성된 AI 검수 Job 결과와 다른 자료를 보여주던 문제를 확인했다.
+- `CampaignLibraryTab.vue`의 조회 소스를 `GET /ad/check/jobs?campaignId=...`와 `GET /ad/check/jobs/{jobId}/detail`로 변경해 검수/승인 화면의 AI 검수 자료와 같은 RDB 요약/Mongo 상세 데이터를 사용하도록 맞췄다.
+- 자료실 카드에는 파일명, 상태, 판정, 위험도, 요약, 요청/완료 시간을 표시하고, 상세 패널에는 원본 파일 링크, Mongo ID, 추출 텍스트, 문서 구조 분석, 글자 인식, 문구 위험도 분석, 최종 상세 판정을 표시하도록 정리했다.
+- 완료된 캠페인 Job의 `검수 결과 보기`와 floating progress 결과 이동은 캠페인 자료실 탭(`tab=library&adCheckJobId=...`)으로 연결해 같은 Job 상세가 선택되도록 변경했다.
