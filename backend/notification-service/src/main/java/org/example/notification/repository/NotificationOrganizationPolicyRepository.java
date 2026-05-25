@@ -17,6 +17,10 @@ public interface NotificationOrganizationPolicyRepository
             NotificationEventType notificationEventType
     );
 
+    List<NotificationOrganizationPolicy> findAllByOrganizationIdOrderByRoleNameAscNotificationTypeAsc(
+            Long organizationId
+    );
+
     List<NotificationOrganizationPolicy> findAllByOrganizationIdAndRoleNameInAndNotificationType(
             Long organizationId,
             Collection<String> roleNames,

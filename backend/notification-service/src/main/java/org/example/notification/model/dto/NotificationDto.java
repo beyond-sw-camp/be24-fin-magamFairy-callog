@@ -1,6 +1,8 @@
 package org.example.notification.model.dto;
 
+import org.example.notification.event.NotificationEventType;
 import org.example.notification.model.Notification;
+import org.example.notification.model.NotificationOrganizationPolicy;
 
 import java.time.Instant;
 import java.util.List;
@@ -48,4 +50,26 @@ public class NotificationDto {
             );
         }
     }
+
+    public record AdminPolicyItem(
+            Long idx,
+            Long organizationIdx,
+            String roleName,
+            NotificationEventType notificationType,
+            Boolean enabled
+    ) {
+        public static AdminPolicyItem from(NotificationOrganizationPolicy policy) {
+            return new AdminPolicyItem(
+                    policy.getId(),
+                    policy.getOrganizationId(),
+                    policy.getRoleName(),
+                    policy.getNotificationType(),
+                    policy.getEnabled()
+            );
+        }
+    }
+
+    public record AdminPolicyReq(List<AdminPolicyItem> policies) {}
+
+    public record AdminPolicyRes(List<AdminPolicyItem> policies) {}
 }
