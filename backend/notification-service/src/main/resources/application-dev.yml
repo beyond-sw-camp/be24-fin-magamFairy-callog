@@ -1,3 +1,15 @@
 spring:
   application:
     name: notification
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+notification:
+  kafka:
+    topic: ${NOTIFICATION_KAFKA_TOPIC:notification.events}
+    dlt-topic: ${NOTIFICATION_KAFKA_DLT_TOPIC:notification.events.dlt}
+    group-id: ${NOTIFICATION_KAFKA_GROUP_ID:notification-service}
+  deadline:
+    scheduler:
+      enabled: ${NOTIFICATION_DEADLINE_SCHEDULER_ENABLED:false}
+      fixed-rate-ms: ${NOTIFICATION_DEADLINE_SCHEDULER_FIXED_RATE_MS:300000}
