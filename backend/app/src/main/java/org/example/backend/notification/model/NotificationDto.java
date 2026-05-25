@@ -150,4 +150,24 @@ public class NotificationDto {
             case SYSTEM -> "system";
         };
     }
+
+    // Kafka Event
+    public record NotificationEvent(
+            String eventId,
+            String eventType,
+            Long recipientUserId,
+            Long senderUserId,
+            String senderName,
+            String title,
+            String message,
+            String detail,
+            String targetLabel,
+            String targetUrl,
+            String referenceType,
+            Long referenceId,
+            String referenceStatus,
+            String severity,
+            String occurredAt,
+            String schemaVersion
+    ) {}
 }
