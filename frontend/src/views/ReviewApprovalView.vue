@@ -23,6 +23,11 @@ const props = defineProps({
     type: [String, Number],
     required: true,
   },
+  viewMode: {
+    type: String,
+    default: 'all',
+    validator: (value) => ['all', 'check', 'approval'].includes(value),
+  },
 })
 
 const route = useRoute()
@@ -48,6 +53,7 @@ const submittingDecisionId = ref(null)
 const selectedDetailJobId = ref('')
 const analysisDetailLoadingJobId = ref('')
 const adCheckResultPage = ref(1)
+const submittingReviewJobId = ref('')
 
 const AD_CHECK_RESULT_PAGE_SIZE = 4
 
@@ -62,6 +68,19 @@ const canFinalReview = computed(() =>
   organizationIsPm.value
   && ['MANAGER', 'GENERAL_MANAGER'].includes(myCampaignRole.value),
 )
+const currentUserIdx = computed(() => Number(memberContext.value?.me?.userIdx ?? 0) || null)
+const showCheckWorkspace = computed(() => props.viewMode === 'all' || props.viewMode === 'check')
+const showApprovalWorkspace = computed(() => props.viewMode === 'all' || props.viewMode === 'approval')
+const reviewPanelEyebrow = computed(() => {
+  if (props.viewMode === 'check') return 'AI Check Results'
+  if (props.viewMode === 'approval') return 'Final Review'
+  return 'Review Requests'
+})
+const reviewPanelTitle = computed(() => {
+  if (props.viewMode === 'check') return 'AI 검수 자료'
+  if (props.viewMode === 'approval') return '승인 대기 자료'
+  return '승인 요청'
+})
 
 const ISSUE_HIGHLIGHT_RULES = [
   {
@@ -94,9 +113,6 @@ const HIGHLIGHT_PATTERN = new RegExp(
 )
 
 const normalizedAnalysisStatus = computed(() => normalizeAnalysisStatus(analysisResult.value?.status))
-const normalizedAnalysisPassed = computed(() =>
-  normalizedAnalysisStatus.value === 'pass' && !analysisError.value,
-)
 const analysisVerdict = computed(() =>
   analysisResult.value
     ? getAdCheckVerdict({
@@ -168,14 +184,18 @@ const paginatedAdCheckSummaries = computed(() => {
   const start = (adCheckResultPage.value - 1) * AD_CHECK_RESULT_PAGE_SIZE
   return adCheckSummaries.value.slice(start, start + AD_CHECK_RESULT_PAGE_SIZE)
 })
+const requestedReviewJobIds = computed(() =>
+  new Set(reviewRequests.value.map((request) => String(request.adCheckJobId || '')).filter(Boolean)),
+)
 
 const canCreateReviewRequest = computed(() =>
   Boolean(
     analysisFileInfo.value
     && props.campaignId
     && canRequestReview.value
+    && activeAnalysisJobId.value
     && analysisResult.value?.fileObjectKey
-    && normalizedAnalysisPassed.value
+    && !analysisError.value
     && !isAnalyzing.value
     && !isSubmittingReviewRequest.value,
   ),
@@ -389,6 +409,31 @@ function summaryThumbnail(summary) {
   return ''
 }
 
+function requesterLabel(item) {
+  const name = String(item?.requesterName ?? '').trim()
+  const loginId = String(item?.requesterLoginId ?? '').trim()
+  const organization = String(item?.requesterOrganizationName ?? '').trim()
+  const primary = name || loginId || '요청자'
+  return organization ? `${primary} · ${organization}` : primary
+}
+
+function isMyAdCheckSummary(summary) {
+  return Boolean(
+    summary?.requesterId
+    && currentUserIdx.value
+    && Number(summary.requesterId) === Number(currentUserIdx.value),
+  )
+}
+
+function canRequestFinalReviewFromSummary(summary) {
+  return Boolean(
+    canRequestReview.value
+    && isMyAdCheckSummary(summary)
+    && String(summary?.status || '').toUpperCase() === 'SUCCEEDED'
+    && !requestedReviewJobIds.value.has(String(summary.jobId || ''))
+  )
+}
+
 async function loadMemberContext() {
   memberContextError.value = ''
   if (!props.campaignId) return
@@ -411,15 +456,15 @@ async function loadReviewRequests() {
     reviewRequests.value = Array.isArray(requests) ? requests : []
   } catch (error) {
     reviewRequests.value = []
-    reviewLoadError.value = error?.message ?? '검수 요청 목록을 불러오지 못했습니다.'
+    reviewLoadError.value = error?.message ?? '승인 요청 목록을 불러오지 못했습니다.'
   }
 }
 
 async function createReviewRequest() {
   requestSubmitError.value = ''
 
-  if (!normalizedAnalysisPassed.value) {
-    requestSubmitError.value = 'AI 1차 검수 통과 후 검수 요청을 생성할 수 있습니다.'
+  if (!activeAnalysisJobId.value) {
+    requestSubmitError.value = 'AI 검수 완료 자료를 먼저 선택해주세요.'
     return
   }
 
@@ -431,6 +476,7 @@ async function createReviewRequest() {
   isSubmittingReviewRequest.value = true
   try {
     const result = await CreateAdReviewRequest(props.campaignId, {
+      jobId: activeAnalysisJobId.value,
       fileName: analysisResult.value.fileName ?? analysisFileInfo.value?.name ?? 'upload',
       fileObjectKey: analysisResult.value.fileObjectKey,
       fileContentType: analysisResult.value.fileContentType ?? selectedAnalysisFile.value?.type ?? null,
@@ -441,6 +487,8 @@ async function createReviewRequest() {
       violationText: analysisResult.value.violationText,
       reason: analysisResult.value.reason,
       suggestion: analysisResult.value.suggestion,
+      verdictLevel: analysisResult.value.verdictLevel,
+      mongoDocumentId: analysisResult.value.analysisJobId,
       requestMemo: reviewRequestMemo.value.trim() || null,
     })
 
@@ -448,9 +496,28 @@ async function createReviewRequest() {
     resetAnalysisForm()
     closeAnalysisRequest()
   } catch (error) {
-    requestSubmitError.value = error?.message ?? '검수 요청 생성에 실패했습니다.'
+    requestSubmitError.value = error?.message ?? '승인 요청 생성에 실패했습니다.'
   } finally {
     isSubmittingReviewRequest.value = false
+  }
+}
+
+async function createReviewRequestFromSummary(summary) {
+  if (!canRequestFinalReviewFromSummary(summary) || submittingReviewJobId.value) return
+
+  submittingReviewJobId.value = summary.jobId
+  requestSubmitError.value = ''
+  try {
+    const result = await CreateAdReviewRequest(props.campaignId, {
+      jobId: summary.jobId,
+      requestMemo: reviewRequestMemo.value.trim() || null,
+    })
+    replaceReviewRequest(result)
+    await loadReviewRequests()
+  } catch (error) {
+    requestSubmitError.value = error?.message ?? '승인 요청 생성에 실패했습니다.'
+  } finally {
+    submittingReviewJobId.value = ''
   }
 }
 
@@ -498,7 +565,7 @@ function replaceReviewRequest(request) {
 }
 
 function openAnalysisRequest() {
-  if (!canUseAiJudge.value) return
+  if (!canUseAiJudge.value || !showCheckWorkspace.value) return
   isAnalysisOpen.value = true
 }
 
@@ -615,7 +682,8 @@ function openAnalysisJobResult(job) {
         campaignId: job.campaignId,
       },
       query: {
-        tab: 'library',
+        tab: 'review',
+        reviewTab: 'library',
         adCheckJobId: job.jobId,
       },
     })
@@ -657,6 +725,8 @@ async function processAnalysisFile(file) {
 }
 
 async function openAnalysisJobFromRoute() {
+  if (!showCheckWorkspace.value) return
+
   const jobId = String(route.query.adCheckJobId || '').trim()
   if (!jobId) {
     return
@@ -763,6 +833,19 @@ watch(
 )
 
 watch(
+  () => props.viewMode,
+  () => {
+    if (!showCheckWorkspace.value) {
+      isAnalysisOpen.value = false
+      resetAnalysisForm()
+    }
+    if (showCheckWorkspace.value) {
+      void openAnalysisJobFromRoute()
+    }
+  },
+)
+
+watch(
   () => route.query.adCheckJobId,
   () => {
     void openAnalysisJobFromRoute()
@@ -772,11 +855,11 @@ watch(
 
 <template>
   <section class="review-page">
-    <section v-if="isAnalysisOpen" class="review-panel">
+    <section v-if="isAnalysisOpen && showCheckWorkspace" class="review-panel">
       <header class="review-panel__head">
         <div>
           <p>AI Risk Review</p>
-          <h3>검수 요청 생성</h3>
+          <h3>AI 검수 요청 생성</h3>
         </div>
         <button type="button" class="ghost-button" @click="closeAnalysisRequest">목록으로</button>
       </header>
@@ -835,7 +918,7 @@ watch(
             <textarea
               v-model="reviewRequestMemo"
               rows="4"
-              placeholder="PM에게 전달할 검수 요청 내용을 입력하세요."
+              placeholder="PM에게 전달할 승인 요청 내용을 입력하세요."
             />
           </label>
         </section>
@@ -991,7 +1074,7 @@ watch(
             :disabled="!canCreateReviewRequest"
             @click="createReviewRequest"
           >
-            {{ isSubmittingReviewRequest ? '생성 중...' : '검수 요청 생성' }}
+            {{ isSubmittingReviewRequest ? '요청 중...' : '승인 요청하기' }}
           </button>
         </aside>
       </div>
@@ -1000,19 +1083,20 @@ watch(
     <section v-else class="review-panel">
       <header class="review-panel__head">
         <div>
-          <p>Review Requests</p>
-          <h3>검수 요청</h3>
+          <p>{{ reviewPanelEyebrow }}</p>
+          <h3>{{ reviewPanelTitle }}</h3>
         </div>
-        <button v-if="canUseAiJudge" type="button" class="primary-button" @click="openAnalysisRequest">
-          검수 요청
+        <button v-if="canUseAiJudge && showCheckWorkspace" type="button" class="primary-button" @click="openAnalysisRequest">
+          AI 검수 요청하기
         </button>
       </header>
 
       <p v-if="memberContextError" class="form-error">{{ memberContextError }}</p>
       <p v-if="reviewLoadError" class="form-error">{{ reviewLoadError }}</p>
       <p v-if="reviewDecisionError" class="form-error">{{ reviewDecisionError }}</p>
+      <p v-if="requestSubmitError" class="form-error">{{ requestSubmitError }}</p>
 
-      <section class="ad-check-results">
+      <section v-if="showCheckWorkspace" class="ad-check-results">
         <header class="ad-check-results__head">
           <div>
             <p>AI Check Results</p>
@@ -1062,6 +1146,10 @@ watch(
                 </dd>
               </div>
               <div>
+                <dt>업로드</dt>
+                <dd>{{ requesterLabel(summary) }}</dd>
+              </div>
+              <div>
                 <dt>조치</dt>
                 <dd>{{ adCheckVerdictOf(summary).guidance }}</dd>
               </div>
@@ -1075,14 +1163,25 @@ watch(
               </div>
             </dl>
 
-            <button
-              type="button"
-              class="ghost-button"
-              :disabled="adCheckJobsStore.detailLoadingJobId === summary.jobId"
-              @click="openAdCheckDetail(summary)"
-            >
-              {{ adCheckJobsStore.detailLoadingJobId === summary.jobId ? '불러오는 중...' : '상세 보기' }}
-            </button>
+            <div class="ad-check-summary-card__actions">
+              <button
+                v-if="canRequestFinalReviewFromSummary(summary)"
+                type="button"
+                class="primary-button"
+                :disabled="submittingReviewJobId === summary.jobId"
+                @click="createReviewRequestFromSummary(summary)"
+              >
+                {{ submittingReviewJobId === summary.jobId ? '요청 중...' : '승인 요청하기' }}
+              </button>
+              <button
+                type="button"
+                class="ghost-button"
+                :disabled="adCheckJobsStore.detailLoadingJobId === summary.jobId"
+                @click="openAdCheckDetail(summary)"
+              >
+                {{ adCheckJobsStore.detailLoadingJobId === summary.jobId ? '불러오는 중...' : '상세 보기' }}
+              </button>
+            </div>
           </article>
         </div>
 
@@ -1108,22 +1207,25 @@ watch(
           </button>
         </nav>
 
-        <article v-else class="empty-state empty-state--compact">
+        <article
+          v-if="!adCheckJobsStore.isLoadingSummaries && !adCheckSummaries.length"
+          class="empty-state empty-state--compact"
+        >
           <strong>저장된 AI 검수 자료가 없습니다.</strong>
           <p>파일 검수를 완료하면 결과 요약이 이곳에 표시됩니다.</p>
         </article>
       </section>
 
-      <div v-if="reviewRequests.length" class="review-list">
+      <div v-if="showApprovalWorkspace && reviewRequests.length" class="review-list">
         <article v-for="request in reviewRequests" :key="request.idx" class="review-card">
           <div class="review-card__main">
             <span class="review-card__type">검수</span>
-            <strong>{{ request.fileName ?? '광고 소재 검수 요청' }}</strong>
-            <p>{{ request.requestMemo || 'AI 1차 검수 통과 후 생성된 검수 요청입니다.' }}</p>
+            <strong>{{ request.fileName ?? '광고 소재 승인 요청' }}</strong>
+            <p>{{ request.requestMemo || 'AI 1차 검수 후 생성된 승인 요청입니다.' }}</p>
           </div>
 
           <div class="review-card__meta">
-            <span>{{ request.requesterName ?? request.requesterLoginId ?? '요청자' }}</span>
+            <span>{{ requesterLabel(request) }}</span>
             <strong>{{ formatDate(request.createdAt) }}</strong>
           </div>
 
@@ -1169,9 +1271,9 @@ watch(
         </article>
       </div>
 
-      <article v-else class="empty-state">
-        <strong>등록된 검수 요청이 없습니다.</strong>
-        <p>협력사가 AI 1차 검수를 통과한 파일을 요청하면 이곳에 표시됩니다.</p>
+      <article v-else-if="showApprovalWorkspace" class="empty-state">
+        <strong>등록된 승인 요청이 없습니다.</strong>
+        <p>협력사가 AI 1차 검수 자료를 승인 요청하면 이곳에 표시됩니다.</p>
       </article>
     </section>
 
@@ -1347,7 +1449,10 @@ watch(
   white-space: nowrap;
 }
 
-.ad-check-summary-card > .ghost-button {
+.ad-check-summary-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-self: end;
 }
 
@@ -2075,7 +2180,7 @@ watch(
     grid-row: auto;
   }
 
-  .ad-check-summary-card > .ghost-button {
+  .ad-check-summary-card__actions {
     justify-self: stretch;
   }
 

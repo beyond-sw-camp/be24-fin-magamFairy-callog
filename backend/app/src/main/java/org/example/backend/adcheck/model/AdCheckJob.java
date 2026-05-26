@@ -97,6 +97,13 @@ public class AdCheckJob extends BaseEntity {
     @Column(columnDefinition = "LONGTEXT")
     private String resultPayload;
 
+    private Boolean deleted;
+
+    @Column(length = 100)
+    private String deletedByLoginId;
+
+    private LocalDateTime deletedAt;
+
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
 
@@ -122,6 +129,7 @@ public class AdCheckJob extends BaseEntity {
                 .status(AdCheckJobStatus.QUEUED)
                 .currentStep(AdCheckJobStep.QUEUED)
                 .progressPercent(AdCheckJobStep.QUEUED.getProgressPercent())
+                .deleted(false)
                 .build();
     }
 
@@ -212,6 +220,16 @@ public class AdCheckJob extends BaseEntity {
         return status == AdCheckJobStatus.SUCCEEDED
                 || status == AdCheckJobStatus.FAILED
                 || status == AdCheckJobStatus.CANCELED;
+    }
+
+    public boolean isDeleted() {
+        return Boolean.TRUE.equals(deleted);
+    }
+
+    public void delete(String loginId) {
+        this.deleted = true;
+        this.deletedByLoginId = trimToNull(loginId);
+        this.deletedAt = LocalDateTime.now();
     }
 
     public void clearFileBytes() {

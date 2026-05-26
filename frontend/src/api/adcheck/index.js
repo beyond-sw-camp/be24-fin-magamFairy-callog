@@ -173,6 +173,14 @@ export const CancelAdCheckJob = async (jobId) => {
   }
 }
 
+export const DeleteAdCheckJob = async (jobId) => {
+  try {
+    return unwrapResponse(await api.delete(`/ad/check/jobs/${jobId}`))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
 export const ListAdReviewRequests = async (campaignId) => {
   try {
     return unwrapResponse(await api.get(`/campaigns/${campaignId}/ad-review-requests`))

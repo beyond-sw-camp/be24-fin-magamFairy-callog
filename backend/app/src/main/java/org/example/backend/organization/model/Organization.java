@@ -1,5 +1,6 @@
 package org.example.backend.organization.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -49,6 +50,7 @@ public class Organization {
     @Setter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "generalManager_idx")
+    @JsonIgnoreProperties("organization")
     private User generalManager;
 
     @Setter

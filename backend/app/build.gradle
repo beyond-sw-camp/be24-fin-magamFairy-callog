@@ -1,5 +1,11 @@
 description = 'app'
 
+dependencyManagement {
+    imports {
+        mavenBom 'io.github.resilience4j:resilience4j-bom:2.3.0'
+    }
+}
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
