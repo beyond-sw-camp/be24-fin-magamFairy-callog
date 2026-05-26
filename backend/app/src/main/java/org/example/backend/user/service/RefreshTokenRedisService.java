@@ -2,9 +2,11 @@ package org.example.backend.user.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -27,18 +29,28 @@ public class RefreshTokenRedisService {
     private static final Duration TTL = Duration.ofDays(14);
     private static final String KEY_BY_USER  = "refresh:user:";
     private static final String KEY_BY_TOKEN = "refresh:token:";
+    private static final RedisScript<Long> REDIS_SCRIPT = RedisScript.of("""
+            local old = redis.call('GET', KEYS[1])
+            if old then
+                redis.call('DEL', ARGV[1] .. old)
+            end
+            redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+            redis.call('SET', ARGV[1] .. ARGV[2], ARGV[4], 'PX', ARGV[3])
+            return 1
+            """, Long.class);
 
     private final StringRedisTemplate redis;
 
     /** 토큰 저장. 같은 userId 의 기존 토큰은 덮어쓰기(로테이션). */
     public void save(String userId, String token) {
-        // 기존 토큰의 역인덱스 정리
-        String old = redis.opsForValue().get(KEY_BY_USER + userId);
-        if (old != null) {
-            redis.delete(KEY_BY_TOKEN + old);
-        }
-        redis.opsForValue().set(KEY_BY_USER + userId, token, TTL);
-        redis.opsForValue().set(KEY_BY_TOKEN + token, userId, TTL);
+        redis.execute(
+                REDIS_SCRIPT,
+                List.of(KEY_BY_USER + userId),
+                KEY_BY_TOKEN,
+                token,
+                String.valueOf(TTL.toMillis()),
+                userId
+        );
     }
 
     /** userId 로 현재 활성 토큰 조회. */

@@ -8,13 +8,16 @@ import org.example.backend.common.model.BaseResponse;
 import org.example.backend.user.model.TokenDto;
 import org.example.backend.user.model.UserDto;
 import org.example.backend.user.service.AuthService;
+import org.example.backend.user.service.JwtBlacklistService;
 import org.example.backend.user.service.UserService;
+import org.example.backend.user.utils.JwtUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
 import java.util.Map;
 
 @RestController
@@ -24,6 +27,8 @@ public class AuthController {
 
     private final AuthService authService;
     private final UserService userService;
+    private final JwtBlacklistService jwtBlacklistService;
+    private final JwtUtil jwtUtil;
 
     @Value("${app.secure-cookie}")
     private boolean secureCookie;
@@ -98,6 +103,19 @@ public class AuthController {
 
         if (refreshToken != null) {
             authService.logout(refreshToken);
+        }
+
+        // 로그아웃을 할 시 현재 유저의 accessToken을 블랙리스트에 올림 * 보안
+        String auth = request.getHeader("Authorization");
+        if(auth != null && auth.startsWith("Bearer ")) {
+            String access = auth.substring(7).trim();
+
+            try {
+                long remainMs = jwtUtil.getExpiration(access).getTime() - System.currentTimeMillis();
+                jwtBlacklistService.blacklist(access, Duration.ofMillis(Math.max(0, remainMs)));
+            } catch (Exception ignored) {
+                // 잘못된 토큰이면 무시 (어차피 JwtFilter에서 거부됨)
+            }
         }
 
         response.addCookie(createRefreshCookie(null, 0));

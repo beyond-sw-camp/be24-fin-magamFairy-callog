@@ -22,6 +22,7 @@ import org.example.backend.dashboard.dto.DashboardSummaryDto;
 import org.example.backend.dashboard.dto.PartnerProgressDto;
 import org.example.backend.dashboard.dto.PipelineStageDto;
 import org.example.backend.dashboard.dto.RevenueYoYPointDto;
+import org.example.backend.dashboard.dto.RevenuePointDto;
 import org.example.backend.dashboard.dto.QuarterGoalProgressDto;
 import org.example.backend.dashboard.dto.RecentActivityDto;
 import org.example.backend.dashboard.dto.ReviewQueueItemDto;
@@ -69,6 +70,8 @@ import java.util.stream.Collectors;
 public class DashboardAggregateService {
 
     private static final Set<String> ACTIVE_CAMPAIGN_STATUSES = Set.of("live", "review", "paused");
+    private static final String DASHBOARD_VERSION_KEY =
+            " + ':v' + @dashboardCacheVersionService.getVersion(#callerIdx)";
 
     private final UserRepository userRepository;
     private final org.example.backend.common.redis.UserAuthCache userAuthCache;
@@ -89,33 +92,32 @@ public class DashboardAggregateService {
 
     // ── 0. Dashboard 페이지 통합 응답 (B4 + Fix A) ───────────────────
     /**
-     * Dashboard 페이지 진입 시 5종 데이터를 한 번에 산출 + 캐시.
+     * Dashboard 페이지 진입 시 핵심 데이터를 한 번에 산출 + 캐시.
      *
      * ⚡ Fix A: 메소드 자체에 @Cacheable.
      *   - 이전: loadAll() 안에서 summary() / quarterGoals() 등 같은 클래스 호출 →
      *     Spring AOP proxy 우회 → sub-method 의 @Cacheable 무시 → 캐시 효과 거의 없었음.
      *   - 현재: 통합 응답 (DashboardPageDto) 자체를 단일 키로 Redis 에 적재.
-     *     cache hit 시 sub-method 진입조차 안 함 (5종 DB 쿼리 전부 skip).
+     *     cache hit 시 sub-method 진입조차 안 함.
      *
      * 캐시 키: "{callerIdx}:{periodCode}" — 사용자별 + 분기별 분리.
-     * Invalidation: 캠페인/KPI/Task 변경 시 @CacheEvict(DASHBOARD_PAGE, allEntries=true) 필요.
+     * Invalidation: 캠페인/KPI/Task 변경 시 dashboard version 을 올려 다음 요청부터 새 키를 쓰게 한다.
      */
     @Cacheable(value = CacheNames.DASHBOARD_PAGE,
-            key = "#callerIdx + ':' + (#periodCode == null ? '' : #periodCode)",
+            key = "#callerIdx + ':' + (#periodCode == null ? '' : #periodCode)" + DASHBOARD_VERSION_KEY,
             sync = true)   // ⚡ Cache Stampede 방지: 동일 키 DB 로딩을 한 스레드만 수행 (cold-start DB 폭주 차단)
     public org.example.backend.dashboard.dto.DashboardPageDto loadAll(Long callerIdx, String periodCode) {
         return new org.example.backend.dashboard.dto.DashboardPageDto(
                 summary(callerIdx),
                 quarterGoals(callerIdx, periodCode),
                 partnerProgress(callerIdx),
-                assetCategories(callerIdx),
-                kpiCategories(callerIdx)
+                assetCategories(callerIdx)
         );
     }
 
     // ── 1. Summary ──────────────────────────────────────────
 
-    @Cacheable(value = CacheNames.DASHBOARD_SUMMARY, key = "#callerIdx")
+    @Cacheable(value = CacheNames.DASHBOARD_SUMMARY, key = "#callerIdx" + DASHBOARD_VERSION_KEY)
     public DashboardSummaryDto summary(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -194,7 +196,7 @@ public class DashboardAggregateService {
     // ── 2. Quarter Goals ────────────────────────────────────
 
     @Cacheable(value = CacheNames.DASHBOARD_QUARTER_GOALS,
-               key = "#callerIdx + ':' + (#periodCode ?: 'all')")
+               key = "#callerIdx + ':' + (#periodCode ?: 'all')" + DASHBOARD_VERSION_KEY)
     public List<QuarterGoalProgressDto> quarterGoals(Long callerIdx, String periodCode) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -296,7 +298,7 @@ public class DashboardAggregateService {
 
     // ── 3. Partner Progress ─────────────────────────────────
 
-    @Cacheable(value = CacheNames.DASHBOARD_PARTNER_PROGRESS, key = "#callerIdx")
+    @Cacheable(value = CacheNames.DASHBOARD_PARTNER_PROGRESS, key = "#callerIdx" + DASHBOARD_VERSION_KEY)
     public List<PartnerProgressDto> partnerProgress(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -385,7 +387,7 @@ public class DashboardAggregateService {
 
     // ── 4. Review Queue ─────────────────────────────────────
 
-    @Cacheable(value = CacheNames.DASHBOARD_REVIEW_QUEUE, key = "#callerIdx")
+    @Cacheable(value = CacheNames.DASHBOARD_REVIEW_QUEUE, key = "#callerIdx" + DASHBOARD_VERSION_KEY)
     public List<ReviewQueueItemDto> reviewQueue(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -399,7 +401,7 @@ public class DashboardAggregateService {
      * Zone3 P2 — 내 참여 캠페인의 광고검수 요청(REQUESTED) 큐.
      * Task REVIEW 기반 reviewQueue 와 달리, 실제 승인/반려 PATCH 대상(requestId+campaignId)을 제공.
      */
-    @Cacheable(value = CacheNames.DASHBOARD_AD_REVIEW_QUEUE, key = "#callerIdx")
+    @Cacheable(value = CacheNames.DASHBOARD_AD_REVIEW_QUEUE, key = "#callerIdx" + DASHBOARD_VERSION_KEY)
     public AdReviewQueueDto adReviewQueue(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -455,7 +457,7 @@ public class DashboardAggregateService {
 
     // ── 5. Blockers ─────────────────────────────────────────
 
-    @Cacheable(value = CacheNames.DASHBOARD_BLOCKERS, key = "#callerIdx")
+    @Cacheable(value = CacheNames.DASHBOARD_BLOCKERS, key = "#callerIdx" + DASHBOARD_VERSION_KEY)
     public List<BlockerDto> blockers(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -505,7 +507,7 @@ public class DashboardAggregateService {
 
     // ── 6. Asset Categories ────────────────────────────────
 
-    @Cacheable(value = CacheNames.DASHBOARD_ASSET_CATEGORIES, key = "#callerIdx")
+    @Cacheable(value = CacheNames.DASHBOARD_ASSET_CATEGORIES, key = "#callerIdx" + DASHBOARD_VERSION_KEY)
     public Map<String, Long> assetCategories(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -533,7 +535,7 @@ public class DashboardAggregateService {
 
     // ── 7. KPI Categories ──────────────────────────────────
 
-    @Cacheable(value = CacheNames.DASHBOARD_KPI_CATEGORIES, key = "#callerIdx")
+    @Cacheable(value = CacheNames.DASHBOARD_KPI_CATEGORIES, key = "#callerIdx" + DASHBOARD_VERSION_KEY)
     public Map<String, Long> kpiCategories(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -556,7 +558,7 @@ public class DashboardAggregateService {
      * 호출자가 참여/담당한 캠페인들의 최근 활동 피드 (최신순, 최대 20건).
      * 회사 격리: filterCampaigns(scope) 가 반환한 캠페인만 대상.
      */
-    @Cacheable(value = CacheNames.DASHBOARD_RECENT_ACTIVITY, key = "#callerIdx")
+    @Cacheable(value = CacheNames.DASHBOARD_RECENT_ACTIVITY, key = "#callerIdx" + DASHBOARD_VERSION_KEY)
     public List<RecentActivityDto> recentActivity(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -597,7 +599,7 @@ public class DashboardAggregateService {
      * 내 캠페인들을 status 별로 count 하여 퍼널 단계 순서로 반환.
      * 알 수 없는 status 는 원본 문자열을 stage 라벨로 사용 (맨 뒤).
      */
-    @Cacheable(value = CacheNames.DASHBOARD_CAMPAIGN_PIPELINE, key = "#callerIdx")
+    @Cacheable(value = CacheNames.DASHBOARD_CAMPAIGN_PIPELINE, key = "#callerIdx" + DASHBOARD_VERSION_KEY)
     public List<PipelineStageDto> campaignPipeline(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -627,7 +629,7 @@ public class DashboardAggregateService {
      * 내 캠페인별 진척률(DONE task / 전체 task)을 내림차순 정렬해 반환.
      * isMine = 호출자가 해당 캠페인의 PM(MANAGER) 또는 GM 인 경우 true.
      */
-    @Cacheable(value = CacheNames.DASHBOARD_CAMPAIGN_PROGRESS, key = "#callerIdx")
+    @Cacheable(value = CacheNames.DASHBOARD_CAMPAIGN_PROGRESS, key = "#callerIdx" + DASHBOARD_VERSION_KEY)
     public List<CampaignProgressDto> campaignProgress(Long callerIdx) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -677,7 +679,7 @@ public class DashboardAggregateService {
      * year/quarter 미지정 시 현재 연도/분기.
      */
     @Cacheable(value = CacheNames.DASHBOARD_REVENUE_YOY,
-               key = "#callerIdx + ':' + (#year ?: 0) + ':' + (#quarter ?: 0)")
+               key = "#callerIdx + ':' + (#year ?: 0) + ':' + (#quarter ?: 0)" + DASHBOARD_VERSION_KEY)
     public List<RevenueYoYPointDto> revenueYoY(Long callerIdx, Integer year, Integer quarter) {
         User caller = findUser(callerIdx);
         Scope scope = resolveScope(caller);
@@ -703,6 +705,34 @@ public class DashboardAggregateService {
             result.add(new RevenueYoYPointDto((first + i) + "월", cur[i], prev[i]));
         }
         return result;
+    }
+
+    /**
+     * 매출(FINANCIAL) KPI의 KpiMonthlySnapshot 을 해당 연도의 4개 분기로 합산.
+     * Zone4 매출 추이 "분기" 토글용.
+     */
+    @Cacheable(value = CacheNames.DASHBOARD_REVENUE_YOY,
+               key = "'q:' + #callerIdx + ':' + (#year ?: 0)" + DASHBOARD_VERSION_KEY)
+    public List<RevenuePointDto> revenueQuarters(Long callerIdx, Integer year) {
+        User caller = findUser(callerIdx);
+        Scope scope = resolveScope(caller);
+        int y = (year == null) ? LocalDate.now().getYear() : year;
+
+        List<OrganizationKpi> revenueKpis = orgKpiRepository.findRevenueKpis(
+                scope.allCampaigns ? null : scope.ownerOrgId);
+
+        BigDecimal[] q = {BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO};
+        for (OrganizationKpi kpi : revenueKpis) {
+            for (KpiMonthlySnapshot s : monthlySnapshotRepository
+                    .findAllByOrgKpi_IdxAndYearOrderByMonthAsc(kpi.getIdx(), y)) {
+                if (s.getActualValue() == null) continue;
+                int qi = (s.getMonth() - 1) / 3;
+                if (qi >= 0 && qi < 4) q[qi] = q[qi].add(s.getActualValue());
+            }
+        }
+        List<RevenuePointDto> out = new ArrayList<>(4);
+        for (int i = 0; i < 4; i++) out.add(new RevenuePointDto((i + 1) + "분기", q[i]));
+        return out;
     }
 
     /** 한 KPI 의 특정 연도, 분기 3개월 actual 을 acc[0..2] 에 누적. */
@@ -793,7 +823,7 @@ public class DashboardAggregateService {
 
     /**
      * ⚡ B5: in-memory cache (60s TTL) 를 통한 user 조회.
-     * Dashboard 의 5개 endpoint 가 병렬 호출돼도 첫 호출만 DB, 나머지는 cache hit.
+     * Dashboard 의 여러 endpoint 가 병렬 호출돼도 첫 호출만 DB, 나머지는 cache hit.
      */
     private User findUser(Long userIdx) {
         return userAuthCache.loadUser(userIdx);
