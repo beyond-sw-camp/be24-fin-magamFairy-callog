@@ -76,6 +76,7 @@ const router = useRouter()
 const store = usePlannerStore()
 
 const activeTab = ref('캠페인 오버뷰')
+const reviewMaterialTab = ref('check')
 const currentBoardView = ref('part')
 const metadataEditing = ref(false)
 const isSaving = ref(false)
@@ -120,15 +121,21 @@ const isPartner = computed(() => {
   return t === 'EXTERNAL_PARTNER';
 });
 const tabs = computed(() => {
-  const base = ["캠페인 오버뷰", "팀 보드 보기", "검수/승인", "자료실", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
+  const base = ["캠페인 오버뷰", "팀 보드 보기", "자료 검수", "참여자 설정", "캠페인 성과/KPI", "매칭 탭"];
   return isPartner.value ? base.filter((t) => t !== '캠페인 성과/KPI') : base;
 });
+
+const reviewMaterialTabs = [
+  { id: 'check', label: '검수' },
+  { id: 'approval', label: '승인' },
+  { id: 'library', label: '자료실' },
+]
+const reviewMaterialTabIds = new Set(reviewMaterialTabs.map((tab) => tab.id))
 
 const TAB_TO_QUERY_MAP = {
   '캠페인 오버뷰': 'overview',
   '팀 보드 보기': 'board',
-  '검수/승인': 'review',
-  '자료실': 'library',
+  '자료 검수': 'review',
   '참여자 설정': 'members',
   '캠페인 성과/KPI': 'kpi',
   '매칭 탭': 'matching',
@@ -137,14 +144,33 @@ const TAB_TO_QUERY_MAP = {
 const handleTabClick = (tabName) => {
   activeTab.value = tabName
   const queryTab = TAB_TO_QUERY_MAP[tabName]
-  if (queryTab && route.query.tab !== queryTab) {
-    router.replace({
-      query: {
-        ...route.query,
-        tab: queryTab,
-      },
-    })
+  if (!queryTab) return
+
+  const nextQuery = {
+    ...route.query,
+    tab: queryTab,
   }
+  if (tabName === '자료 검수') {
+    reviewMaterialTab.value = 'check'
+    nextQuery.reviewTab = 'check'
+  } else {
+    nextQuery.reviewTab = undefined
+  }
+
+  router.replace({ query: nextQuery })
+}
+
+function handleReviewMaterialTabClick(tabId) {
+  if (!reviewMaterialTabIds.has(tabId)) return
+
+  reviewMaterialTab.value = tabId
+  router.replace({
+    query: {
+      ...route.query,
+      tab: 'review',
+      reviewTab: tabId,
+    },
+  })
 }
 
 const campaignId = computed(() => route.params.campaignId)
@@ -896,15 +922,34 @@ async function loadCampaignTeamboard(campaignId) {
 const TAB_QUERY_MAP = {
   overview: '캠페인 오버뷰',
   board: '팀 보드 보기',
-  review: '검수/승인',
-  library: '자료실',
+  review: '자료 검수',
+  library: '자료 검수',
   members: '참여자 설정',
   kpi: '캠페인 성과/KPI',
   matching: '매칭 탭',
 }
+
+function queryString(value) {
+  return String(Array.isArray(value) ? value[0] ?? '' : value ?? '')
+}
+
+function resolveReviewMaterialTabFromQuery() {
+  const requestedTab = queryString(route.query.reviewTab)
+  if (reviewMaterialTabIds.has(requestedTab)) return requestedTab
+
+  if (queryString(route.query.tab) === 'library') return 'library'
+  if (queryString(route.query.adCheckJobId)) return 'check'
+  return 'approval'
+}
+
 function applyTabFromQuery() {
-  const label = TAB_QUERY_MAP[route.query.tab]
-  if (label && tabs.value.includes(label)) activeTab.value = label
+  const label = TAB_QUERY_MAP[queryString(route.query.tab)]
+  if (!label || !tabs.value.includes(label)) return
+
+  activeTab.value = label
+  if (label === '자료 검수') {
+    reviewMaterialTab.value = resolveReviewMaterialTabFromQuery()
+  }
 }
 
 onMounted(() => {
@@ -925,7 +970,7 @@ watch(
     }
   },
 )
-watch(() => route.query.tab, applyTabFromQuery)
+watch(() => [route.query.tab, route.query.reviewTab, route.query.adCheckJobId], applyTabFromQuery)
 </script>
 
 <template>
@@ -1301,7 +1346,7 @@ watch(() => route.query.tab, applyTabFromQuery)
     </section>
 
     <section v-else-if="activeTab === '팀 보드 보기'" class="tab-surface">
-      <div class="board-toolbar">
+        <div class="board-toolbar">
         <div class="segmented-control">
           <button type="button" :class="{ active: currentBoardView === 'part' }" @click="currentBoardView = 'part'">
             업무 파트
@@ -1367,12 +1412,36 @@ watch(() => route.query.tab, applyTabFromQuery)
       </div>
     </section>
 
-    <section v-else-if="activeTab === '검수/승인'" class="tab-surface">
-      <ReviewApprovalView :key="campaignId" :campaign-id="campaignId" />
-    </section>
+    <section v-else-if="activeTab === '자료 검수'" class="tab-surface review-material-surface">
+      <nav class="review-material-tabs" aria-label="자료 검수 상세 탭">
+        <button
+          v-for="tab in reviewMaterialTabs"
+          :key="tab.id"
+          type="button"
+          :class="['review-material-tabs__button', { active: reviewMaterialTab === tab.id }]"
+          @click="handleReviewMaterialTabClick(tab.id)"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
 
-    <section v-else-if="activeTab === '자료실'" class="tab-surface">
-      <CampaignLibraryTab :key="campaignId" :campaign-id="campaignId" />
+      <ReviewApprovalView
+        v-if="reviewMaterialTab === 'check'"
+        :key="`${campaignId}-check`"
+        :campaign-id="campaignId"
+        view-mode="check"
+      />
+      <ReviewApprovalView
+        v-else-if="reviewMaterialTab === 'approval'"
+        :key="`${campaignId}-approval`"
+        :campaign-id="campaignId"
+        view-mode="approval"
+      />
+      <CampaignLibraryTab
+        v-else
+        :key="`${campaignId}-library`"
+        :campaign-id="campaignId"
+      />
     </section>
 
     <section v-else-if="activeTab === '참여자 설정'" class="tab-surface">
@@ -2034,6 +2103,40 @@ watch(() => route.query.tab, applyTabFromQuery)
 .tab-surface {
   display: grid;
   gap: 18px;
+}
+
+.review-material-surface {
+  gap: 14px;
+}
+
+.review-material-tabs {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  gap: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-color);
+  padding: 6px;
+}
+
+.review-material-tabs__button {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.review-material-tabs__button.active {
+  border-color: color-mix(in srgb, var(--color-primary-500) 34%, var(--border-color));
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
 }
 
 .panel,
@@ -3072,12 +3175,36 @@ textarea:disabled {
   transition: width 0.5s ease;
 }
 
-.board-toolbar,
 .reference-toolbar {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--panel-color);
   padding: 12px;
+}
+
+.board-toolbar {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.board-toolbar__actions {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-color);
+  padding: 6px;
+}
+
+.board-toolbar__actions input {
+  width: 200px;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.board-toolbar__actions .btn {
+  min-height: 34px;
 }
 
 .board-context-pill {
@@ -3096,27 +3223,33 @@ textarea:disabled {
 
 .segmented-control {
   display: inline-flex;
-  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  gap: 6px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 4px;
+  background: var(--panel-color);
+  padding: 6px;
 }
 
 .segmented-control button {
-  min-height: 32px;
+  min-height: 34px;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  color: var(--muted-text);
+  background: transparent;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 13px;
-  font-weight: 800;
-  padding: 0 12px;
+  font-weight: 900;
+  padding: 0 14px;
+  white-space: nowrap;
 }
 
 .segmented-control button.active {
-  background: var(--panel-color);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
+  border-color: color-mix(in srgb, var(--color-primary-500) 34%, var(--border-color));
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
 }
 
 .board-grid {
@@ -3638,6 +3771,11 @@ textarea:disabled {
   .campaign-hero__meta span + span {
     border-left: 0;
     padding-left: 0;
+  }
+
+  .board-toolbar__actions,
+  .board-toolbar__actions input {
+    width: 100%;
   }
 
   .metric-grid,

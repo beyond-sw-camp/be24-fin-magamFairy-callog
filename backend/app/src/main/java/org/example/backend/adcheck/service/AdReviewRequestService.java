@@ -1,9 +1,13 @@
 package org.example.backend.adcheck.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.activity.service.CampaignActivityService;
 import org.example.backend.adcheck.model.AdCheckDto;
+import org.example.backend.adcheck.model.AdCheckJob;
+import org.example.backend.adcheck.model.AdCheckJobStatus;
 import org.example.backend.adcheck.model.AdReviewRequest;
+import org.example.backend.adcheck.repository.AdCheckJobRepository;
 import org.example.backend.adcheck.repository.AdReviewRequestRepository;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignMember;
@@ -34,6 +38,7 @@ public class AdReviewRequestService {
     private static final String AI_STATUS_PASS = "pass";
 
     private final AdReviewRequestRepository adReviewRequestRepository;
+    private final AdCheckJobRepository adCheckJobRepository;
     private final AdCheckFileStorageService adCheckFileStorageService;
     private final CampaignRepository campaignRepository;
     private final CampaignMemberRepository campaignMemberRepository;
@@ -41,6 +46,7 @@ public class AdReviewRequestService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final CampaignActivityService activityService;
+    private final ObjectMapper objectMapper;
 
     public List<AdCheckDto.ReviewRequestRes> list(Long campaignId, AuthUserDetails authUser) {
         User caller = findUser(authUser);
@@ -80,38 +86,81 @@ public class AdReviewRequestService {
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Campaign not found."));
         requireCampaignMember(campaignId, requester);
-        requirePartnerOrganization(campaignId, requester);
 
-        String aiStatus = normalize(req.status());
-        aiStatus = aiStatus == null ? null : aiStatus.toLowerCase();
-        if (!AI_STATUS_PASS.equals(aiStatus)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AI check must pass before creating review request.");
+        String adCheckJobId = normalize(req.jobId());
+        AdCheckJob sourceJob = null;
+        AdCheckDto.FileCheckRes sourceResult = null;
+        if (adCheckJobId != null) {
+            sourceJob = findReviewSourceJob(adCheckJobId, requester, campaign);
+            sourceResult = parseJobResult(sourceJob);
+            if (adReviewRequestRepository.existsByCampaignIdxAndAdCheckJobId(campaignId, adCheckJobId)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "review request already exists for this AI check.");
+            }
+        } else {
+            requirePartnerOrganization(campaignId, requester);
         }
 
-        String fileObjectKey = normalize(req.fileObjectKey());
+        String aiStatus = normalize(firstText(req.status(), sourceResult == null ? null : sourceResult.getStatus()));
+        aiStatus = aiStatus == null ? null : aiStatus.toLowerCase();
+        if (adCheckJobId == null && !AI_STATUS_PASS.equals(aiStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AI check must pass before creating review request.");
+        }
+        if (adCheckJobId != null && aiStatus == null) {
+            aiStatus = "completed";
+        }
+
+        String fileObjectKey = normalize(firstText(
+                req.fileObjectKey(),
+                sourceResult == null ? null : sourceResult.getFileObjectKey()
+        ));
         if (!adCheckFileStorageService.isAdCheckFileKey(fileObjectKey)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid ad check file object key.");
         }
 
-        String fileName = normalize(req.fileName());
+        String fileName = normalize(firstText(
+                req.fileName(),
+                sourceResult == null ? null : sourceResult.getFileName(),
+                sourceJob == null ? null : sourceJob.getFileName()
+        ));
         if (fileName == null) {
             fileName = "upload";
         }
+        String mongoDocumentId = normalize(firstText(
+                req.mongoDocumentId(),
+                sourceJob == null ? null : sourceJob.getMongoDocumentId(),
+                sourceResult == null ? null : sourceResult.getAnalysisJobId()
+        ));
+        Integer verdictLevel = firstLevel(req.verdictLevel(), sourceResult == null ? null : sourceResult.getVerdictLevel());
 
         Organization organization = requester.getOrganization();
         AdReviewRequest saved = adReviewRequestRepository.save(AdReviewRequest.builder()
                 .campaign(campaign)
                 .fileName(fileName)
                 .fileObjectKey(fileObjectKey)
-                .fileContentType(normalize(req.fileContentType()))
-                .fileSize(req.fileSize())
-                .extractedText(req.extractedText())
+                .fileContentType(normalize(firstText(
+                        req.fileContentType(),
+                        sourceResult == null ? null : sourceResult.getFileContentType(),
+                        sourceJob == null ? null : sourceJob.getFileContentType()
+                )))
+                .fileSize(req.fileSize() != null
+                        ? req.fileSize()
+                        : sourceResult == null ? null : sourceResult.getFileSize())
+                .extractedText(firstText(req.extractedText(), sourceResult == null ? null : sourceResult.getExtractedText()))
                 .requestStatus(REQUEST_STATUS_REQUESTED)
                 .aiStatus(aiStatus)
-                .law(normalize(req.law()))
-                .violationText(normalize(req.violationText()))
-                .reason(normalize(req.reason()))
-                .suggestion(normalize(req.suggestion()))
+                .law(normalize(firstText(req.law(), sourceResult == null ? null : sourceResult.getLaw())))
+                .violationText(normalize(firstText(
+                        req.violationText(),
+                        sourceResult == null ? null : sourceResult.getViolationText()
+                )))
+                .reason(normalize(firstText(req.reason(), sourceResult == null ? null : sourceResult.getReason())))
+                .suggestion(normalize(firstText(
+                        req.suggestion(),
+                        sourceResult == null ? null : sourceResult.getSuggestion()
+                )))
+                .adCheckJobId(adCheckJobId)
+                .mongoDocumentId(mongoDocumentId)
+                .verdictLevel(verdictLevel)
                 .requestMemo(normalize(req.requestMemo()))
                 .requesterLoginId(requester.getId())
                 .requesterName(requester.getName())
@@ -122,6 +171,44 @@ public class AdReviewRequestService {
         activityService.record(campaign, requester, "REVIEW_SUBMIT", "검수 요청 제출: " + fileName);
 
         return toResponse(saved);
+    }
+
+    private AdCheckJob findReviewSourceJob(String jobId, User requester, Campaign campaign) {
+        AdCheckJob job = adCheckJobRepository.findByJobIdAndRequester_Idx(jobId, requester.getIdx())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AI check job not found."));
+        if (job.isDeleted()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "AI check job not found.");
+        }
+        if (job.getStatus() != AdCheckJobStatus.SUCCEEDED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AI check must be completed first.");
+        }
+        if (!belongsToCampaign(job, campaign)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AI check job does not belong to this campaign.");
+        }
+        return job;
+    }
+
+    private boolean belongsToCampaign(AdCheckJob job, Campaign campaign) {
+        String jobCampaignId = normalize(job.getCampaignId());
+        if (jobCampaignId == null || campaign == null) {
+            return false;
+        }
+        if (campaign.getPublicId() != null && jobCampaignId.equals(campaign.getPublicId())) {
+            return true;
+        }
+        return campaign.getIdx() != null && jobCampaignId.equals(String.valueOf(campaign.getIdx()));
+    }
+
+    private AdCheckDto.FileCheckRes parseJobResult(AdCheckJob job) {
+        if (job == null || job.getResultPayload() == null || job.getResultPayload().isBlank()) {
+            return null;
+        }
+
+        try {
+            return objectMapper.readValue(job.getResultPayload(), AdCheckDto.FileCheckRes.class);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AI check result payload is invalid.");
+        }
     }
 
     @Transactional
@@ -288,5 +375,30 @@ public class AdReviewRequestService {
             return null;
         }
         return value.trim();
+    }
+
+    private String firstText(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            String normalized = normalize(value);
+            if (normalized != null) {
+                return normalized;
+            }
+        }
+        return null;
+    }
+
+    private Integer firstLevel(Integer... levels) {
+        if (levels == null) {
+            return null;
+        }
+        for (Integer level : levels) {
+            if (level != null && level >= 1 && level <= 5) {
+                return level;
+            }
+        }
+        return null;
     }
 }

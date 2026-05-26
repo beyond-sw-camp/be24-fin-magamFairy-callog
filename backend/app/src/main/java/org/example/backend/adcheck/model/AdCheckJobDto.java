@@ -17,6 +17,9 @@ public class AdCheckJobDto {
     public record JobRes(
             String jobId,
             Long requesterId,
+            String requesterLoginId,
+            String requesterName,
+            String requesterOrganizationName,
             String campaignId,
             String fileName,
             String status,
@@ -46,6 +49,11 @@ public class AdCheckJobDto {
             return new JobRes(
                     job.getJobId(),
                     job.getRequester() == null ? null : job.getRequester().getIdx(),
+                    job.getRequester() == null ? null : job.getRequester().getId(),
+                    job.getRequester() == null ? null : job.getRequester().getName(),
+                    job.getRequester() == null || job.getRequester().getOrganization() == null
+                            ? null
+                            : job.getRequester().getOrganization().getName(),
                     job.getCampaignId(),
                     job.getFileName(),
                     job.getStatus().name(),
@@ -85,6 +93,9 @@ public class AdCheckJobDto {
     public record JobSummaryRes(
             String jobId,
             Long requesterId,
+            String requesterLoginId,
+            String requesterName,
+            String requesterOrganizationName,
             String campaignId,
             String fileName,
             String status,
@@ -106,6 +117,9 @@ public class AdCheckJobDto {
             return new JobSummaryRes(
                     jobId,
                     requesterId,
+                    requesterLoginId,
+                    requesterName,
+                    requesterOrganizationName,
                     campaignId,
                     fileName,
                     status,
@@ -133,6 +147,11 @@ public class AdCheckJobDto {
             return new JobSummaryRes(
                     job.getJobId(),
                     job.getRequester() == null ? null : job.getRequester().getIdx(),
+                    job.getRequester() == null ? null : job.getRequester().getId(),
+                    job.getRequester() == null ? null : job.getRequester().getName(),
+                    job.getRequester() == null || job.getRequester().getOrganization() == null
+                            ? null
+                            : job.getRequester().getOrganization().getName(),
                     job.getCampaignId(),
                     job.getFileName(),
                     job.getStatus().name(),

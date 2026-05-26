@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import {
   CancelAdCheckJob,
   CreateAdCheckJob,
+  DeleteAdCheckJob,
   GetAdCheckJob,
   GetAdCheckJobDetail,
   ListAdCheckJobs,
@@ -126,6 +127,9 @@ function normalizeJob(rawJob) {
     ...job,
     jobId: String(job.jobId ?? ''),
     requesterId: job.requesterId ?? null,
+    requesterLoginId: job.requesterLoginId ?? '',
+    requesterName: job.requesterName ?? '',
+    requesterOrganizationName: job.requesterOrganizationName ?? '',
     campaignId: job.campaignId ?? null,
     fileName: job.fileName ?? 'upload',
     status,
@@ -153,6 +157,9 @@ function normalizeJobSummary(rawSummary) {
     ...summary,
     jobId: String(summary.jobId ?? ''),
     requesterId: summary.requesterId ?? null,
+    requesterLoginId: summary.requesterLoginId ?? '',
+    requesterName: summary.requesterName ?? '',
+    requesterOrganizationName: summary.requesterOrganizationName ?? '',
     campaignId: summary.campaignId ?? null,
     fileName: summary.fileName ?? 'upload',
     status: String(summary.status || 'QUEUED').toUpperCase(),
@@ -348,6 +355,16 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
     return upsertJob(job)
   }
 
+  async function deleteJob(jobId) {
+    await DeleteAdCheckJob(jobId)
+    jobs.value = jobs.value.filter((job) => job.jobId !== jobId)
+    jobSummaries.value = jobSummaries.value.filter((summary) => summary.jobId !== jobId)
+    const nextDetails = { ...jobDetailsById.value }
+    delete nextDetails[jobId]
+    jobDetailsById.value = nextDetails
+    clearJobPoll(jobId)
+  }
+
   function dismissJob(jobId) {
     if (!jobId) {
       return
@@ -434,6 +451,7 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
     loadJobDetail,
     loadActiveJobs,
     cancelJob,
+    deleteJob,
     dismissJob,
     findJob,
     findJobDetail,

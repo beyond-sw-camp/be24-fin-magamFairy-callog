@@ -14,6 +14,10 @@ import org.example.backend.adcheck.model.AdCheckJobStatus;
 import org.example.backend.adcheck.model.AdCheckJobStep;
 import org.example.backend.adcheck.repository.AdCheckJobRepository;
 import org.example.backend.adcheck.repository.AdCheckOutboxEventRepository;
+import org.example.backend.campaign.model.Campaign;
+import org.example.backend.campaign.repository.CampaignMemberRepository;
+import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.common.security.CampaignMemberGuard;
 import org.example.backend.notification.service.NotificationService;
 import org.example.backend.notification.service.NotificationSseService;
 import org.example.backend.user.model.AuthUserDetails;
@@ -31,6 +35,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -65,6 +70,8 @@ public class AdCheckJobService {
     private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
     private final AdCheckFileStorageService adCheckFileStorageService;
     private final AdCheckOutboxEventRepository adCheckOutboxEventRepository;
+    private final CampaignRepository campaignRepository;
+    private final CampaignMemberRepository campaignMemberRepository;
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
     private final NotificationSseService notificationSseService;
@@ -179,38 +186,32 @@ public class AdCheckJobService {
     }
 
     public AdCheckJobDto.JobRes getJob(String jobId, AuthUserDetails requester) {
-        Long requesterIdx = requesterIdx(requester);
-        return transactionTemplate.execute(status -> adCheckJobRepository
-                .findByJobIdAndRequester_Idx(jobId, requesterIdx)
-                .map(this::toDto)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "검수 작업을 찾을 수 없습니다.")));
+        return transactionTemplate.execute(status -> toDto(findAccessibleJob(jobId, requester)));
     }
 
     public AdCheckJobDto.JobSummaryRes getJobSummary(String jobId, AuthUserDetails requester) {
-        Long requesterIdx = requesterIdx(requester);
-        return transactionTemplate.execute(status -> adCheckJobRepository
-                .findByJobIdAndRequester_Idx(jobId, requesterIdx)
-                .map(this::toSummaryDto)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "검수 작업을 찾을 수 없습니다.")));
+        return transactionTemplate.execute(status -> toSummaryDto(findAccessibleJob(jobId, requester)));
     }
 
     public List<AdCheckJobDto.JobSummaryRes> listJobs(AuthUserDetails requester, String campaignId) {
         Long requesterIdx = requesterIdx(requester);
         return transactionTemplate.execute(status -> {
-            List<AdCheckJob> jobs = campaignId == null || campaignId.isBlank()
-                    ? adCheckJobRepository.findAllByRequester_IdxOrderByCreatedAtDesc(requesterIdx)
-                    : adCheckJobRepository.findAllByRequester_IdxAndCampaignIdOrderByCreatedAtDesc(
-                            requesterIdx,
-                            campaignId.trim()
-                    );
+            List<AdCheckJob> jobs;
+            if (campaignId == null || campaignId.isBlank()) {
+                jobs = adCheckJobRepository.findAllByRequester_IdxOrderByCreatedAtDesc(requesterIdx);
+            } else {
+                Campaign campaign = requireCampaignAccess(campaignId, requesterIdx);
+                jobs = adCheckJobRepository.findAllByCampaignIdInOrderByCreatedAtDesc(campaignIdsOf(campaign));
+            }
             return jobs.stream()
+                    .filter(job -> !job.isDeleted())
                     .map(this::toSummaryDto)
                     .toList();
         });
     }
 
     public AdCheckJobDto.JobDetailRes getJobDetail(String jobId, AuthUserDetails requester) {
-        AdCheckJobDto.JobSummaryRes summary = getJobSummary(jobId, requester);
+        AdCheckJobDto.JobSummaryRes summary = transactionTemplate.execute(status -> toSummaryDto(findAccessibleJob(jobId, requester)));
         AdCheckDto.FileCheckRes detail = findMongoDetail(summary, jobId)
                 .map(this::refreshStorageUrls)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "상세 자료를 불러오지 못했습니다."));
@@ -224,6 +225,7 @@ public class AdCheckJobService {
         return transactionTemplate.execute(status -> adCheckJobRepository
                 .findAllByRequester_IdxAndStatusInOrderByCreatedAtDesc(requesterIdx, ACTIVE_STATUSES)
                 .stream()
+                .filter(job -> !job.isDeleted())
                 .map(this::toDto)
                 .toList());
     }
@@ -244,6 +246,26 @@ public class AdCheckJobService {
 
         emitJobEvent(canceledJob, "ad-check.job.updated");
         return canceledJob;
+    }
+
+    public void deleteJob(String jobId, AuthUserDetails requester) {
+        Long requesterIdx = requesterIdx(requester);
+        AdCheckJobDto.JobRes deletedJob = transactionTemplate.execute(status -> {
+            AdCheckJob job = adCheckJobRepository.findByJobIdAndRequester_Idx(jobId, requesterIdx)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ad check job not found."));
+
+            if (job.isDeleted()) {
+                return toDto(job);
+            }
+            if (!job.isTerminal()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "active ad check job cannot be deleted.");
+            }
+
+            job.delete(requester.getId());
+            return toDto(job);
+        });
+
+        emitJobEvent(deletedJob, "ad-check.job.updated");
     }
 
     private void recoverActiveJobs() {
@@ -652,6 +674,63 @@ public class AdCheckJobService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 사용자 정보가 필요합니다.");
         }
         return requester.getIdx();
+    }
+
+    private AdCheckJob findAccessibleJob(String jobId, AuthUserDetails requester) {
+        Long requesterIdx = requesterIdx(requester);
+        AdCheckJob job = adCheckJobRepository.findByJobId(jobId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "검수 작업을 찾을 수 없습니다."));
+
+        if (job.isDeleted()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "검수 작업을 찾을 수 없습니다.");
+        }
+        if (job.getRequester() != null && requesterIdx.equals(job.getRequester().getIdx())) {
+            return job;
+        }
+        if (job.getCampaignId() != null && !job.getCampaignId().isBlank()) {
+            requireCampaignAccess(job.getCampaignId(), requesterIdx);
+            return job;
+        }
+
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "검수 작업을 찾을 수 없습니다.");
+    }
+
+    private Campaign requireCampaignAccess(String campaignId, Long requesterIdx) {
+        Campaign campaign = resolveCampaign(campaignId);
+        CampaignMemberGuard.requireMember(campaignMemberRepository
+                .findByCampaignIdxAndUserIdx(campaign.getIdx(), requesterIdx)
+                .orElse(null));
+        return campaign;
+    }
+
+    private Campaign resolveCampaign(String campaignId) {
+        String normalized = campaignId == null ? null : campaignId.trim();
+        if (normalized == null || normalized.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "campaignId is required.");
+        }
+
+        Optional<Campaign> byPublicId = campaignRepository.findByPublicId(normalized);
+        if (byPublicId.isPresent()) {
+            return byPublicId.get();
+        }
+
+        try {
+            return campaignRepository.findById(Long.parseLong(normalized))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Campaign not found."));
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Campaign not found.");
+        }
+    }
+
+    private List<String> campaignIdsOf(Campaign campaign) {
+        LinkedHashSet<String> campaignIds = new LinkedHashSet<>();
+        if (campaign.getPublicId() != null && !campaign.getPublicId().isBlank()) {
+            campaignIds.add(campaign.getPublicId());
+        }
+        if (campaign.getIdx() != null) {
+            campaignIds.add(String.valueOf(campaign.getIdx()));
+        }
+        return campaignIds.stream().toList();
     }
 
     private byte[] readFileBytes(MultipartFile file) {
