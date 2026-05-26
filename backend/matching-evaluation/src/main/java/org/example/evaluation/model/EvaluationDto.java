@@ -40,17 +40,6 @@ public class EvaluationDto {
         }
     }
 
-//    @Getter
-//    @Setter
-//    @NoArgsConstructor
-//    @AllArgsConstructor
-//    @Builder
-//    public static class StartEvaluationReq {
-//        private String campaignIdx;
-//        private Object campaign;
-//        private Object benefit;
-//    }
-
     @Getter
     @Setter
     @NoArgsConstructor
