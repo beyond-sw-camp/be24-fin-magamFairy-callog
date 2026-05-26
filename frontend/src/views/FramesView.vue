@@ -1,9 +1,6 @@
 <script setup>
-import { computed, ref } from 'vue'
-import { createFrame } from '@/api/frames'
-import { usePlannerStore } from '@/stores/planner'
-
-const plannerStore = usePlannerStore()
+import { computed, onMounted, ref } from 'vue'
+import { createFrame, listFrames } from '@/api/frames'
 
 const t = {
   eyebrow: '\uCEA0\uD398\uC778 \uC2E4\uD589 \uAE30\uC900',
@@ -371,6 +368,15 @@ const campaignTypeOptions = computed(() => [
 ])
 const librarySortOptions = ['점수 높은순', '사용 많은순', '통과율 높은순']
 
+onMounted(async () => {
+  try {
+    const frames = await listFrames()
+    customLibraryFrames.value = Array.isArray(frames) ? frames.map((frame) => toLibraryFrame(frame)) : []
+  } catch (error) {
+    console.warn('Frame list load failed.', error)
+  }
+})
+
 const filteredLibraryFrames = computed(() => {
   const result = libraryFrames.value.filter((frame) =>
     selectedCampaignType.value === '전체 캠페인 방식' || frame.category === selectedCampaignType.value,
@@ -388,24 +394,6 @@ const filteredLibraryFrames = computed(() => {
 })
 
 const modalFrame = computed(() => libraryFrames.value.find((frame) => frame.id === selectedModalFrameId.value) ?? null)
-const modalFrameCampaignHistory = computed(() => {
-  if (!modalFrame.value) return []
-
-  return plannerStore.campaigns
-    .filter((campaign) => Array.isArray(campaign.campaignMethods) && campaign.campaignMethods.includes(modalFrame.value.category))
-    .map((campaign) => ({
-      id: campaign.id,
-      title: campaign.name,
-      createdAt: formatHistoryDate(campaign.createdAt),
-      status: campaign.status === 'completed' ? '완료 캠페인' : campaign.status === 'active' ? '진행 중' : '초안',
-      passRate: modalFrame.value.performance.pass_rate,
-    }))
-})
-
-const modalUsageCount = computed(() => {
-  if (!modalFrame.value) return 0
-  return modalFrame.value.performance.usage_count + modalFrameCampaignHistory.value.length
-})
 const activePreviewChannel = computed(
   () => previewChannelOptions.find((channel) => channel.id === selectedPreviewChannel.value) ?? previewChannelOptions[0],
 )
@@ -827,17 +815,6 @@ function toLibraryFrame(frame) {
     },
   }
 }
-
-function formatHistoryDate(value) {
-  if (!value) return '날짜 없음'
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return String(value).slice(0, 10).replaceAll('-', '.')
-  }
-
-  return date.toISOString().slice(0, 10).replaceAll('-', '.')
-}
 </script>
 
 <template>
@@ -1124,10 +1101,10 @@ function formatHistoryDate(value) {
             <article v-if="modalFrame.purpose" class="frame-detail-panel">
               <div class="frame-detail-panel__head">
                 <div>
-                  <span class="material-symbols-outlined">flag</span>
-                  <h4>사용 목적</h4>
+                  <span class="material-symbols-outlined">folder</span>
+                  <h4>언제 쓰는 프레임워크인가</h4>
                 </div>
-                <p>이 프레임을 쓰는 상황</p>
+                <p>업무 상황별 기준점</p>
               </div>
               <p class="purpose-copy">{{ modalFrame.purpose }}</p>
             </article>
@@ -1230,48 +1207,23 @@ function formatHistoryDate(value) {
           </main>
 
           <aside class="frame-modal__aside">
-            <article class="modal-side-panel">
-              <p class="section-eyebrow">PERFORMANCE</p>
-              <div class="performance-grid">
-                <div>
-                  <strong>{{ modalUsageCount }}</strong>
-                  <span>사용 캠페인</span>
-                </div>
-                <div>
-                  <strong class="success">{{ modalFrame.performance.pass_rate }}%</strong>
-                  <span>평균 통과율</span>
-                </div>
-                <div>
-                  <strong>{{ modalFrame.performance.avg_revisions }}</strong>
-                  <span>평균 수정 횟수</span>
-                </div>
-                <div>
-                  <strong>{{ modalFrame.version }}</strong>
-                  <span>현재 버전</span>
-                </div>
-              </div>
-            </article>
-
-            <article class="modal-side-panel">
-              <p class="section-eyebrow">FRAME HISTORY</p>
-              <ul v-if="modalFrameCampaignHistory.length" class="history-list">
-                <li v-for="item in modalFrameCampaignHistory" :key="item.id">
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.status }} · 통과율 <em>{{ item.passRate }}%</em> · {{ item.createdAt }}</span>
+            <article class="modal-side-panel modal-side-panel--guide">
+              <p class="section-eyebrow">ONBOARDING</p>
+              <h4>마케팅 업무를 처음 맡았을 때</h4>
+              <ul class="side-check-list">
+                <li>
+                  <span class="material-symbols-outlined">check_circle</span>
+                  캠페인 유형을 고르고 필수 표기부터 확인
+                </li>
+                <li>
+                  <span class="material-symbols-outlined">check_circle</span>
+                  금지 표현을 피하고 권장 표현으로 문안 정리
+                </li>
+                <li>
+                  <span class="material-symbols-outlined">check_circle</span>
+                  미리보기로 실제 캠페인 소재 형태를 빠르게 파악
                 </li>
               </ul>
-              <p v-else class="history-empty">
-                아직 이 방식으로 생성된 캠페인이 없습니다.
-              </p>
-              <button type="button" class="history-link">전체 이력 보기 →</button>
-            </article>
-
-            <article class="modal-side-panel">
-              <p class="section-eyebrow">FRAME SCORE</p>
-              <div class="score-meter">
-                <strong>{{ modalFrame.score }}</strong>
-                <span>프레임 품질 점수</span>
-              </div>
             </article>
           </aside>
         </div>
@@ -1887,25 +1839,6 @@ function formatHistoryDate(value) {
 .frame-modal__badges strong {
   background: color-mix(in srgb, var(--success-color) 13%, var(--panel-color));
   color: var(--success-color);
-}
-
-.history-link {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 0 12px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.history-link {
-  background: var(--panel-color);
-  color: var(--text-primary);
 }
 
 .frame-modal__layout {
@@ -3161,105 +3094,36 @@ function formatHistoryDate(value) {
   padding: 16px;
 }
 
-.performance-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.performance-grid div {
-  display: grid;
-  min-height: 62px;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 8px;
-  text-align: center;
-}
-
-.performance-grid strong {
+.modal-side-panel h4 {
+  margin: 0;
   color: var(--text-primary);
-  font-size: 18px;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.4;
 }
 
-.performance-grid strong.success {
-  color: var(--success-color);
-  font-style: normal;
-}
-
-.performance-grid span {
-  color: var(--muted-text);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.history-list {
+.side-check-list {
   display: grid;
-  gap: 0;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.history-list li {
+.side-check-list li {
   display: grid;
-  gap: 5px;
-  border-bottom: 1px solid var(--border-color);
-  padding: 10px 0;
-}
-
-.history-list strong {
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.history-list span,
-.history-empty {
-  color: var(--muted-text);
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 7px;
+  align-items: start;
+  color: var(--text-secondary);
   font-size: 12px;
+  font-weight: 800;
   line-height: 1.45;
 }
 
-.history-list em {
+.side-check-list span {
   color: var(--success-color);
-  font-style: normal;
-  font-weight: 900;
-}
-
-.history-empty {
-  margin: 0;
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-  padding: 12px;
-}
-
-.history-link {
-  min-height: 30px;
-  border: 0;
-  color: var(--accent-strong);
-}
-
-.score-meter {
-  display: grid;
-  min-height: 92px;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--accent-color) 8%, var(--panel-muted));
-  color: var(--accent-strong);
-  text-align: center;
-}
-
-.score-meter strong {
-  font-size: 34px;
-  font-weight: 900;
-}
-
-.score-meter span {
-  color: var(--muted-text);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 18px;
 }
 
 @media (max-width: 1180px) {
@@ -3272,7 +3136,7 @@ function formatHistoryDate(value) {
   }
 
   .frame-modal__aside {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .frame-live-preview {
