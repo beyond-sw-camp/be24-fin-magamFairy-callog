@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ApproveAdReviewRequest,
@@ -570,6 +570,8 @@ function openAnalysisRequest() {
 }
 
 function closeAnalysisRequest() {
+  stopActiveAnalysisPolling()
+  activeAnalysisJobId.value = ''
   isAnalysisOpen.value = false
   if (route.query.adCheckJobId) {
     router.replace({
@@ -588,6 +590,7 @@ async function loadAdCheckSummaries() {
 
 function resetAnalysisForm() {
   selectedAnalysisFile.value = null
+  stopActiveAnalysisPolling()
   activeAnalysisJobId.value = ''
   isAnalyzing.value = false
   analysisResult.value = null
@@ -598,6 +601,12 @@ function resetAnalysisForm() {
   uploadDragDepth.value = 0
   if (analysisFileInput.value) {
     analysisFileInput.value.value = ''
+  }
+}
+
+function stopActiveAnalysisPolling() {
+  if (activeAnalysisJobId.value) {
+    adCheckJobsStore.clearJobPoll(activeAnalysisJobId.value)
   }
 }
 
@@ -729,10 +738,15 @@ async function openAnalysisJobFromRoute() {
 
   const jobId = String(route.query.adCheckJobId || '').trim()
   if (!jobId) {
+    stopActiveAnalysisPolling()
+    activeAnalysisJobId.value = ''
     return
   }
 
   isAnalysisOpen.value = true
+  if (activeAnalysisJobId.value && activeAnalysisJobId.value !== jobId) {
+    stopActiveAnalysisPolling()
+  }
   activeAnalysisJobId.value = jobId
 
   let job = adCheckJobsStore.findJob(jobId)
@@ -806,6 +820,10 @@ async function loadPageData() {
 onMounted(async () => {
   await loadPageData()
   await openAnalysisJobFromRoute()
+})
+
+onBeforeUnmount(() => {
+  stopActiveAnalysisPolling()
 })
 
 watch(activeAnalysisJob, (job) => {

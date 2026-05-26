@@ -3,9 +3,10 @@ import api from '/plugins/interceptor.js'
 const AD_CHECK_TIMEOUT_MS = 180000
 const AD_CHECK_JOB_TIMEOUT_MS = 60000
 
-function createAdCheckError(message, data) {
+function createAdCheckError(message, data, status = null) {
   const error = new Error(message)
   error.data = data
+  error.status = status
   return error
 }
 
@@ -43,6 +44,7 @@ function toAdCheckError(error) {
     error?.message ??
     'AI check request failed.',
     payload?.data ?? error?.data ?? payload,
+    error?.response?.status ?? null,
   )
 }
 
