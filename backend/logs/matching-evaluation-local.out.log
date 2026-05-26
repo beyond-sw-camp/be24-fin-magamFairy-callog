@@ -1,0 +1,296 @@
+> Task :matching-evaluation:compileJava UP-TO-DATE
+> Task :matching-evaluation:processResources
+> Task :matching-evaluation:classes
+> Task :matching-evaluation:resolveMainClassName
+
+> Task :matching-evaluation:bootRun
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.13)
+
+2026-05-26T02:53:55.857+09:00  INFO 24480 --- [ai-evaluation] [           main] o.e.evaluation.EvaluationApplication     : Starting EvaluationApplication using Java 17.0.2 with PID 24480 (C:\finalProject\magamfairy\be24-fin-magamFairy-callog\backend\matching-evaluation\build\classes\java\main started by Playdata in C:\finalProject\magamfairy\be24-fin-magamFairy-callog\backend\matching-evaluation)
+2026-05-26T02:53:55.862+09:00  INFO 24480 --- [ai-evaluation] [           main] o.e.evaluation.EvaluationApplication     : The following 1 profile is active: "local"
+2026-05-26T02:53:57.607+09:00  INFO 24480 --- [ai-evaluation] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data MongoDB repositories in DEFAULT mode.
+2026-05-26T02:53:57.928+09:00  INFO 24480 --- [ai-evaluation] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 308 ms. Found 1 MongoDB repository interface.
+2026-05-26T02:53:58.489+09:00  INFO 24480 --- [ai-evaluation] [           main] o.s.cloud.context.scope.GenericScope     : BeanFactory id=c13dab51-3524-3a34-98dd-951e5ef5c61a
+2026-05-26T02:53:59.304+09:00  INFO 24480 --- [ai-evaluation] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8082 (http)
+2026-05-26T02:53:59.336+09:00  INFO 24480 --- [ai-evaluation] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-05-26T02:53:59.336+09:00  INFO 24480 --- [ai-evaluation] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.53]
+2026-05-26T02:53:59.470+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-05-26T02:53:59.473+09:00  INFO 24480 --- [ai-evaluation] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 3560 ms
+2026-05-26T02:54:00.329+09:00  INFO 24480 --- [ai-evaluation] [           main] org.mongodb.driver.client                : MongoClient with metadata {"driver": {"name": "mongo-java-driver|sync|spring-boot", "version": "5.5.2"}, "os": {"type": "Windows", "name": "Windows 11", "architecture": "amd64", "version": "10.0"}, "platform": "Java/Oracle Corporation/17.0.2+8-86"} created with settings MongoClientSettings{readPreference=primary, writeConcern=WriteConcern{w=null, wTimeout=null ms, journal=null}, retryWrites=true, retryReads=true, readConcern=ReadConcern{level=null}, credential=MongoCredential{mechanism=null, userName='root', source='admin', password=<hidden>, mechanismProperties=<hidden>}, transportSettings=null, commandListeners=[io.micrometer.core.instrument.binder.mongodb.MongoMetricsCommandListener@18483b8b], codecRegistry=ProvidersCodecRegistry{codecProviders=[ValueCodecProvider{}, BsonValueCodecProvider{}, DBRefCodecProvider{}, DBObjectCodecProvider{}, DocumentCodecProvider{}, CollectionCodecProvider{}, IterableCodecProvider{}, MapCodecProvider{}, GeoJsonCodecProvider{}, GridFSFileCodecProvider{}, Jsr310CodecProvider{}, JsonObjectCodecProvider{}, BsonCodecProvider{}, EnumCodecProvider{}, com.mongodb.client.model.mql.ExpressionCodecProvider@24fc2c80, com.mongodb.Jep395RecordCodecProvider@965bcbc, com.mongodb.KotlinCodecProvider@7ab1ad9]}, loggerSettings=LoggerSettings{maxDocumentLength=1000}, clusterSettings={hosts=[localhost:27017], srvServiceName=mongodb, mode=SINGLE, requiredClusterType=UNKNOWN, requiredReplicaSetName='null', serverSelector='null', clusterListeners='[]', serverSelectionTimeout='30000 ms', localThreshold='15 ms'}, socketSettings=SocketSettings{connectTimeoutMS=10000, readTimeoutMS=0, receiveBufferSize=0, proxySettings=ProxySettings{host=null, port=null, username=null, password=null}}, heartbeatSocketSettings=SocketSettings{connectTimeoutMS=10000, readTimeoutMS=10000, receiveBufferSize=0, proxySettings=ProxySettings{host=null, port=null, username=null, password=null}}, connectionPoolSettings=ConnectionPoolSettings{maxSize=100, minSize=0, maxWaitTimeMS=120000, maxConnectionLifeTimeMS=0, maxConnectionIdleTimeMS=0, maintenanceInitialDelayMS=0, maintenanceFrequencyMS=60000, connectionPoolListeners=[io.micrometer.core.instrument.binder.mongodb.MongoMetricsConnectionPoolListener@5ee6fdc4], maxConnecting=2}, serverSettings=ServerSettings{heartbeatFrequencyMS=10000, minHeartbeatFrequencyMS=500, serverMonitoringMode=AUTO, serverListeners='[]', serverMonitorListeners='[]'}, sslSettings=SslSettings{enabled=false, invalidHostNameAllowed=false, context=null}, applicationName='null', compressorList=[], uuidRepresentation=JAVA_LEGACY, serverApi=null, autoEncryptionSettings=null, dnsClient=null, inetAddressResolver=null, contextProvider=null, timeoutMS=null}
+2026-05-26T02:54:00.352+09:00  INFO 24480 --- [ai-evaluation] [localhost:27017] org.mongodb.driver.cluster               : Monitor thread successfully connected to server with description ServerDescription{address=localhost:27017, type=STANDALONE, cryptd=false, state=CONNECTED, ok=true, minWireVersion=0, maxWireVersion=21, maxDocumentSize=16777216, logicalSessionTimeoutMinutes=30, roundTripTimeNanos=39050400, minRoundTripTimeNanos=0}
+2026-05-26T02:54:02.492+09:00  INFO 24480 --- [ai-evaluation] [           main] DiscoveryClientOptionalArgsConfiguration : Eureka HTTP Client uses RestTemplate.
+2026-05-26T02:54:02.600+09:00  WARN 24480 --- [ai-evaluation] [           main] iguration$LoadBalancerCaffeineWarnLogger : Spring Cloud LoadBalancer is currently working with the default cache. While this cache implementation is useful for development and tests, it's recommended to use Caffeine cache in production.You can switch to using Caffeine cache, by adding it and org.springframework.cache.caffeine.CaffeineCacheManager to the classpath.
+2026-05-26T02:54:02.619+09:00  INFO 24480 --- [ai-evaluation] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+2026-05-26T02:54:02.865+09:00  INFO 24480 --- [ai-evaluation] [           main] o.s.c.n.eureka.InstanceInfoFactory       : Setting initial instance status as: STARTING
+2026-05-26T02:54:02.924+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : Initializing Eureka in region us-east-1
+2026-05-26T02:54:02.940+09:00  INFO 24480 --- [ai-evaluation] [           main] c.n.d.s.r.aws.ConfigClusterResolver      : Resolving eureka endpoints via configuration
+2026-05-26T02:54:02.959+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : Disable delta property : false
+2026-05-26T02:54:02.959+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : Single vip registry refresh property : null
+2026-05-26T02:54:02.959+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : Force full registry fetch : false
+2026-05-26T02:54:02.960+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : Application is null : false
+2026-05-26T02:54:02.960+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : Registered Applications size is zero : true
+2026-05-26T02:54:02.960+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : Application version is -1: true
+2026-05-26T02:54:02.960+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : Getting all instance registry info from the eureka server
+2026-05-26T02:54:03.645+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : The response status is 200
+2026-05-26T02:54:03.648+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : Starting heartbeat executor: renew interval is: 30
+2026-05-26T02:54:03.650+09:00  INFO 24480 --- [ai-evaluation] [           main] c.n.discovery.InstanceInfoReplicator     : InstanceInfoReplicator onDemand update allowed rate per min is 4
+2026-05-26T02:54:03.653+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : Discovery Client initialized at timestamp 1779731643652 with initial instances count: 2
+2026-05-26T02:54:03.657+09:00  INFO 24480 --- [ai-evaluation] [           main] o.s.c.n.e.s.EurekaServiceRegistry        : Registering application AI-EVALUATION with eureka with status UP
+2026-05-26T02:54:03.658+09:00  INFO 24480 --- [ai-evaluation] [           main] com.netflix.discovery.DiscoveryClient    : Saw local status change event StatusChangeEvent [timestamp=1779731643658, current=UP, previous=STARTING]
+2026-05-26T02:54:03.660+09:00  INFO 24480 --- [ai-evaluation] [foReplicator-%d] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_AI-EVALUATION/LAPTOP-SS5TRSHP:ai-evaluation:8082: registering service...
+2026-05-26T02:54:03.690+09:00  INFO 24480 --- [ai-evaluation] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8082 (http) with context path '/'
+2026-05-26T02:54:03.691+09:00  INFO 24480 --- [ai-evaluation] [           main] .s.c.n.e.s.EurekaAutoServiceRegistration : Updating port to 8082
+2026-05-26T02:54:03.738+09:00  INFO 24480 --- [ai-evaluation] [foReplicator-%d] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_AI-EVALUATION/LAPTOP-SS5TRSHP:ai-evaluation:8082 - registration status: 204
+2026-05-26T02:54:04.097+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.k.clients.consumer.ConsumerConfig    : ConsumerConfig values: 
+	allow.auto.create.topics = true
+	auto.commit.interval.ms = 5000
+	auto.include.jmx.reporter = true
+	auto.offset.reset = earliest
+	bootstrap.servers = [localhost:9092]
+	check.crcs = true
+	client.dns.lookup = use_all_dns_ips
+	client.id = consumer-matching-evaluation-1
+	client.rack = 
+	connections.max.idle.ms = 540000
+	default.api.timeout.ms = 60000
+	enable.auto.commit = false
+	enable.metrics.push = true
+	exclude.internal.topics = true
+	fetch.max.bytes = 52428800
+	fetch.max.wait.ms = 500
+	fetch.min.bytes = 1
+	group.id = matching-evaluation
+	group.instance.id = null
+	group.protocol = classic
+	group.remote.assignor = null
+	heartbeat.interval.ms = 3000
+	interceptor.classes = []
+	internal.leave.group.on.close = true
+	internal.throw.on.fetch.stable.offset.unsupported = false
+	isolation.level = read_uncommitted
+	key.deserializer = class org.apache.kafka.common.serialization.StringDeserializer
+	max.partition.fetch.bytes = 1048576
+	max.poll.interval.ms = 300000
+	max.poll.records = 500
+	metadata.max.age.ms = 300000
+	metadata.recovery.strategy = none
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partition.assignment.strategy = [class org.apache.kafka.clients.consumer.RangeAssignor, class org.apache.kafka.clients.consumer.CooperativeStickyAssignor]
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retry.backoff.max.ms = 1000
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.login.retry.backoff.max.ms = 10000
+	sasl.login.retry.backoff.ms = 100
+	sasl.mechanism = GSSAPI
+	sasl.oauthbearer.clock.skew.seconds = 30
+	sasl.oauthbearer.expected.audience = null
+	sasl.oauthbearer.expected.issuer = null
+	sasl.oauthbearer.header.urlencode = false
+	sasl.oauthbearer.jwks.endpoint.refresh.ms = 3600000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms = 10000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.ms = 100
+	sasl.oauthbearer.jwks.endpoint.url = null
+	sasl.oauthbearer.scope.claim.name = scope
+	sasl.oauthbearer.sub.claim.name = sub
+	sasl.oauthbearer.token.endpoint.url = null
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.certificate.chain = null
+	ssl.keystore.key = null
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.certificates = null
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	value.deserializer = class org.apache.kafka.common.serialization.StringDeserializer
+
+2026-05-26T02:54:04.194+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.k.c.t.i.KafkaMetricsCollector        : initializing Kafka metrics collector
+2026-05-26T02:54:04.440+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka version: 3.9.2
+2026-05-26T02:54:04.441+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka commitId: 5e9866f43ab8e7e4
+2026-05-26T02:54:04.441+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka startTimeMs: 1779731644438
+2026-05-26T02:54:04.458+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-matching-evaluation-1, groupId=matching-evaluation] Subscribed to topic(s): evaluation.start
+2026-05-26T02:54:04.473+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.k.clients.consumer.ConsumerConfig    : ConsumerConfig values: 
+	allow.auto.create.topics = true
+	auto.commit.interval.ms = 5000
+	auto.include.jmx.reporter = true
+	auto.offset.reset = earliest
+	bootstrap.servers = [localhost:9092]
+	check.crcs = true
+	client.dns.lookup = use_all_dns_ips
+	client.id = consumer-matching-evaluation-2
+	client.rack = 
+	connections.max.idle.ms = 540000
+	default.api.timeout.ms = 60000
+	enable.auto.commit = false
+	enable.metrics.push = true
+	exclude.internal.topics = true
+	fetch.max.bytes = 52428800
+	fetch.max.wait.ms = 500
+	fetch.min.bytes = 1
+	group.id = matching-evaluation
+	group.instance.id = null
+	group.protocol = classic
+	group.remote.assignor = null
+	heartbeat.interval.ms = 3000
+	interceptor.classes = []
+	internal.leave.group.on.close = true
+	internal.throw.on.fetch.stable.offset.unsupported = false
+	isolation.level = read_uncommitted
+	key.deserializer = class org.apache.kafka.common.serialization.StringDeserializer
+	max.partition.fetch.bytes = 1048576
+	max.poll.interval.ms = 300000
+	max.poll.records = 500
+	metadata.max.age.ms = 300000
+	metadata.recovery.strategy = none
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partition.assignment.strategy = [class org.apache.kafka.clients.consumer.RangeAssignor, class org.apache.kafka.clients.consumer.CooperativeStickyAssignor]
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retry.backoff.max.ms = 1000
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.login.retry.backoff.max.ms = 10000
+	sasl.login.retry.backoff.ms = 100
+	sasl.mechanism = GSSAPI
+	sasl.oauthbearer.clock.skew.seconds = 30
+	sasl.oauthbearer.expected.audience = null
+	sasl.oauthbearer.expected.issuer = null
+	sasl.oauthbearer.header.urlencode = false
+	sasl.oauthbearer.jwks.endpoint.refresh.ms = 3600000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms = 10000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.ms = 100
+	sasl.oauthbearer.jwks.endpoint.url = null
+	sasl.oauthbearer.scope.claim.name = scope
+	sasl.oauthbearer.sub.claim.name = sub
+	sasl.oauthbearer.token.endpoint.url = null
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.certificate.chain = null
+	ssl.keystore.key = null
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.certificates = null
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	value.deserializer = class org.apache.kafka.common.serialization.StringDeserializer
+
+2026-05-26T02:54:04.474+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.k.c.t.i.KafkaMetricsCollector        : initializing Kafka metrics collector
+2026-05-26T02:54:04.503+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka version: 3.9.2
+2026-05-26T02:54:04.503+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka commitId: 5e9866f43ab8e7e4
+2026-05-26T02:54:04.503+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka startTimeMs: 1779731644503
+2026-05-26T02:54:04.516+09:00  INFO 24480 --- [ai-evaluation] [           main] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] Subscribed to topic(s): evaluation.collect
+2026-05-26T02:54:04.542+09:00  INFO 24480 --- [ai-evaluation] [           main] o.e.evaluation.EvaluationApplication     : Started EvaluationApplication in 10.064 seconds (process running for 11.037)
+2026-05-26T02:54:05.362+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] org.apache.kafka.clients.Metadata        : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] Cluster ID: -m5r0hA2Qjm3UJ5aUHK7zA
+2026-05-26T02:54:05.362+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] org.apache.kafka.clients.Metadata        : [Consumer clientId=consumer-matching-evaluation-1, groupId=matching-evaluation] Cluster ID: -m5r0hA2Qjm3UJ5aUHK7zA
+2026-05-26T02:54:05.363+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-1, groupId=matching-evaluation] Discovered group coordinator localhost:9092 (id: 2147483646 rack: null)
+2026-05-26T02:54:05.364+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] Discovered group coordinator localhost:9092 (id: 2147483646 rack: null)
+2026-05-26T02:54:05.367+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] (Re-)joining group
+2026-05-26T02:54:05.367+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-1, groupId=matching-evaluation] (Re-)joining group
+2026-05-26T02:54:05.397+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] Request joining group due to: need to re-join with the given member-id: consumer-matching-evaluation-2-b595b2fe-aa3f-4ec6-995c-b24e1cc8c8a1
+2026-05-26T02:54:05.397+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-1, groupId=matching-evaluation] Request joining group due to: need to re-join with the given member-id: consumer-matching-evaluation-1-43ddb6d9-6ff3-4d9e-86b1-f567f27080d4
+2026-05-26T02:54:05.398+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] (Re-)joining group
+2026-05-26T02:54:05.398+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-1, groupId=matching-evaluation] (Re-)joining group
+2026-05-26T02:54:27.390+09:00  INFO 24480 --- [ai-evaluation] [nio-8082-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-05-26T02:54:27.390+09:00  INFO 24480 --- [ai-evaluation] [nio-8082-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-05-26T02:54:27.395+09:00  INFO 24480 --- [ai-evaluation] [nio-8082-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 4 ms
+2026-05-26T02:54:30.722+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-1, groupId=matching-evaluation] Successfully joined group with generation Generation{generationId=18, memberId='consumer-matching-evaluation-1-43ddb6d9-6ff3-4d9e-86b1-f567f27080d4', protocol='range'}
+2026-05-26T02:54:30.722+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] Successfully joined group with generation Generation{generationId=18, memberId='consumer-matching-evaluation-2-b595b2fe-aa3f-4ec6-995c-b24e1cc8c8a1', protocol='range'}
+2026-05-26T02:54:30.736+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-1, groupId=matching-evaluation] Finished assignment for group at generation 18: {consumer-matching-evaluation-1-43ddb6d9-6ff3-4d9e-86b1-f567f27080d4=Assignment(partitions=[evaluation.start-0]), consumer-matching-evaluation-2-b595b2fe-aa3f-4ec6-995c-b24e1cc8c8a1=Assignment(partitions=[evaluation.collect-0])}
+2026-05-26T02:54:30.748+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-1, groupId=matching-evaluation] Successfully synced group in generation Generation{generationId=18, memberId='consumer-matching-evaluation-1-43ddb6d9-6ff3-4d9e-86b1-f567f27080d4', protocol='range'}
+2026-05-26T02:54:30.748+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] Successfully synced group in generation Generation{generationId=18, memberId='consumer-matching-evaluation-2-b595b2fe-aa3f-4ec6-995c-b24e1cc8c8a1', protocol='range'}
+2026-05-26T02:54:30.749+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-1, groupId=matching-evaluation] Notifying assignor about the new Assignment(partitions=[evaluation.start-0])
+2026-05-26T02:54:30.749+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] Notifying assignor about the new Assignment(partitions=[evaluation.collect-0])
+2026-05-26T02:54:30.751+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] k.c.c.i.ConsumerRebalanceListenerInvoker : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] Adding newly assigned partitions: evaluation.collect-0
+2026-05-26T02:54:30.751+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] k.c.c.i.ConsumerRebalanceListenerInvoker : [Consumer clientId=consumer-matching-evaluation-1, groupId=matching-evaluation] Adding newly assigned partitions: evaluation.start-0
+2026-05-26T02:54:30.764+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] Found no committed offset for partition evaluation.collect-0
+2026-05-26T02:54:30.765+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerUtils        : Setting offset for partition evaluation.start-0 to the committed offset FetchPosition{offset=18, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[localhost:9092 (id: 1 rack: null)], epoch=0}}
+2026-05-26T02:54:30.766+09:00  INFO 24480 --- [ai-evaluation] [ntainer#0-0-C-1] o.s.k.l.KafkaMessageListenerContainer    : matching-evaluation: partitions assigned: [evaluation.start-0]
+2026-05-26T02:54:30.778+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] o.a.k.c.c.internals.SubscriptionState    : [Consumer clientId=consumer-matching-evaluation-2, groupId=matching-evaluation] Resetting offset for partition evaluation.collect-0 to position FetchPosition{offset=0, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[localhost:9092 (id: 1 rack: null)], epoch=0}}.
+2026-05-26T02:54:30.779+09:00  INFO 24480 --- [ai-evaluation] [ntainer#1-0-C-1] o.s.k.l.KafkaMessageListenerContainer    : matching-evaluation: partitions assigned: [evaluation.collect-0]
+2026-05-26T02:59:02.967+09:00  INFO 24480 --- [ai-evaluation] [rap-executor-%d] c.n.d.s.r.aws.ConfigClusterResolver      : Resolving eureka endpoints via configuration
+2026-05-26T03:00:03.966+09:00  INFO 24480 --- [ai-evaluation] [beatExecutor-%d] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_AI-EVALUATION/LAPTOP-SS5TRSHP:ai-evaluation:8082 - Re-registering apps/AI-EVALUATION
+2026-05-26T03:00:03.966+09:00  INFO 24480 --- [ai-evaluation] [beatExecutor-%d] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_AI-EVALUATION/LAPTOP-SS5TRSHP:ai-evaluation:8082: registering service...
+2026-05-26T03:00:03.969+09:00  INFO 24480 --- [ai-evaluation] [beatExecutor-%d] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_AI-EVALUATION/LAPTOP-SS5TRSHP:ai-evaluation:8082 - registration status: 204
+
+> Task :matching-evaluation:bootRun FAILED
+4 actionable tasks: 3 executed, 1 up-to-date

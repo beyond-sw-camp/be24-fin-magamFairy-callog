@@ -4,7 +4,6 @@ import java.util.NoSuchElementException;
 import lombok.RequiredArgsConstructor;
 import org.example.evaluation.common.model.BaseResponse;
 import org.example.evaluation.common.model.BaseResponseStatus;
-import org.example.evaluation.model.EvaluationDocument;
 import org.example.evaluation.model.EvaluationDto;
 import org.example.evaluation.service.EvaluationService;
 import org.springframework.http.HttpStatus;
@@ -22,8 +21,8 @@ public class EvaluationController {
         try {
             return ResponseEntity.ok(
                     BaseResponse.processing(
-                            BaseResponseStatus.SUCCESS
-//                            ,evaluationService.result(campaignIdx)
+                            BaseResponseStatus.SUCCESS,
+                            evaluationService.result(campaignIdx)
                     )
             );
         } catch (NoSuchElementException e) {
@@ -35,27 +34,23 @@ public class EvaluationController {
         }
     }
 
-//    @PostMapping("/collect")
-//    public ResponseEntity<BaseResponse> collect(@RequestBody EvaluationDto.SaveEvaluationReq dto) {
-//        try {
-//            EvaluationDocument saved = evaluationService.save(dto);
-//            return ResponseEntity.ok(
-//                    BaseResponse.processing(
-//                            BaseResponseStatus.SUCCESSFULY_EVALUATED,
-//                            EvaluationDto.MongoEvaluationRes.of(saved)
-//                    )
-//            );
-//        } catch (Exception e) {
-//            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-//                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-//        }
-//    }
+    @PostMapping("/collect")
+    public ResponseEntity<BaseResponse> collect(@RequestBody EvaluationDto.SaveEvaluationReq dto) {
+        try {
+            evaluationService.requestCollectEvaluation(dto);
+            return ResponseEntity.accepted()
+                    .body(BaseResponse.processing(BaseResponseStatus.SUCCESSFULY_EVALUATED));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
+                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
+        }
+    }
 
-//    @PostMapping("/start")
-//    public ResponseEntity<BaseResponse> start(@RequestBody EvaluationDto.StartEvaluationReq dto) {
-//        evaluationService.startEvaluation(dto);
-//
-//        return ResponseEntity.accepted()
-//                .body(BaseResponse.processing(BaseResponseStatus.EVLUATION_STARTED));
-//    }
+    @PostMapping("/start")
+    public ResponseEntity<BaseResponse> start(@RequestBody EvaluationDto.StartEvaluationReq dto) {
+        evaluationService.requestStartEvaluation(dto);
+
+        return ResponseEntity.accepted()
+                .body(BaseResponse.processing(BaseResponseStatus.EVLUATION_STARTED));
+    }
 }
