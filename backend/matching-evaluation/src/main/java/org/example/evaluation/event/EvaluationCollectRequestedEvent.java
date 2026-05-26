@@ -25,6 +25,12 @@ public class EvaluationCollectRequestedEvent {
     private String campaignPublicId;
 
     private Long benefitIdx;
+    private String goal;
+    private String title;
+    private String partner;
+    private String assetDescription;
+    private String offer;
+    private String target;
     private String category;
     private Integer overallScore;
     private List<String> improvementDirections;

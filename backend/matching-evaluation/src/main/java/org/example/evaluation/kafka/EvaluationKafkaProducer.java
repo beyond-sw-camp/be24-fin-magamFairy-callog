@@ -4,9 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.example.evaluation.event.EvaluationCompletedEvent;
+import org.example.evaluation.event.EvaluationCollectRequestedEvent;
 import org.example.evaluation.event.EvaluationDeadLetterEvent;
 import org.example.evaluation.event.EvaluationEventType;
 import org.example.evaluation.event.EvaluationFailedEvent;
+import org.example.evaluation.event.EvaluationStartRequestedEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -17,6 +19,12 @@ public class EvaluationKafkaProducer {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
+
+    @Value("${app.kafka.topics.evaluation-start:evaluation.start}")
+    private String evaluationStartTopic;
+
+    @Value("${app.kafka.topics.evaluation-collect:evaluation.collect}")
+    private String evaluationCollectTopic;
 
     @Value("${app.kafka.topics.evaluation-completed:evaluation.completed}")
     private String evaluationCompletedTopic;
@@ -29,6 +37,14 @@ public class EvaluationKafkaProducer {
 
     @Value("${app.kafka.topics.evaluation-collect-dlq:evaluation.collect.dlq}")
     private String evaluationCollectDlqTopic;
+
+    public void sendStart(EvaluationStartRequestedEvent event) {
+        send(evaluationStartTopic, event.key(), event);
+    }
+
+    public void sendCollect(EvaluationCollectRequestedEvent event) {
+        send(evaluationCollectTopic, event.key(), event);
+    }
 
     public void sendCompleted(EvaluationCompletedEvent event) {
         send(evaluationCompletedTopic, event.key(), event);

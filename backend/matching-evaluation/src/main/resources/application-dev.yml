@@ -46,7 +46,7 @@ management:
 
 custom:
   n8n:
-    webhook-url: ${N8N_URL}
+    webhook-url: ${N8N_URL_TEST}
     evaluation-endpoint: ${EVALUATION_ENDPOINT}
 
 app:
