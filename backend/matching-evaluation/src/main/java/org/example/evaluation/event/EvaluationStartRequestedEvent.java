@@ -9,6 +9,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.example.evaluation.model.EvaluationDto;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 @Builder
@@ -17,21 +19,12 @@ import org.example.evaluation.model.EvaluationDto;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class EvaluationStartRequestedEvent {
 
-    @JsonAlias({"campaignIdx", "campaignPublicId"})
     private String campaignPublicId;
+    private Long benefitIdx;
 
-    private Object campaign;
-    private Object benefit;
+    @Builder.Default
+    private String eventId = UUID.randomUUID().toString();
 
-    public String key() {
-        return campaignPublicId;
-    }
-
-    public EvaluationDto.StartEvaluationReq toServiceRequest() {
-        return EvaluationDto.StartEvaluationReq.builder()
-                .campaignIdx(campaignPublicId)
-                .campaign(campaign)
-                .benefit(benefit)
-                .build();
-    }
+    @Builder.Default
+    private long timestamp = System.currentTimeMillis();
 }

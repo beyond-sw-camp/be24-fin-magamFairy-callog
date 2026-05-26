@@ -9,6 +9,7 @@ import org.example.evaluation.event.EvaluationCollectRequestedEvent;
 import org.example.evaluation.event.EvaluationFailedEvent;
 import org.example.evaluation.event.EvaluationStartRequestedEvent;
 import org.example.evaluation.model.EvaluationDocument;
+import org.example.evaluation.model.EvaluationDto;
 import org.example.evaluation.service.EvaluationService;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -26,25 +27,15 @@ public class EvaluationKafkaConsumer {
             topics = "${app.kafka.topics.evaluation-start}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void consumeStartEvaluation(String message) {
-        log.info("[Kafka] evaluation.start received: {}", message);
+    @KafkaListener(topics = "campaign-response-topic", groupId = "evaluation-module-group")
+    public void consumeMainModuleResponse(EvaluationDto.StartEvaluation response) {
+        log.info("[Evaluation MSA] 메인 모듈로부터 데이터 스냅샷 수신 완료. campaignIdx(publicId)={}",
+                response.getCampaignIdx());
 
-        EvaluationStartRequestedEvent event = null;
-        try {
-            event = objectMapper.readValue(message, EvaluationStartRequestedEvent.class);
-
-            evaluationService.startEvaluation(event.toServiceRequest());
-        } catch (JsonProcessingException e) {
-            log.error("[Kafka] evaluation.start deserialize failed.", e);
-            evaluationKafkaProducer.sendStartDeadLetter(null, message, e.getMessage());
-        } catch (RuntimeException e) {
-            log.error("[Kafka] evaluation.start processing failed.", e);
-            evaluationKafkaProducer.sendFailed(EvaluationFailedEvent.builder()
-                    .campaignPublicId(event != null ? event.getCampaignPublicId() : null)
-                    .failedStage("N8N_WEBHOOK")
-                    .reason(e.getMessage())
-                    .build());
-        }
+        // 2. 수신한 꽉 찬 데이터를 가지고 n8n 웰훅을 찌르거나 파이프라인 가동!
+        // 기존 startEvaluation(EvaluationDto.StartEvaluationReq dto)을
+        // 넘겨받은 상세 데이터에 맞게 가공하여 오버로딩 혹은 수정해서 호출하시면 됩니다.
+        evaluationService.startEvaluation(response);
     }
 
     @KafkaListener(

@@ -13,6 +13,7 @@ import org.example.backend.matching.model.PartnerBenefits;
 import org.example.backend.matching.model.evaluation.EvaluationDto;
 import org.example.backend.matching.repository.BenefitRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -26,6 +27,7 @@ public class EvaluationService {
     private final EvaluationKafkaProducer evaluationKafkaProducer;
     private final MatchingEvaluationClient matchingEvaluationClient;
 
+    @Transactional(readOnly = true)
     public void startEvaluation(EvaluationDto.StartEvaluationReq dto) {
         PartnerBenefits benefit = benefitRepository.findById(dto.getBenefitIdx())
                 .orElseThrow(() -> new EntityNotFoundException(
