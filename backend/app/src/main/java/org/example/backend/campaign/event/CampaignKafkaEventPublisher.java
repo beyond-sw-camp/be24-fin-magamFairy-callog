@@ -28,7 +28,7 @@ public class CampaignKafkaEventPublisher {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.kafka.campaign-sync-enabled}")
+    @Value("${app.kafka.campaign-sync-enabled:false}")
     private boolean enabled;
 
     @Value("${app.kafka.topics.campaign-sync:campaign.sync}")
