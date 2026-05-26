@@ -23,18 +23,32 @@ public class EvaluationKafkaConsumer {
 
     /**
      * ⭐️ 메인 모듈(모놀리식)이 꽉 채워 보내준 데이터 스냅샷을 수신하는 리스너
-     * 오직 모놀리식의 '응답 토픽'만 구독해야 합니다.
+     * String으로 안전하게 받아와 ObjectMapper를 통해 객체로 변환합니다.
      */
     @KafkaListener(
             topics = "${app.kafka.topics.evaluation-start-reply:evaluation.start-reply}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void consumeMainModuleResponse(EvaluationDto.StartEvaluation response) {
-        log.info("[Evaluation MSA] 메인 모듈로부터 데이터 스냅샷 수신 완료. campaignIdx(publicId)={}",
-                response.getCampaignIdx());
+    public void consumeMainModuleResponse(String message) { // 💡 EvaluationDto.StartEvaluation에서 String으로 변경
+        log.info("[Evaluation MSA] 메인 모듈로부터 응답 수신 (Raw Payload): {}", message);
 
-        // 수신한 데이터를 가지고 n8n 웹훅을 호출하는 비즈니스 로직 가동
-        evaluationService.startEvaluation(response);
+        try {
+            // 💡 명시적으로 Json 문자열을 수신 측 DTO 객체로 변환
+            EvaluationDto.StartEvaluation response =
+                    objectMapper.readValue(message, EvaluationDto.StartEvaluation.class);
+
+            log.info("[Evaluation MSA] 메인 모듈로부터 데이터 스냅샷 수신 및 파싱 완료. campaignIdx(publicId)={}",
+                    response.getCampaignIdx());
+
+            // 수신한 데이터를 가지고 n8n 웹훅을 호출하는 비즈니스 로직 가동
+            evaluationService.startEvaluation(response);
+
+        } catch (JsonProcessingException e) {
+            log.error("[Evaluation MSA] 응답 메시지 역직렬화(JSON 파싱) 실패. message={}", message, e);
+            // 필요 시 에러 핸들링 파이프라인 전송 가능 (예: sendStartDeadLetter)
+        } catch (RuntimeException e) {
+            log.error("[Evaluation MSA] 응답 처리 중 비즈니스 로직 에러 발생", e);
+        }
     }
 
     /**
