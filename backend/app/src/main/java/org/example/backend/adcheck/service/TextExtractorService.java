@@ -72,12 +72,8 @@ public class TextExtractorService {
             ObjectMapper objectMapper,
             @Value("${custom.layout.api-key:}") String layoutServiceApiKey
     ) {
-        if (!StringUtils.hasText(layoutServiceApiKey)) {
-            throw new IllegalStateException("LAYOUT_SERVICE_API_KEY is required for layout/OCR service calls.");
-        }
-
         this.objectMapper = objectMapper;
-        this.layoutServiceApiKey = layoutServiceApiKey.trim();
+        this.layoutServiceApiKey = StringUtils.hasText(layoutServiceApiKey) ? layoutServiceApiKey.trim() : "";
 
         SimpleClientHttpRequestFactory longRunningFactory = new SimpleClientHttpRequestFactory();
         longRunningFactory.setConnectTimeout(5000);
@@ -89,17 +85,14 @@ public class TextExtractorService {
         cropFactory.setReadTimeout(30000);
         cropFactory.setProxy(Proxy.NO_PROXY);
 
-        this.layoutRestClient = RestClient.builder()
-                .requestFactory(longRunningFactory)
-                .defaultHeader(LAYOUT_API_KEY_HEADER, this.layoutServiceApiKey)
+        this.layoutRestClient = withLayoutServiceApiKey(RestClient.builder()
+                .requestFactory(longRunningFactory))
                 .build();
-        this.ocrRestClient = RestClient.builder()
-                .requestFactory(longRunningFactory)
-                .defaultHeader(LAYOUT_API_KEY_HEADER, this.layoutServiceApiKey)
+        this.ocrRestClient = withLayoutServiceApiKey(RestClient.builder()
+                .requestFactory(longRunningFactory))
                 .build();
-        this.cropRestClient = RestClient.builder()
-                .requestFactory(cropFactory)
-                .defaultHeader(LAYOUT_API_KEY_HEADER, this.layoutServiceApiKey)
+        this.cropRestClient = withLayoutServiceApiKey(RestClient.builder()
+                .requestFactory(cropFactory))
                 .build();
     }
 
@@ -253,6 +246,7 @@ public class TextExtractorService {
     }
 
     private JsonNode requestLayout(byte[] bytes, String filename, String contentType) {
+        requireLayoutServiceApiKey();
         log.info("Calling layout-parser service. url={}, fileName={}, contentType={}, size={}",
                 layoutUrl, filename, contentType, bytes.length);
 
@@ -328,6 +322,7 @@ public class TextExtractorService {
     }
 
     private byte[] downloadCrop(String cropUrl) {
+        requireLayoutServiceApiKey();
         try {
             byte[] bytes = cropRestClient.get()
                     .uri(cropUrl)
@@ -423,6 +418,7 @@ public class TextExtractorService {
     }
 
     private String extractViaOcrSync(byte[] bytes, String filename, String contentType) {
+        requireLayoutServiceApiKey();
         log.info("Calling OCR service. url={}, fileName={}, contentType={}, size={}",
                 ocrUrl, filename, contentType, bytes.length);
 
@@ -462,6 +458,7 @@ public class TextExtractorService {
     }
 
     private String extractViaOcrJob(byte[] bytes, String filename, String contentType) {
+        requireLayoutServiceApiKey();
         String jobUrl = resolveOcrJobUrl();
         log.info("Calling OCR job service. url={}, fileName={}, contentType={}, size={}",
                 jobUrl, filename, contentType, bytes.length);
@@ -615,6 +612,19 @@ public class TextExtractorService {
                 || lower.contains("dnnl")
                 || lower.contains("busy")
                 || lower.contains("timed out");
+    }
+
+    private RestClient.Builder withLayoutServiceApiKey(RestClient.Builder builder) {
+        if (StringUtils.hasText(layoutServiceApiKey)) {
+            return builder.defaultHeader(LAYOUT_API_KEY_HEADER, layoutServiceApiKey);
+        }
+        return builder;
+    }
+
+    private void requireLayoutServiceApiKey() {
+        if (!StringUtils.hasText(layoutServiceApiKey)) {
+            throw new IllegalStateException("LAYOUT_SERVICE_API_KEY is required for layout/OCR service calls.");
+        }
     }
 
     private MultiValueMap<String, Object> createMultipartBody(byte[] bytes, String filename, String contentType) {
