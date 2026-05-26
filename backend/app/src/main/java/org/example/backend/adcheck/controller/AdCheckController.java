@@ -55,7 +55,7 @@ public class AdCheckController {
         try {
             return ResponseEntity.ok(BaseResponse.success(adCheckService.checkFile(file)));
         } catch (AdCheckService.FileCheckException e) {
-            log.error("Ad file check failed after text extraction. fileName={}, size={}",
+            log.error("Ad file check via ai-judge failed with partial response. fileName={}, size={}",
                     file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize(), e);
             return ResponseEntity.ok(BaseResponse.fail(BaseResponseStatus.FAIL, e.getResponse()));
         } catch (RuntimeException e) {

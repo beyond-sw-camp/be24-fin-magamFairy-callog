@@ -26,6 +26,8 @@ spring:
           uri: lb://ai-judge
           predicates:
             - Path=/aijudge/**
+          filters:
+            - JwtFilter
 
         # ai 평가
 

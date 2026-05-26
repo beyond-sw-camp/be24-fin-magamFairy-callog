@@ -21,9 +21,11 @@ app:
   frontend-url: ${FRONTEND_URL}
   secure-cookie: ${SECURE_COOKIE}
   kafka:
+    campaign-sync-enabled: ${CAMPAIGN_SYNC_KAFKA_ENABLED}
     topics:
       evaluation-start: evaluation.start
       evaluation-collect: evaluation.collect
+      campaign-sync: ${CAMPAIGN_SYNC_TOPIC:campaign.sync}
 msa:
   matching-evaluation:
     base-url: ${EVALUATION_URL}
@@ -113,19 +115,6 @@ logging:
     org.springframework.http.client: TRACE
 
 custom:
-  n8n:
-    webhook-url: ${N8N_URL_TEST}
-    evaluation-endpoint: ${EVALUATION_ENDPOINT}
-    check-endpoint: ${CHECK_ENDPOINT}
-  ocr:
-    url: ${OCR_SERVICE_URL}
-    async-enabled: ${OCR_ASYNC_ENABLED}
-    job-url: ${OCR_JOB_SERVICE_URL}
-    job-poll-interval-ms: ${OCR_JOB_POLL_INTERVAL_MS}
-    job-poll-timeout-ms: ${OCR_JOB_POLL_TIMEOUT_MS}
-  layout:
-    url: ${LAYOUT_SERVICE_URL}
-    api-key: ${LAYOUT_SERVICE_API_KEY:}
   mongodb:
     analysis-enabled: ${MONGODB_STD_ENABLED:false}
     analysis-uri: ${MONGODB_STD_URL:}

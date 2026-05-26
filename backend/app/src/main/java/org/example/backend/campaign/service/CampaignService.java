@@ -1,6 +1,7 @@
 package org.example.backend.campaign.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.backend.campaign.event.CampaignKafkaEventPublisher;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignDto;
 import org.example.backend.campaign.model.CampaignMember;
@@ -78,6 +79,7 @@ public class CampaignService {
     private final NotificationSseService sseService;
     private final TaskRepository taskRepository;
     private final DashboardCacheEvictor dashboardCacheEvictor;
+    private final CampaignKafkaEventPublisher campaignKafkaEventPublisher;
     public List<CampaignDto.Res> listCampaigns(Long userIdx) {
         return listCampaigns(userIdx, "mine");
     }
@@ -165,13 +167,14 @@ public class CampaignService {
                     .build();
             participantRepository.save(pmParticipant);
         }
+        List<CampaignMember> syncedMembers = new ArrayList<>();
         CampaignMember ownerMember = CampaignMember.builder()
                 .campaign(saved)
                 .user(owner)
                 .campaignRole(CampaignMemberRole.GENERAL_MANAGER)
                 .joinedAt(LocalDateTime.now())
                 .build();
-        memberRepository.save(ownerMember);
+        syncedMembers.add(memberRepository.save(ownerMember));
 
         // 모달에서 선택한 팀원(ownerUserIdxs) — 본인 제외하고 MANAGER로 자동 등록
         if (dto.ownerUserIdxs() != null && !dto.ownerUserIdxs().isEmpty()) {
@@ -183,12 +186,13 @@ public class CampaignService {
                         .findByCampaignIdxAndUserIdx(saved.getIdx(), candidate.getIdx())
                         .isPresent();
                 if (alreadyMember) continue;
-                memberRepository.save(CampaignMember.builder()
+                CampaignMember managerMember = memberRepository.save(CampaignMember.builder()
                         .campaign(saved)
                         .user(candidate)
                         .campaignRole(CampaignMemberRole.MANAGER)
                         .joinedAt(LocalDateTime.now())
                         .build());
+                syncedMembers.add(managerMember);
             }
         }
 
@@ -199,6 +203,8 @@ public class CampaignService {
 
         // Dashboard 캐시 무효화 (active count, partnerCount, kpiCategories, blockers 영향)
         dashboardCacheEvictor.evictCampaign(saved.getIdx());
+        campaignKafkaEventPublisher.publishCampaignUpserted(saved);
+        syncedMembers.forEach(campaignKafkaEventPublisher::publishMemberUpserted);
 
         return buildResponseFor(saved, owner);
     }
@@ -231,6 +237,7 @@ public class CampaignService {
         sseService.broadcastCalendarRefresh(campaign.getIdx(), "campaign");
         // Dashboard 캐시 무효화 (캠페인명/partner 변경 시 partnerProgress 등 stale 방지)
         dashboardCacheEvictor.evictCampaign(campaign.getIdx());
+        campaignKafkaEventPublisher.publishCampaignUpserted(campaign);
         return buildResponseFor(campaign, user);
     }
 
@@ -241,6 +248,7 @@ public class CampaignService {
         campaign.updatePartners(normalizeList(dto.partners()));
         // Dashboard 캐시 무효화 (partnerCount, partnerProgress 영향)
         dashboardCacheEvictor.evictCampaign(campaign.getIdx());
+        campaignKafkaEventPublisher.publishCampaignUpserted(campaign);
         return buildResponseFor(campaign, user);
     }
 
@@ -257,6 +265,7 @@ public class CampaignService {
         campaign.updateStatus(status);
         // Dashboard 캐시 무효화 (active count, activeByOrg 영향)
         dashboardCacheEvictor.evictCampaign(campaign.getIdx());
+        campaignKafkaEventPublisher.publishCampaignUpserted(campaign);
         return buildResponseFor(campaign, user);
     }
 
