@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.adcheck.model.AdCheckDto;
+import org.example.backend.adcheck.model.AdCheckJobDto;
 import org.example.backend.adcheck.service.AdAiAnalysisService;
+import org.example.backend.adcheck.service.AdCheckJobService;
 import org.example.backend.notification.service.NotificationService;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -14,21 +16,24 @@ import org.springframework.stereotype.Component;
 public class AiJudgeKafkaEventListener {
     private final ObjectMapper objectMapper;
     private final AdAiAnalysisService adAiAnalysisService;
+    private final AdCheckJobService adCheckJobService;
     private final NotificationService notificationService;
 
     public AiJudgeKafkaEventListener(
             ObjectMapper objectMapper,
             AdAiAnalysisService adAiAnalysisService,
+            AdCheckJobService adCheckJobService,
             NotificationService notificationService
     ) {
         this.objectMapper = objectMapper;
         this.adAiAnalysisService = adAiAnalysisService;
+        this.adCheckJobService = adCheckJobService;
         this.notificationService = notificationService;
     }
 
     @KafkaListener(
             topics = "${ai-judge.kafka.completed-topic:ai-judge.completed}",
-            groupId = "${spring.kafka.consumer.group-id:callog-app-ai-judge}",
+            groupId = "${ai-judge.kafka.group-id:callog-app-ai-judge}",
             autoStartup = "${ai-judge.kafka.enabled:false}"
     )
     public void handleAiJudgeCompleted(String payload) {
@@ -41,17 +46,28 @@ public class AiJudgeKafkaEventListener {
                     text(event, "aiStatus"),
                     text(event, "fileName")
             );
-            adAiAnalysisService.applyAiJudgeEvent(event);
+            String eventType = text(event, "eventType");
+            String appManagedJobId = text(event.path("context"), "adCheckJobId");
 
-            Long requesterIdx = longValue(event.path("context").path("requesterUserIdx"));
-            if (hasText(event.path("context").path("adCheckJobId"))) {
+            if ("AI_JUDGE_PROGRESS".equals(eventType)) {
+                applyAppManagedProgress(event, appManagedJobId);
+                return;
+            }
+
+            if (hasText(appManagedJobId)) {
+                applyAppManagedResult(event, eventType, appManagedJobId);
+                applyAnalysisProjection(event);
                 log.info(
                         "Skip ai-judge Kafka notification for app-managed ad check job. jobId={}, analysisJobId={}",
-                        text(event.path("context"), "adCheckJobId"),
+                        appManagedJobId,
                         text(event, "analysisJobId")
                 );
                 return;
             }
+
+            adAiAnalysisService.applyAiJudgeEvent(event);
+
+            Long requesterIdx = longValue(event.path("context").path("requesterUserIdx"));
             if (requesterIdx == null) {
                 log.warn(
                         "AI judge Kafka event has no requester context. eventType={}, analysisJobId={}",
@@ -67,7 +83,48 @@ public class AiJudgeKafkaEventListener {
         }
     }
 
+    private void applyAnalysisProjection(JsonNode event) {
+        try {
+            adAiAnalysisService.applyAiJudgeEvent(event);
+        } catch (Exception e) {
+            log.warn("AI judge campaign analysis projection update failed. analysisJobId={}",
+                    text(event, "analysisJobId"), e);
+        }
+    }
+
+    private void applyAppManagedProgress(JsonNode event, String jobId) {
+        if (!hasText(jobId)) {
+            return;
+        }
+        String token = text(event.path("context"), "adCheckProgressToken");
+        String step = text(event, "step");
+        if (!hasText(token) || !hasText(step)) {
+            log.warn("Skipped AI judge progress event because token or step is missing. jobId={}", jobId);
+            return;
+        }
+        adCheckJobService.updateProgress(new AdCheckJobDto.ProgressReq(jobId, token, step));
+    }
+
+    private void applyAppManagedResult(JsonNode event, String eventType, String jobId) {
+        AdCheckDto.FileCheckRes response = toFileCheckResponse(event);
+        if ("AI_JUDGE_FAILED".equals(eventType)) {
+            adCheckJobService.failFromAiJudgeEvent(jobId, response, text(event, "errorMessage"));
+            return;
+        }
+        adCheckJobService.completeFromAiJudgeEvent(jobId, response);
+    }
+
     private AdCheckDto.FileCheckRes toFileCheckResponse(JsonNode event) {
+        JsonNode result = event == null ? null : event.path("result");
+        if (result != null && result.isObject()) {
+            try {
+                return objectMapper.treeToValue(result, AdCheckDto.FileCheckRes.class);
+            } catch (Exception e) {
+                log.warn("AI judge result payload cannot be converted. analysisJobId={}",
+                        text(event, "analysisJobId"), e);
+            }
+        }
+
         String eventType = text(event, "eventType");
         String errorMessage = text(event, "errorMessage");
         if ("AI_JUDGE_FAILED".equals(eventType) && errorMessage.isBlank()) {
@@ -149,5 +206,9 @@ public class AiJudgeKafkaEventListener {
 
     private boolean hasText(JsonNode value) {
         return value != null && !value.isMissingNode() && !value.isNull() && !value.asText("").isBlank();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

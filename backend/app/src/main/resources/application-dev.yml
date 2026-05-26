@@ -26,6 +26,15 @@ app:
       evaluation-start: evaluation.start
       evaluation-collect: evaluation.collect
       campaign-sync: ${CAMPAIGN_SYNC_TOPIC:campaign.sync}
+  ad-check:
+    kafka-result-timeout-ms: ${AI_JUDGE_KAFKA_RESULT_TIMEOUT_MS:300000}
+ai-judge:
+  kafka:
+    enabled: ${AI_JUDGE_KAFKA_ENABLED:true}
+    request-topic: ${AI_JUDGE_REQUEST_TOPIC:ai-judge.requests}
+    completed-topic: ${AI_JUDGE_COMPLETED_TOPIC:ai-judge.completed}
+    group-id: ${AI_JUDGE_APP_GROUP_ID:callog-app-ai-judge}
+    send-timeout-ms: ${AI_JUDGE_KAFKA_SEND_TIMEOUT_MS:10000}
 msa:
   matching-evaluation:
     base-url: ${EVALUATION_URL}
@@ -101,6 +110,12 @@ spring:
 
   kafka:
     bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 logging:
   level:

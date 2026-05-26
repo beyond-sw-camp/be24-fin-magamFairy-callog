@@ -50,7 +50,9 @@ management:
 
 ai-judge:
   kafka:
-    enabled: ${AI_JUDGE_KAFKA_ENABLED:false}
+    enabled: ${AI_JUDGE_KAFKA_ENABLED:true}
+    request-topic: ${AI_JUDGE_REQUEST_TOPIC:ai-judge.requests}
+    request-group-id: ${AI_JUDGE_REQUEST_GROUP_ID:ai-judge-file-check}
     completed-topic: ${AI_JUDGE_COMPLETED_TOPIC:ai-judge.completed}
     campaign-sync-enabled: ${AI_JUDGE_CAMPAIGN_SYNC_ENABLED:false}
     campaign-sync-topic: ${CAMPAIGN_SYNC_TOPIC:campaign.sync}

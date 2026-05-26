@@ -3,7 +3,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ApproveAdReviewRequest,
-  CheckCampaignAdFileWithAiJudge,
   CreateAdReviewRequest,
   ListAdReviewRequests,
   RejectAdReviewRequest,
@@ -713,14 +712,9 @@ async function processAnalysisFile(file) {
   selectedAnalysisFile.value = file
   isAnalyzing.value = true
   try {
-    const result = await CheckCampaignAdFileWithAiJudge(props.campaignId, file)
-    activeAnalysisJobId.value = result?.analysisJobId ?? ''
-    analysisResult.value = result
-    analysisError.value = normalizeAnalysisStatus(result?.status)
-      ? ''
-      : 'AI 검수 결과 형식이 올바르지 않습니다. 서버 응답을 확인해주세요.'
-    isAnalyzing.value = false
-    void loadAdCheckSummaries()
+    const job = await adCheckJobsStore.startJob(file, { campaignId: props.campaignId })
+    activeAnalysisJobId.value = job?.jobId ?? ''
+    applyAnalysisJobResult(job)
   } catch (error) {
     if (error?.data && typeof error.data === 'object') {
       analysisResult.value = error.data

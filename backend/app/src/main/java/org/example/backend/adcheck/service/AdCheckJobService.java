@@ -6,6 +6,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
+import org.example.backend.adcheck.event.AiJudgeKafkaRequestPublisher;
 import org.example.backend.adcheck.model.AdCheckDto;
 import org.example.backend.adcheck.model.AdCheckJob;
 import org.example.backend.adcheck.model.AdCheckJobDto;
@@ -52,7 +53,6 @@ import java.util.function.Supplier;
 public class AdCheckJobService {
     private static final String CONTEXT_JOB_ID = "adCheckJobId";
     private static final String CONTEXT_PROGRESS_TOKEN = "adCheckProgressToken";
-    private static final String CONTEXT_PROGRESS_CALLBACK_URL = "adCheckProgressCallbackUrl";
     private static final List<AdCheckJobStatus> ACTIVE_STATUSES = List.of(
             AdCheckJobStatus.RUNNING,
             AdCheckJobStatus.QUEUED
@@ -63,10 +63,11 @@ public class AdCheckJobService {
             AdCheckJobStep.RESULT_BUILDING
     );
     private static final int SUMMARY_SAVE_RETRY_COUNT = 3;
+    private static final long RESULT_WAIT_POLL_MILLIS = 1000L;
 
     private final AdCheckJobRepository adCheckJobRepository;
     private final UserRepository userRepository;
-    private final AdCheckService adCheckService;
+    private final AiJudgeKafkaRequestPublisher aiJudgeKafkaRequestPublisher;
     private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
     private final AdCheckFileStorageService adCheckFileStorageService;
     private final AdCheckOutboxEventRepository adCheckOutboxEventRepository;
@@ -79,8 +80,8 @@ public class AdCheckJobService {
     private final BlockingQueue<String> queue = new LinkedBlockingQueue<>();
     private final Set<String> queuedJobIds = ConcurrentHashMap.newKeySet();
 
-    @Value("${app.ad-check.progress-callback-url:http://localhost:8083/ad/check/jobs/internal/progress}")
-    private String progressCallbackUrl;
+    @Value("${app.ad-check.kafka-result-timeout-ms:300000}")
+    private long kafkaResultTimeoutMillis;
 
     private volatile boolean acceptingJobs = true;
     private Thread workerThread;
@@ -129,6 +130,9 @@ public class AdCheckJobService {
         byte[] fileBytes = readFileBytes(file);
         User requesterEntity = userRepository.findByIdx(requester.getIdx())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자 정보를 찾을 수 없습니다."));
+        if (campaignId != null && !campaignId.isBlank()) {
+            requireCampaignAccess(campaignId, requester.getIdx());
+        }
         String jobId = "ai-judge-" + UUID.randomUUID();
         String progressToken = UUID.randomUUID().toString();
 
@@ -324,24 +328,60 @@ public class AdCheckJobService {
         );
 
         try {
-            AdCheckDto.FileCheckRes result = adCheckService.checkFileWithAiJudge(
+            AdCheckFileStorageService.StoredFile kafkaSourceFile = adCheckFileStorageService.uploadOriginal(
                     multipartFile,
-                    workItem.requester(),
-                    workItem.campaignId(),
+                    adCheckFileStorageService.createAnalysisStorageContext(workItem.fileName())
+            );
+            aiJudgeKafkaRequestPublisher.publishFileCheckRequest(
+                    workItem.jobId(),
+                    multipartFile.getOriginalFilename(),
+                    multipartFile.getContentType(),
+                    kafkaSourceFile.getFileSize(),
+                    kafkaSourceFile.getObjectKey(),
+                    null,
                     progressContext(workItem)
             );
-            completeJob(jobId, result);
+            waitForTerminalJob(jobId);
         } catch (Exception e) {
             failJob(jobId, e);
         }
     }
 
-    private void completeJob(String jobId, AdCheckDto.FileCheckRes result) {
+    public AdCheckJobDto.JobRes completeFromAiJudgeEvent(
+            String jobId,
+            AdCheckDto.FileCheckRes result
+    ) {
+        if (jobId == null || jobId.isBlank()) {
+            return null;
+        }
+        return completeJob(jobId, result);
+    }
+
+    public AdCheckJobDto.JobRes failFromAiJudgeEvent(
+            String jobId,
+            AdCheckDto.FileCheckRes partialResponse,
+            String fallbackErrorMessage
+    ) {
+        if (jobId == null || jobId.isBlank()) {
+            return null;
+        }
+        String message = firstText(
+                partialResponse == null ? null : partialResponse.getErrorMessage(),
+                fallbackErrorMessage,
+                "AI judge Kafka processing failed."
+        );
+        return failJob(jobId, new AdCheckService.FileCheckException(message, partialResponse, null));
+    }
+
+    private AdCheckJobDto.JobRes completeJob(String jobId, AdCheckDto.FileCheckRes result) {
         String mongoDocumentId = adCheckAnalysisMongoStorageService.saveDetailOrThrow(result);
         AdCheckJobDto.JobRes completedJob = executeWithRetry(jobId, "ad check summary save", () -> transactionTemplate.execute(status -> {
             AdCheckJob job = adCheckJobRepository.findByJobId(jobId).orElse(null);
             if (job == null) {
                 return null;
+            }
+            if (job.isTerminal()) {
+                return toDto(job);
             }
             job.markSucceeded(
                     null,
@@ -355,9 +395,10 @@ public class AdCheckJobService {
         }));
         emitJobEvent(completedJob, "ad-check.completed");
         notifyCompletedJob(completedJob, result);
+        return completedJob;
     }
 
-    private void failJob(String jobId, Throwable error) {
+    private AdCheckJobDto.JobRes failJob(String jobId, Throwable error) {
         AdCheckDto.FileCheckRes partialResponse = null;
         if (error instanceof AdCheckService.FileCheckException fileCheckException) {
             partialResponse = fileCheckException.getResponse();
@@ -383,6 +424,9 @@ public class AdCheckJobService {
             if (job == null) {
                 return null;
             }
+            if (job.isTerminal()) {
+                return toDto(job);
+            }
             job.markFailed(
                     errorMessage,
                     null,
@@ -396,6 +440,7 @@ public class AdCheckJobService {
         });
         emitJobEvent(failedJob, "ad-check.failed");
         notifyFailedJob(failedJob);
+        return failedJob;
     }
 
     private WorkItem loadWorkItem(String jobId) {
@@ -418,10 +463,46 @@ public class AdCheckJobService {
         Map<String, Object> context = new HashMap<>();
         context.put(CONTEXT_JOB_ID, workItem.jobId());
         context.put(CONTEXT_PROGRESS_TOKEN, workItem.progressToken());
-        if (progressCallbackUrl != null && !progressCallbackUrl.isBlank()) {
-            context.put(CONTEXT_PROGRESS_CALLBACK_URL, progressCallbackUrl.trim());
+        if (workItem.requester() != null) {
+            if (workItem.requester().getIdx() != null) {
+                context.put("requesterUserIdx", workItem.requester().getIdx());
+            }
+            if (workItem.requester().getId() != null && !workItem.requester().getId().isBlank()) {
+                context.put("requesterLoginId", workItem.requester().getId());
+            }
+            if (workItem.requester().getName() != null && !workItem.requester().getName().isBlank()) {
+                context.put("requesterName", workItem.requester().getName());
+            }
+        }
+        if (workItem.campaignId() != null && !workItem.campaignId().isBlank()) {
+            context.put("campaignId", workItem.campaignId().trim());
         }
         return context;
+    }
+
+    private void waitForTerminalJob(String jobId) {
+        long deadline = System.currentTimeMillis() + Math.max(1000L, kafkaResultTimeoutMillis);
+        while (acceptingJobs) {
+            if (isTerminalJob(jobId)) {
+                return;
+            }
+            if (System.currentTimeMillis() > deadline) {
+                throw new IllegalStateException("AI judge Kafka result timed out.");
+            }
+            try {
+                Thread.sleep(RESULT_WAIT_POLL_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("AI judge Kafka result wait interrupted.", e);
+            }
+        }
+    }
+
+    private boolean isTerminalJob(String jobId) {
+        Boolean terminal = transactionTemplate.execute(status -> adCheckJobRepository.findByJobId(jobId)
+                .map(AdCheckJob::isTerminal)
+                .orElse(true));
+        return Boolean.TRUE.equals(terminal);
     }
 
     private AdCheckJobStep parseCallbackStep(String rawStep) {

@@ -363,3 +363,11 @@
 - 알림센터 목록이 필터 결과 전체를 한 번에 렌더링하지 않고 10개씩 페이지 단위로 표시되도록 했다.
 - 필터별 전체 개수와 상단 통계는 유지하고, 목록 헤더에는 현재 페이지에서 보이는 범위를 표시하도록 정리했다.
 - 필터 변경, 쿼리 `notificationId` 진입, 페이지 변경 시 선택 알림과 상세 패널이 현재 페이지에 맞게 동기화되도록 했다.
+
+### AI 검수 app-ai-judge Kafka 통신 전환
+- 검수 Job worker가 ai-judge HTTP API를 직접 호출하지 않고 `ai-judge.requests` Kafka 토픽으로 파일 검수 요청을 발행하도록 변경했다.
+- ai-judge 서비스는 `ai-judge.requests`를 소비해 파일 분석을 수행하고, 진행/완료/실패 이벤트를 `ai-judge.completed` 토픽으로 발행한다.
+- app은 `AI_JUDGE_PROGRESS`, `AI_JUDGE_COMPLETED`, `AI_JUDGE_FAILED` 이벤트를 소비해 Job 진행률, 완료, 실패 상태를 갱신한다.
+- 기존 HTTP progress callback 대신 Kafka progress 이벤트를 사용하도록 연결해 MSA 간 AI 검수 흐름의 중심 통신을 Kafka로 맞췄다.
+- `.\gradlew.bat :app:compileJava :aijudge:compileJava` 성공.
+- `npm run build` 성공.
