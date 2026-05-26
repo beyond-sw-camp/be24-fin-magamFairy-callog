@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Phase 2 데이터 모델 보강 — 월별·일별 KPI 스냅샷 배치.
@@ -110,13 +111,25 @@ public class SnapshotScheduler {
     /** organization 별로 참여 캠페인의 CampaignKpi 모음. */
     private Map<Long, List<CampaignKpi>> collectKpisByOrganization() {
         Map<Long, List<CampaignKpi>> kpisByOrg = new HashMap<>();
-        Set<Long> seenCampaigns = new HashSet<>();
-        for (CampaignParticipant cp : participantRepository.findAll()) {
+        List<CampaignParticipant> participants = participantRepository.findAll();
+        Set<Long> seenCampaigns = participants.stream()
+                .map(CampaignParticipant::getCampaign)
+                .filter(Objects::nonNull)
+                .map(Campaign::getIdx)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        Map<Long, List<CampaignKpi>> kpisByCampaign = seenCampaigns.isEmpty()
+                ? Map.of()
+                : campaignKpiRepository.findAllByCampaign_IdxInOrderByIdxAsc(seenCampaigns).stream()
+                    .filter(kpi -> kpi.getCampaign() != null && kpi.getCampaign().getIdx() != null)
+                    .collect(Collectors.groupingBy(kpi -> kpi.getCampaign().getIdx()));
+
+        for (CampaignParticipant cp : participants) {
             Organization org = cp.getOrganization();
             Campaign campaign = cp.getCampaign();
-            if (org == null || campaign == null) continue;
-            seenCampaigns.add(campaign.getIdx());
-            List<CampaignKpi> ckpis = campaignKpiRepository.findAllByCampaignIdxOrderByIdxAsc(campaign.getIdx());
+            if (org == null || org.getIdx() == null || campaign == null || campaign.getIdx() == null) continue;
+            List<CampaignKpi> ckpis = kpisByCampaign.getOrDefault(campaign.getIdx(), List.of());
             kpisByOrg.computeIfAbsent(org.getIdx(), k -> new java.util.ArrayList<>()).addAll(ckpis);
         }
         return kpisByOrg;

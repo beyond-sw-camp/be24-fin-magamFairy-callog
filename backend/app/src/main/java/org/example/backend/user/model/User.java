@@ -17,6 +17,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.example.backend.organization.model.Organization;
 
 @NoArgsConstructor
@@ -70,6 +71,7 @@ public class User {
     @Setter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organization_id")
+    @JsonIgnoreProperties("generalManager")
     private Organization organization;
 
     @Setter

@@ -1,6 +1,7 @@
 package org.example.backend.notification.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.backend.common.redis.CacheNames;
 import org.example.backend.common.security.Roles;
 import org.example.backend.notification.model.NotificationAdminPolicy;
@@ -26,6 +27,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class NotificationSettingsService {
     private final NotificationSettingRepository settingRepository;
     private final NotificationAdminPolicyRepository adminPolicyRepository;
@@ -35,8 +37,8 @@ public class NotificationSettingsService {
     /**
      * 알림 설정 조회 — 사용자별 키. TTL 30분 (CacheNames 설정).
      * 변경(updateSetting) 시 즉시 evict 되어야 stale 안 됨.
+     * 메서드 레벨 쓰기 트랜잭션 제거: 조회 메서드는 클래스 레벨 readOnly 트랜잭션만 사용.
      */
-    @Transactional
     @Cacheable(value = CacheNames.NOTIFICATION_SETTING, key = "#authUser.idx")
     public NotificationDto.SettingRes getSetting(AuthUserDetails authUser) {
         User user = findUser(authUser);
