@@ -1,7 +1,13 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { GetAdCheckJobDetail, ListAdCheckJobs } from '@/api/adcheck/index.js'
+import AdCheckDetailModal from '@/components/adcheck/AdCheckDetailModal.vue'
+import {
+  getAdCheckDisplayVerdict,
+  normalizeAdCheckResultStatus,
+  normalizeAdCheckVerdictLevel,
+} from '@/utils/adCheckVerdict'
 
 const props = defineProps({
   campaignId: {
@@ -11,15 +17,20 @@ const props = defineProps({
 })
 
 const route = useRoute()
+const router = useRouter()
 const records = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
 const detailLoadingJobId = ref('')
 const detailErrorMessage = ref('')
 const detailsByJobId = ref({})
+const thumbnailHydrationIds = ref(new Set())
 const activeFilter = ref('all')
 const searchQuery = ref('')
 const selectedRecordId = ref(null)
+const currentPage = ref(1)
+
+const PAGE_SIZE = 6
 
 const filterOptions = [
   { id: 'all', label: '전체' },
@@ -36,9 +47,7 @@ function normalizeStatus(status) {
 }
 
 function normalizeResultStatus(status) {
-  const value = String(status ?? '').trim().toLowerCase()
-  if (['pass', 'warning', 'violation', 'failed'].includes(value)) return value
-  return ''
+  return normalizeAdCheckResultStatus(status)
 }
 
 function recordKey(record) {
@@ -47,6 +56,10 @@ function recordKey(record) {
 
 function normalizeText(value) {
   return String(value ?? '').replace(/\s+/g, ' ').trim()
+}
+
+function firstTextValue(...values) {
+  return values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
 }
 
 function statusLabel(status) {
@@ -59,36 +72,16 @@ function statusLabel(status) {
   return '대기 중'
 }
 
-function resultStatusLabel(status) {
-  const normalized = normalizeResultStatus(status)
-  if (normalized === 'pass') return '검수 완료'
-  if (normalized === 'warning') return '확인 필요'
-  if (normalized === 'violation') return '위반 의심'
-  if (normalized === 'failed') return '검수 실패'
-  return '결과 대기'
-}
-
-function riskLevelLabel(level) {
-  const normalized = String(level ?? '').toUpperCase()
-  if (normalized === 'LOW') return '낮음'
-  if (normalized === 'MEDIUM') return '중간'
-  if (normalized === 'HIGH') return '높음'
-  if (normalized === 'NORMAL') return '보통'
-  return '미정'
-}
-
 function statusTone(record) {
   const normalizedStatus = normalizeStatus(record?.normalizedStatus ?? record?.status)
   const normalizedResult = normalizeResultStatus(record?.normalizedResultStatus ?? record?.resultStatus)
   if (normalizedStatus === 'FAILED' || normalizedStatus === 'CANCELED' || normalizedResult === 'failed') {
-    return 'rejected'
+    return 'danger'
   }
   if (normalizedStatus === 'QUEUED' || normalizedStatus === 'RUNNING') {
     return 'requested'
   }
-  if (normalizedResult === 'pass') return 'approved'
-  if (normalizedResult === 'violation') return 'rejected'
-  return 'requested'
+  return recordVerdict(record).tone
 }
 
 function recordBadgeLabel(record) {
@@ -96,7 +89,7 @@ function recordBadgeLabel(record) {
   if (['QUEUED', 'RUNNING', 'FAILED', 'CANCELED'].includes(record.normalizedStatus)) {
     return statusLabel(record.normalizedStatus)
   }
-  return resultStatusLabel(record.normalizedResultStatus)
+  return recordVerdict(record).label
 }
 
 function isActiveStatus(status) {
@@ -111,17 +104,42 @@ function formatDateTime(value) {
   return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-function formatFileSize(size) {
-  const bytes = Number(size)
-  if (!Number.isFinite(bytes) || bytes <= 0) return '-'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let value = bytes
-  let unitIndex = 0
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024
-    unitIndex += 1
-  }
-  return `${value.toFixed(unitIndex === 0 ? 0 : 1)}${units[unitIndex]}`
+function recordVerdict(record) {
+  return getAdCheckDisplayVerdict({
+    jobStatus: record?.normalizedStatus ?? record?.status,
+    status: record?.normalizedResultStatus ?? record?.resultStatus,
+    verdictLevel: record?.verdictLevel,
+    riskLevel: record?.riskLevel,
+    summaryMessage: record?.summaryMessage,
+  })
+}
+
+function firstImageUrl(images) {
+  if (!Array.isArray(images)) return ''
+  return images.find((image) => typeof image?.url === 'string' && image.url.trim())?.url ?? ''
+}
+
+function detailThumbnailUrl(detail) {
+  const summary = detail?.summary ?? {}
+  const detailResult = detail?.detail ?? {}
+  const rawDocument = detail?.rawDocument ?? {}
+  const contentType = firstTextValue(summary.fileContentType, detailResult.fileContentType)
+  const fileUrl = firstTextValue(summary.fileUrl, detailResult.fileUrl)
+
+  if (summary.thumbnailUrl) return summary.thumbnailUrl
+  if (contentType.startsWith('image/') && fileUrl) return fileUrl
+
+  return firstTextValue(
+    firstImageUrl(detailResult.extractedImageAssets),
+    firstImageUrl(rawDocument?.artifacts?.images),
+    firstImageUrl(rawDocument?.recognizedTextResult?.images),
+  )
+}
+
+function recordThumbnail(record) {
+  if (record?.thumbnailUrl) return record.thumbnailUrl
+  if (String(record?.fileContentType || '').startsWith('image/')) return record.fileUrl || ''
+  return detailThumbnailUrl(detailsByJobId.value[record?.archiveId ?? recordKey(record)])
 }
 
 const normalizedRecords = computed(() =>
@@ -129,6 +147,11 @@ const normalizedRecords = computed(() =>
     ...record,
     normalizedStatus: normalizeStatus(record.status),
     normalizedResultStatus: normalizeResultStatus(record.resultStatus),
+    verdictLevel: normalizeAdCheckVerdictLevel(record.verdictLevel ?? record.riskLevel),
+    fileUrl: record.fileUrl ?? '',
+    fileContentType: record.fileContentType ?? '',
+    fileSize: record.fileSize ?? null,
+    thumbnailUrl: record.thumbnailUrl ?? '',
     archiveId: recordKey(record),
   })),
 )
@@ -136,9 +159,7 @@ const normalizedRecords = computed(() =>
 const summary = computed(() => {
   const total = normalizedRecords.value.length
   const completed = normalizedRecords.value.filter((record) => record.normalizedStatus === 'SUCCEEDED').length
-  const review = normalizedRecords.value.filter((record) =>
-    ['warning', 'violation'].includes(record.normalizedResultStatus),
-  ).length
+  const review = normalizedRecords.value.filter((record) => record.verdictLevel > 1).length
   const failed = normalizedRecords.value.filter((record) =>
     record.normalizedStatus === 'FAILED' || record.normalizedResultStatus === 'failed',
   ).length
@@ -159,7 +180,7 @@ const filteredRecords = computed(() => {
     .filter((record) => {
       if (activeFilter.value === 'all') return true
       if (activeFilter.value === 'completed') return record.normalizedStatus === 'SUCCEEDED'
-      if (activeFilter.value === 'review') return ['warning', 'violation'].includes(record.normalizedResultStatus)
+      if (activeFilter.value === 'review') return record.verdictLevel > 1
       if (activeFilter.value === 'failed') {
         return record.normalizedStatus === 'FAILED' || record.normalizedResultStatus === 'failed'
       }
@@ -188,7 +209,8 @@ const filteredRecords = computed(() => {
 
 const selectedRecord = computed(() => {
   const selectedId = selectedRecordId.value
-  return filteredRecords.value.find((record) => record.archiveId === selectedId) ?? filteredRecords.value[0] ?? null
+  if (!selectedId) return null
+  return filteredRecords.value.find((record) => record.archiveId === selectedId) ?? null
 })
 
 const selectedDetail = computed(() => {
@@ -196,45 +218,14 @@ const selectedDetail = computed(() => {
   return selectedId ? detailsByJobId.value[selectedId] ?? null : null
 })
 
-const selectedRawDocument = computed(() => selectedDetail.value?.rawDocument ?? {})
-const selectedDetailData = computed(() => selectedDetail.value?.detail ?? null)
-const selectedOriginalUrl = computed(() =>
-  selectedDetailData.value?.fileUrl || detailValue(['file', 'url']) || '',
-)
 const isSelectedActive = computed(() => isActiveStatus(selectedRecord.value?.normalizedStatus))
 const isSelectedDetailLoading = computed(() => detailLoadingJobId.value === selectedRecord.value?.archiveId)
-
-const selectedAiSummary = computed(() => {
-  const record = selectedRecord.value
-  if (!record) return []
-
-  return [
-    { label: '최종 판정', value: resultStatusLabel(record.normalizedResultStatus) },
-    { label: '위험도', value: riskLevelLabel(record.riskLevel) },
-    { label: '요약', value: record.summaryMessage },
-    { label: '관련 법령', value: selectedDetailData.value?.law },
-    { label: '문제 표현', value: selectedDetailData.value?.violationText },
-    { label: '검수 사유', value: selectedDetailData.value?.reason },
-    { label: '수정 제안', value: selectedDetailData.value?.suggestion },
-    { label: '오류 상세', value: detailValue(['errorDetail']) },
-  ].filter((item) => normalizeText(item.value))
+const hasDetailModal = computed(() => Boolean(selectedRecord.value))
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredRecords.value.length / PAGE_SIZE)))
+const pagedRecords = computed(() => {
+  const start = (currentPage.value - 1) * PAGE_SIZE
+  return filteredRecords.value.slice(start, start + PAGE_SIZE)
 })
-
-function detailValue(path, fallback = '') {
-  return path.reduce((current, key) => current?.[key], selectedRawDocument.value) ?? fallback
-}
-
-function formatJson(value) {
-  if (!value || (typeof value === 'object' && !Object.keys(value).length)) {
-    return ''
-  }
-
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
-}
 
 async function loadLibrary() {
   if (!props.campaignId) return
@@ -273,8 +264,77 @@ async function loadDetail(jobId) {
   }
 }
 
+async function hydrateRecordThumbnail(record) {
+  const jobId = record?.archiveId
+
+  if (
+    !jobId ||
+    recordThumbnail(record) ||
+    detailsByJobId.value[jobId] ||
+    thumbnailHydrationIds.value.has(jobId) ||
+    isActiveStatus(record.normalizedStatus)
+  ) {
+    return
+  }
+
+  const nextHydrationIds = new Set(thumbnailHydrationIds.value)
+  nextHydrationIds.add(jobId)
+  thumbnailHydrationIds.value = nextHydrationIds
+
+  try {
+    const detail = await GetAdCheckJobDetail(jobId)
+    detailsByJobId.value = {
+      ...detailsByJobId.value,
+      [jobId]: detail,
+    }
+
+    const summary = detail?.summary ?? {}
+    const detailResult = detail?.detail ?? {}
+    const thumbnailUrl = detailThumbnailUrl(detail)
+
+    records.value = records.value.map((item) => {
+      if (recordKey(item) !== jobId) {
+        return item
+      }
+
+      return {
+        ...item,
+        fileUrl: firstTextValue(item.fileUrl, summary.fileUrl, detailResult.fileUrl),
+        fileContentType: firstTextValue(
+          item.fileContentType,
+          summary.fileContentType,
+          detailResult.fileContentType,
+        ),
+        fileSize: item.fileSize ?? summary.fileSize ?? detailResult.fileSize ?? null,
+        thumbnailUrl: firstTextValue(item.thumbnailUrl, summary.thumbnailUrl, thumbnailUrl),
+      }
+    })
+  } catch (error) {
+    console.warn('Ad check thumbnail hydration failed.', error)
+  } finally {
+    const nextIds = new Set(thumbnailHydrationIds.value)
+    nextIds.delete(jobId)
+    thumbnailHydrationIds.value = nextIds
+  }
+}
+
 function selectRecord(record) {
   selectedRecordId.value = record.archiveId
+}
+
+function closeDetailModal() {
+  const closingRecordId = selectedRecordId.value
+  selectedRecordId.value = null
+  detailErrorMessage.value = ''
+
+  if (closingRecordId && String(route.query.adCheckJobId || '') === closingRecordId) {
+    void router.replace({
+      query: {
+        ...route.query,
+        adCheckJobId: undefined,
+      },
+    })
+  }
 }
 
 function applyRouteSelection() {
@@ -287,8 +347,11 @@ function applyRouteSelection() {
 watch(
   filteredRecords,
   (rows) => {
-    if (!rows.some((record) => record.archiveId === selectedRecordId.value)) {
-      selectedRecordId.value = rows[0]?.archiveId ?? null
+    if (selectedRecordId.value && !rows.some((record) => record.archiveId === selectedRecordId.value)) {
+      selectedRecordId.value = null
+    }
+    if (currentPage.value > totalPages.value) {
+      currentPage.value = totalPages.value
     }
   },
   { immediate: true },
@@ -305,6 +368,16 @@ watch(
 )
 
 watch(
+  pagedRecords,
+  (rows) => {
+    rows.forEach((record) => {
+      void hydrateRecordThumbnail(record)
+    })
+  },
+  { immediate: true },
+)
+
+watch(
   () => route.query.adCheckJobId,
   applyRouteSelection,
 )
@@ -315,12 +388,17 @@ watch(
     records.value = []
     searchQuery.value = ''
     activeFilter.value = 'all'
+    currentPage.value = 1
     selectedRecordId.value = null
     detailsByJobId.value = {}
     detailErrorMessage.value = ''
     void loadLibrary()
   },
 )
+
+watch([activeFilter, searchQuery], () => {
+  currentPage.value = 1
+})
 
 onMounted(loadLibrary)
 </script>
@@ -386,10 +464,10 @@ onMounted(loadLibrary)
       <strong>자료를 불러오는 중입니다.</strong>
     </article>
 
-    <section v-else-if="filteredRecords.length" class="library-layout">
+    <section v-else-if="filteredRecords.length" class="library-list" aria-label="자료 목록">
       <div class="library-list" aria-label="자료 목록">
         <article
-          v-for="record in filteredRecords"
+          v-for="record in pagedRecords"
           :key="record.archiveId"
           class="library-item"
           :class="{ 'library-item--active': selectedRecord?.archiveId === record.archiveId }"
@@ -398,6 +476,10 @@ onMounted(loadLibrary)
           @click="selectRecord(record)"
           @keydown.enter="selectRecord(record)"
         >
+          <figure class="library-item__preview">
+            <img v-if="recordThumbnail(record)" :src="recordThumbnail(record)" :alt="`${record.fileName} 미리보기`" />
+            <figcaption v-else>Preview</figcaption>
+          </figure>
           <div class="library-item__main">
             <span :class="['library-status', `library-status--${statusTone(record)}`]">
               {{ recordBadgeLabel(record) }}
@@ -406,107 +488,47 @@ onMounted(loadLibrary)
             <p>{{ record.summaryMessage || '검수 결과 요약을 준비 중입니다.' }}</p>
           </div>
           <div class="library-item__meta">
-            <span>{{ riskLevelLabel(record.riskLevel) }}</span>
+            <span>{{ recordVerdict(record).title }}</span>
             <time>{{ formatDateTime(record.createdAt) }}</time>
+            <button type="button" class="library-detail-button" @click.stop="selectRecord(record)">
+              상세 보기
+            </button>
           </div>
         </article>
       </div>
 
-      <aside v-if="selectedRecord" class="library-detail">
-        <header class="library-detail__head">
-          <div>
-            <span :class="['library-status', `library-status--${statusTone(selectedRecord)}`]">
-              {{ recordBadgeLabel(selectedRecord) }}
-            </span>
-            <h4>{{ selectedRecord.fileName || '광고 소재' }}</h4>
-            <p>요청 {{ formatDateTime(selectedRecord.createdAt) }} · 완료 {{ formatDateTime(selectedRecord.finishedAt) }}</p>
-          </div>
-          <a
-            v-if="selectedOriginalUrl"
-            :href="selectedOriginalUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="library-file-link"
-          >
-            파일 열기
-          </a>
-        </header>
-
-        <dl class="library-detail__grid">
-          <div>
-            <dt>콘텐츠 유형</dt>
-            <dd>{{ selectedDetailData?.fileContentType || detailValue(['file', 'contentType'], '-') }}</dd>
-          </div>
-          <div>
-            <dt>파일 크기</dt>
-            <dd>{{ formatFileSize(selectedDetailData?.fileSize || detailValue(['file', 'size'])) }}</dd>
-          </div>
-          <div>
-            <dt>상태</dt>
-            <dd>{{ statusLabel(selectedRecord.normalizedStatus) }}</dd>
-          </div>
-          <div>
-            <dt>Mongo ID</dt>
-            <dd>{{ selectedRecord.mongoDocumentId || selectedDetail?.mongoDocumentId || '-' }}</dd>
-          </div>
-        </dl>
-
-        <section v-if="isSelectedActive" class="library-detail__section">
-          <h5>진행 상태</h5>
-          <p>검수 작업이 아직 진행 중입니다. 완료되면 상세 분석 자료가 이곳에 표시됩니다.</p>
-        </section>
-
-        <section v-else-if="isSelectedDetailLoading" class="library-detail__section">
-          <h5>상세 자료</h5>
-          <p>상세 자료를 불러오고 있습니다.</p>
-        </section>
-
-        <section v-else-if="detailErrorMessage && !selectedDetail" class="library-detail__section">
-          <h5>상세 자료</h5>
-          <p class="library-error">{{ detailErrorMessage }}</p>
-        </section>
-
-        <section v-if="selectedAiSummary.length" class="library-detail__section">
-          <h5>검수 요약</h5>
-          <dl class="library-review-note">
-            <div v-for="item in selectedAiSummary" :key="item.label">
-              <dt>{{ item.label }}</dt>
-              <dd>{{ item.value }}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section v-if="selectedDetailData?.extractedText" class="library-detail__section">
-          <h5>추출된 전체 텍스트</h5>
-          <pre>{{ selectedDetailData.extractedText }}</pre>
-        </section>
-
-        <section v-if="formatJson(detailValue(['documentStructureResult']))" class="library-detail__section">
-          <h5>문서 구조 분석 결과</h5>
-          <pre>{{ formatJson(detailValue(['documentStructureResult'])) }}</pre>
-        </section>
-
-        <section v-if="formatJson(detailValue(['recognizedTextResult']))" class="library-detail__section">
-          <h5>글자 인식 결과</h5>
-          <pre>{{ formatJson(detailValue(['recognizedTextResult'])) }}</pre>
-        </section>
-
-        <section v-if="formatJson(detailValue(['textRiskAnalysisResult']))" class="library-detail__section">
-          <h5>문구 위험도 분석 결과</h5>
-          <pre>{{ formatJson(detailValue(['textRiskAnalysisResult'])) }}</pre>
-        </section>
-
-        <section v-if="formatJson(detailValue(['finalResult']))" class="library-detail__section">
-          <h5>최종 상세 판정</h5>
-          <pre>{{ formatJson(detailValue(['finalResult'])) }}</pre>
-        </section>
-      </aside>
+      <nav v-if="totalPages > 1" class="library-pagination" aria-label="자료실 페이지">
+        <button type="button" :disabled="currentPage === 1" @click="currentPage -= 1">
+          이전
+        </button>
+        <button
+          v-for="page in totalPages"
+          :key="page"
+          type="button"
+          :class="{ active: currentPage === page }"
+          @click="currentPage = page"
+        >
+          {{ page }}
+        </button>
+        <button type="button" :disabled="currentPage === totalPages" @click="currentPage += 1">
+          다음
+        </button>
+      </nav>
     </section>
 
     <article v-else class="library-empty">
       <strong>표시할 자료가 없습니다.</strong>
       <p>{{ activeFilter === 'all' ? '검사하기를 완료하면 AI 검수 자료가 여기에 정리됩니다.' : '필터나 검색어를 조정해 보세요.' }}</p>
     </article>
+
+    <AdCheckDetailModal
+      v-if="hasDetailModal"
+      :summary="selectedRecord"
+      :detail="selectedDetail"
+      :loading="isSelectedDetailLoading"
+      :error-message="detailErrorMessage"
+      @close="closeDetailModal"
+    />
   </section>
 </template>
 
@@ -534,10 +556,6 @@ onMounted(loadLibrary)
 .library-toolbar p,
 .library-stats span,
 .library-item__meta span,
-.library-detail__head p,
-.library-detail__grid dt,
-.library-detail__section h5,
-.library-review-note dt,
 .library-search span {
   color: var(--muted-text);
   font-size: 12px;
@@ -552,7 +570,7 @@ onMounted(loadLibrary)
 }
 
 .library-button,
-.library-file-link {
+.library-detail-button {
   display: inline-flex;
   min-height: 34px;
   align-items: center;
@@ -572,6 +590,13 @@ onMounted(loadLibrary)
 .library-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.library-detail-button {
+  min-height: 28px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  padding: 0 9px;
 }
 
 .library-stats {
@@ -656,13 +681,6 @@ onMounted(loadLibrary)
   font-weight: 850;
 }
 
-.library-layout {
-  display: grid;
-  grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.1fr);
-  gap: 14px;
-  align-items: start;
-}
-
 .library-list {
   display: grid;
   gap: 8px;
@@ -670,7 +688,7 @@ onMounted(loadLibrary)
 
 .library-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   border: 1px solid var(--border-color);
@@ -693,14 +711,37 @@ onMounted(loadLibrary)
   outline-offset: 2px;
 }
 
+.library-item__preview {
+  display: grid;
+  width: 88px;
+  height: 70px;
+  overflow: hidden;
+  place-items: center;
+  margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-muted);
+}
+
+.library-item__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.library-item__preview figcaption {
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 850;
+}
+
 .library-item__main {
   display: grid;
   min-width: 0;
   gap: 6px;
 }
 
-.library-item__main strong,
-.library-detail__head h4 {
+.library-item__main strong {
   overflow: hidden;
   color: var(--text-primary);
   font-weight: 950;
@@ -733,6 +774,36 @@ onMounted(loadLibrary)
   white-space: nowrap;
 }
 
+.library-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.library-pagination button {
+  min-height: 30px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 0 10px;
+}
+
+.library-pagination button.active {
+  border-color: color-mix(in srgb, var(--color-primary-500) 34%, var(--border-color));
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+
+.library-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .library-status {
   display: inline-flex;
   width: fit-content;
@@ -745,12 +816,14 @@ onMounted(loadLibrary)
   white-space: nowrap;
 }
 
-.library-status--approved {
+.library-status--approved,
+.library-status--pass {
   background: var(--color-success-light);
   color: var(--color-success-dark);
 }
 
-.library-status--rejected {
+.library-status--rejected,
+.library-status--danger {
   background: var(--color-danger-light);
   color: var(--color-danger-dark);
 }
@@ -760,113 +833,49 @@ onMounted(loadLibrary)
   color: var(--color-primary-700);
 }
 
-.library-detail {
-  display: grid;
-  gap: 14px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-color);
-  padding: 16px;
-  box-shadow: var(--shadow-sm);
-}
-
-.library-detail__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 14px;
-}
-
-.library-detail__head > div {
-  display: grid;
-  min-width: 0;
-  gap: 7px;
-}
-
-.library-detail__head h4 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.library-detail__head p {
-  margin: 0;
-}
-
-.library-detail__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0;
-}
-
-.library-detail__grid div {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+.library-status--neutral {
   background: var(--panel-muted);
-  padding: 10px;
-}
-
-.library-detail__grid dd,
-.library-review-note dd {
-  min-width: 0;
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 750;
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.library-detail__section {
-  display: grid;
-  gap: 8px;
-}
-
-.library-detail__section h5 {
-  margin: 0;
-  text-transform: uppercase;
-}
-
-.library-detail__section p {
-  margin: 0;
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
 }
 
-.library-detail__section pre {
-  max-height: 260px;
-  overflow: auto;
-  margin: 0;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--panel-muted);
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1.55;
-  padding: 11px;
-  white-space: pre-wrap;
-  word-break: break-word;
+.library-status--recheck {
+  background: color-mix(in srgb, #84cc16 18%, transparent);
+  color: #4d7c0f;
 }
 
-.library-review-note {
-  display: grid;
-  gap: 8px;
-  margin: 0;
+.library-status--suggestion {
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+  color: #92400e;
 }
 
-.library-review-note div {
-  display: grid;
-  gap: 4px;
-  border-left: 3px solid var(--color-primary-500);
-  background: var(--panel-muted);
-  padding: 9px 11px;
+.library-status--revision {
+  background: color-mix(in srgb, #f97316 18%, transparent);
+  color: #9a3412;
+}
+
+:global(:root[data-theme='dark']) .library-status--pass {
+  background: color-mix(in srgb, #10b981 16%, transparent);
+  color: #6ee7b7;
+}
+
+:global(:root[data-theme='dark']) .library-status--recheck {
+  background: color-mix(in srgb, #84cc16 18%, transparent);
+  color: #bef264;
+}
+
+:global(:root[data-theme='dark']) .library-status--suggestion {
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+  color: #fcd34d;
+}
+
+:global(:root[data-theme='dark']) .library-status--revision {
+  background: color-mix(in srgb, #f97316 18%, transparent);
+  color: #fdba74;
+}
+
+:global(:root[data-theme='dark']) .library-status--danger {
+  background: color-mix(in srgb, var(--color-danger) 18%, transparent);
+  color: #fca5a5;
 }
 
 .library-empty {
@@ -892,10 +901,6 @@ onMounted(loadLibrary)
 }
 
 @media (max-width: 1100px) {
-  .library-layout {
-    grid-template-columns: 1fr;
-  }
-
   .library-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -904,7 +909,6 @@ onMounted(loadLibrary)
 @media (max-width: 720px) {
   .library-toolbar,
   .library-controls,
-  .library-detail__head,
   .library-item {
     align-items: stretch;
     grid-template-columns: 1fr;
@@ -913,7 +917,7 @@ onMounted(loadLibrary)
 
   .library-search,
   .library-button,
-  .library-file-link {
+  .library-detail-button {
     width: 100%;
   }
 
@@ -921,7 +925,6 @@ onMounted(loadLibrary)
     justify-items: start;
   }
 
-  .library-detail__grid,
   .library-stats {
     grid-template-columns: 1fr;
   }

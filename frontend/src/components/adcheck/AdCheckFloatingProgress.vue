@@ -3,17 +3,23 @@ import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { isTerminalJobStatus, useAdCheckJobsStore } from '@/stores/adCheckJobs'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useUserSettingsStore } from '@/stores/userSettings'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const adCheckJobsStore = useAdCheckJobsStore()
+const userSettingsStore = useUserSettingsStore()
 
 const job = computed(() => adCheckJobsStore.floatingJob)
 const isReviewRoute = computed(() =>
   route.name === 'campaign-detail' && String(route.query.tab || '') === 'review',
 )
-const hasPanel = computed(() => Boolean(job.value) && !isReviewRoute.value)
+const isProgressPanelEnabled = computed(() =>
+  userSettingsStore.notifications.enabled
+  && userSettingsStore.notifications.showAdCheckProgressPanel !== false,
+)
+const hasPanel = computed(() => isProgressPanelEnabled.value && Boolean(job.value) && !isReviewRoute.value)
 const canOpenResult = computed(() => Boolean(job.value?.targetUrl || job.value?.result?.analysisJobId))
 const queuedJobs = computed(() =>
   adCheckJobsStore.queuedJobs.filter((queuedJob) => queuedJob.jobId !== job.value?.jobId),
@@ -77,13 +83,24 @@ onMounted(() => {
   if (!authStore.isHydrated) {
     authStore.restore()
   }
-  void loadActiveJobs()
+  if (isProgressPanelEnabled.value) {
+    void loadActiveJobs()
+  }
 })
 
 watch(
   () => authStore.isAuthenticated,
   (authenticated) => {
-    if (authenticated) {
+    if (authenticated && isProgressPanelEnabled.value) {
+      void loadActiveJobs()
+    }
+  },
+)
+
+watch(
+  isProgressPanelEnabled,
+  (enabled) => {
+    if (enabled) {
       void loadActiveJobs()
     }
   },

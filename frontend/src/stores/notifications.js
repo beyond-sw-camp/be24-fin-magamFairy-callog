@@ -102,6 +102,30 @@ function resolveReviewOutcome(type) {
   return ''
 }
 
+function isAiJudgeNotification(notification) {
+  return Boolean(
+    notification?.reviewOutcome ||
+    String(notification?.type || '').toUpperCase().startsWith('AI_JUDGE_'),
+  )
+}
+
+function extractAnalysisJobId(targetUrl) {
+  const rawUrl = String(targetUrl || '')
+  if (!rawUrl.includes('/references')) {
+    return ''
+  }
+
+  const [, query = ''] = rawUrl.split('?')
+  return new URLSearchParams(query).get('analysisJobId') ?? ''
+}
+
+function buildAdCheckReviewUrl(job) {
+  if (!job?.campaignId || !job?.jobId) {
+    return ''
+  }
+  return `/campaigns/${job.campaignId}?tab=review&adCheckJobId=${encodeURIComponent(job.jobId)}`
+}
+
 function normalizeDate(value) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
@@ -224,6 +248,46 @@ export const useNotificationsStore = defineStore('notifications', () => {
       notification.isRead = false
       unreadCount.value += 1
     }
+  }
+
+  async function resolveNotificationTargetUrl(notification) {
+    if (!notification?.targetUrl || !isAiJudgeNotification(notification)) {
+      return notification?.targetUrl ?? ''
+    }
+
+    const currentReviewUrl = buildAdCheckReviewUrlFromTarget(notification.targetUrl)
+    if (currentReviewUrl) {
+      return currentReviewUrl
+    }
+
+    const analysisJobId = extractAnalysisJobId(notification.targetUrl)
+    if (!analysisJobId) {
+      return notification.targetUrl
+    }
+
+    const adCheckJobsStore = useAdCheckJobsStore()
+    const summaries = adCheckJobsStore.jobSummaries.length
+      ? adCheckJobsStore.jobSummaries
+      : await adCheckJobsStore.loadJobSummaries()
+    const matchedJob = summaries.find((job) =>
+      [job.jobId, job.mongoDocumentId].map((value) => String(value || '')).includes(analysisJobId),
+    )
+    return buildAdCheckReviewUrl(matchedJob) || notification.targetUrl
+  }
+
+  function buildAdCheckReviewUrlFromTarget(targetUrl) {
+    const [, campaignId = ''] = String(targetUrl || '').match(/^\/campaigns\/([^/?#]+)/) ?? []
+    if (!campaignId) {
+      return ''
+    }
+
+    const [, query = ''] = String(targetUrl || '').split('?')
+    const params = new URLSearchParams(query)
+    const jobId = params.get('adCheckJobId')
+    if (!jobId) {
+      return targetUrl
+    }
+    return `/campaigns/${campaignId}?tab=review&adCheckJobId=${encodeURIComponent(jobId)}`
   }
 
   async function markAllAsRead() {
@@ -357,6 +421,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     disconnect,
     loadNotifications,
     markAsRead,
+    resolveNotificationTargetUrl,
     markAllAsRead,
     upsertNotification,
     getReviewOutcomeMeta,

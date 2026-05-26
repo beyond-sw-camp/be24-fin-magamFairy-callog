@@ -77,6 +77,7 @@ public class AiJudgeKafkaEventPublisher {
         event.put("violationText", response.getViolationText());
         event.put("reason", response.getReason());
         event.put("suggestion", response.getSuggestion());
+        event.put("verdictLevel", response.getVerdictLevel());
         event.put("extractionMode", response.getExtractionMode());
         event.put("finalResultObjectKey", response.getFinalResultObjectKey());
         event.put("errorMessage", response.getErrorMessage());

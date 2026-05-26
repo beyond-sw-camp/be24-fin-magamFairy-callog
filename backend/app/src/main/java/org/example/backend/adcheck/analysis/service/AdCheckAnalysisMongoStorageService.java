@@ -234,6 +234,7 @@ public class AdCheckAnalysisMongoStorageService {
                 .append("violationText", response.getViolationText())
                 .append("reason", response.getReason())
                 .append("suggestion", response.getSuggestion())
+                .append("verdictLevel", response.getVerdictLevel())
                 .append("errorMessage", response.getErrorMessage());
     }
 
@@ -292,6 +293,7 @@ public class AdCheckAnalysisMongoStorageService {
                 .violationText(text(result, "violationText"))
                 .reason(text(result, "reason"))
                 .suggestion(text(result, "suggestion"))
+                .verdictLevel(verdictLevelValue(result == null ? null : result.get("verdictLevel")))
                 .extractionMode(text(document, "extractionMode"))
                 .processingTimes(processingTimesDto(document.get("processingTimes", Document.class)))
                 .errorMessage(text(result, "errorMessage"))
@@ -372,6 +374,21 @@ public class AdCheckAnalysisMongoStorageService {
         } catch (NumberFormatException ignored) {
             return null;
         }
+    }
+
+    private Integer verdictLevelValue(Object value) {
+        Integer number = intValue(value);
+        if (number != null) {
+            return number >= 1 && number <= 5 ? number : null;
+        }
+        String raw = value == null ? "" : String.valueOf(value);
+        for (int index = 0; index < raw.length(); index++) {
+            char current = raw.charAt(index);
+            if (current >= '1' && current <= '5') {
+                return current - '0';
+            }
+        }
+        return null;
     }
 
     private String textValue(Map<String, Object> context, String key) {

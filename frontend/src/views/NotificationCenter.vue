@@ -163,12 +163,13 @@ function closeNotificationSettings() {
   isSettingsModalOpen.value = false
 }
 
-function openTarget(notification) {
-  if (!notification?.targetUrl) {
+async function openTarget(notification) {
+  const targetUrl = await notificationStore.resolveNotificationTargetUrl(notification)
+  if (!targetUrl) {
     return
   }
 
-  router.push(notification.targetUrl)
+  router.push(targetUrl)
 }
 
 function isCampaignInvitationActionable(notification) {

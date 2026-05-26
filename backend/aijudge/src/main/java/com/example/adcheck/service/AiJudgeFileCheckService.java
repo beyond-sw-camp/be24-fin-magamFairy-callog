@@ -279,7 +279,8 @@ public class AiJudgeFileCheckService {
                     .law(result.law())
                     .violationText(result.violationText())
                     .reason(result.reason())
-                    .suggestion(result.suggestion());
+                    .suggestion(result.suggestion())
+                    .verdictLevel(result.verdictLevel());
         }
         return builder.build();
     }

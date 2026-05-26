@@ -28,6 +28,7 @@ public class AdCheckJobDto {
             String errorMessage,
             String resultStatus,
             String riskLevel,
+            Integer verdictLevel,
             String summaryMessage,
             String mongoDocumentId,
             AdCheckDto.FileCheckRes result,
@@ -40,9 +41,7 @@ public class AdCheckJobDto {
         public static JobRes from(AdCheckJob job, ObjectMapper objectMapper) {
             AdCheckDto.FileCheckRes result = parseResult(job.getResultPayload(), objectMapper);
             String analysisJobId = firstText(job.getMongoDocumentId(), result == null ? null : result.getAnalysisJobId());
-            String targetUrl = analysisJobId == null || analysisJobId.isBlank()
-                    ? null
-                    : "/references?analysisJobId=" + analysisJobId;
+            String targetUrl = buildTargetUrl(job, analysisJobId);
 
             return new JobRes(
                     job.getJobId(),
@@ -58,6 +57,7 @@ public class AdCheckJobDto {
                     job.getErrorMessage(),
                     job.getResultStatus(),
                     job.getRiskLevel(),
+                    firstVerdictLevel(result == null ? null : result.getVerdictLevel(), job.getRiskLevel()),
                     job.getSummaryMessage(),
                     job.getMongoDocumentId(),
                     result,
@@ -90,19 +90,45 @@ public class AdCheckJobDto {
             String status,
             String resultStatus,
             String riskLevel,
+            Integer verdictLevel,
             String summaryMessage,
             String mongoDocumentId,
+            String fileUrl,
+            String fileContentType,
+            Long fileSize,
+            String thumbnailUrl,
             String targetUrl,
             Date createdAt,
             Date updatedAt,
             LocalDateTime finishedAt
     ) {
+        public JobSummaryRes withStorageUrls(String nextFileUrl, String nextThumbnailUrl) {
+            return new JobSummaryRes(
+                    jobId,
+                    requesterId,
+                    campaignId,
+                    fileName,
+                    status,
+                    resultStatus,
+                    riskLevel,
+                    verdictLevel,
+                    summaryMessage,
+                    mongoDocumentId,
+                    firstText(nextFileUrl, fileUrl),
+                    fileContentType,
+                    fileSize,
+                    firstText(nextThumbnailUrl, thumbnailUrl),
+                    targetUrl,
+                    createdAt,
+                    updatedAt,
+                    finishedAt
+            );
+        }
+
         public static JobSummaryRes from(AdCheckJob job, ObjectMapper objectMapper) {
             AdCheckDto.FileCheckRes result = JobRes.parseResult(job.getResultPayload(), objectMapper);
             String documentId = firstText(job.getMongoDocumentId(), result == null ? null : result.getAnalysisJobId());
-            String targetUrl = documentId == null || documentId.isBlank()
-                    ? null
-                    : "/references?analysisJobId=" + documentId;
+            String targetUrl = buildTargetUrl(job, documentId);
 
             return new JobSummaryRes(
                     job.getJobId(),
@@ -112,14 +138,36 @@ public class AdCheckJobDto {
                     job.getStatus().name(),
                     firstText(job.getResultStatus(), result == null ? null : result.getStatus()),
                     job.getRiskLevel(),
+                    firstVerdictLevel(result == null ? null : result.getVerdictLevel(), job.getRiskLevel()),
                     job.getSummaryMessage(),
                     documentId,
+                    result == null ? null : result.getFileUrl(),
+                    result == null ? null : result.getFileContentType(),
+                    result == null ? null : result.getFileSize(),
+                    resolveThumbnailUrl(result),
                     targetUrl,
                     job.getCreatedAt(),
                     job.getUpdatedAt(),
                     job.getFinishedAt()
             );
         }
+    }
+
+    private static String resolveThumbnailUrl(AdCheckDto.FileCheckRes result) {
+        if (result == null) {
+            return null;
+        }
+        if (result.getFileContentType() != null && result.getFileContentType().startsWith("image/")) {
+            return result.getFileUrl();
+        }
+        if (result.getExtractedImageAssets() != null) {
+            for (AdCheckDto.FileArtifact artifact : result.getExtractedImageAssets()) {
+                if (artifact != null && artifact.getUrl() != null && !artifact.getUrl().isBlank()) {
+                    return artifact.getUrl();
+                }
+            }
+        }
+        return null;
     }
 
     public record JobDetailRes(
@@ -134,6 +182,32 @@ public class AdCheckJobDto {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
                 return value;
+            }
+        }
+        return null;
+    }
+
+    private static String buildTargetUrl(AdCheckJob job, String analysisJobId) {
+        if (job.getCampaignId() != null && !job.getCampaignId().isBlank()) {
+            return "/campaigns/" + job.getCampaignId() + "?tab=review&adCheckJobId=" + job.getJobId();
+        }
+        if (analysisJobId != null && !analysisJobId.isBlank()) {
+            return "/references?analysisJobId=" + analysisJobId;
+        }
+        return null;
+    }
+
+    private static Integer firstVerdictLevel(Integer resultLevel, String storedRiskLevel) {
+        if (resultLevel != null && resultLevel >= 1 && resultLevel <= 5) {
+            return resultLevel;
+        }
+        if (storedRiskLevel == null || storedRiskLevel.isBlank()) {
+            return null;
+        }
+        for (int index = 0; index < storedRiskLevel.length(); index++) {
+            char current = storedRiskLevel.charAt(index);
+            if (current >= '1' && current <= '5') {
+                return current - '0';
             }
         }
         return null;

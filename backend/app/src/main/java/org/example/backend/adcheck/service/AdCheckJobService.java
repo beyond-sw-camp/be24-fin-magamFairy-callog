@@ -63,6 +63,7 @@ public class AdCheckJobService {
     private final UserRepository userRepository;
     private final AdCheckService adCheckService;
     private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
+    private final AdCheckFileStorageService adCheckFileStorageService;
     private final AdCheckOutboxEventRepository adCheckOutboxEventRepository;
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
@@ -189,7 +190,7 @@ public class AdCheckJobService {
         Long requesterIdx = requesterIdx(requester);
         return transactionTemplate.execute(status -> adCheckJobRepository
                 .findByJobIdAndRequester_Idx(jobId, requesterIdx)
-                .map(job -> AdCheckJobDto.JobSummaryRes.from(job, objectMapper))
+                .map(this::toSummaryDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "검수 작업을 찾을 수 없습니다.")));
     }
 
@@ -203,7 +204,7 @@ public class AdCheckJobService {
                             campaignId.trim()
                     );
             return jobs.stream()
-                    .map(job -> AdCheckJobDto.JobSummaryRes.from(job, objectMapper))
+                    .map(this::toSummaryDto)
                     .toList();
         });
     }
@@ -211,6 +212,7 @@ public class AdCheckJobService {
     public AdCheckJobDto.JobDetailRes getJobDetail(String jobId, AuthUserDetails requester) {
         AdCheckJobDto.JobSummaryRes summary = getJobSummary(jobId, requester);
         AdCheckDto.FileCheckRes detail = findMongoDetail(summary, jobId)
+                .map(this::refreshStorageUrls)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "상세 자료를 불러오지 못했습니다."));
         Map<String, Object> rawDocument = findRawMongoDocument(summary, jobId).orElse(Map.of());
         String documentId = firstText(summary.mongoDocumentId(), detail.getAnalysisJobId(), jobId);
@@ -508,7 +510,7 @@ public class AdCheckJobService {
         if (job == null || job.requesterId() == null || result == null) {
             return;
         }
-        notificationService.notifyAiJudgeResult(job.requesterId(), result);
+        notificationService.notifyAiJudgeResult(job.requesterId(), result, jobTargetUrl(job));
     }
 
     private void notifyFailedJob(AdCheckJobDto.JobRes job) {
@@ -526,16 +528,123 @@ public class AdCheckJobService {
 
     private String jobTargetUrl(AdCheckJobDto.JobRes job) {
         if (job == null) {
-            return "/references";
+            return "/campaign-folder";
         }
         if (job.campaignId() != null && !job.campaignId().isBlank()) {
             return "/campaigns/" + job.campaignId() + "?tab=review&adCheckJobId=" + job.jobId();
         }
-        return firstText(job.targetUrl(), "/references");
+        return "/campaign-folder";
+    }
+
+    private AdCheckJobDto.JobSummaryRes toSummaryDto(AdCheckJob job) {
+        AdCheckDto.FileCheckRes result = parseResultPayload(job.getResultPayload());
+        AdCheckJobDto.JobSummaryRes summary = AdCheckJobDto.JobSummaryRes.from(job, objectMapper);
+        return refreshSummaryStorageUrls(summary, result);
     }
 
     private AdCheckJobDto.JobRes toDto(AdCheckJob job) {
         return AdCheckJobDto.JobRes.from(job, objectMapper);
+    }
+
+    private AdCheckDto.FileCheckRes parseResultPayload(String resultPayload) {
+        if (resultPayload == null || resultPayload.isBlank()) {
+            return null;
+        }
+
+        try {
+            return objectMapper.readValue(resultPayload, AdCheckDto.FileCheckRes.class);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private AdCheckJobDto.JobSummaryRes refreshSummaryStorageUrls(
+            AdCheckJobDto.JobSummaryRes summary,
+            AdCheckDto.FileCheckRes result
+    ) {
+        if (summary == null || result == null) {
+            return summary;
+        }
+
+        String fileUrl = createFreshViewUrl(
+                result.getFileObjectKey(),
+                result.getFileContentType(),
+                summary.fileUrl()
+        );
+        String thumbnailUrl = result.getFileContentType() != null
+                && result.getFileContentType().startsWith("image/")
+                ? fileUrl
+                : refreshedFirstImageUrl(result.getExtractedImageAssets(), summary.thumbnailUrl());
+
+        return summary.withStorageUrls(fileUrl, thumbnailUrl);
+    }
+
+    private AdCheckDto.FileCheckRes refreshStorageUrls(AdCheckDto.FileCheckRes detail) {
+        if (detail == null) {
+            return null;
+        }
+
+        List<AdCheckDto.FileArtifact> imageAssets = detail.getExtractedImageAssets() == null
+                ? List.of()
+                : detail.getExtractedImageAssets().stream()
+                        .map(this::refreshImageArtifactUrl)
+                        .toList();
+
+        return detail.toBuilder()
+                .fileUrl(createFreshViewUrl(
+                        detail.getFileObjectKey(),
+                        detail.getFileContentType(),
+                        detail.getFileUrl()
+                ))
+                .extractedImageAssets(imageAssets)
+                .build();
+    }
+
+    private AdCheckDto.FileArtifact refreshImageArtifactUrl(AdCheckDto.FileArtifact artifact) {
+        if (artifact == null) {
+            return null;
+        }
+
+        return AdCheckDto.FileArtifact.builder()
+                .type(artifact.getType())
+                .targetId(artifact.getTargetId())
+                .page(artifact.getPage())
+                .readingOrder(artifact.getReadingOrder())
+                .objectKey(artifact.getObjectKey())
+                .url(createFreshViewUrl(artifact.getObjectKey(), artifact.getContentType(), artifact.getUrl()))
+                .contentType(artifact.getContentType())
+                .fileSize(artifact.getFileSize())
+                .build();
+    }
+
+    private String refreshedFirstImageUrl(List<AdCheckDto.FileArtifact> imageAssets, String fallbackUrl) {
+        if (imageAssets == null || imageAssets.isEmpty()) {
+            return fallbackUrl;
+        }
+
+        return imageAssets.stream()
+                .filter(artifact -> artifact != null)
+                .map(artifact -> createFreshViewUrl(
+                        artifact.getObjectKey(),
+                        artifact.getContentType(),
+                        artifact.getUrl()
+                ))
+                .filter(url -> url != null && !url.isBlank())
+                .findFirst()
+                .orElse(fallbackUrl);
+    }
+
+    private String createFreshViewUrl(String objectKey, String contentType, String fallbackUrl) {
+        if (objectKey == null || objectKey.isBlank() || !adCheckFileStorageService.isAdCheckFileKey(objectKey)) {
+            return fallbackUrl;
+        }
+
+        try {
+            return adCheckFileStorageService.createViewUrl(objectKey, contentType);
+        } catch (RuntimeException e) {
+            log.warn("Ad check file view URL refresh failed. objectKey={}", objectKey, e);
+            return fallbackUrl;
+        }
     }
 
     private Long requesterIdx(AuthUserDetails requester) {
@@ -604,6 +713,11 @@ public class AdCheckJobService {
     private String resolveRiskLevel(AdCheckDto.FileCheckRes result, String errorMessage) {
         if (errorMessage != null && !errorMessage.isBlank()) {
             return "HIGH";
+        }
+
+        Integer verdictLevel = result == null ? null : result.getVerdictLevel();
+        if (verdictLevel != null && verdictLevel >= 1 && verdictLevel <= 5) {
+            return String.valueOf(verdictLevel);
         }
 
         String status = normalizeResultStatus(result == null ? null : result.getStatus());
@@ -683,6 +797,7 @@ public class AdCheckJobService {
         payload.put("status", job.getStatus() == null ? null : job.getStatus().name());
         payload.put("resultStatus", job.getResultStatus());
         payload.put("riskLevel", job.getRiskLevel());
+        payload.put("verdictLevel", result == null ? null : result.getVerdictLevel());
         payload.put("summaryMessage", job.getSummaryMessage());
         payload.put("mongoDocumentId", job.getMongoDocumentId());
         payload.put("analysisJobId", firstText(

@@ -550,14 +550,15 @@ function getReviewOutcomeMeta(item) {
 }
 
 async function handleNotificationTarget(item) {
-  if (!item?.targetUrl) {
+  const targetUrl = await notificationStore.resolveNotificationTargetUrl(item)
+  if (!targetUrl) {
     await handleNotificationDetail(item)
     return
   }
 
   await notificationStore.markAsRead(item)
   closeFloatingMenus()
-  router.push(item.targetUrl)
+  router.push(targetUrl)
 }
 
 function handleDocumentClick(event) {

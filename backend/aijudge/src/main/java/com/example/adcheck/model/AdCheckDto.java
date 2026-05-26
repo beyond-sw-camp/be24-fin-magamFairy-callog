@@ -1,5 +1,6 @@
 package com.example.adcheck.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
@@ -24,7 +25,17 @@ public class AdCheckDto {
             @JsonProperty("violation_text")
             String violationText,
             String reason,
-            String suggestion
+            String suggestion,
+            @JsonAlias({
+                    "verdict_level",
+                    "reviewLevel",
+                    "review_level",
+                    "riskLevel",
+                    "risk_level",
+                    "level",
+                    "grade"
+            })
+            Integer verdictLevel
     ) {
     }
 
@@ -53,6 +64,7 @@ public class AdCheckDto {
         private String violationText;
         private String reason;
         private String suggestion;
+        private Integer verdictLevel;
         private String extractionMode;
         private ProcessingTimes processingTimes;
         private String errorMessage;

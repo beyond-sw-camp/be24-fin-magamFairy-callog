@@ -176,6 +176,7 @@ public class AdCheckAnalysisMongoStorageService {
                 .append("violationText", response.getViolationText())
                 .append("reason", response.getReason())
                 .append("suggestion", response.getSuggestion())
+                .append("verdictLevel", response.getVerdictLevel())
                 .append("errorMessage", response.getErrorMessage());
     }
 

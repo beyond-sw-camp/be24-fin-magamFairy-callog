@@ -8,6 +8,7 @@ import {
   ListAdCheckJobs,
   ListActiveAdCheckJobs,
 } from '@/api/adcheck/index.js'
+import { normalizeAdCheckVerdictLevel } from '@/utils/adCheckVerdict'
 
 export const AD_CHECK_JOB_STEPS = [
   {
@@ -136,6 +137,7 @@ function normalizeJob(rawJob) {
       ? Math.max(0, Math.min(100, progressPercent))
       : 0,
     errorMessage: job.errorMessage ?? '',
+    verdictLevel: normalizeAdCheckVerdictLevel(job.verdictLevel ?? job.result?.verdictLevel ?? job.riskLevel),
     targetUrl: job.targetUrl ?? '',
     result: job.result ?? null,
     createdAt: normalizeDateValue(job.createdAt),
@@ -156,8 +158,13 @@ function normalizeJobSummary(rawSummary) {
     status: String(summary.status || 'QUEUED').toUpperCase(),
     resultStatus: String(summary.resultStatus || '').toLowerCase(),
     riskLevel: String(summary.riskLevel || '').toUpperCase(),
+    verdictLevel: normalizeAdCheckVerdictLevel(summary.verdictLevel ?? summary.riskLevel),
     summaryMessage: summary.summaryMessage ?? '',
     mongoDocumentId: summary.mongoDocumentId ?? '',
+    fileUrl: summary.fileUrl ?? '',
+    fileContentType: summary.fileContentType ?? '',
+    fileSize: summary.fileSize ?? null,
+    thumbnailUrl: summary.thumbnailUrl ?? '',
     targetUrl: summary.targetUrl ?? '',
     createdAt: normalizeDateValue(summary.createdAt),
     updatedAt: normalizeDateValue(summary.updatedAt),
@@ -172,6 +179,9 @@ function normalizeJobDetail(rawDetail) {
     summary: normalizeJobSummary(detail.summary),
     mongoDocumentId: detail.mongoDocumentId ?? detail.summary?.mongoDocumentId ?? '',
     detail: detail.detail ?? null,
+    verdictLevel: normalizeAdCheckVerdictLevel(
+      detail.detail?.verdictLevel ?? detail.summary?.verdictLevel ?? detail.summary?.riskLevel,
+    ),
     rawDocument: detail.rawDocument ?? {},
   }
 }

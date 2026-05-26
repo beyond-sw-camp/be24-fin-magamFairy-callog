@@ -8,8 +8,15 @@ import {
   RejectAdReviewRequest,
 } from '@/api/adcheck/index.js'
 import { getCampaignMembers } from '@/api/campaignMembers'
+import AdCheckDetailModal from '@/components/adcheck/AdCheckDetailModal.vue'
 import AdCheckJobProgress from '@/components/adcheck/AdCheckJobProgress.vue'
 import { adCheckStatusLabel, isTerminalJobStatus, useAdCheckJobsStore } from '@/stores/adCheckJobs'
+import {
+  AD_CHECK_VERDICT_LEVELS,
+  getAdCheckDisplayVerdict,
+  getAdCheckVerdict,
+  normalizeAdCheckResultStatus,
+} from '@/utils/adCheckVerdict'
 
 const props = defineProps({
   campaignId: {
@@ -40,6 +47,9 @@ const reviewDecisionError = ref('')
 const submittingDecisionId = ref(null)
 const selectedDetailJobId = ref('')
 const analysisDetailLoadingJobId = ref('')
+const adCheckResultPage = ref(1)
+
+const AD_CHECK_RESULT_PAGE_SIZE = 4
 
 const memberContext = ref(null)
 const memberContextError = ref('')
@@ -53,10 +63,53 @@ const canFinalReview = computed(() =>
   && ['MANAGER', 'GENERAL_MANAGER'].includes(myCampaignRole.value),
 )
 
+const ISSUE_HIGHLIGHT_RULES = [
+  {
+    tone: 'danger',
+    icon: '🚫',
+    label: '금지/반려 위험',
+    keywords: ['제출 반려', '반려 대상', '사용 불가', '사용 금지', '불법', '허위', '기만'],
+  },
+  {
+    tone: 'warning',
+    icon: '⚠️',
+    label: '중요 확인',
+    keywords: ['한 번에 해결', '100%', '1위', '오해', '주의', '단정', '단정적', '과장', '보장', '확정', '절대', '최고', '유일', '소비자', '경고', '위험', '법적', '금지'],
+  },
+  {
+    tone: 'recommend',
+    icon: '💡',
+    label: '추천 수정',
+    keywords: ['수정', '제안', '완화', '근거', '보완', '추가', '대체', '추천', '표기'],
+  },
+]
+
+const HIGHLIGHT_KEYWORDS = ISSUE_HIGHLIGHT_RULES
+  .flatMap((rule) => rule.keywords)
+  .sort((left, right) => right.length - left.length)
+
+const HIGHLIGHT_PATTERN = new RegExp(
+  `(${HIGHLIGHT_KEYWORDS.map(escapeRegExp).join('|')})`,
+  'gi',
+)
+
 const normalizedAnalysisStatus = computed(() => normalizeAnalysisStatus(analysisResult.value?.status))
 const normalizedAnalysisPassed = computed(() =>
   normalizedAnalysisStatus.value === 'pass' && !analysisError.value,
 )
+const analysisVerdict = computed(() =>
+  analysisResult.value
+    ? getAdCheckVerdict({
+      ...analysisResult.value,
+      status: normalizedAnalysisStatus.value,
+    })
+    : null,
+)
+const analysisVerdictClass = computed(() => {
+  if (!analysisFileInfo.value || isAnalyzing.value) return 'analysis-verdict--empty'
+  if (analysisError.value) return 'analysis-verdict--danger'
+  return analysisVerdict.value ? `analysis-verdict--${analysisVerdict.value.tone}` : 'analysis-verdict--empty'
+})
 const activeAnalysisJob = computed(() =>
   activeAnalysisJobId.value ? adCheckJobsStore.findJob(activeAnalysisJobId.value) : null,
 )
@@ -77,27 +130,44 @@ const analysisIssues = computed(() => {
 
   const { law, violationText, reason, suggestion } = analysisResult.value
   const issueSections = buildIssueSections(reason, suggestion)
+  const verdict = analysisVerdict.value ?? getAdCheckVerdict(analysisResult.value)
+  const highlightSource = [
+    violationText,
+    issueSections.reason,
+    issueSections.suggestion,
+  ].join(' ')
   return [{
-    title: normalizedAnalysisStatus.value === 'violation'
-      ? '광고법 위반 표현 발견'
-      : '주의가 필요한 표현 발견',
+    title: verdict.title,
+    verdict,
     source: law || 'AI 검수',
     target: violationText || '',
+    targetTokens: tokenizeIssueText(violationText),
     reason: issueSections.reason,
+    reasonBlocks: issueSections.reasonBlocks,
     suggestion: issueSections.suggestion,
     suggestionItems: issueSections.suggestionItems,
+    highlightBadges: buildIssueHighlightBadges(highlightSource),
   }]
 })
 
 const analysisProcessingTimes = computed(() => analysisResult.value?.processingTimes ?? null)
 const adCheckSummaries = computed(() => adCheckJobsStore.jobSummaries ?? [])
+const selectedAdCheckSummary = computed(() =>
+  adCheckSummaries.value.find((summary) => summary.jobId === selectedDetailJobId.value) ?? null,
+)
 const selectedJobDetail = computed(() =>
   selectedDetailJobId.value ? adCheckJobsStore.findJobDetail(selectedDetailJobId.value) : null,
 )
-const selectedRawDocument = computed(() => selectedJobDetail.value?.rawDocument ?? {})
 const isSelectedDetailLoading = computed(() =>
   Boolean(selectedDetailJobId.value && adCheckJobsStore.detailLoadingJobId === selectedDetailJobId.value),
 )
+const adCheckTotalPages = computed(() =>
+  Math.max(1, Math.ceil(adCheckSummaries.value.length / AD_CHECK_RESULT_PAGE_SIZE)),
+)
+const paginatedAdCheckSummaries = computed(() => {
+  const start = (adCheckResultPage.value - 1) * AD_CHECK_RESULT_PAGE_SIZE
+  return adCheckSummaries.value.slice(start, start + AD_CHECK_RESULT_PAGE_SIZE)
+})
 
 const canCreateReviewRequest = computed(() =>
   Boolean(
@@ -112,24 +182,27 @@ const canCreateReviewRequest = computed(() =>
 )
 
 function normalizeAnalysisStatus(status) {
-  const value = String(status ?? '').trim().toLowerCase()
-  if (['violation', 'warning', 'pass'].includes(value)) return value
-  return ''
+  return normalizeAdCheckResultStatus(status)
 }
 
 function buildIssueSections(reason, suggestion) {
   const parsedReason = splitSuggestionMarker(reason)
-  const cleanSuggestion = normalizeText(suggestion) || parsedReason.suggestion
+  const cleanSuggestion = normalizeDisplayText(suggestion) || parsedReason.suggestion
+  const cleanReason = parsedReason.reason
 
   return {
-    reason: parsedReason.reason,
+    reason: cleanReason,
+    reasonBlocks: splitReasonBlocks(cleanReason),
     suggestion: cleanSuggestion,
-    suggestionItems: splitSuggestionItems(cleanSuggestion),
+    suggestionItems: splitSuggestionItems(cleanSuggestion).map((item) => ({
+      text: item,
+      tokens: tokenizeIssueText(item),
+    })),
   }
 }
 
 function splitSuggestionMarker(value) {
-  const text = normalizeText(value)
+  const text = normalizeDisplayText(value)
   const marker = text.match(/(?:^|[\s·-])수정\s*제안\s*[:：]\s*/)
   if (!marker || marker.index === undefined) {
     return { reason: text, suggestion: '' }
@@ -142,33 +215,109 @@ function splitSuggestionMarker(value) {
 }
 
 function splitSuggestionItems(value) {
-  const text = normalizeText(value).replace(/^수정\s*제안\s*[:：]\s*/, '').trim()
+  const text = normalizeDisplayText(value)
+    .replace(/^수정\s*제안\s*[:：]\s*/, '')
+    .replace(/\s+예[:：]\s*/g, '\n예: ')
+    .replace(/\s+또는\s+/g, '\n또는 ')
+    .trim()
   if (!text) return []
 
   const bulletParts = text
-    .split(/\n+|[·•]\s+/)
+    .split(/\n+|(?:^|\s)(?:\d+[.)]|[-*•])\s+/)
     .map((item) => item.trim())
     .filter(Boolean)
 
   if (bulletParts.length > 1) return bulletParts
 
   const sentenceParts = text
-    .match(/[^.!?。]+(?:[.!?。]+|$)/g)
+    .match(/[^.。]+(?:[.。]+|$)/g)
     ?.map((item) => item.trim())
     .filter(Boolean) ?? []
 
   return sentenceParts.length > 1 ? sentenceParts : [text]
 }
 
+function splitReasonBlocks(value) {
+  const text = normalizeDisplayText(value)
+  if (!text) return []
+
+  return text
+    .split(/\n+|(?<=[.。])\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => ({
+      text: item,
+      tokens: tokenizeIssueText(item),
+    }))
+}
+
+function normalizeDisplayText(value) {
+  return String(value ?? '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n')
+}
+
 function normalizeText(value) {
   return String(value ?? '').replace(/\s+/g, ' ').trim()
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function resolveHighlightTone(text) {
+  const normalized = String(text ?? '').toLowerCase()
+  const rule = ISSUE_HIGHLIGHT_RULES.find((item) =>
+    item.keywords.some((keyword) => normalized.includes(keyword.toLowerCase())),
+  )
+  return rule?.tone ?? ''
+}
+
+function tokenizeIssueText(value) {
+  const text = normalizeDisplayText(value)
+  if (!text) return []
+
+  const tokens = []
+  let lastIndex = 0
+  HIGHLIGHT_PATTERN.lastIndex = 0
+
+  for (const match of text.matchAll(HIGHLIGHT_PATTERN)) {
+    const index = match.index ?? 0
+    if (index > lastIndex) {
+      tokens.push({ text: text.slice(lastIndex, index), tone: '' })
+    }
+
+    const matchedText = match[0]
+    tokens.push({
+      text: matchedText,
+      tone: resolveHighlightTone(matchedText),
+    })
+    lastIndex = index + matchedText.length
+  }
+
+  if (lastIndex < text.length) {
+    tokens.push({ text: text.slice(lastIndex), tone: '' })
+  }
+
+  return tokens
+}
+
+function buildIssueHighlightBadges(value) {
+  const text = normalizeText(value).toLowerCase()
+  return ISSUE_HIGHLIGHT_RULES
+    .filter((rule) => rule.keywords.some((keyword) => text.includes(keyword.toLowerCase())))
+    .map(({ tone, icon, label }) => ({ tone, icon, label }))
+}
+
 function analysisStatusLabel(status) {
-  if (status === 'pass') return '이상 없음'
-  if (status === 'warning') return '주의 필요'
-  if (status === 'violation') return '위반 의심'
-  return '대기'
+  if (!status) return '대기'
+  return getAdCheckVerdict({
+    ...analysisResult.value,
+    status,
+  }).label
 }
 
 function reviewStatusLabel(status) {
@@ -184,30 +333,12 @@ function reviewStatusTone(status) {
   return 'approval'
 }
 
-function aiResultStatusLabel(status) {
-  const normalized = String(status ?? '').toLowerCase()
-  if (normalized === 'pass') return '검수 완료'
-  if (normalized === 'warning') return '확인 필요'
-  if (normalized === 'violation') return '위반 의심'
-  if (normalized === 'failed') return '검수 실패'
-  return '결과 대기'
+function adCheckVerdictOf(item) {
+  return getAdCheckDisplayVerdict(item)
 }
 
-function riskLevelLabel(level) {
-  const normalized = String(level ?? '').toUpperCase()
-  if (normalized === 'LOW') return '낮음'
-  if (normalized === 'MEDIUM') return '중간'
-  if (normalized === 'HIGH') return '높음'
-  if (normalized === 'NORMAL') return '보통'
-  return '미정'
-}
-
-function riskLevelTone(level) {
-  const normalized = String(level ?? '').toUpperCase()
-  if (normalized === 'LOW') return 'ready'
-  if (normalized === 'MEDIUM') return 'approval'
-  if (normalized === 'HIGH') return 'danger'
-  return 'neutral'
+function adCheckVerdictChipClass(item) {
+  return `status-chip status-chip--${adCheckVerdictOf(item).tone}`
 }
 
 function formatDate(value) {
@@ -252,20 +383,10 @@ function formatDuration(millis) {
   return `${(millis / 1000).toFixed(2)}s`
 }
 
-function formatJson(value) {
-  if (!value || (typeof value === 'object' && !Object.keys(value).length)) {
-    return ''
-  }
-
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
-}
-
-function detailValue(path, fallback = '') {
-  return path.reduce((current, key) => current?.[key], selectedRawDocument.value) ?? fallback
+function summaryThumbnail(summary) {
+  if (summary?.thumbnailUrl) return summary.thumbnailUrl
+  if (String(summary?.fileContentType || '').startsWith('image/')) return summary.fileUrl || ''
+  return ''
 }
 
 async function loadMemberContext() {
@@ -623,6 +744,12 @@ watch(activeAnalysisJob, (job) => {
   }
 })
 
+watch(adCheckSummaries, () => {
+  if (adCheckResultPage.value > adCheckTotalPages.value) {
+    adCheckResultPage.value = adCheckTotalPages.value
+  }
+})
+
 watch(
   () => props.campaignId,
   () => {
@@ -630,6 +757,7 @@ watch(
     isAnalysisOpen.value = false
     reviewRequests.value = []
     selectedDetailJobId.value = ''
+    adCheckResultPage.value = 1
     loadPageData()
   },
 )
@@ -715,11 +843,7 @@ watch(
         <aside class="analysis-result">
           <article
             class="analysis-verdict"
-            :class="{
-              'analysis-verdict--empty': !analysisFileInfo || isAnalyzing,
-              'analysis-verdict--error': analysisError || analysisIssues.length,
-              'analysis-verdict--clear': analysisFileInfo && !isAnalyzing && normalizedAnalysisStatus === 'pass',
-            }"
+            :class="analysisVerdictClass"
           >
             <span>AI 1차 판단</span>
             <strong>
@@ -730,13 +854,35 @@ watch(
                     ? 'AI 분석 중'
                     : analysisError
                       ? '검수 실패'
-                      : analysisStatusLabel(normalizedAnalysisStatus)
+                      : analysisVerdict?.label || analysisStatusLabel(normalizedAnalysisStatus)
               }}
             </strong>
             <p v-if="analysisError">{{ analysisError }}</p>
-            <p v-else-if="normalizedAnalysisStatus === 'pass'">AI 1차 검수에서 문제 항목이 발견되지 않았습니다.</p>
-            <p v-else-if="analysisIssues.length">아래 항목을 확인한 뒤 수정 후 다시 요청해주세요.</p>
+            <p v-else-if="analysisVerdict">
+              {{ analysisVerdict.description }} {{ analysisVerdict.guidance }}
+            </p>
             <p v-else>파일을 업로드하면 검수 결과가 표시됩니다.</p>
+
+            <ol
+              v-if="analysisFileInfo && !isAnalyzing && !analysisError && analysisVerdict?.level"
+              class="verdict-scale"
+              aria-label="AI 검수 판단 등급"
+            >
+              <li
+                v-for="level in AD_CHECK_VERDICT_LEVELS"
+                :key="level.key"
+                :class="[
+                  `verdict-scale__item--${level.tone}`,
+                  {
+                    'is-active': analysisVerdict.key === level.key,
+                    'is-before': level.level < analysisVerdict.level,
+                  },
+                ]"
+              >
+                <span>{{ level.level }}</span>
+                <strong>{{ level.label }}</strong>
+              </li>
+            </ol>
           </article>
 
           <article v-if="analysisProcessingTimes" class="analysis-timing">
@@ -769,20 +915,67 @@ watch(
           </article>
 
           <div v-if="analysisIssues.length" class="issue-list">
-            <article v-for="issue in analysisIssues" :key="issue.title" class="issue-card">
+            <article
+              v-for="issue in analysisIssues"
+              :key="issue.title"
+              class="issue-card"
+              :class="`issue-card--${issue.verdict.tone}`"
+            >
               <span>{{ issue.source }}</span>
               <strong>{{ issue.title }}</strong>
-              <blockquote v-if="issue.target">{{ issue.target }}</blockquote>
+              <p class="issue-card__verdict">
+                {{ issue.verdict.description }} {{ issue.verdict.guidance }}
+              </p>
+
+              <div v-if="issue.highlightBadges.length" class="issue-alert-badges">
+                <span
+                  v-for="badge in issue.highlightBadges"
+                  :key="badge.label"
+                  :class="`issue-alert-badge issue-alert-badge--${badge.tone}`"
+                >
+                  <b>{{ badge.icon }}</b>
+                  {{ badge.label }}
+                </span>
+              </div>
+
+              <blockquote v-if="issue.target" class="issue-target">
+                <span
+                  v-for="(token, index) in issue.targetTokens"
+                  :key="`${token.text}-${index}`"
+                  :class="token.tone ? `issue-highlight issue-highlight--${token.tone}` : ''"
+                >
+                  {{ token.text }}
+                </span>
+              </blockquote>
+
               <div v-if="issue.reason" class="issue-section">
                 <span>위반 사유</span>
-                <p>{{ issue.reason }}</p>
+                <p v-for="block in issue.reasonBlocks" :key="block.text">
+                  <span
+                    v-for="(token, index) in block.tokens"
+                    :key="`${token.text}-${index}`"
+                    :class="token.tone ? `issue-highlight issue-highlight--${token.tone}` : ''"
+                  >
+                    {{ token.text }}
+                  </span>
+                </p>
               </div>
+
               <div v-if="issue.suggestion" class="issue-section issue-section--suggestion">
                 <span>수정 제안</span>
-                <ul v-if="issue.suggestionItems.length > 1">
-                  <li v-for="item in issue.suggestionItems" :key="item">{{ item }}</li>
-                </ul>
-                <p v-else>{{ issue.suggestion }}</p>
+                <ol class="suggestion-list">
+                  <li v-for="item in issue.suggestionItems" :key="item.text">
+                    <p>
+                      <span
+                        v-for="(token, index) in item.tokens"
+                        :key="`${token.text}-${index}`"
+                        :class="token.tone ? `issue-highlight issue-highlight--${token.tone}` : ''"
+                      >
+                        {{ token.text }}
+                      </span>
+                    </p>
+                  </li>
+                </ol>
               </div>
             </article>
           </div>
@@ -844,10 +1037,15 @@ watch(
 
         <div v-else-if="adCheckSummaries.length" class="ad-check-summary-list">
           <article
-            v-for="summary in adCheckSummaries"
+            v-for="summary in paginatedAdCheckSummaries"
             :key="summary.jobId"
             class="ad-check-summary-card"
           >
+            <figure class="ad-check-summary-card__preview">
+              <img v-if="summaryThumbnail(summary)" :src="summaryThumbnail(summary)" :alt="`${summary.fileName} 미리보기`" />
+              <figcaption v-else>Preview</figcaption>
+            </figure>
+
             <div class="ad-check-summary-card__main">
               <span>{{ adCheckStatusLabel(summary.status) }}</span>
               <strong>{{ summary.fileName }}</strong>
@@ -856,16 +1054,16 @@ watch(
 
             <dl class="ad-check-summary-card__meta">
               <div>
-                <dt>판정</dt>
-                <dd>{{ aiResultStatusLabel(summary.resultStatus) }}</dd>
-              </div>
-              <div>
-                <dt>위험도</dt>
+                <dt>판단 등급</dt>
                 <dd>
-                  <em :class="`status-chip status-chip--${riskLevelTone(summary.riskLevel)}`">
-                    {{ riskLevelLabel(summary.riskLevel) }}
+                  <em :class="adCheckVerdictChipClass(summary)">
+                    {{ adCheckVerdictOf(summary).title }}
                   </em>
                 </dd>
+              </div>
+              <div>
+                <dt>조치</dt>
+                <dd>{{ adCheckVerdictOf(summary).guidance }}</dd>
               </div>
               <div>
                 <dt>요청</dt>
@@ -888,93 +1086,32 @@ watch(
           </article>
         </div>
 
+        <nav v-if="adCheckSummaries.length && adCheckTotalPages > 1" class="ad-check-pagination" aria-label="AI 검수 자료 페이지">
+          <button type="button" :disabled="adCheckResultPage === 1" @click="adCheckResultPage -= 1">
+            이전
+          </button>
+          <button
+            v-for="page in adCheckTotalPages"
+            :key="page"
+            type="button"
+            :class="{ active: adCheckResultPage === page }"
+            @click="adCheckResultPage = page"
+          >
+            {{ page }}
+          </button>
+          <button
+            type="button"
+            :disabled="adCheckResultPage === adCheckTotalPages"
+            @click="adCheckResultPage += 1"
+          >
+            다음
+          </button>
+        </nav>
+
         <article v-else class="empty-state empty-state--compact">
           <strong>저장된 AI 검수 자료가 없습니다.</strong>
           <p>파일 검수를 완료하면 결과 요약이 이곳에 표시됩니다.</p>
         </article>
-
-        <section v-if="selectedDetailJobId" class="ad-check-detail-panel">
-          <header class="ad-check-detail-panel__head">
-            <div>
-              <p>Mongo Detail</p>
-              <h4>{{ selectedJobDetail?.summary?.fileName || '상세 자료' }}</h4>
-            </div>
-            <button type="button" class="ghost-button" @click="closeAdCheckDetail">닫기</button>
-          </header>
-
-          <p
-            v-if="adCheckJobsStore.detailLoadError && !selectedJobDetail && !isSelectedDetailLoading"
-            class="form-error"
-          >
-            {{ adCheckJobsStore.detailLoadError }}
-          </p>
-
-          <div v-if="isSelectedDetailLoading" class="ad-check-detail-panel__loading">
-            상세 자료를 불러오고 있습니다.
-          </div>
-
-          <div v-else-if="selectedJobDetail" class="ad-check-detail-panel__body">
-            <dl class="ad-check-detail-meta">
-              <div>
-                <dt>원본 파일</dt>
-                <dd>{{ selectedJobDetail.detail?.fileName || selectedJobDetail.summary.fileName }}</dd>
-              </div>
-              <div>
-                <dt>콘텐츠 타입</dt>
-                <dd>{{ selectedJobDetail.detail?.fileContentType || '-' }}</dd>
-              </div>
-              <div>
-                <dt>파일 크기</dt>
-                <dd>{{ formatFileSize(selectedJobDetail.detail?.fileSize) }}</dd>
-              </div>
-              <div>
-                <dt>Mongo ID</dt>
-                <dd>{{ selectedJobDetail.mongoDocumentId }}</dd>
-              </div>
-            </dl>
-
-            <details class="ad-check-detail-section" open>
-              <summary>추출된 전체 텍스트</summary>
-              <pre>{{ selectedJobDetail.detail?.extractedText || '추출된 텍스트가 없습니다.' }}</pre>
-            </details>
-
-            <details
-              v-if="formatJson(detailValue(['documentStructureResult']))"
-              class="ad-check-detail-section"
-            >
-              <summary>문서 구조 분석 결과</summary>
-              <pre>{{ formatJson(detailValue(['documentStructureResult'])) }}</pre>
-            </details>
-
-            <details
-              v-if="formatJson(detailValue(['recognizedTextResult']))"
-              class="ad-check-detail-section"
-            >
-              <summary>글자 인식 결과</summary>
-              <pre>{{ formatJson(detailValue(['recognizedTextResult'])) }}</pre>
-            </details>
-
-            <details
-              v-if="formatJson(detailValue(['textRiskAnalysisResult']))"
-              class="ad-check-detail-section"
-            >
-              <summary>문구 위험도 분석 결과</summary>
-              <pre>{{ formatJson(detailValue(['textRiskAnalysisResult'])) }}</pre>
-            </details>
-
-            <details
-              v-if="formatJson(detailValue(['finalResult']))"
-              class="ad-check-detail-section"
-            >
-              <summary>최종 상세 판정</summary>
-              <pre>{{ formatJson(detailValue(['finalResult'])) }}</pre>
-            </details>
-
-            <p v-if="detailValue(['errorDetail'])" class="form-error">
-              오류 상세: {{ detailValue(['errorDetail']) }}
-            </p>
-          </div>
-        </section>
       </section>
 
       <div v-if="reviewRequests.length" class="review-list">
@@ -1037,6 +1174,15 @@ watch(
         <p>협력사가 AI 1차 검수를 통과한 파일을 요청하면 이곳에 표시됩니다.</p>
       </article>
     </section>
+
+    <AdCheckDetailModal
+      v-if="selectedDetailJobId"
+      :summary="selectedJobDetail?.summary || selectedAdCheckSummary"
+      :detail="selectedJobDetail"
+      :loading="isSelectedDetailLoading"
+      :error-message="adCheckJobsStore.detailLoadError"
+      @close="closeAdCheckDetail"
+    />
   </section>
 </template>
 
@@ -1091,8 +1237,7 @@ watch(
   border-bottom: 1px solid var(--border-color);
 }
 
-.ad-check-results__head,
-.ad-check-detail-panel__head {
+.ad-check-results__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1100,17 +1245,14 @@ watch(
 }
 
 .ad-check-results__head p,
-.ad-check-detail-panel__head p,
 .ad-check-summary-card__main span,
-.ad-check-summary-card__meta dt,
-.ad-check-detail-meta dt {
+.ad-check-summary-card__meta dt {
   color: var(--muted-text);
   font-size: 12px;
   font-weight: 850;
 }
 
-.ad-check-results__head h4,
-.ad-check-detail-panel__head h4 {
+.ad-check-results__head h4 {
   margin-top: 3px;
   color: var(--text-primary);
   font-size: 16px;
@@ -1125,11 +1267,38 @@ watch(
 
 .ad-check-summary-card {
   display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
   gap: 12px;
+  align-items: start;
   padding: 13px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--panel-muted);
+}
+
+.ad-check-summary-card__preview {
+  display: grid;
+  width: 96px;
+  height: 82px;
+  overflow: hidden;
+  place-items: center;
+  grid-row: 1 / span 3;
+  margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
+}
+
+.ad-check-summary-card__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ad-check-summary-card__preview figcaption {
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 850;
 }
 
 .ad-check-summary-card__main {
@@ -1154,23 +1323,20 @@ watch(
   line-height: 1.45;
 }
 
-.ad-check-summary-card__meta,
-.ad-check-detail-meta {
+.ad-check-summary-card__meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 0;
 }
 
-.ad-check-summary-card__meta div,
-.ad-check-detail-meta div {
+.ad-check-summary-card__meta div {
   display: grid;
   min-width: 0;
   gap: 3px;
 }
 
-.ad-check-summary-card__meta dd,
-.ad-check-detail-meta dd {
+.ad-check-summary-card__meta dd {
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -1179,6 +1345,40 @@ watch(
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ad-check-summary-card > .ghost-button {
+  justify-self: end;
+}
+
+.ad-check-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.ad-check-pagination button {
+  min-height: 30px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 0 10px;
+}
+
+.ad-check-pagination button.active {
+  border-color: color-mix(in srgb, var(--color-primary-500) 34%, var(--border-color));
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+
+.ad-check-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .ad-check-summary-card--loading span,
@@ -1197,56 +1397,6 @@ watch(
 
 .ad-check-summary-card--loading p {
   width: 82%;
-}
-
-.ad-check-detail-panel {
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--panel-muted);
-}
-
-.ad-check-detail-panel__body {
-  display: grid;
-  gap: 10px;
-}
-
-.ad-check-detail-panel__loading {
-  padding: 16px;
-  border-radius: var(--radius-sm);
-  background: var(--panel-color);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.ad-check-detail-section {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--panel-color);
-}
-
-.ad-check-detail-section summary {
-  cursor: pointer;
-  padding: 10px 12px;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 950;
-}
-
-.ad-check-detail-section pre {
-  max-height: 240px;
-  overflow: auto;
-  margin: 0;
-  padding: 0 12px 12px;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .primary-button,
@@ -1391,18 +1541,114 @@ watch(
   outline: none;
 }
 
-.analysis-verdict--clear {
-  border-color: color-mix(in srgb, var(--color-success) 34%, var(--border-color));
-  background: color-mix(in srgb, var(--color-success) 12%, var(--panel-color));
+.analysis-verdict--empty {
+  border-color: var(--border-color);
 }
 
-.analysis-verdict--error {
-  border-color: color-mix(in srgb, var(--color-danger) 34%, var(--border-color));
+.analysis-verdict--neutral,
+.issue-card--neutral {
+  border-color: var(--border-color);
+  background: var(--panel-muted);
+}
+
+.analysis-verdict--pass,
+.issue-card--pass {
+  border-color: color-mix(in srgb, #10b981 42%, var(--border-color));
+  background: color-mix(in srgb, #10b981 12%, var(--panel-color));
+}
+
+.analysis-verdict--recheck,
+.issue-card--recheck {
+  border-color: color-mix(in srgb, #84cc16 42%, var(--border-color));
+  background: color-mix(in srgb, #84cc16 12%, var(--panel-color));
+}
+
+.analysis-verdict--suggestion,
+.issue-card--suggestion {
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--border-color));
+  background: color-mix(in srgb, #f59e0b 12%, var(--panel-color));
+}
+
+.analysis-verdict--revision,
+.issue-card--revision {
+  border-color: color-mix(in srgb, #f97316 46%, var(--border-color));
+  background: color-mix(in srgb, #f97316 13%, var(--panel-color));
+}
+
+.analysis-verdict--danger,
+.issue-card--danger {
+  border-color: color-mix(in srgb, var(--color-danger) 46%, var(--border-color));
   background: var(--danger-surface);
 }
 
-.analysis-verdict--empty {
-  border-color: var(--border-color);
+.verdict-scale {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.verdict-scale li {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
+  color: var(--text-secondary);
+  opacity: 0.62;
+}
+
+.verdict-scale li.is-before {
+  opacity: 0.78;
+}
+
+.verdict-scale li.is-active {
+  border-color: currentColor;
+  box-shadow: inset 0 0 0 1px currentColor;
+  opacity: 1;
+}
+
+.verdict-scale span {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.verdict-scale strong {
+  overflow-wrap: anywhere;
+  color: currentColor;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.verdict-scale__item--pass {
+  color: #059669;
+}
+
+.verdict-scale__item--recheck {
+  color: #65a30d;
+}
+
+.verdict-scale__item--suggestion {
+  color: #b45309;
+}
+
+.verdict-scale__item--revision {
+  color: #c2410c;
+}
+
+.verdict-scale__item--danger {
+  color: var(--color-danger-dark);
 }
 
 .analysis-job-stage {
@@ -1469,21 +1715,59 @@ watch(
   gap: 8px;
 }
 
+.issue-alert-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.issue-alert-badge {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 950;
+  padding: 0 10px;
+}
+
+.issue-alert-badge b {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.issue-alert-badge--danger {
+  background: var(--color-danger-light);
+  color: var(--color-danger-dark);
+}
+
+.issue-alert-badge--warning {
+  background: color-mix(in srgb, #f59e0b 20%, transparent);
+  color: #92400e;
+}
+
+.issue-alert-badge--recommend {
+  background: color-mix(in srgb, #10b981 16%, transparent);
+  color: #047857;
+}
+
 .issue-card blockquote {
   margin: 0;
-  padding: 8px 10px;
-  border-left: 3px solid var(--border-strong);
+  padding: 10px 12px;
+  border-left: 4px solid var(--color-danger);
   border-radius: var(--radius-sm);
   background: var(--panel-color);
   color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.55;
 }
 
 .issue-section {
   display: grid;
-  gap: 6px;
-  padding: 10px;
+  gap: 8px;
+  padding: 11px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background: var(--panel-color);
@@ -1496,22 +1780,131 @@ watch(
 }
 
 .issue-section p,
-.issue-section ul {
+.issue-section ol {
   margin: 0;
 }
 
-.issue-section ul {
+.issue-section p {
+  white-space: pre-wrap;
+}
+
+.suggestion-list {
   display: grid;
-  gap: 6px;
-  padding-left: 18px;
+  gap: 8px;
+  padding: 0;
+  counter-reset: suggestion;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.5;
+  list-style: none;
+}
+
+.suggestion-list li {
+  position: relative;
+  display: grid;
+  min-height: 34px;
+  align-items: start;
+  padding: 8px 10px 8px 38px;
+  border: 1px solid color-mix(in srgb, var(--color-primary-500) 20%, var(--border-color));
+  border-radius: var(--radius-sm);
+  background: var(--panel-color);
+  counter-increment: suggestion;
+}
+
+.suggestion-list li::before {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-500);
+  color: #fff;
+  content: counter(suggestion);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.issue-highlight {
+  display: inline;
+  border-radius: 5px;
+  box-decoration-break: clone;
+  font-weight: 950;
+  padding: 1px 4px;
+  -webkit-box-decoration-break: clone;
+}
+
+.issue-highlight--danger {
+  background: color-mix(in srgb, var(--color-danger) 20%, transparent);
+  color: var(--color-danger-dark);
+}
+
+.issue-highlight--warning {
+  background: color-mix(in srgb, #f59e0b 22%, transparent);
+  color: #92400e;
+}
+
+.issue-highlight--recommend {
+  background: color-mix(in srgb, #10b981 18%, transparent);
+  color: #047857;
 }
 
 .issue-section--suggestion {
   border-color: color-mix(in srgb, var(--color-primary-500) 28%, var(--border-color));
   background: color-mix(in srgb, var(--color-primary-100) 48%, var(--panel-color));
+}
+
+:global(:root[data-theme='dark']) .verdict-scale__item--pass,
+:global(:root[data-theme='dark']) .status-chip--pass,
+:global(:root[data-theme='dark']) .issue-alert-badge--recommend,
+:global(:root[data-theme='dark']) .issue-highlight--recommend {
+  color: #6ee7b7;
+}
+
+:global(:root[data-theme='dark']) .verdict-scale__item--recheck,
+:global(:root[data-theme='dark']) .status-chip--recheck {
+  color: #bef264;
+}
+
+:global(:root[data-theme='dark']) .verdict-scale__item--suggestion,
+:global(:root[data-theme='dark']) .status-chip--suggestion,
+:global(:root[data-theme='dark']) .issue-alert-badge--warning,
+:global(:root[data-theme='dark']) .issue-highlight--warning {
+  color: #fcd34d;
+}
+
+:global(:root[data-theme='dark']) .verdict-scale__item--revision,
+:global(:root[data-theme='dark']) .status-chip--revision {
+  color: #fdba74;
+}
+
+:global(:root[data-theme='dark']) .verdict-scale__item--danger,
+:global(:root[data-theme='dark']) .status-chip--danger,
+:global(:root[data-theme='dark']) .issue-alert-badge--danger,
+:global(:root[data-theme='dark']) .issue-highlight--danger {
+  color: #fca5a5;
+}
+
+:global(:root[data-theme='dark']) .analysis-verdict--pass,
+:global(:root[data-theme='dark']) .issue-card--pass {
+  background: color-mix(in srgb, #10b981 12%, var(--panel-color));
+}
+
+:global(:root[data-theme='dark']) .analysis-verdict--recheck,
+:global(:root[data-theme='dark']) .issue-card--recheck {
+  background: color-mix(in srgb, #84cc16 12%, var(--panel-color));
+}
+
+:global(:root[data-theme='dark']) .analysis-verdict--suggestion,
+:global(:root[data-theme='dark']) .issue-card--suggestion {
+  background: color-mix(in srgb, #f59e0b 12%, var(--panel-color));
+}
+
+:global(:root[data-theme='dark']) .analysis-verdict--revision,
+:global(:root[data-theme='dark']) .issue-card--revision {
+  background: color-mix(in srgb, #f97316 13%, var(--panel-color));
 }
 
 .form-error {
@@ -1596,6 +1989,26 @@ watch(
   color: var(--text-secondary);
 }
 
+.status-chip--pass {
+  background: color-mix(in srgb, #10b981 16%, transparent);
+  color: #047857;
+}
+
+.status-chip--recheck {
+  background: color-mix(in srgb, #84cc16 18%, transparent);
+  color: #4d7c0f;
+}
+
+.status-chip--suggestion {
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+  color: #92400e;
+}
+
+.status-chip--revision {
+  background: color-mix(in srgb, #f97316 18%, transparent);
+  color: #9a3412;
+}
+
 .review-card__text,
 .review-card__reason {
   grid-column: 1 / -1;
@@ -1643,15 +2056,27 @@ watch(
 @media (max-width: 720px) {
   .review-panel__head,
   .ad-check-results__head,
-  .ad-check-detail-panel__head,
   .review-card__actions {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .ad-check-summary-card__meta,
-  .ad-check-detail-meta {
+  .ad-check-summary-card__meta {
     grid-template-columns: 1fr;
+  }
+
+  .ad-check-summary-card {
+    grid-template-columns: 1fr;
+  }
+
+  .ad-check-summary-card__preview {
+    width: 100%;
+    height: 140px;
+    grid-row: auto;
+  }
+
+  .ad-check-summary-card > .ghost-button {
+    justify-self: stretch;
   }
 
   .analysis-timing dl {

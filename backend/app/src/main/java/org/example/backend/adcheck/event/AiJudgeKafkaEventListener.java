@@ -77,6 +77,7 @@ public class AiJudgeKafkaEventListener {
                 .violationText(text(event, "violationText"))
                 .reason(text(event, "reason"))
                 .suggestion(text(event, "suggestion"))
+                .verdictLevel(integer(event, "verdictLevel", "verdict_level", "reviewLevel", "review_level", "riskLevel", "risk_level", "level", "grade"))
                 .extractionMode(text(event, "extractionMode"))
                 .finalResultObjectKey(text(event, "finalResultObjectKey"))
                 .errorMessage(errorMessage)
@@ -104,6 +105,37 @@ public class AiJudgeKafkaEventListener {
         } catch (NumberFormatException ignored) {
             return null;
         }
+    }
+
+    private Integer integer(JsonNode node, String... names) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        for (String name : names) {
+            Integer parsed = intValue(node.path(name));
+            if (parsed != null) {
+                return parsed;
+            }
+        }
+        return null;
+    }
+
+    private Integer intValue(JsonNode value) {
+        if (value == null || value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        if (value.canConvertToInt()) {
+            int number = value.asInt();
+            return number >= 1 && number <= 5 ? number : null;
+        }
+        String raw = value.asText("").trim();
+        for (int index = 0; index < raw.length(); index++) {
+            char current = raw.charAt(index);
+            if (current >= '1' && current <= '5') {
+                return current - '0';
+            }
+        }
+        return null;
     }
 
     private boolean hasText(JsonNode value) {

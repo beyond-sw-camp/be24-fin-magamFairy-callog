@@ -358,6 +358,11 @@ public class NotificationService {
 
     @Transactional
     public void notifyAiJudgeResult(Long requesterIdx, AdCheckDto.FileCheckRes response) {
+        notifyAiJudgeResult(requesterIdx, response, null);
+    }
+
+    @Transactional
+    public void notifyAiJudgeResult(Long requesterIdx, AdCheckDto.FileCheckRes response, String targetUrl) {
         if (requesterIdx == null || response == null) {
             return;
         }
@@ -381,7 +386,7 @@ public class NotificationService {
                 nonBlank(response.getFileName(), "업로드 파일"),
                 aiJudgeDetail(response, type),
                 "검수 결과 보기",
-                aiJudgeTargetUrl(response.getAnalysisJobId()),
+                nonBlank(targetUrl, aiJudgeTargetUrl(response)),
                 aiJudgeDedupeKey(response.getAnalysisJobId(), requesterIdx),
                 "AI_JUDGE_ANALYSIS",
                 null,
@@ -416,7 +421,7 @@ public class NotificationService {
                 nonBlank(fileName, "업로드 파일"),
                 nonBlank(errorMessage, "AI 검수 처리 중 오류가 발생했습니다."),
                 "검수 결과 보기",
-                nonBlank(targetUrl, "/references"),
+                nonBlank(targetUrl, "/campaign-folder"),
                 aiJudgeDedupeKey(nonBlank(jobId, null), requesterIdx),
                 "AI_JUDGE_ANALYSIS",
                 null,
@@ -620,13 +625,29 @@ public class NotificationService {
         builder.append(label).append(": ").append(nextValue);
     }
 
-    private String aiJudgeTargetUrl(String analysisJobId) {
-        String normalizedId = normalize(analysisJobId);
-        if (normalizedId == null) {
-            return "/references";
+    private String aiJudgeTargetUrl(AdCheckDto.FileCheckRes response) {
+        String campaignId = contextText(response == null ? null : response.getContext(), "campaignId");
+        String jobId = contextText(response == null ? null : response.getContext(), "adCheckJobId");
+        if (campaignId != null) {
+            StringBuilder builder = new StringBuilder("/campaigns/")
+                    .append(campaignId)
+                    .append("?tab=review");
+            if (jobId != null) {
+                builder.append("&adCheckJobId=")
+                        .append(URLEncoder.encode(jobId, StandardCharsets.UTF_8));
+            }
+            return builder.toString();
         }
 
-        return "/references?analysisJobId=" + URLEncoder.encode(normalizedId, StandardCharsets.UTF_8);
+        return "/campaign-folder";
+    }
+
+    private String contextText(Map<String, Object> context, String key) {
+        if (context == null || key == null) {
+            return null;
+        }
+        Object value = context.get(key);
+        return value == null ? null : normalize(String.valueOf(value));
     }
 
     private String aiJudgeDedupeKey(String analysisJobId, Long requesterIdx) {
