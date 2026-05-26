@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
   CancelAdCheckJob,
+  CreateDirectAdCheckJob,
   CreateAdCheckJob,
   DeleteAdCheckJob,
   GetAdCheckJob,
@@ -280,6 +281,17 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
     return normalizedJob
   }
 
+  async function startDirectJob(file, options = {}) {
+    const response = await CreateDirectAdCheckJob(file, options)
+    const normalizedJob = upsertJob(response?.job)
+    scheduleJobPoll(normalizedJob?.jobId)
+    return {
+      ...response,
+      job: normalizedJob,
+      context: response?.context ?? {},
+    }
+  }
+
   async function fetchJob(jobId) {
     const job = await GetAdCheckJob(jobId)
     return upsertJob(job)
@@ -446,6 +458,7 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
     upsertJob,
     handleJobEvent,
     startJob,
+    startDirectJob,
     fetchJob,
     loadJobSummaries,
     loadJobDetail,

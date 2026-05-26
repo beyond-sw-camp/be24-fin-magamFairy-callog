@@ -93,6 +93,15 @@ public class AdCheckController {
         return ResponseEntity.ok(BaseResponse.success(adCheckJobService.createJob(file, user, campaignId)));
     }
 
+    @PostMapping("/check/jobs/direct")
+    public ResponseEntity<BaseResponse<AdCheckJobDto.DirectJobRes>> createDirectCheckJob(
+            @RequestBody AdCheckJobDto.DirectJobCreateReq request,
+            @AuthenticationPrincipal AuthUserDetails user
+    ) {
+        RoleGuard.requireAuthenticated(user);
+        return ResponseEntity.ok(BaseResponse.success(adCheckJobService.createDirectJob(request, user)));
+    }
+
     @PostMapping("/check/jobs/internal/progress")
     public ResponseEntity<BaseResponse<AdCheckJobDto.JobRes>> updateCheckJobProgress(
             @RequestBody AdCheckJobDto.ProgressReq request

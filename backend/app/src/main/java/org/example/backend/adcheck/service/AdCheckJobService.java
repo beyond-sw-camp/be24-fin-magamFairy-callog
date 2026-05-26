@@ -53,6 +53,8 @@ public class AdCheckJobService {
     private static final String CONTEXT_JOB_ID = "adCheckJobId";
     private static final String CONTEXT_PROGRESS_TOKEN = "adCheckProgressToken";
     private static final String CONTEXT_PROGRESS_CALLBACK_URL = "adCheckProgressCallbackUrl";
+    private static final String CONTEXT_MODE = "adCheckMode";
+    private static final String CONTEXT_MODE_DIRECT = "direct-aijudge";
     private static final List<AdCheckJobStatus> ACTIVE_STATUSES = List.of(
             AdCheckJobStatus.RUNNING,
             AdCheckJobStatus.QUEUED
@@ -100,6 +102,7 @@ public class AdCheckJobService {
         List<String> waitingJobIds = transactionTemplate.execute(status -> adCheckJobRepository
                 .findAllByStatusInOrderByCreatedAtAsc(List.of(AdCheckJobStatus.QUEUED))
                 .stream()
+                .filter(this::hasStoredFileBytes)
                 .map(AdCheckJob::getJobId)
                 .toList());
 
@@ -154,6 +157,46 @@ public class AdCheckJobService {
         return queuedJob;
     }
 
+    public AdCheckJobDto.DirectJobRes createDirectJob(
+            AdCheckJobDto.DirectJobCreateReq request,
+            AuthUserDetails requester
+    ) {
+        Long requesterIdx = requesterIdx(requester);
+        User requesterEntity = userRepository.findByIdx(requesterIdx)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎."));
+
+        String campaignId = request == null ? "" : firstText(request.campaignId());
+        if (!campaignId.isBlank()) {
+            requireCampaignAccess(campaignId, requesterIdx);
+        }
+
+        String jobId = "ai-judge-" + UUID.randomUUID();
+        String progressToken = UUID.randomUUID().toString();
+        String fileName = firstText(request == null ? null : request.fileName(), "upload");
+        String fileContentType = firstText(request == null ? null : request.fileContentType());
+        Long fileSize = request == null ? null : request.fileSize();
+
+        AdCheckJobDto.JobRes createdJob = transactionTemplate.execute(status -> {
+            AdCheckJob job = AdCheckJob.queued(
+                    jobId,
+                    progressToken,
+                    requesterEntity,
+                    campaignId,
+                    fileName,
+                    fileContentType,
+                    fileSize,
+                    null
+            );
+            job.markRunning();
+            AdCheckJob savedJob = adCheckJobRepository.save(job);
+            return toDto(savedJob);
+        });
+
+        emitJobEvent(createdJob, "ad-check.job.created");
+        emitJobEvent(createdJob, "ad-check.step.changed");
+        return new AdCheckJobDto.DirectJobRes(createdJob, directContext(createdJob));
+    }
+
     public AdCheckJobDto.JobRes updateProgress(AdCheckJobDto.ProgressReq request) {
         if (request == null
                 || request.jobId() == null || request.jobId().isBlank()
@@ -182,6 +225,68 @@ public class AdCheckJobService {
         });
 
         emitJobEvent(updatedJob, "ad-check.step.changed");
+        return updatedJob;
+    }
+
+    public AdCheckJobDto.JobRes applyDirectAiJudgeEvent(AdCheckDto.FileCheckRes response, boolean failed) {
+        if (response == null || !CONTEXT_MODE_DIRECT.equals(textValue(response.getContext(), CONTEXT_MODE))) {
+            return null;
+        }
+
+        String jobId = textValue(response.getContext(), CONTEXT_JOB_ID);
+        if (jobId.isBlank()) {
+            return null;
+        }
+
+        String resultPayload = serializeResult(response);
+        String errorMessage = failed
+                ? firstText(response.getErrorMessage(), "AI judge processing failed.")
+                : null;
+
+        AdCheckJobDto.JobRes updatedJob = executeWithRetry(jobId, "direct ai-judge event save", () ->
+                transactionTemplate.execute(status -> {
+                    AdCheckJob job = adCheckJobRepository.findByJobId(jobId).orElse(null);
+                    if (job == null) {
+                        log.warn("Direct ai-judge event has no matching ad check job. jobId={}, analysisJobId={}",
+                                jobId, response.getAnalysisJobId());
+                        return null;
+                    }
+                    if (job.isTerminal()) {
+                        return null;
+                    }
+
+                    if (failed) {
+                        job.markFailed(
+                                errorMessage,
+                                resultPayload,
+                                response.getAnalysisJobId(),
+                                normalizeResultStatus(firstText(response.getStatus(), "failed")),
+                                resolveRiskLevel(response, errorMessage),
+                                resolveSummaryMessage(response, errorMessage)
+                        );
+                        saveOutboxEvents(job, response, "ad-check.summary-updated");
+                    } else {
+                        job.markSucceeded(
+                                resultPayload,
+                                response.getAnalysisJobId(),
+                                normalizeResultStatus(response.getStatus()),
+                                resolveRiskLevel(response, null),
+                                resolveSummaryMessage(response, null)
+                        );
+                        saveOutboxEvents(job, response, "ad-check.detail-saved", "ad-check.summary-created", "ad-check.result-ready");
+                    }
+
+                    return toDto(job);
+                })
+        );
+
+        if (failed) {
+            emitJobEvent(updatedJob, "ad-check.failed");
+            notifyFailedJob(updatedJob);
+        } else {
+            emitJobEvent(updatedJob, "ad-check.completed");
+            notifyCompletedJob(updatedJob, response);
+        }
         return updatedJob;
     }
 
@@ -273,10 +378,11 @@ public class AdCheckJobService {
                 .findAllByStatusInOrderByCreatedAtAsc(ACTIVE_STATUSES)
                 .stream()
                 .peek(job -> {
-                    if (job.getStatus() == AdCheckJobStatus.RUNNING) {
+                    if (job.getStatus() == AdCheckJobStatus.RUNNING && hasStoredFileBytes(job)) {
                         job.markQueued();
                     }
                 })
+                .filter(this::hasStoredFileBytes)
                 .map(AdCheckJob::getJobId)
                 .toList());
 
@@ -285,6 +391,10 @@ public class AdCheckJobService {
         }
 
         jobIds.forEach(this::enqueueJob);
+    }
+
+    private boolean hasStoredFileBytes(AdCheckJob job) {
+        return job != null && job.getFileBytes() != null && job.getFileBytes().length > 0;
     }
 
     private void workerLoop() {
@@ -415,13 +525,41 @@ public class AdCheckJobService {
     }
 
     private Map<String, Object> progressContext(WorkItem workItem) {
+        return progressContext(workItem.jobId(), workItem.progressToken());
+    }
+
+    private Map<String, Object> progressContext(String jobId, String progressToken) {
         Map<String, Object> context = new HashMap<>();
-        context.put(CONTEXT_JOB_ID, workItem.jobId());
-        context.put(CONTEXT_PROGRESS_TOKEN, workItem.progressToken());
+        context.put(CONTEXT_JOB_ID, jobId);
+        context.put(CONTEXT_PROGRESS_TOKEN, progressToken);
         if (progressCallbackUrl != null && !progressCallbackUrl.isBlank()) {
             context.put(CONTEXT_PROGRESS_CALLBACK_URL, progressCallbackUrl.trim());
         }
         return context;
+    }
+
+    private Map<String, Object> directContext(AdCheckJobDto.JobRes job) {
+        Map<String, Object> context = progressContext(job.jobId(), findProgressToken(job.jobId()));
+        context.put(CONTEXT_MODE, CONTEXT_MODE_DIRECT);
+        if (job.campaignId() != null && !job.campaignId().isBlank()) {
+            context.put("campaignId", job.campaignId());
+        }
+        if (job.requesterId() != null) {
+            context.put("requesterUserIdx", job.requesterId());
+        }
+        if (job.requesterLoginId() != null && !job.requesterLoginId().isBlank()) {
+            context.put("requesterLoginId", job.requesterLoginId());
+        }
+        if (job.requesterName() != null && !job.requesterName().isBlank()) {
+            context.put("requesterName", job.requesterName());
+        }
+        return context;
+    }
+
+    private String findProgressToken(String jobId) {
+        return transactionTemplate.execute(status -> adCheckJobRepository.findByJobId(jobId)
+                .map(AdCheckJob::getProgressToken)
+                .orElse(jobId));
     }
 
     private AdCheckJobStep parseCallbackStep(String rawStep) {
@@ -903,6 +1041,14 @@ public class AdCheckJobService {
             }
         }
         return "";
+    }
+
+    private String textValue(Map<String, Object> values, String key) {
+        if (values == null || key == null || !values.containsKey(key)) {
+            return "";
+        }
+        Object value = values.get(key);
+        return value == null ? "" : String.valueOf(value).trim();
     }
 
     @FunctionalInterface

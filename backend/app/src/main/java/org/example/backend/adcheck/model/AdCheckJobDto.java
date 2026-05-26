@@ -14,6 +14,20 @@ public class AdCheckJobDto {
     ) {
     }
 
+    public record DirectJobCreateReq(
+            String campaignId,
+            String fileName,
+            String fileContentType,
+            Long fileSize
+    ) {
+    }
+
+    public record DirectJobRes(
+            JobRes job,
+            Map<String, Object> context
+    ) {
+    }
+
     public record JobRes(
             String jobId,
             Long requesterId,

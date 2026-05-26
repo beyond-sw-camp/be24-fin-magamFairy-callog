@@ -671,6 +671,11 @@ function applyAnalysisJobResult(job) {
     return
   }
 
+  if (analysisResult.value && activeAnalysisJobId.value === job.jobId) {
+    isAnalyzing.value = false
+    return
+  }
+
   analysisError.value = ''
   isAnalyzing.value = true
 }
@@ -712,13 +717,24 @@ async function processAnalysisFile(file) {
 
   selectedAnalysisFile.value = file
   isAnalyzing.value = true
+  let directJob = null
   try {
-    const result = await CheckCampaignAdFileWithAiJudge(props.campaignId, file)
-    activeAnalysisJobId.value = result?.analysisJobId ?? ''
+    const directStart = await adCheckJobsStore.startDirectJob(file, { campaignId: props.campaignId })
+    directJob = directStart?.job ?? null
+    activeAnalysisJobId.value = directJob?.jobId ?? ''
+    applyAnalysisJobResult(directJob)
+
+    const result = await CheckCampaignAdFileWithAiJudge(props.campaignId, file, {
+      context: directStart?.context ?? {},
+    })
     analysisResult.value = result
     analysisError.value = normalizeAnalysisStatus(result?.status)
       ? ''
       : 'AI 검수 결과 형식이 올바르지 않습니다. 서버 응답을 확인해주세요.'
+    isAnalyzing.value = false
+    if (directJob?.jobId) {
+      await adCheckJobsStore.fetchJob(directJob.jobId).catch(() => null)
+    }
     isAnalyzing.value = false
     void loadAdCheckSummaries()
   } catch (error) {
@@ -727,6 +743,11 @@ async function processAnalysisFile(file) {
     }
     analysisError.value = error?.message ?? 'AI 검수 요청에 실패했습니다.'
     isAnalyzing.value = false
+    if (directJob?.jobId) {
+      await adCheckJobsStore.fetchJob(directJob.jobId).catch(() => null)
+      isAnalyzing.value = false
+      void loadAdCheckSummaries()
+    }
   }
 }
 
@@ -974,35 +995,7 @@ watch(
             </ol>
           </article>
 
-          <article v-if="analysisProcessingTimes" class="analysis-timing">
-            <header class="analysis-timing__head">
-              <span>Processing Time</span>
-              <strong>{{ extractionModeLabel(analysisResult?.extractionMode) }}</strong>
-            </header>
-            <dl>
-              <div>
-                <dt>PDF/TXT</dt>
-                <dd>{{ formatDuration(analysisProcessingTimes.textExtractionMillis) }}</dd>
-              </div>
-              <div>
-                <dt>Layout</dt>
-                <dd>{{ formatDuration(analysisProcessingTimes.layoutMillis) }}</dd>
-              </div>
-              <div>
-                <dt>OCR</dt>
-                <dd>{{ formatDuration(analysisProcessingTimes.ocrMillis) }}</dd>
-              </div>
-              <div>
-                <dt>AI</dt>
-                <dd>{{ formatDuration(analysisProcessingTimes.aiAnalysisMillis) }}</dd>
-              </div>
-              <div>
-                <dt>Total</dt>
-                <dd>{{ formatDuration(analysisProcessingTimes.totalMillis) }}</dd>
-              </div>
-            </dl>
-          </article>
-
+          
           <div v-if="analysisIssues.length" class="issue-list">
             <article
               v-for="issue in analysisIssues"

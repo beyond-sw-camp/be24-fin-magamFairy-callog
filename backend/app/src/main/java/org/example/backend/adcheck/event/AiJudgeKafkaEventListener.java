@@ -2,27 +2,36 @@ package org.example.backend.adcheck.event;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.adcheck.model.AdCheckDto;
 import org.example.backend.adcheck.service.AdAiAnalysisService;
+import org.example.backend.adcheck.service.AdCheckJobService;
 import org.example.backend.notification.service.NotificationService;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 @Component
 @Slf4j
 public class AiJudgeKafkaEventListener {
+    private static final String DIRECT_AI_JUDGE_MODE = "direct-aijudge";
+
     private final ObjectMapper objectMapper;
     private final AdAiAnalysisService adAiAnalysisService;
+    private final AdCheckJobService adCheckJobService;
     private final NotificationService notificationService;
 
     public AiJudgeKafkaEventListener(
             ObjectMapper objectMapper,
             AdAiAnalysisService adAiAnalysisService,
+            AdCheckJobService adCheckJobService,
             NotificationService notificationService
     ) {
         this.objectMapper = objectMapper;
         this.adAiAnalysisService = adAiAnalysisService;
+        this.adCheckJobService = adCheckJobService;
         this.notificationService = notificationService;
     }
 
@@ -43,6 +52,12 @@ public class AiJudgeKafkaEventListener {
             );
             adAiAnalysisService.applyAiJudgeEvent(event);
 
+            AdCheckDto.FileCheckRes response = toFileCheckResponse(event);
+            if (DIRECT_AI_JUDGE_MODE.equals(text(event.path("context"), "adCheckMode"))) {
+                adCheckJobService.applyDirectAiJudgeEvent(response, "AI_JUDGE_FAILED".equals(text(event, "eventType")));
+                return;
+            }
+
             Long requesterIdx = longValue(event.path("context").path("requesterUserIdx"));
             if (hasText(event.path("context").path("adCheckJobId"))) {
                 log.info(
@@ -61,7 +76,7 @@ public class AiJudgeKafkaEventListener {
                 return;
             }
 
-            notificationService.notifyAiJudgeResult(requesterIdx, toFileCheckResponse(event));
+            notificationService.notifyAiJudgeResult(requesterIdx, response);
         } catch (Exception e) {
             log.warn("AI judge Kafka event cannot be parsed. payload={}", payload, e);
         }
@@ -90,7 +105,15 @@ public class AiJudgeKafkaEventListener {
                 .extractionMode(text(event, "extractionMode"))
                 .finalResultObjectKey(text(event, "finalResultObjectKey"))
                 .errorMessage(errorMessage)
+                .context(contextMap(event.path("context")))
                 .build();
+    }
+
+    private Map<String, Object> contextMap(JsonNode context) {
+        if (context == null || context.isMissingNode() || context.isNull() || !context.isObject()) {
+            return Map.of();
+        }
+        return objectMapper.convertValue(context, new TypeReference<>() {});
     }
 
     private String text(JsonNode node, String name) {

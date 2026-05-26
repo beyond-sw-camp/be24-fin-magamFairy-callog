@@ -77,6 +77,9 @@ export const CheckAdFileWithAiJudge = async (file, options = {}) => {
   if (options.campaignId) {
     formData.append('campaignId', options.campaignId)
   }
+  if (options.context) {
+    formData.append('context', JSON.stringify(options.context))
+  }
   try {
     return unwrapDirectAiJudgeResponse(
       await api.post('/aijudge/check/file', formData, {
@@ -89,11 +92,14 @@ export const CheckAdFileWithAiJudge = async (file, options = {}) => {
   }
 }
 
-export const CheckCampaignAdFileWithAiJudge = async (campaignId, file) => {
+export const CheckCampaignAdFileWithAiJudge = async (campaignId, file, options = {}) => {
   const formData = new FormData()
   formData.append('file', file)
   if (campaignId) {
     formData.append('campaignId', campaignId)
+  }
+  if (options.context) {
+    formData.append('context', JSON.stringify(options.context))
   }
   try {
     return unwrapDirectAiJudgeResponse(
@@ -102,6 +108,21 @@ export const CheckCampaignAdFileWithAiJudge = async (campaignId, file) => {
         headers: { 'Content-Type': 'multipart/form-data' },
       }),
     )
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const CreateDirectAdCheckJob = async (file, options = {}) => {
+  const payload = {
+    campaignId: options.campaignId ?? null,
+    fileName: file?.name ?? 'upload',
+    fileContentType: file?.type || null,
+    fileSize: file?.size ?? null,
+  }
+
+  try {
+    return unwrapResponse(await api.post('/ad/check/jobs/direct', payload))
   } catch (error) {
     throw toAdCheckError(error)
   }
