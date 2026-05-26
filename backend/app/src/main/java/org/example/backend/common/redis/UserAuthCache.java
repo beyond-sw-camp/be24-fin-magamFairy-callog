@@ -25,12 +25,14 @@ public class UserAuthCache {
     private final UserRepository userRepository;
 
     @Cacheable(value = CacheNames.USER_AUTH, key = "#userIdx", unless = "#result == null")
-    public User loadUser(Long userIdx) {
+    public CachedUserAuth loadUser(Long userIdx) {
         if (userIdx == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found.");
         }
-        return userRepository.findWithOrganizationByIdx(userIdx)
+        User user = userRepository.findWithOrganizationByIdx(userIdx)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found."));
+        
+        return CachedUserAuth.from(user);
     }
 
     @CacheEvict(value = CacheNames.USER_AUTH, key = "#userIdx")

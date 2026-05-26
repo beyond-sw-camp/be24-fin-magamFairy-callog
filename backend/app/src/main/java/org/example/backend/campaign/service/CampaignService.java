@@ -78,9 +78,6 @@ public class CampaignService {
     private final NotificationSseService sseService;
     private final TaskRepository taskRepository;
     private final DashboardCacheEvictor dashboardCacheEvictor;
-    public List<CampaignDto.Res> listCampaigns(Long userIdx) {
-        return listCampaigns(userIdx, "mine");
-    }
 
     /**
      * scope = "mine" → 내가 멤버인 캠페인 (CampaignMember 기준)

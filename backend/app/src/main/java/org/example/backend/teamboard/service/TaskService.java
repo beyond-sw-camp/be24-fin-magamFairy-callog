@@ -9,6 +9,7 @@ import org.example.backend.campaign.model.CampaignParticipant;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignParticipantRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.common.redis.CacheNames;
 import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.notification.service.NotificationService;
 import org.example.backend.notification.service.NotificationSseService;
@@ -23,6 +24,9 @@ import org.example.backend.teamboard.repository.TaskRepository;
 import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +53,7 @@ public class TaskService {
     private final NotificationSseService sseService;
     private final DashboardCacheEvictor dashboardCacheEvictor;
     private final CampaignActivityService activityService;
+    private final CacheManager cacheManager;
 
     /** 메인 팀 보드 - 내가 참여한 캠페인의 Task + 내 개인 업무(캠페인 무관). */
     public List<TaskDto.ResList> listAll(Long userIdx) {
@@ -81,6 +86,7 @@ public class TaskService {
     }
 
     /** 캠페인 팀 보드 - 캠페인 종속 Task (직접 campaign_id 또는 업무파트 경유) */
+    @Cacheable(value = CacheNames.TASK_LIST, key = "#campaignIdx", unless = "#result == null")
     public List<TaskDto.ResList> listByCampaign(Long campaignIdx) {
         return taskRepository.findAllByCampaignDirectOrViaTaskPart(campaignIdx).stream()
                 .map(TaskDto.ResList::from)
@@ -115,6 +121,7 @@ public class TaskService {
         sseService.broadcastCalendarRefresh(campaignIdx, "task");
         // Dashboard 캐시 무효화 (reviewQueue, summary.pending, blockers 영향)
         evictTaskDashboard(null, resolveCampaign(saved), null, assignee);
+        evictTaskList(campaignIdx);
         return TaskDto.ResTask.from(saved);
     }
 
@@ -196,7 +203,9 @@ public class TaskService {
                 ? task.getTaskPart().getCampaign().getIdx() : null;
         sseService.broadcastCalendarRefresh(campaignIdxForSse, "task");
         // Dashboard 캐시 무효화 (status 변경 시 reviewQueue/blockers/passPct 모두 영향)
-        evictTaskDashboard(previousCampaign, resolveCampaign(task), previousAssignee, task.getAssignee());
+        Campaign nextCampaign = resolveCampaign(task);
+        evictTaskDashboard(previousCampaign, nextCampaign, previousAssignee, task.getAssignee());
+        evictTaskList(previousCampaign, nextCampaign);
         return TaskDto.ResTask.from(task);
     }
 
@@ -212,6 +221,7 @@ public class TaskService {
         sseService.broadcastCalendarRefresh(campaignIdxForSse, "task");
         // Dashboard 캐시 무효화 (reviewQueue/blockers 에서 제거)
         evictTaskDashboard(campaign, null, assignee, null);
+        evictTaskList(campaign);
     }
 
     /** 활동 로그용 캠페인 해석: 직접 campaign → 업무파트 경유 → 참여사 경유. 없으면 null(개인 업무). */
@@ -259,6 +269,25 @@ public class TaskService {
     private void addUserIdx(Set<Long> userIdxs, User user) {
         if (user != null && user.getIdx() != null) {
             userIdxs.add(user.getIdx());
+        }
+    }
+
+    private void evictTaskList(Campaign... campaigns) {
+        if (campaigns == null) {
+            return;
+        }
+        for (Campaign campaign : campaigns) {
+            evictTaskList(campaign == null ? null : campaign.getIdx());
+        }
+    }
+
+    private void evictTaskList(Long campaignIdx) {
+        if (campaignIdx == null) {
+            return;
+        }
+        Cache cache = cacheManager.getCache(CacheNames.TASK_LIST);
+        if (cache != null) {
+            cache.evict(campaignIdx);
         }
     }
 
