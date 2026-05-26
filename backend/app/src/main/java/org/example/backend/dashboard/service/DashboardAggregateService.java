@@ -74,7 +74,7 @@ public class DashboardAggregateService {
             " + ':v' + @dashboardCacheVersionService.getVersion(#callerIdx)";
 
     private final UserRepository userRepository;
-    private final org.example.backend.common.redis.UserAuthCache userAuthCache;
+
     private final OrganizationRepository organizationRepository;
     private final CampaignRepository campaignRepository;
     private final CampaignKpiRepository campaignKpiRepository;
@@ -822,11 +822,14 @@ public class DashboardAggregateService {
     // ── Helper ──────────────────────────────────────────────
 
     /**
-     * ⚡ B5: in-memory cache (60s TTL) 를 통한 user 조회.
-     * Dashboard 의 여러 endpoint 가 병렬 호출돼도 첫 호출만 DB, 나머지는 cache hit.
+     * ⚡ B5: Organization 포함 user 조회. Dashboard 의 여러 endpoint 가 병렬 호출돼도
+     * @Cacheable(DASHBOARD_PAGE, sync=true) 덕분에 DB 접근이 최소화됨.
+     * UserAuthCache 는 JwtFilter 전용 (보안 목적, DTO만 저장) — 여기서는 Organization 연관이 필요하므로 직접 조회.
      */
     private User findUser(Long userIdx) {
-        return userAuthCache.loadUser(userIdx);
+        return userRepository.findWithOrganizationByIdx(userIdx)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "User not found."));
     }
 
     private static Integer averageAchievement(List<CampaignKpi> kpis) {

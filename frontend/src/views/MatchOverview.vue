@@ -66,8 +66,6 @@ function moveToMatchingTab(criteria) {
 
 function requestEvaluation(candidate) {
   evaluationCandidate.value = candidate ?? null
-  console.log(candidate)
-  console.log("ㅎㅇ")
   startEvaluation(evaluationCandidate.value);
   currentTab.value = 'evaluation'
 }

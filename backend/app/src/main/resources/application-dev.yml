@@ -21,20 +21,12 @@ app:
   frontend-url: ${FRONTEND_URL}
   secure-cookie: ${SECURE_COOKIE}
   kafka:
-    campaign-sync-enabled: ${CAMPAIGN_SYNC_KAFKA_ENABLED}
     topics:
       evaluation-start: evaluation.start
       evaluation-collect: evaluation.collect
-      campaign-sync: ${CAMPAIGN_SYNC_TOPIC:campaign.sync}
-  ad-check:
-    kafka-result-timeout-ms: ${AI_JUDGE_KAFKA_RESULT_TIMEOUT_MS:300000}
-ai-judge:
-  kafka:
-    enabled: ${AI_JUDGE_KAFKA_ENABLED:true}
-    request-topic: ${AI_JUDGE_REQUEST_TOPIC:ai-judge.requests}
-    completed-topic: ${AI_JUDGE_COMPLETED_TOPIC:ai-judge.completed}
-    group-id: ${AI_JUDGE_APP_GROUP_ID:callog-app-ai-judge}
-    send-timeout-ms: ${AI_JUDGE_KAFKA_SEND_TIMEOUT_MS:10000}
+    consumer:
+      propoerties:
+        spring.json.use.type.headers: false
 msa:
   matching-evaluation:
     base-url: ${EVALUATION_URL}
@@ -110,12 +102,8 @@ spring:
 
   kafka:
     bootstrap-servers: localhost:9092
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-    consumer:
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    topics:
+      evaluation-start: evaluation-start
 
 logging:
   level:
@@ -130,6 +118,19 @@ logging:
     org.springframework.http.client: TRACE
 
 custom:
+  n8n:
+    webhook-url: ${N8N_URL}
+    evaluation-endpoint: ${EVALUATION_ENDPOINT}
+    check-endpoint: ${CHECK_ENDPOINT}
+  ocr:
+    url: ${OCR_SERVICE_URL}
+    async-enabled: ${OCR_ASYNC_ENABLED}
+    job-url: ${OCR_JOB_SERVICE_URL}
+    job-poll-interval-ms: ${OCR_JOB_POLL_INTERVAL_MS}
+    job-poll-timeout-ms: ${OCR_JOB_POLL_TIMEOUT_MS}
+  layout:
+    url: ${LAYOUT_SERVICE_URL}
+    api-key: ${LAYOUT_SERVICE_API_KEY:}
   mongodb:
     analysis-enabled: ${MONGODB_STD_ENABLED:false}
     analysis-uri: ${MONGODB_STD_URL:}

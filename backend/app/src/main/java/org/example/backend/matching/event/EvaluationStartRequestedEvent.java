@@ -1,13 +1,7 @@
-package org.example.evaluation.event;
+package org.example.backend.matching.event;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import org.example.evaluation.model.EvaluationDto;
+import lombok.*;
 
 import java.util.UUID;
 

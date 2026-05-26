@@ -20,6 +20,9 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -68,29 +71,46 @@ public class NotificationDeadlineScheduler {
     }
 
     private void notifyWindow(Collection<Task> tasks, NotificationType type, String keyPrefix) {
+        Map<Long, List<CampaignMember>> membersByCampaign = loadMembersByCampaign(tasks);
         tasks.forEach(task -> notificationService.notifyDeadline(
                 task,
-                deadlineRecipients(task),
+                deadlineRecipients(task, membersByCampaign),
                 type,
                 keyPrefix + ":task:" + task.getIdx()
         ));
     }
 
-    private List<User> deadlineRecipients(Task task) {
+    private Map<Long, List<CampaignMember>> loadMembersByCampaign(Collection<Task> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<Long> campaignIdxs = tasks.stream()
+                .map(this::resolveCampaignIdx)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (campaignIdxs.isEmpty()) {
+            return Map.of();
+        }
+
+        return campaignMemberRepository.findAllByCampaignIdxIn(campaignIdxs).stream()
+                .filter(member -> member.getCampaign() != null && member.getCampaign().getIdx() != null)
+                .collect(Collectors.groupingBy(member -> member.getCampaign().getIdx()));
+    }
+
+    private List<User> deadlineRecipients(Task task, Map<Long, List<CampaignMember>> membersByCampaign) {
         Map<Long, User> recipients = new LinkedHashMap<>();
 
         if (task.getAssignee() != null && task.getAssignee().getIdx() != null) {
             recipients.put(task.getAssignee().getIdx(), task.getAssignee());
         }
 
-        Long campaignIdx = task.getTaskPart() != null && task.getTaskPart().getCampaign() != null
-                ? task.getTaskPart().getCampaign().getIdx()
-                : null;
+        Long campaignIdx = resolveCampaignIdx(task);
         if (campaignIdx == null) {
             return List.copyOf(recipients.values());
         }
 
-        campaignMemberRepository.findAllByCampaignIdx(campaignIdx).stream()
+        membersByCampaign.getOrDefault(campaignIdx, List.of()).stream()
                 .filter(member -> member.getCampaignRole() == CampaignMemberRole.MANAGER
                         || member.getCampaignRole() == CampaignMemberRole.GENERAL_MANAGER)
                 .map(CampaignMember::getUser)
@@ -98,5 +118,21 @@ public class NotificationDeadlineScheduler {
                 .forEach(user -> recipients.putIfAbsent(user.getIdx(), user));
 
         return List.copyOf(recipients.values());
+    }
+
+    private Long resolveCampaignIdx(Task task) {
+        if (task == null) {
+            return null;
+        }
+        if (task.getCampaign() != null) {
+            return task.getCampaign().getIdx();
+        }
+        if (task.getTaskPart() != null && task.getTaskPart().getCampaign() != null) {
+            return task.getTaskPart().getCampaign().getIdx();
+        }
+        if (task.getParticipant() != null && task.getParticipant().getCampaign() != null) {
+            return task.getParticipant().getCampaign().getIdx();
+        }
+        return null;
     }
 }

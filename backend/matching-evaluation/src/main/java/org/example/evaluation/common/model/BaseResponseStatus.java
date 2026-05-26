@@ -17,7 +17,7 @@ public enum BaseResponseStatus {
 
     // 3000번대 클라이언트 입력 오류, 입력값 검증 오류
     VALIDATION_ERROR(false, 3005, "입력값을 확인해주세요."),
-
+    EMPTY_PAYLOAD(false, 3006 ,"입력값이 비었습니다." ),
 
     // 5000번대 실패
     FAIL(false, 5000, "요청이 실패했습니다."),

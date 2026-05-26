@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.evaluation.common.model.BaseResponse;
 import org.example.evaluation.common.model.BaseResponseStatus;
 import org.example.evaluation.model.EvaluationDto;
+import org.example.evaluation.model.N8nEvaluationPayloadDto;
 import org.example.evaluation.service.EvaluationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,9 +36,14 @@ public class EvaluationController {
     }
 
     @PostMapping("/collect")
-    public ResponseEntity<BaseResponse> collect(@RequestBody EvaluationDto.SaveEvaluationReq dto) {
+    public ResponseEntity<BaseResponse> collect(@RequestBody N8nEvaluationPayloadDto dto) {
+
+        if (dto == null) {
+            return ResponseEntity.badRequest().body(BaseResponse.fail(BaseResponseStatus.EMPTY_PAYLOAD));
+        }
+
         try {
-            evaluationService.requestCollectEvaluation(dto);
+            evaluationService.collect(dto);
             return ResponseEntity.accepted()
                     .body(BaseResponse.processing(BaseResponseStatus.SUCCESSFULY_EVALUATED));
         } catch (Exception e) {
