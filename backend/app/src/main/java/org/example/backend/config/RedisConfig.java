@@ -154,6 +154,7 @@ public class RedisConfig {
                         .allowIfSubType(java.lang.Boolean.class)
                         // java.time 타입
                         .allowIfSubType(java.time.temporal.Temporal.class)
+                        .allowIfSubType(java.util.Date.class)
                         .build(),
                 ObjectMapper.DefaultTyping.EVERYTHING,
                 JsonTypeInfo.As.PROPERTY

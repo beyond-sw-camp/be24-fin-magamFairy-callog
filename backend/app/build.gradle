@@ -1,5 +1,11 @@
 description = 'app'
 
+dependencyManagement {
+    imports {
+        mavenBom 'io.github.resilience4j:resilience4j-bom:2.3.0'
+    }
+}
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
@@ -21,7 +27,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
     implementation 'org.springframework.kafka:spring-kafka'
-    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.3.0'
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3'
     compileOnly 'org.projectlombok:lombok'
 
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
@@ -39,7 +45,6 @@ dependencies {
     // iCalendar(.ics) 생성/파싱 — 구글 캘린더 가져오기/내보내기 (RFC 5545)
     implementation 'org.mnode.ical4j:ical4j:3.2.14'
 
-    implementation 'org.apache.pdfbox:pdfbox:3.0.3'
     implementation 'io.github.openhtmltopdf:openhtmltopdf-core:1.1.37'
     implementation 'io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37'
     implementation 'io.github.openhtmltopdf:openhtmltopdf-slf4j:1.1.37'

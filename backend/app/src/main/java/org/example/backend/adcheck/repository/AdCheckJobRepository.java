@@ -22,5 +22,7 @@ public interface AdCheckJobRepository extends JpaRepository<AdCheckJob, Long> {
 
     List<AdCheckJob> findAllByRequester_IdxAndCampaignIdOrderByCreatedAtDesc(Long requesterIdx, String campaignId);
 
+    List<AdCheckJob> findAllByCampaignIdInOrderByCreatedAtDesc(Collection<String> campaignIds);
+
     List<AdCheckJob> findAllByStatusInOrderByCreatedAtAsc(Collection<AdCheckJobStatus> statuses);
 }

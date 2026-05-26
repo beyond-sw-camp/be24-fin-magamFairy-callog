@@ -12,6 +12,7 @@ import org.example.backend.common.security.RoleGuard;
 import org.example.backend.user.model.AuthUserDetails;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -55,7 +56,7 @@ public class AdCheckController {
         try {
             return ResponseEntity.ok(BaseResponse.success(adCheckService.checkFile(file)));
         } catch (AdCheckService.FileCheckException e) {
-            log.error("Ad file check failed after text extraction. fileName={}, size={}",
+            log.error("Ad file check via ai-judge failed with partial response. fileName={}, size={}",
                     file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize(), e);
             return ResponseEntity.ok(BaseResponse.fail(BaseResponseStatus.FAIL, e.getResponse()));
         } catch (RuntimeException e) {
@@ -139,5 +140,15 @@ public class AdCheckController {
     ) {
         RoleGuard.requireAuthenticated(user);
         return ResponseEntity.ok(BaseResponse.success(adCheckJobService.cancelJob(jobId, user)));
+    }
+
+    @DeleteMapping("/check/jobs/{jobId}")
+    public ResponseEntity<BaseResponse<Void>> deleteCheckJob(
+            @PathVariable String jobId,
+            @AuthenticationPrincipal AuthUserDetails user
+    ) {
+        RoleGuard.requireAuthenticated(user);
+        adCheckJobService.deleteJob(jobId, user);
+        return ResponseEntity.ok(BaseResponse.success(null));
     }
 }
