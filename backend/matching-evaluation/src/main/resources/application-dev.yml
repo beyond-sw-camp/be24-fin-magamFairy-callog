@@ -19,6 +19,7 @@ spring:
   data:
     mongodb:
       uri: ${MONGODB_URL}
+      database: ${MONGODB_EVALUATION}
 
 management:
   endpoints:
@@ -46,7 +47,7 @@ management:
 
 custom:
   n8n:
-    webhook-url: ${N8N_URL_TEST}
+    webhook-url: ${N8N_URL}
     evaluation-endpoint: ${EVALUATION_ENDPOINT}
 
 app:
@@ -64,3 +65,7 @@ eureka:
     fetch-registry: true
     service-url:
       defaultZone: ${EUREKA_URI}
+
+logging:
+  level:
+    org.springframework.data.mongodb.core.MongoTemplate: DEBUG

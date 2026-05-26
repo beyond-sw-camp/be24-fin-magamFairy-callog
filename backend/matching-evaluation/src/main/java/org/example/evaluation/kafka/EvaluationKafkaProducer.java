@@ -39,7 +39,7 @@ public class EvaluationKafkaProducer {
     private String evaluationCollectDlqTopic;
 
     public void sendStart(EvaluationStartRequestedEvent event) {
-        send(evaluationStartTopic, event.key(), event);
+        send(evaluationStartTopic, event.getCampaignPublicId(), event);
     }
 
     public void sendCollect(EvaluationCollectRequestedEvent event) {

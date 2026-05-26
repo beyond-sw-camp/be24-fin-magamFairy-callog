@@ -45,6 +45,8 @@ dependencies {
     implementation 'io.github.openhtmltopdf:openhtmltopdf-slf4j:1.1.37'
     implementation 'software.amazon.awssdk:s3:2.25.70'
 
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-spring6:2.2.0'
 
     // 유레카
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'

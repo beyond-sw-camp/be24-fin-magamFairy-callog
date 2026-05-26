@@ -31,12 +31,24 @@ public class EvaluationService {
     @Value("${custom.n8n.webhook-url}${custom.n8n.evaluation-endpoint}")
     private String n8nWebhookUrl;
 
+//    public void requestStartEvaluation(EvaluationDto.StartEvaluationReq dto) {
+//        EvaluationStartRequestedEvent event = EvaluationStartRequestedEvent.builder()
+//                .campaignPublicId(dto.getCampaignIdx())
+//                .campaign(dto.getCampaign())
+//                .benefit(dto.getBenefit())
+//                .build();
+//
+//        evaluationKafkaProducer.sendStart(event);
+//    }
+
     public void requestStartEvaluation(EvaluationDto.StartEvaluationReq dto) {
         EvaluationStartRequestedEvent event = EvaluationStartRequestedEvent.builder()
                 .campaignPublicId(dto.getCampaignIdx())
-                .campaign(dto.getCampaign())
-                .benefit(dto.getBenefit())
+                .benefitIdx(dto.getBenefitIdx())
                 .build();
+
+        log.info("[Evaluation MSA] 메인 모듈에 데이터 조회 요청 전송. publicId={}, benefitIdx={}",
+                dto.getCampaignIdx(), dto.getBenefitIdx());
 
         evaluationKafkaProducer.sendStart(event);
     }
@@ -57,7 +69,7 @@ public class EvaluationService {
         evaluationKafkaProducer.sendCollect(event);
     }
 
-    public void startEvaluation(EvaluationDto.StartEvaluationReq dto) {
+    public void startEvaluation(EvaluationDto.StartEvaluation dto) {
         try {
             restClient.post()
                     .uri(n8nWebhookUrl)
@@ -108,7 +120,7 @@ public class EvaluationService {
         List<EvaluationDocument> documents = evaluationMongoRepository.findAllByPublicId(publicId);
 
         if (documents.isEmpty()) {
-            throw new NoSuchElementException("No evaluation result found. campaignPublicId: " + publicId);
+            throw new NoSuchElementException("No evaluation result found. publicId: " + publicId);
         }
 
         return documents.stream()

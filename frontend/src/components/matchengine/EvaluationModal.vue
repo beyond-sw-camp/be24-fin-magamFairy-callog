@@ -49,8 +49,8 @@ function submitRequest() {
 
   // 평가 요청에 필요한 정보 담기
   const submit = {
-    campaign: props.campaignInfo,
-    benefit: selectedBenefit.value,
+    // campaign: props.campaignInfo,
+    benefitIdx: selectedBenefit.value.idx,
   }
 
   // console.log(submit)
