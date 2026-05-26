@@ -23,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 @Component
 @Slf4j
@@ -81,21 +82,40 @@ public class AiJudgeClient {
     }
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file) {
-        return checkFile(file, null);
+        return checkFile(file, Map.of(), null);
+    }
+
+    public AdCheckDto.FileCheckRes checkFile(MultipartFile file, Map<String, Object> context) {
+        return checkFile(file, context, null);
     }
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file, String analysisJobId) {
+        return checkFile(file, Map.of(), analysisJobId);
+    }
+
+    private AdCheckDto.FileCheckRes checkFile(
+            MultipartFile file,
+            Map<String, Object> context,
+            String analysisJobId
+    ) {
         String url = normalizeBaseUrl(aiJudgeBaseUrl) + CHECK_FILE_PATH;
 
         try {
             log.info("Calling ai-judge file service. url={}, analysisJobId={}, fileName={}, size={}",
                     url, analysisJobId, file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize());
 
-            AdCheckDto.FileCheckRes response = aiRestClient.post()
-                    .uri(url + "?analysisJobId={analysisJobId}", analysisJobId)
+            RestClient.RequestBodyUriSpec request = aiRestClient.post();
+            RestClient.RequestBodySpec bodyRequest;
+            if (StringUtils.hasText(analysisJobId)) {
+                bodyRequest = request.uri(url + "?analysisJobId={analysisJobId}", analysisJobId);
+            } else {
+                bodyRequest = request.uri(url);
+            }
+
+            AdCheckDto.FileCheckRes response = bodyRequest
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .accept(MediaType.APPLICATION_JSON)
-                    .body(createMultipartBody(file))
+                    .body(createMultipartBody(file, context))
                     .retrieve()
                     .body(AdCheckDto.FileCheckRes.class);
 
@@ -168,7 +188,7 @@ public class AiJudgeClient {
         throw new DetailUnavailableException("ai-judge analysis detail is temporarily unavailable.", cause);
     }
 
-    private MultiValueMap<String, Object> createMultipartBody(MultipartFile file) {
+    private MultiValueMap<String, Object> createMultipartBody(MultipartFile file, Map<String, Object> context) {
         if (file == null || file.isEmpty()) {
             throw new RuntimeException("ad check file is required.");
         }
@@ -189,6 +209,11 @@ public class AiJudgeClient {
 
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
             body.add("file", filePart);
+            if (context != null && !context.isEmpty()) {
+                HttpHeaders contextHeaders = new HttpHeaders();
+                contextHeaders.setContentType(MediaType.APPLICATION_JSON);
+                body.add("context", new HttpEntity<>(objectMapper.writeValueAsString(context), contextHeaders));
+            }
             return body;
         } catch (IOException e) {
             throw new RuntimeException("ad check file cannot be read.", e);
@@ -261,5 +286,5 @@ public class AiJudgeClient {
         public String getFilename() {
             return filename;
         }
-    }//
+    }
 }

@@ -39,6 +39,7 @@ import java.util.Set;
 @Slf4j
 public class TextExtractorService {
 
+    private static final String LAYOUT_API_KEY_HEADER = "X-API-Key";
     private static final Set<String> IMAGE_EXTENSIONS = Set.of(
             ".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"
     );
@@ -47,6 +48,7 @@ public class TextExtractorService {
     private final RestClient layoutRestClient;
     private final RestClient cropRestClient;
     private final RestClient ocrRestClient;
+    private final String layoutServiceApiKey;
 
     @Value("${custom.layout.url:http://localhost:8001/v1/layout/analyze}")
     private String layoutUrl;
@@ -66,8 +68,16 @@ public class TextExtractorService {
     @Value("${custom.ocr.job-poll-timeout-ms:180000}")
     private long ocrJobPollTimeoutMs;
 
-    public TextExtractorService(ObjectMapper objectMapper) {
+    public TextExtractorService(
+            ObjectMapper objectMapper,
+            @Value("${custom.layout.api-key:}") String layoutServiceApiKey
+    ) {
+        if (!StringUtils.hasText(layoutServiceApiKey)) {
+            throw new IllegalStateException("LAYOUT_SERVICE_API_KEY is required for layout/OCR service calls.");
+        }
+
         this.objectMapper = objectMapper;
+        this.layoutServiceApiKey = layoutServiceApiKey.trim();
 
         SimpleClientHttpRequestFactory longRunningFactory = new SimpleClientHttpRequestFactory();
         longRunningFactory.setConnectTimeout(5000);
@@ -81,12 +91,15 @@ public class TextExtractorService {
 
         this.layoutRestClient = RestClient.builder()
                 .requestFactory(longRunningFactory)
+                .defaultHeader(LAYOUT_API_KEY_HEADER, this.layoutServiceApiKey)
                 .build();
         this.ocrRestClient = RestClient.builder()
                 .requestFactory(longRunningFactory)
+                .defaultHeader(LAYOUT_API_KEY_HEADER, this.layoutServiceApiKey)
                 .build();
         this.cropRestClient = RestClient.builder()
                 .requestFactory(cropFactory)
+                .defaultHeader(LAYOUT_API_KEY_HEADER, this.layoutServiceApiKey)
                 .build();
     }
 

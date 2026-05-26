@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.backend.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
 import org.example.backend.adcheck.client.AiJudgeClient;
 import org.example.backend.adcheck.model.AdCheckDto;
+import org.example.backend.notification.service.NotificationService;
+import org.example.backend.user.model.AuthUserDetails;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -31,6 +33,7 @@ import java.util.regex.Pattern;
 @Slf4j
 public class AdCheckService {
 
+    private static final String CONTEXT_AD_CHECK_JOB_ID = "adCheckJobId";
     private final RestClient aiRestClient;
     private final AiJudgeClient aiJudgeClient;
     private static final Pattern JSON_FENCE_PATTERN = Pattern.compile("(?s)```(?:json)?\\s*(\\{.*?})\\s*```");
@@ -43,6 +46,7 @@ public class AdCheckService {
     private final TextExtractorService textExtractorService;
     private final AdCheckFileStorageService adCheckFileStorageService;
     private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
+    private final NotificationService notificationService;
 
     @Value("${custom.n8n.webhook-url}${custom.n8n.check-endpoint}")
     private String adCheckUrl;
@@ -53,7 +57,8 @@ public class AdCheckService {
             ObjectMapper objectMapper,
             TextExtractorService textExtractorService,
             AdCheckFileStorageService adCheckFileStorageService,
-            AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService
+            AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService,
+            NotificationService notificationService
     ) {
         this.aiRestClient = aiRestClient;
         this.aiJudgeClient = aiJudgeClient;
@@ -61,6 +66,7 @@ public class AdCheckService {
         this.textExtractorService = textExtractorService;
         this.adCheckFileStorageService = adCheckFileStorageService;
         this.adCheckAnalysisMongoStorageService = adCheckAnalysisMongoStorageService;
+        this.notificationService = notificationService;
     }
 
     public AdCheckDto.Res check(String copy) {
@@ -178,11 +184,76 @@ public class AdCheckService {
     }
 
     public AdCheckDto.FileCheckRes checkFileWithAiJudge(MultipartFile file) {
+        return checkFileWithAiJudge(file, null, null);
+    }
+
+    public AdCheckDto.FileCheckRes checkFileWithAiJudge(
+            MultipartFile file,
+            AuthUserDetails requester,
+            String campaignId
+    ) {
+        return checkFileWithAiJudge(file, requester, campaignId, Map.of());
+    }
+
+    public AdCheckDto.FileCheckRes checkFileWithAiJudge(
+            MultipartFile file,
+            AuthUserDetails requester,
+            String campaignId,
+            Map<String, Object> extraContext
+    ) {
         try {
-            return aiJudgeClient.checkFile(file);
+            Map<String, Object> context = aiJudgeContext(requester, campaignId);
+            if (extraContext != null && !extraContext.isEmpty()) {
+                context.putAll(extraContext);
+            }
+            boolean shouldNotify = !isAsyncJobContext(context);
+
+            AdCheckDto.FileCheckRes response = aiJudgeClient.checkFile(file, context);
+            if (shouldNotify) {
+                notifyAiJudgeResult(requester, response);
+            }
+            return response;
         } catch (AiJudgeClient.FileCheckRemoteException e) {
+            if (!isAsyncJobContext(extraContext)) {
+                notifyAiJudgeResult(requester, e.getResponse());
+            }
             throw new FileCheckException(e.getMessage(), e.getResponse(), e);
         }
+    }
+
+    private boolean isAsyncJobContext(Map<String, Object> context) {
+        if (context == null || context.isEmpty()) {
+            return false;
+        }
+        Object jobId = context.get(CONTEXT_AD_CHECK_JOB_ID);
+        return jobId != null && !String.valueOf(jobId).isBlank();
+    }
+
+    private void notifyAiJudgeResult(AuthUserDetails requester, AdCheckDto.FileCheckRes response) {
+        if (requester == null || requester.getIdx() == null) {
+            return;
+        }
+
+        notificationService.notifyAiJudgeResult(requester.getIdx(), response);
+    }
+
+    private Map<String, Object> aiJudgeContext(AuthUserDetails requester, String campaignId) {
+        Map<String, Object> context = new HashMap<>();
+        if (requester != null) {
+            if (requester.getIdx() != null) {
+                context.put("requesterUserIdx", requester.getIdx());
+            }
+            if (requester.getId() != null && !requester.getId().isBlank()) {
+                context.put("requesterLoginId", requester.getId());
+            }
+            if (requester.getName() != null && !requester.getName().isBlank()) {
+                context.put("requesterName", requester.getName());
+            }
+        }
+        if (campaignId != null && !campaignId.isBlank()) {
+            context.put("campaignId", campaignId.trim());
+        }
+        return context;
     }
 
     private AdCheckDto.ProcessingTimes buildProcessingTimes(
@@ -278,7 +349,8 @@ public class AdCheckService {
                     .law(result.getLaw())
                     .violationText(result.getViolationText())
                     .reason(result.getReason())
-                    .suggestion(result.getSuggestion());
+                    .suggestion(result.getSuggestion())
+                    .verdictLevel(result.getVerdictLevel());
         }
         return builder.build();
     }
@@ -330,18 +402,32 @@ public class AdCheckService {
 
     // n8n AI Agent는 {"output": "...json string..."} 형태로 응답함
     private AdCheckDto.Res parseResponse(String raw) {
+        String trimmed = raw == null ? "" : raw.trim();
         try {
-            JsonNode root = objectMapper.readTree(raw.trim());
+            JsonNode root = objectMapper.readTree(trimmed);
             JsonNode result = root;
 
             if (root.hasNonNull("output")) {
                 String output = root.get("output").asText();
-                result = objectMapper.readTree(extractJsonPayload(output));
+                String payload = extractJsonPayload(output);
+                try {
+                    result = objectMapper.readTree(payload);
+                } catch (Exception outputParseException) {
+                    Integer directLevel = parseLevelText(payload);
+                    if (directLevel != null) {
+                        return directLevelResponse(directLevel);
+                    }
+                    throw outputParseException;
+                }
             }
 
             return toAdCheckResponse(result);
 
         } catch (Exception e) {
+            Integer directLevel = parseLevelText(trimmed);
+            if (directLevel != null) {
+                return directLevelResponse(directLevel);
+            }
             throw new RuntimeException("AI 검수 결과를 파싱할 수 없습니다: " + raw, e);
         }
     }
@@ -366,17 +452,21 @@ public class AdCheckService {
     }
 
     private AdCheckDto.Res toAdCheckResponse(JsonNode result) throws IOException {
-        if (result.has("status")) {
-            return objectMapper.treeToValue(result, AdCheckDto.Res.class);
-        }
-
         String status = text(result, "final_status", "status");
         JsonNode review = selectReview(result, status);
 
-        String law = text(review, "law");
-        String violationText = text(review, "violation_text", "violationText");
-        String reason = text(review, "reason");
-        String suggestion = text(review, "suggestion");
+        String law = firstText(text(review, "law"), text(result, "law"));
+        String violationText = firstText(
+                text(review, "violation_text", "violationText"),
+                text(result, "violation_text", "violationText")
+        );
+        String reason = firstText(text(review, "reason"), text(result, "reason"));
+        String suggestion = firstText(text(review, "suggestion"), text(result, "suggestion"));
+        Integer verdictLevel = firstInteger(
+                parseLevel(result),
+                integer(review, "verdictLevel", "verdict_level", "reviewLevel", "review_level", "riskLevel", "risk_level", "level", "grade"),
+                integer(result, "verdictLevel", "verdict_level", "reviewLevel", "review_level", "riskLevel", "risk_level", "level", "grade")
+        );
 
         if (!hasText(reason)) {
             reason = text(result, "summary");
@@ -387,7 +477,19 @@ public class AdCheckService {
                 law,
                 violationText,
                 reason,
-                suggestion
+                suggestion,
+                verdictLevel
+        );
+    }
+
+    private AdCheckDto.Res directLevelResponse(Integer verdictLevel) {
+        return new AdCheckDto.Res(
+                verdictLevel == 1 ? "pass" : "warning",
+                "",
+                "",
+                "",
+                "",
+                verdictLevel
         );
     }
 
@@ -422,6 +524,55 @@ public class AdCheckService {
             JsonNode value = node.path(name);
             if (value.isTextual() && hasText(value.asText())) {
                 return value.asText().trim();
+            }
+        }
+        return "";
+    }
+
+    private Integer integer(JsonNode node, String... names) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        for (String name : names) {
+            Integer parsed = parseLevel(node.path(name));
+            if (parsed != null) {
+                return parsed;
+            }
+        }
+        return null;
+    }
+
+    private Integer parseLevel(JsonNode value) {
+        if (value == null || value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        if (value.canConvertToInt()) {
+            int level = value.asInt();
+            return level >= 1 && level <= 5 ? level : null;
+        }
+
+        return parseLevelText(value.asText(""));
+    }
+
+    private Integer parseLevelText(String value) {
+        String raw = value == null ? "" : value.trim();
+        Matcher matcher = Pattern.compile("(?<!\\d)[1-5](?!\\d)").matcher(raw);
+        return matcher.find() ? Integer.parseInt(matcher.group()) : null;
+    }
+
+    private Integer firstInteger(Integer... values) {
+        for (Integer value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String firstText(String... values) {
+        for (String value : values) {
+            if (hasText(value)) {
+                return value.trim();
             }
         }
         return "";

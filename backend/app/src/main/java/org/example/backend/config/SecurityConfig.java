@@ -64,6 +64,7 @@ public class SecurityConfig {
                         "/api/sse/**",
                         "/sse/**"
                 ).permitAll()
+                .requestMatchers("/ad/check/jobs/internal/progress").permitAll()
                 .requestMatchers("/ad/**").authenticated()
                 .requestMatchers(HttpMethod.GET,    "/campaigns/*/members").authenticated()
                 .requestMatchers(HttpMethod.GET,    "/campaigns/*/members/candidates/**")

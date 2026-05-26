@@ -1,5 +1,6 @@
 package org.example.backend.adcheck.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
@@ -9,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 public class AdCheckDto {
 
@@ -29,6 +31,16 @@ public class AdCheckDto {
         private String violationText;
         private String reason;
         private String suggestion;
+        @JsonAlias({
+                "verdict_level",
+                "reviewLevel",
+                "review_level",
+                "riskLevel",
+                "risk_level",
+                "level",
+                "grade"
+        })
+        private Integer verdictLevel;
     }
 
     @Getter
@@ -56,9 +68,11 @@ public class AdCheckDto {
         private String violationText;
         private String reason;
         private String suggestion;
+        private Integer verdictLevel;
         private String extractionMode;
         private ProcessingTimes processingTimes;
         private String errorMessage;
+        private Map<String, Object> context;
 
         public static FileCheckRes of(String fileName, String extractedText, Res res) {
             return of(fileName, null, null, null, null, extractedText, res, null, null);
@@ -87,6 +101,7 @@ public class AdCheckDto {
                     .violationText(res.getViolationText())
                     .reason(res.getReason())
                     .suggestion(res.getSuggestion())
+                    .verdictLevel(res.getVerdictLevel())
                     .extractionMode(extractionMode)
                     .processingTimes(processingTimes)
                     .build();

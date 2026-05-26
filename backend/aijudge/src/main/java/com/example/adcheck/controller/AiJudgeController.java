@@ -3,6 +3,7 @@ package com.example.adcheck.controller;
 import com.example.adcheck.model.AdCheckDto;
 import com.example.adcheck.service.AiJudgeFileCheckService;
 import com.example.adcheck.service.AiJudgeService;
+import com.example.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -16,12 +17,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
-import com.example.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
 
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/aijudge")
+@RequestMapping({"/multi/aijudge", "/aijudge"})
 public class AiJudgeController {
 
     private final AiJudgeService aiJudgeService;
@@ -50,9 +50,10 @@ public class AiJudgeController {
     @PostMapping(value = "/check/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AdCheckDto.FileCheckRes checkFile(
             @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "context", required = false) String context,
             @RequestParam(value = "analysisJobId", required = false) String analysisJobId
     ) {
-        return aiJudgeFileCheckService.checkFile(file, analysisJobId);
+        return aiJudgeFileCheckService.checkFile(file, context, analysisJobId);
     }
 
     @GetMapping("/analyses/{analysisJobId}")

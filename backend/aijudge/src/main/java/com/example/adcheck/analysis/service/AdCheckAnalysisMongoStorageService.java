@@ -1,6 +1,7 @@
 package com.example.adcheck.analysis.service;
 
 import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
@@ -18,7 +19,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -28,11 +31,23 @@ public class AdCheckAnalysisMongoStorageService {
     @Value("${custom.mongodb.analysis-uri:}")
     private String analysisUri;
 
+    @Value("${custom.mongodb.analysis-enabled:false}")
+    private boolean analysisEnabled;
+
     @Value("${custom.mongodb.analysis-database:}")
     private String analysisDatabase;
 
     @Value("${custom.mongodb.analysis-collection:" + DEFAULT_COLLECTION + "}")
     private String analysisCollection;
+
+    @Value("${custom.mongodb.analysis-server-selection-timeout-ms:5000}")
+    private long serverSelectionTimeoutMillis;
+
+    @Value("${custom.mongodb.analysis-connect-timeout-ms:5000}")
+    private long connectTimeoutMillis;
+
+    @Value("${custom.mongodb.analysis-read-timeout-ms:10000}")
+    private long readTimeoutMillis;
 
     private MongoClient mongoClient;
     private String resolvedDatabaseName;
@@ -78,7 +93,7 @@ public class AdCheckAnalysisMongoStorageService {
     }
 
     private boolean isEnabled() {
-        return StringUtils.hasText(analysisUri);
+        return analysisEnabled && StringUtils.hasText(analysisUri);
     }
 
     private synchronized MongoCollection<Document> collection() {
@@ -91,7 +106,18 @@ public class AdCheckAnalysisMongoStorageService {
                 throw new IllegalStateException("custom.mongodb.analysis-database is required when URI has no database.");
             }
 
-            mongoClient = MongoClients.create(connectionString);
+            MongoClientSettings settings = MongoClientSettings.builder()
+                    .applyConnectionString(connectionString)
+                    .applyToClusterSettings(builder -> builder.serverSelectionTimeout(
+                            Math.max(1000L, serverSelectionTimeoutMillis),
+                            TimeUnit.MILLISECONDS
+                    ))
+                    .applyToSocketSettings(builder -> builder
+                            .connectTimeout(Math.max(1000L, connectTimeoutMillis), TimeUnit.MILLISECONDS)
+                            .readTimeout(Math.max(1000L, readTimeoutMillis), TimeUnit.MILLISECONDS))
+                    .build();
+
+            mongoClient = MongoClients.create(settings);
             resolvedDatabaseName = databaseName;
         }
 
@@ -103,15 +129,27 @@ public class AdCheckAnalysisMongoStorageService {
 
     private Document toDocument(AdCheckDto.FileCheckRes response) {
         Date now = Date.from(Instant.now());
+        String jobId = textValue(response.getContext(), "adCheckJobId");
         return new Document("_id", response.getAnalysisJobId())
+                .append("jobId", jobId)
                 .append("analysisJobId", response.getAnalysisJobId())
                 .append("analysisObjectPrefix", response.getAnalysisObjectPrefix())
+                .append("originalFileKey", response.getFileObjectKey())
+                .append("originalFileName", response.getFileName())
+                .append("originalContentType", response.getFileContentType())
+                .append("originalFileUrl", response.getFileUrl())
                 .append("file", fileDocument(response))
                 .append("artifacts", artifactDocument(response))
+                .append("documentStructureResult", documentStructureDocument(response))
                 .append("result", resultDocument(response))
+                .append("recognizedTextResult", recognizedTextDocument(response))
+                .append("textRiskAnalysisResult", resultDocument(response))
+                .append("finalResult", resultDocument(response))
+                .append("errorDetail", response.getErrorMessage())
                 .append("extractionMode", response.getExtractionMode())
                 .append("extractedText", response.getExtractedText())
                 .append("processingTimes", processingTimesDocument(response.getProcessingTimes()))
+                .append("context", response.getContext() == null ? Map.of() : response.getContext())
                 .append("createdAt", now)
                 .append("updatedAt", now);
     }
@@ -119,14 +157,18 @@ public class AdCheckAnalysisMongoStorageService {
     private Document fileDocument(AdCheckDto.FileCheckRes response) {
         return new Document("name", response.getFileName())
                 .append("objectKey", response.getFileObjectKey())
+                .append("url", response.getFileUrl())
                 .append("contentType", response.getFileContentType())
                 .append("size", response.getFileSize());
     }
 
     private Document artifactDocument(AdCheckDto.FileCheckRes response) {
         return new Document("extractedTextObjectKey", response.getExtractedTextObjectKey())
+                .append("extractedTextUrl", response.getExtractedTextUrl())
                 .append("aiResultObjectKey", response.getAiResultObjectKey())
+                .append("aiResultUrl", response.getAiResultUrl())
                 .append("finalResultObjectKey", response.getFinalResultObjectKey())
+                .append("finalResultUrl", response.getFinalResultUrl())
                 .append("images", imageDocuments(response.getExtractedImageAssets()));
     }
 
@@ -142,6 +184,7 @@ public class AdCheckAnalysisMongoStorageService {
                     .append("page", image.getPage())
                     .append("readingOrder", image.getReadingOrder())
                     .append("objectKey", image.getObjectKey())
+                    .append("url", image.getUrl())
                     .append("contentType", image.getContentType())
                     .append("size", image.getFileSize()));
         }
@@ -154,7 +197,25 @@ public class AdCheckAnalysisMongoStorageService {
                 .append("violationText", response.getViolationText())
                 .append("reason", response.getReason())
                 .append("suggestion", response.getSuggestion())
+                .append("verdictLevel", response.getVerdictLevel())
                 .append("errorMessage", response.getErrorMessage());
+    }
+
+    private Document recognizedTextDocument(AdCheckDto.FileCheckRes response) {
+        return new Document("extractedText", response.getExtractedText())
+                .append("extractionMode", response.getExtractionMode())
+                .append("images", imageDocuments(response.getExtractedImageAssets()));
+    }
+
+    private Document documentStructureDocument(AdCheckDto.FileCheckRes response) {
+        return new Document("extractionMode", response.getExtractionMode())
+                .append("analysisObjectPrefix", response.getAnalysisObjectPrefix())
+                .append("layoutMillis", response.getProcessingTimes() == null
+                        ? null
+                        : response.getProcessingTimes().getLayoutMillis())
+                .append("extractedImageCount", response.getExtractedImageAssets() == null
+                        ? 0
+                        : response.getExtractedImageAssets().size());
     }
 
     private Document processingTimesDocument(AdCheckDto.ProcessingTimes processingTimes) {
@@ -196,6 +257,7 @@ public class AdCheckAnalysisMongoStorageService {
                 .violationText(text(result, "violationText"))
                 .reason(text(result, "reason"))
                 .suggestion(text(result, "suggestion"))
+                .verdictLevel(integerValue(result, "verdictLevel"))
                 .errorMessage(text(result, "errorMessage"))
                 .extractionMode(text(document, "extractionMode"))
                 .processingTimes(toProcessingTimes(processingTimes))
@@ -278,6 +340,14 @@ public class AdCheckAnalysisMongoStorageService {
             return "";
         }
         return message.replaceAll("mongodb://[^\\s]+", "mongodb://<redacted>");
+    }
+
+    private String textValue(Map<String, Object> context, String key) {
+        if (context == null || key == null) {
+            return null;
+        }
+        Object value = context.get(key);
+        return value == null ? null : String.valueOf(value);
     }
 
     @PreDestroy
