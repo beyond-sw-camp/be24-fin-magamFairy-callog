@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.*;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignDto;
+import org.example.backend.matching.event.EvaluationStartRequestedEvent;
 import org.example.backend.matching.model.*;
 import org.example.backend.organization.model.Organization;
 
@@ -183,6 +184,10 @@ public class EvaluationDto {
     @Builder
     public static class StartEvaluationReq {
         private Long benefitIdx;
+        private String publicId;
+        public static StartEvaluationReq from(EvaluationStartRequestedEvent event) {
+            return StartEvaluationReq.builder().benefitIdx(event.getBenefitIdx()).publicId(event.getCampaignPublicId()).build();
+        }
     }
 
     @Getter

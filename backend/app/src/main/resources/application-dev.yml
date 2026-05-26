@@ -24,6 +24,9 @@ app:
     topics:
       evaluation-start: evaluation.start
       evaluation-collect: evaluation.collect
+    consumer:
+      propoerties:
+        spring.json.use.type.headers: false
 msa:
   matching-evaluation:
     base-url: ${EVALUATION_URL}
@@ -99,6 +102,8 @@ spring:
 
   kafka:
     bootstrap-servers: localhost:9092
+    topics:
+      evaluation-start: evaluation-start
 
 logging:
   level:
