@@ -57,6 +57,7 @@ public class EvaluationDto {
 
         @JsonAlias("uuid")
         private String sessionId;
+        @JsonAlias({"campaignIdx", "campaignPublicId"})
         private String publicId;
         private String goal;
         private String title;
