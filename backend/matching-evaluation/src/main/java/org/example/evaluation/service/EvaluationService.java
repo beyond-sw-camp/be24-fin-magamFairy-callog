@@ -108,7 +108,7 @@ public class EvaluationService {
         List<EvaluationDocument> documents = evaluationMongoRepository.findAllByPublicId(publicId);
 
         if (documents.isEmpty()) {
-            throw new NoSuchElementException("No evaluation result found. campaignPublicId: " + publicId);
+            throw new NoSuchElementException("No evaluation result found. publicId: " + publicId);
         }
 
         return documents.stream()
