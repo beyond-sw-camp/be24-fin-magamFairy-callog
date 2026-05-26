@@ -1,6 +1,7 @@
 package org.example.backend.adcheck.client;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.adcheck.model.AdCheckDto;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -28,8 +29,10 @@ import java.util.Map;
 @Slf4j
 public class AiJudgeClient {
 
-    private static final String CHECK_PATH = "/multi/aijudge/check";
-    private static final String CHECK_FILE_PATH = "/multi/aijudge/check/file";
+    private static final String CHECK_PATH = "/aijudge/check";
+    private static final String CHECK_FILE_PATH = "/aijudge/check/file";
+    private static final String ANALYSIS_DETAIL_PATH = "/aijudge/analyses/{analysisJobId}";
+    private static final String DETAIL_CIRCUIT_BREAKER = "aiJudgeDetail";
 
     private final RestClient aiRestClient;
     private final ObjectMapper objectMapper;
@@ -79,18 +82,37 @@ public class AiJudgeClient {
     }
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file) {
-        return checkFile(file, Map.of());
+        return checkFile(file, Map.of(), null);
     }
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file, Map<String, Object> context) {
+        return checkFile(file, context, null);
+    }
+
+    public AdCheckDto.FileCheckRes checkFile(MultipartFile file, String analysisJobId) {
+        return checkFile(file, Map.of(), analysisJobId);
+    }
+
+    private AdCheckDto.FileCheckRes checkFile(
+            MultipartFile file,
+            Map<String, Object> context,
+            String analysisJobId
+    ) {
         String url = normalizeBaseUrl(aiJudgeBaseUrl) + CHECK_FILE_PATH;
 
         try {
-            log.info("Calling ai-judge file service. url={}, fileName={}, size={}",
-                    url, file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize());
+            log.info("Calling ai-judge file service. url={}, analysisJobId={}, fileName={}, size={}",
+                    url, analysisJobId, file == null ? null : file.getOriginalFilename(), file == null ? 0 : file.getSize());
 
-            AdCheckDto.FileCheckRes response = aiRestClient.post()
-                    .uri(url)
+            RestClient.RequestBodyUriSpec request = aiRestClient.post();
+            RestClient.RequestBodySpec bodyRequest;
+            if (StringUtils.hasText(analysisJobId)) {
+                bodyRequest = request.uri(url + "?analysisJobId={analysisJobId}", analysisJobId);
+            } else {
+                bodyRequest = request.uri(url);
+            }
+
+            AdCheckDto.FileCheckRes response = bodyRequest
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .accept(MediaType.APPLICATION_JSON)
                     .body(createMultipartBody(file, context))
@@ -123,6 +145,47 @@ public class AiJudgeClient {
             log.error("ai-judge file service call failed. url={}", url, e);
             throw new RuntimeException("ai-judge file service call failed.", e);
         }
+    }
+
+    @CircuitBreaker(name = DETAIL_CIRCUIT_BREAKER, fallbackMethod = "analysisDetailFallback")
+    public AdCheckDto.FileCheckRes getAnalysisDetail(String analysisJobId) {
+        if (!StringUtils.hasText(analysisJobId)) {
+            throw new DetailUnavailableException("analysis job id is required.");
+        }
+
+        String url = normalizeBaseUrl(aiJudgeBaseUrl) + ANALYSIS_DETAIL_PATH;
+        try {
+            log.info("Calling ai-judge analysis detail service. analysisJobId={}", analysisJobId);
+            AdCheckDto.FileCheckRes response = aiRestClient.get()
+                    .uri(url, analysisJobId)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(AdCheckDto.FileCheckRes.class);
+
+            if (response == null) {
+                throw new DetailUnavailableException("ai-judge returned an empty analysis detail response.");
+            }
+            return response;
+        } catch (DetailUnavailableException e) {
+            throw e;
+        } catch (ResourceAccessException e) {
+            log.warn("ai-judge analysis detail connection/read failed. analysisJobId={}", analysisJobId, e);
+            throw new DetailUnavailableException("ai-judge analysis detail is unreachable or timed out.", e);
+        } catch (RestClientResponseException e) {
+            log.warn("ai-judge analysis detail returned error status. analysisJobId={}, status={}",
+                    analysisJobId, e.getStatusCode(), e);
+            throw new DetailUnavailableException("ai-judge analysis detail returned HTTP " + e.getStatusCode(), e);
+        } catch (RestClientException e) {
+            log.warn("ai-judge analysis detail call failed. analysisJobId={}", analysisJobId, e);
+            throw new DetailUnavailableException("ai-judge analysis detail call failed.", e);
+        }
+    }
+
+    public AdCheckDto.FileCheckRes analysisDetailFallback(String analysisJobId, Throwable cause) {
+        if (cause instanceof DetailUnavailableException detailUnavailableException) {
+            throw detailUnavailableException;
+        }
+        throw new DetailUnavailableException("ai-judge analysis detail is temporarily unavailable.", cause);
     }
 
     private MultiValueMap<String, Object> createMultipartBody(MultipartFile file, Map<String, Object> context) {
@@ -183,7 +246,7 @@ public class AiJudgeClient {
 
     private String normalizeBaseUrl(String baseUrl) {
         if (baseUrl == null || baseUrl.isBlank()) {
-            return "http://localhost:8082";
+            return "http://localhost:8081";
         }
         return baseUrl.replaceAll("/+$", "");
     }
@@ -198,6 +261,16 @@ public class AiJudgeClient {
 
         public AdCheckDto.FileCheckRes getResponse() {
             return response;
+        }
+    }
+
+    public static class DetailUnavailableException extends RuntimeException {
+        public DetailUnavailableException(String message) {
+            super(message);
+        }
+
+        public DetailUnavailableException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 

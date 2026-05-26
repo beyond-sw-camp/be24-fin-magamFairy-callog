@@ -8,6 +8,9 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 
 import java.util.List;
 
@@ -38,7 +41,7 @@ public class MatchingEvaluationClient {
                 .toBodilessEntity();
     }
 
-    public List<EvaluationDto.MongoEvaluationRes> getResult(Long campaignIdx) {
+    public List<EvaluationDto.MongoEvaluationRes> getResult(String campaignIdx) {
         BaseResponse<List<EvaluationDto.MongoEvaluationRes>> response =
                 restClient.get()
                         .uri(baseUrl + "/evaluation/result?campaignIdx={campaignIdx}", campaignIdx)

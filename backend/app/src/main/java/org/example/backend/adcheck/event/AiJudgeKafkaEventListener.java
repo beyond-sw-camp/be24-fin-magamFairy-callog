@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.adcheck.model.AdCheckDto;
+import org.example.backend.adcheck.service.AdAiAnalysisService;
 import org.example.backend.notification.service.NotificationService;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -12,10 +13,16 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class AiJudgeKafkaEventListener {
     private final ObjectMapper objectMapper;
+    private final AdAiAnalysisService adAiAnalysisService;
     private final NotificationService notificationService;
 
-    public AiJudgeKafkaEventListener(ObjectMapper objectMapper, NotificationService notificationService) {
+    public AiJudgeKafkaEventListener(
+            ObjectMapper objectMapper,
+            AdAiAnalysisService adAiAnalysisService,
+            NotificationService notificationService
+    ) {
         this.objectMapper = objectMapper;
+        this.adAiAnalysisService = adAiAnalysisService;
         this.notificationService = notificationService;
     }
 
@@ -34,6 +41,8 @@ public class AiJudgeKafkaEventListener {
                     text(event, "aiStatus"),
                     text(event, "fileName")
             );
+            adAiAnalysisService.applyAiJudgeEvent(event);
+
             Long requesterIdx = longValue(event.path("context").path("requesterUserIdx"));
             if (hasText(event.path("context").path("adCheckJobId"))) {
                 log.info(

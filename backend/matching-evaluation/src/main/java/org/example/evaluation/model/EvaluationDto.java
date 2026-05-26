@@ -43,6 +43,7 @@ public class EvaluationDto {
     @AllArgsConstructor
     @Builder
     public static class StartEvaluationReq {
+        private String campaignIdx;
         private Object campaign;
         private Object benefit;
     }
@@ -56,6 +57,7 @@ public class EvaluationDto {
 
         @JsonAlias("uuid")
         private String sessionId;
+        @JsonAlias({"campaignIdx", "campaignPublicId"})
         private String publicId;
         private String goal;
         private String title;

@@ -20,6 +20,13 @@ project:
 app:
   frontend-url: ${FRONTEND_URL}
   secure-cookie: ${SECURE_COOKIE}
+  kafka:
+    topics:
+      evaluation-start: evaluation.start
+      evaluation-collect: evaluation.collect
+msa:
+  matching-evaluation:
+    base-url: ${EVALUATION_URL}
 aws:
   s3:
     bucket-name: ${AWS_BUCKET_NAME}
@@ -90,6 +97,9 @@ spring:
           max-wait: 5000ms
         shutdown-timeout: 2000ms   # graceful shutdown 중 in-flight Redis 명령 정리 시간
 
+  kafka:
+    bootstrap-servers: localhost:9092
+
 logging:
   level:
     org.example.backend.matching.service: debug
@@ -104,7 +114,7 @@ logging:
 
 custom:
   n8n:
-    webhook-url: ${N8N_URL}
+    webhook-url: ${N8N_URL_TEST}
     evaluation-endpoint: ${EVALUATION_ENDPOINT}
     check-endpoint: ${CHECK_ENDPOINT}
   ocr:
@@ -145,10 +155,6 @@ management:
     tracing:
       endpoint: ${JAEGER_URL}
       transport: http
-msa:
-  matching-evaluation:
-    base-url: ${EVALUATION_URL}
-
 eureka:
   client:
     register-with-eureka: true
