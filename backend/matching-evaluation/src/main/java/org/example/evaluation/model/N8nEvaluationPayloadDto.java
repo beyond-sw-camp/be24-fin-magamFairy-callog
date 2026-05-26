@@ -13,6 +13,7 @@ public class N8nEvaluationPayloadDto {
 
     // 공통 메타 데이터 [cite: 1, 6, 11, 16, 21]
     private String uuid;
+    private String publicId;
     private Long campaignIdx;
     private Long benefitIdx;
     private String category;

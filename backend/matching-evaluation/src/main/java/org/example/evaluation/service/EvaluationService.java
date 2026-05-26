@@ -137,7 +137,7 @@ public class EvaluationService {
         Query query = new Query(Criteria.where("sessionId").is(payload.getUuid()));
         Update update = new Update();
         // 2. 공통 기본 인프라 정보 업데이트 설정
-        update.set("publicId", String.valueOf(payload.getCampaignIdx()));
+        update.set("publicId", String.valueOf(payload.getPublicId()));
 
         // 3. 카테고리별 분기 및 객체 바인딩 수행 [cite: 5, 10, 20]
         String category = payload.getCategory().toUpperCase();
