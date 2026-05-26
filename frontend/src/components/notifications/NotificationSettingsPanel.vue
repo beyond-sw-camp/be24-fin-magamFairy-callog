@@ -20,70 +20,14 @@
     <section class="notification-settings-block">
       <div class="notification-settings-heading">
         <div>
-          <strong>알림 방법</strong>
-          <p>알림을 받을 채널을 선택합니다.</p>
+          <strong>표시 방식</strong>
+          <p>화면에 보여줄 알림 UI와 외부 알림 채널을 선택합니다.</p>
         </div>
-        <span>{{ notificationMethodSummary }}</span>
+        <span>{{ notificationDisplaySummary }}</span>
       </div>
-      <div class="notification-methods" role="group" aria-label="알림 방법 선택">
-        <button
-          v-for="option in notificationMethodOptions"
-          :key="option.key"
-          type="button"
-          class="notification-method"
-          :class="{ 'is-active': userSettingsStore.notifications.methods[option.key] }"
-          :disabled="!userSettingsStore.notifications.enabled"
-          @click="toggleNotificationMethod(option.key)"
-        >
-          <span class="notification-method__check material-symbols-outlined">
-            {{
-              userSettingsStore.notifications.methods[option.key]
-                ? 'check_circle'
-                : 'radio_button_unchecked'
-            }}
-          </span>
-          <span>
-            <strong>{{ option.label }}</strong>
-            <small>{{ option.description }}</small>
-          </span>
-        </button>
-      </div>
-      <p v-if="browserPermissionMessage" class="notification-settings-note">
-        {{ browserPermissionMessage }}
-      </p>
-    </section>
-
-    <section class="notification-settings-block notification-settings-block--split">
-      <div>
-        <strong>알림 정도</strong>
-        <p>알림을 어느 범위까지 받을지 선택합니다.</p>
-      </div>
-      <div class="notification-segmented" role="group" aria-label="알림 정도 선택">
-        <button
-          v-for="option in notificationLevelOptions"
-          :key="option.value"
-          type="button"
-          :title="option.description"
-          :class="{ 'is-active': userSettingsStore.notifications.level === option.value }"
-          :disabled="!userSettingsStore.notifications.enabled"
-          @click="setNotificationLevel(option.value)"
-        >
-          {{ option.label }}
-        </button>
-      </div>
-    </section>
-
-    <section class="notification-settings-block">
-      <div class="notification-settings-heading">
-        <div>
-          <strong>알림 조건</strong>
-          <p>알림 센터에 쌓을 이벤트 조건을 선택합니다.</p>
-        </div>
-        <span>{{ notificationConditionCount }}개 활성</span>
-      </div>
-      <div class="notification-condition-list" aria-label="알림 조건">
+      <div class="notification-condition-list" aria-label="알림 표시 방식">
         <div
-          v-for="option in notificationConditionOptions"
+          v-for="option in notificationDisplayOptions"
           :key="option.key"
           class="notification-condition-row"
         >
@@ -94,11 +38,60 @@
           <button
             type="button"
             class="ui-toggle"
-            :class="{ 'is-active': userSettingsStore.notifications.conditions[option.key] }"
-            :aria-pressed="userSettingsStore.notifications.conditions[option.key]"
-            :aria-label="`${option.label} 알림 조건 설정`"
-            :disabled="!userSettingsStore.notifications.enabled"
-            @click="toggleNotificationCondition(option.key)"
+            :class="{ 'is-active': isDisplayOptionEnabled(option) }"
+            :aria-pressed="isDisplayOptionEnabled(option)"
+            :aria-label="`${option.label} 설정`"
+            :disabled="!userSettingsStore.notifications.enabled || isSavingNotifications"
+            @click="toggleNotificationDisplay(option)"
+          >
+            <span class="ui-toggle-thumb" />
+          </button>
+        </div>
+      </div>
+      <p v-if="browserPermissionMessage" class="notification-settings-note">
+        {{ browserPermissionMessage }}
+      </p>
+    </section>
+
+    <section class="notification-settings-block">
+      <div class="notification-settings-heading">
+        <div>
+          <strong>받을 알림</strong>
+          <p>알림 센터에 쌓을 업무 이벤트를 큰 범주로 관리합니다.</p>
+        </div>
+        <span>{{ notificationGroupCount }}개 활성</span>
+      </div>
+      <div class="notification-segmented notification-segmented--wide" role="group" aria-label="알림 정도 선택">
+        <button
+          v-for="option in notificationLevelOptions"
+          :key="option.value"
+          type="button"
+          :title="option.description"
+          :class="{ 'is-active': userSettingsStore.notifications.level === option.value }"
+          :disabled="!userSettingsStore.notifications.enabled || isSavingNotifications"
+          @click="setNotificationLevel(option.value)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+      <div class="notification-condition-list" aria-label="알림 조건">
+        <div
+          v-for="option in notificationGroupOptions"
+          :key="option.key"
+          class="notification-condition-row"
+        >
+          <div>
+            <strong>{{ option.label }}</strong>
+            <p>{{ option.description }}</p>
+          </div>
+          <button
+            type="button"
+            class="ui-toggle"
+            :class="{ 'is-active': isConditionGroupEnabled(option) }"
+            :aria-pressed="isConditionGroupEnabled(option)"
+            :aria-label="`${option.label} 알림 설정`"
+            :disabled="!userSettingsStore.notifications.enabled || isSavingNotifications"
+            @click="toggleNotificationConditionGroup(option)"
           >
             <span class="ui-toggle-thumb" />
           </button>
@@ -197,7 +190,7 @@ const adminPolicyOptions = [
   {
     type: 'REVIEW_REQUESTED',
     label: 'QA 검수',
-    description: '검수 요청, 승인, 반려 알림을 허용합니다.',
+    description: '검수 요청, 승인, 반려, AI 검수 완료/확인 필요/실패 알림을 허용합니다.',
   },
   {
     type: 'DEADLINE_24H',
@@ -214,7 +207,14 @@ const adminPolicyOptions = [
 const adminPolicyTypeGroups = {
   TASK_ASSIGNED: ['TASK_ASSIGNED'],
   TASK_STATUS_CHANGED: ['TASK_STATUS_CHANGED', 'TASK_UPDATED'],
-  REVIEW_REQUESTED: ['REVIEW_REQUESTED', 'REVIEW_APPROVED', 'REVIEW_REJECTED'],
+  REVIEW_REQUESTED: [
+    'REVIEW_REQUESTED',
+    'REVIEW_APPROVED',
+    'REVIEW_REJECTED',
+    'AI_JUDGE_COMPLETED',
+    'AI_JUDGE_REVIEW_REQUIRED',
+    'AI_JUDGE_FAILED',
+  ],
   DEADLINE_24H: ['DEADLINE_24H', 'DEADLINE_1H', 'DEADLINE_OVERDUE'],
   CAMPAIGN_INVITED: [
     'CAMPAIGN_INVITED',
@@ -224,21 +224,30 @@ const adminPolicyTypeGroups = {
   ],
 }
 
-const notificationMethodOptions = [
+const notificationDisplayOptions = [
   {
     key: 'inApp',
+    type: 'method',
     label: '앱 내 알림',
-    description: '헤더 알림 패널과 알림 센터에 표시합니다.',
+    description: '헤더 알림, 최근 알림, 알림 센터에 표시합니다.',
   },
   {
-    key: 'email',
-    label: '이메일',
-    description: '계정 이메일로 주요 알림을 전달할 수 있도록 준비합니다.',
+    key: 'showAdCheckProgressPanel',
+    type: 'local',
+    label: '검수 진행 패널',
+    description: 'AI 검수 중 다른 화면으로 이동해도 오른쪽 하단 진행도를 표시합니다.',
   },
   {
     key: 'browser',
+    type: 'method',
     label: '브라우저 알림',
     description: '브라우저 권한이 허용된 경우 데스크톱 알림으로 표시합니다.',
+  },
+  {
+    key: 'email',
+    type: 'method',
+    label: '이메일',
+    description: '계정 이메일로 주요 알림을 전달할 수 있도록 준비합니다.',
   },
 ]
 
@@ -260,52 +269,43 @@ const notificationLevelOptions = [
   },
 ]
 
-const notificationConditionOptions = [
+const notificationGroupOptions = [
   {
-    key: 'taskAssigned',
-    label: '업무 생성/배정',
-    description: '새 업무가 생성되거나 담당자로 배정될 때 알림을 받습니다.',
-  },
-  {
-    key: 'taskStatusChanged',
-    label: '업무 상태 변경',
-    description: '진행중, 검수, 완료 등 주요 상태가 바뀔 때 알림을 받습니다.',
+    key: 'task',
+    conditionKeys: ['taskAssigned', 'taskStatusChanged'],
+    label: '업무 알림',
+    description: '업무 생성, 담당자 배정, 진행 상태 변경을 알림으로 받습니다.',
   },
   {
     key: 'qaReview',
+    conditionKeys: ['qaReview'],
     label: 'QA 검수',
-    description: '검수 요청, 승인, 반려, 수정 요청 결과를 알림으로 받습니다.',
-  },
-  {
-    key: 'deadline',
-    label: '마감 임박/지연',
-    description: '마감 24시간 전, 1시간 전, 지연 상태 알림을 받습니다.',
-  },
-  {
-    key: 'campaign',
-    label: '캠페인 변경',
-    description: '캠페인 초대, 승인/반려, 구성원 변경 알림을 받습니다.',
+    description: '검수 요청, 승인, 반려, AI 검수 완료/확인 필요/실패 결과를 알림으로 받습니다.',
   },
   {
     key: 'schedule',
-    label: '일정 알림',
-    description: '캘린더 일정 변경과 주요 일정 안내를 알림으로 받습니다.',
+    conditionKeys: ['deadline', 'schedule'],
+    label: '일정/마감',
+    description: '마감 임박, 지연, 캘린더 일정 변경을 알림으로 받습니다.',
+  },
+  {
+    key: 'campaign',
+    conditionKeys: ['campaign'],
+    label: '캠페인 변경',
+    description: '캠페인 초대, 승인/반려, 구성원 변경 알림을 받습니다.',
   },
 ]
 
-const notificationMethodSummary = computed(() => {
-  const selectedMethods = notificationMethodOptions
-    .filter((option) => userSettingsStore.notifications.methods[option.key])
+const notificationDisplaySummary = computed(() => {
+  const selectedDisplays = notificationDisplayOptions
+    .filter((option) => isDisplayOptionEnabled(option))
     .map((option) => option.label)
 
-  return selectedMethods.length ? selectedMethods.join(', ') : '선택 없음'
+  return selectedDisplays.length ? selectedDisplays.join(', ') : '선택 없음'
 })
 
-const notificationConditionCount = computed(
-  () =>
-    notificationConditionOptions.filter(
-      (option) => userSettingsStore.notifications.conditions[option.key],
-    ).length,
+const notificationGroupCount = computed(
+  () => notificationGroupOptions.filter((option) => isConditionGroupEnabled(option)).length,
 )
 
 function resolvePayload(response) {
@@ -343,6 +343,18 @@ function toServerSettings() {
       ...userSettingsStore.notifications.conditions,
     },
   }
+}
+
+function isDisplayOptionEnabled(option) {
+  if (option.type === 'method') {
+    return Boolean(userSettingsStore.notifications.methods[option.key])
+  }
+
+  return userSettingsStore.notifications[option.key] !== false
+}
+
+function isConditionGroupEnabled(option) {
+  return option.conditionKeys.every((key) => userSettingsStore.notifications.conditions[key])
 }
 
 async function loadRemoteNotificationSettings() {
@@ -449,16 +461,31 @@ async function toggleNotificationMethod(key) {
   void saveNotificationSettings()
 }
 
+function toggleNotificationDisplay(option) {
+  if (option.type === 'method') {
+    void toggleNotificationMethod(option.key)
+    return
+  }
+
+  userSettingsStore.updateNotifications({
+    [option.key]: !isDisplayOptionEnabled(option),
+  })
+}
+
 function setNotificationLevel(value) {
   userSettingsStore.updateNotifications({ level: value })
   void saveNotificationSettings()
 }
 
-function toggleNotificationCondition(key) {
-  userSettingsStore.updateNotificationCondition(
-    key,
-    !userSettingsStore.notifications.conditions[key],
+function toggleNotificationConditionGroup(option) {
+  const nextValue = !isConditionGroupEnabled(option)
+  const nextConditions = Object.fromEntries(
+    option.conditionKeys.map((key) => [key, nextValue]),
   )
+
+  userSettingsStore.updateNotifications({
+    conditions: nextConditions,
+  })
   void saveNotificationSettings()
 }
 
@@ -571,6 +598,10 @@ onMounted(() => {
   border-radius: var(--radius-sm);
   background: var(--surface-control);
   padding: 4px;
+}
+
+.notification-segmented--wide {
+  width: fit-content;
 }
 
 .notification-segmented button {

@@ -94,6 +94,10 @@ function getSeverityMeta(severity) {
   return severityMeta[severity] ?? severityMeta.normal
 }
 
+function getReviewOutcomeMeta(notification) {
+  return notificationStore.getReviewOutcomeMeta(notification?.reviewOutcome)
+}
+
 function getFilterCount(key) {
   if (key === 'all') {
     return notifications.value.length
@@ -159,12 +163,13 @@ function closeNotificationSettings() {
   isSettingsModalOpen.value = false
 }
 
-function openTarget(notification) {
-  if (!notification?.targetUrl) {
+async function openTarget(notification) {
+  const targetUrl = await notificationStore.resolveNotificationTargetUrl(notification)
+  if (!targetUrl) {
     return
   }
 
-  router.push(notification.targetUrl)
+  router.push(targetUrl)
 }
 
 function isCampaignInvitationActionable(notification) {
@@ -371,6 +376,14 @@ onMounted(() => {
             <div class="notification-item__body">
               <div class="notification-item__top">
                 <span class="notification-chip">{{ getCategoryMeta(item.category).label }}</span>
+                <span
+                  v-if="getReviewOutcomeMeta(item)"
+                  class="notification-result-chip"
+                  :class="`notification-result-chip--${getReviewOutcomeMeta(item).tone}`"
+                >
+                  <span class="material-symbols-outlined">{{ getReviewOutcomeMeta(item).icon }}</span>
+                  {{ getReviewOutcomeMeta(item).label }}
+                </span>
                 <span class="notification-time">{{ formatRelativeTime(item.createdAt) }}</span>
               </div>
               <strong>{{ item.title }}</strong>
@@ -409,6 +422,14 @@ onMounted(() => {
                 {{ getCategoryMeta(selectedNotification.category).label }}
               </p>
               <h3>{{ selectedNotification.title }}</h3>
+              <span
+                v-if="getReviewOutcomeMeta(selectedNotification)"
+                class="notification-result-chip"
+                :class="`notification-result-chip--${getReviewOutcomeMeta(selectedNotification).tone}`"
+              >
+                <span class="material-symbols-outlined">{{ getReviewOutcomeMeta(selectedNotification).icon }}</span>
+                {{ getReviewOutcomeMeta(selectedNotification).label }}
+              </span>
               <span>{{ formatRelativeTime(selectedNotification.createdAt) }}</span>
             </div>
           </div>
@@ -431,6 +452,14 @@ onMounted(() => {
             <div class="notification-detail__box">
               {{ selectedNotification.detail }}
             </div>
+            <button
+              v-if="getReviewOutcomeMeta(selectedNotification) && selectedNotification.targetUrl"
+              type="button"
+              class="notification-button notification-button--primary notification-result-action"
+              @click="openTarget(selectedNotification)"
+            >
+              검수 결과 보기
+            </button>
             <div
               v-if="isGroupCampaignInvitation(selectedNotification)"
               class="notification-group-banner"
@@ -498,6 +527,18 @@ onMounted(() => {
                     :class="`notification-severity--${selectedNotification.severity}`"
                   >
                     {{ getSeverityMeta(selectedNotification.severity).label }}
+                  </span>
+                </dd>
+              </div>
+              <div v-if="getReviewOutcomeMeta(selectedNotification)">
+                <dt>검수 결과</dt>
+                <dd>
+                  <span
+                    class="notification-result-chip"
+                    :class="`notification-result-chip--${getReviewOutcomeMeta(selectedNotification).tone}`"
+                  >
+                    <span class="material-symbols-outlined">{{ getReviewOutcomeMeta(selectedNotification).icon }}</span>
+                    {{ getReviewOutcomeMeta(selectedNotification).label }}
                   </span>
                 </dd>
               </div>
@@ -914,6 +955,45 @@ onMounted(() => {
 .notification-chip {
   background: color-mix(in srgb, var(--noti-tone, var(--accent-color)) 13%, var(--surface-control));
   color: var(--text-heading);
+}
+
+.notification-result-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 8px;
+  border: 1px solid var(--line-soft);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.notification-result-chip .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.notification-result-chip--completed {
+  border-color: rgba(16, 185, 129, 0.28);
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.notification-result-chip--review-required {
+  border-color: rgba(217, 119, 6, 0.28);
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+}
+
+.notification-result-chip--failed {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+
+.notification-result-action {
+  margin-top: 10px;
 }
 
 .notification-time {

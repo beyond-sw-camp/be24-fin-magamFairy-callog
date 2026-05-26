@@ -1,8 +1,22 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { confirm, confirmAll, getNoti } from '@/api/notifications/index.js'
+import { useAdCheckJobsStore } from '@/stores/adCheckJobs'
 
 const SSE_RETRY_DELAY_MS = 5000
+const AD_CHECK_JOB_EVENTS = [
+  'ad-check.job.created',
+  'ad-check.job.updated',
+  'ad-check.step.changed',
+  'ad-check.completed',
+  'ad-check.failed',
+]
+
+const REVIEW_OUTCOME_META = {
+  completed: { label: '검수 완료', tone: 'completed', icon: 'task_alt' },
+  review_required: { label: '확인 필요', tone: 'review-required', icon: 'policy_alert' },
+  failed: { label: '검수 실패', tone: 'failed', icon: 'error' },
+}
 
 function extractListPayload(response) {
   const payload = response?.data?.data ?? response?.data ?? response ?? {}
@@ -23,7 +37,12 @@ function extractListPayload(response) {
 function normalizeCategory(type, category) {
   const value = String(category || type || '').toLowerCase()
 
-  if (value.includes('review') || value.includes('qa')) {
+  if (
+    value.includes('review') ||
+    value.includes('qa') ||
+    value.includes('judge') ||
+    value.includes('ad_check')
+  ) {
     return 'qa'
   }
 
@@ -42,8 +61,9 @@ function normalizeCategory(type, category) {
   return 'system'
 }
 
-function normalizeSeverity(value, category) {
+function normalizeSeverity(value, category, type) {
   const normalized = String(value || '').toLowerCase()
+  const normalizedType = String(type || '').toUpperCase()
 
   if (['critical', 'urgent'].includes(normalized)) {
     return 'critical'
@@ -57,7 +77,53 @@ function normalizeSeverity(value, category) {
     return 'low'
   }
 
+  if (['AI_JUDGE_REVIEW_REQUIRED', 'AI_JUDGE_FAILED'].includes(normalizedType)) {
+    return 'high'
+  }
+
   return category === 'schedule' ? 'high' : 'normal'
+}
+
+function resolveReviewOutcome(type) {
+  const normalizedType = String(type || '').toUpperCase()
+
+  if (normalizedType === 'AI_JUDGE_COMPLETED') {
+    return 'completed'
+  }
+
+  if (normalizedType === 'AI_JUDGE_REVIEW_REQUIRED') {
+    return 'review_required'
+  }
+
+  if (normalizedType === 'AI_JUDGE_FAILED') {
+    return 'failed'
+  }
+
+  return ''
+}
+
+function isAiJudgeNotification(notification) {
+  return Boolean(
+    notification?.reviewOutcome ||
+    String(notification?.type || '').toUpperCase().startsWith('AI_JUDGE_'),
+  )
+}
+
+function extractAnalysisJobId(targetUrl) {
+  const rawUrl = String(targetUrl || '')
+  if (!rawUrl.includes('/references')) {
+    return ''
+  }
+
+  const [, query = ''] = rawUrl.split('?')
+  return new URLSearchParams(query).get('analysisJobId') ?? ''
+}
+
+function buildAdCheckReviewUrl(job) {
+  if (!job?.campaignId || !job?.jobId) {
+    return ''
+  }
+  return `/campaigns/${job.campaignId}?tab=review&adCheckJobId=${encodeURIComponent(job.jobId)}`
 }
 
 function normalizeDate(value) {
@@ -67,9 +133,10 @@ function normalizeDate(value) {
 
 function normalizeNotification(item, index = 0) {
   const category = normalizeCategory(item.type, item.category)
-  const severity = normalizeSeverity(item.severity ?? item.priority, category)
+  const severity = normalizeSeverity(item.severity ?? item.priority, category, item.type)
   const idx = item.idx ?? item.id ?? null
   const createdAt = normalizeDate(item.createdAt ?? item.created_at ?? item.createDate ?? item.time)
+  const reviewOutcome = resolveReviewOutcome(item.type)
 
   return {
     id: String(idx ?? `${category}-${index}`),
@@ -89,6 +156,8 @@ function normalizeNotification(item, index = 0) {
     referenceType: item.referenceType ?? '',
     referenceId: item.referenceId ?? null,
     referenceStatus: item.referenceStatus ?? '',
+    groupPreview: item.groupPreview ?? null,
+    reviewOutcome,
   }
 }
 
@@ -101,6 +170,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const sseError = ref('')
   const eventSource = ref(null)
   const currentToken = ref('')
+  const lastIncomingNotification = ref(null)
+  const incomingNotificationSequence = ref(0)
 
   // SSE — 캘린더/내 캠페인 실시간 갱신 신호 (구독자가 watch로 수신)
   const lastCalendarRefresh = ref(0)
@@ -108,6 +179,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
   let reconnectTimer = null
 
   const recentNotifications = computed(() => notifications.value.slice(0, 3))
+
+  function getReviewOutcomeMeta(outcome) {
+    return REVIEW_OUTCOME_META[outcome] ?? null
+  }
 
   function setNotifications(items, nextUnreadCount = null) {
     notifications.value = items.map((item, index) => normalizeNotification(item, index))
@@ -125,14 +200,17 @@ export const useNotificationsStore = defineStore('notifications', () => {
       notifications.value.splice(existingIndex, 1, notification)
       if (wasUnread && notification.isRead) {
         unreadCount.value = Math.max(0, unreadCount.value - 1)
+      } else if (!wasUnread && !notification.isRead) {
+        unreadCount.value += 1
       }
-      return
+      return notification
     }
 
     notifications.value.unshift(notification)
     if (!notification.isRead) {
       unreadCount.value += 1
     }
+    return notification
   }
 
   async function loadNotifications(options = {}) {
@@ -170,6 +248,46 @@ export const useNotificationsStore = defineStore('notifications', () => {
       notification.isRead = false
       unreadCount.value += 1
     }
+  }
+
+  async function resolveNotificationTargetUrl(notification) {
+    if (!notification?.targetUrl || !isAiJudgeNotification(notification)) {
+      return notification?.targetUrl ?? ''
+    }
+
+    const currentReviewUrl = buildAdCheckReviewUrlFromTarget(notification.targetUrl)
+    if (currentReviewUrl) {
+      return currentReviewUrl
+    }
+
+    const analysisJobId = extractAnalysisJobId(notification.targetUrl)
+    if (!analysisJobId) {
+      return notification.targetUrl
+    }
+
+    const adCheckJobsStore = useAdCheckJobsStore()
+    const summaries = adCheckJobsStore.jobSummaries.length
+      ? adCheckJobsStore.jobSummaries
+      : await adCheckJobsStore.loadJobSummaries()
+    const matchedJob = summaries.find((job) =>
+      [job.jobId, job.mongoDocumentId].map((value) => String(value || '')).includes(analysisJobId),
+    )
+    return buildAdCheckReviewUrl(matchedJob) || notification.targetUrl
+  }
+
+  function buildAdCheckReviewUrlFromTarget(targetUrl) {
+    const [, campaignId = ''] = String(targetUrl || '').match(/^\/campaigns\/([^/?#]+)/) ?? []
+    if (!campaignId) {
+      return ''
+    }
+
+    const [, query = ''] = String(targetUrl || '').split('?')
+    const params = new URLSearchParams(query)
+    const jobId = params.get('adCheckJobId')
+    if (!jobId) {
+      return targetUrl
+    }
+    return `/campaigns/${campaignId}?tab=review&adCheckJobId=${encodeURIComponent(jobId)}`
   }
 
   async function markAllAsRead() {
@@ -235,14 +353,31 @@ export const useNotificationsStore = defineStore('notifications', () => {
       isSseConnected.value = true
       sseError.value = ''
       void loadNotifications()
+      void useAdCheckJobsStore().loadActiveJobs()
     }
 
     source.addEventListener('notification.created', (event) => {
       try {
-        upsertNotification(JSON.parse(event.data))
+        const notification = upsertNotification(JSON.parse(event.data))
+        if (notification && !notification.isRead) {
+          lastIncomingNotification.value = notification
+          incomingNotificationSequence.value += 1
+        }
       } catch (error) {
         console.warn('Notification SSE payload parsing failed.', error)
       }
+    })
+
+    const handleAdCheckJobEvent = (event) => {
+      try {
+        useAdCheckJobsStore().handleJobEvent(JSON.parse(event.data))
+      } catch (error) {
+        console.warn('Ad check job SSE payload parsing failed.', error)
+      }
+    }
+
+    AD_CHECK_JOB_EVENTS.forEach((eventName) => {
+      source.addEventListener(eventName, handleAdCheckJobEvent)
     })
 
     source.addEventListener('heartbeat', () => {
@@ -278,13 +413,17 @@ export const useNotificationsStore = defineStore('notifications', () => {
     loadError,
     isSseConnected,
     sseError,
+    lastIncomingNotification,
+    incomingNotificationSequence,
     lastCalendarRefresh,
     lastMyCampaignsRefresh,
     connect,
     disconnect,
     loadNotifications,
     markAsRead,
+    resolveNotificationTargetUrl,
     markAllAsRead,
     upsertNotification,
+    getReviewOutcomeMeta,
   }
 })

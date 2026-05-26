@@ -66,13 +66,19 @@ public class AdCheckFileStorageService {
     private String bucketName;
 
     public AnalysisStorageContext createAnalysisStorageContext(String originalFileName) {
+        return createAnalysisStorageContext(originalFileName, null);
+    }
+
+    public AnalysisStorageContext createAnalysisStorageContext(String originalFileName, String requestedWorkId) {
         Instant now = Instant.now();
         String safeBaseName = sanitizeBaseName(removeExtension(resolveOriginalFileName(originalFileName)));
-        String workId = FILE_TIMESTAMP_FORMATTER.format(now)
+        String workId = requestedWorkId == null || requestedWorkId.isBlank()
+                ? FILE_TIMESTAMP_FORMATTER.format(now)
                 + "_"
                 + UUID.randomUUID().toString().substring(0, 8)
                 + "_"
-                + safeBaseName;
+                + safeBaseName
+                : sanitizeBaseName(requestedWorkId);
 
         return AnalysisStorageContext.builder()
                 .workId(workId)

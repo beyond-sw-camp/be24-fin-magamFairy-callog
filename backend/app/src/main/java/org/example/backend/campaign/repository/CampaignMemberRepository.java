@@ -22,6 +22,9 @@ public interface CampaignMemberRepository extends JpaRepository<CampaignMember, 
 
     boolean existsByCampaignIdxAndUserIdx(Long campaignIdx, Long userIdx);
 
+    @Query("SELECT cm.user.idx FROM CampaignMember cm WHERE cm.campaign.idx = :campaignIdx")
+    java.util.Set<Long> findUserIdxByCampaignIdx(@Param("campaignIdx") Long campaignIdx);
+
     @Query("SELECT cm.user.idx FROM CampaignMember cm WHERE cm.campaign.idx = :campaignIdx AND cm.user.idx IN :userIdxList")
     java.util.Set<Long> findUserIdxByCampaignIdxAndUserIdxIn(
             @Param("campaignIdx") Long campaignIdx,

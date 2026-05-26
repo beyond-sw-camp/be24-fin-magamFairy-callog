@@ -2,6 +2,7 @@ package com.example.adcheck.service;
 
 import com.example.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
 import com.example.adcheck.model.AdCheckDto;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -29,6 +30,7 @@ public class AiJudgeFileCheckService {
     private final AdCheckFileStorageService adCheckFileStorageService;
     private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
     private final AiJudgeKafkaEventPublisher aiJudgeKafkaEventPublisher;
+    private final AiJudgeProgressCallbackClient aiJudgeProgressCallbackClient;
 
     public AiJudgeFileCheckService(
             AiJudgeService aiJudgeService,
@@ -36,7 +38,8 @@ public class AiJudgeFileCheckService {
             TextExtractorService textExtractorService,
             AdCheckFileStorageService adCheckFileStorageService,
             AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService,
-            AiJudgeKafkaEventPublisher aiJudgeKafkaEventPublisher
+            AiJudgeKafkaEventPublisher aiJudgeKafkaEventPublisher,
+            AiJudgeProgressCallbackClient aiJudgeProgressCallbackClient
     ) {
         this.aiJudgeService = aiJudgeService;
         this.objectMapper = objectMapper;
@@ -44,16 +47,42 @@ public class AiJudgeFileCheckService {
         this.adCheckFileStorageService = adCheckFileStorageService;
         this.adCheckAnalysisMongoStorageService = adCheckAnalysisMongoStorageService;
         this.aiJudgeKafkaEventPublisher = aiJudgeKafkaEventPublisher;
+        this.aiJudgeProgressCallbackClient = aiJudgeProgressCallbackClient;
     }
 
     public AdCheckDto.FileCheckRes checkFile(MultipartFile file) {
+        return checkFile(file, null, null);
+    }
+
+    public AdCheckDto.FileCheckRes checkFile(MultipartFile file, String rawContext, String analysisJobId) {
         long totalStartedAt = System.nanoTime();
+        Map<String, Object> context = parseContext(rawContext);
         try {
             AdCheckFileStorageService.AnalysisStorageContext storageContext =
-                    adCheckFileStorageService.createAnalysisStorageContext(file == null ? null : file.getOriginalFilename());
+                    adCheckFileStorageService.createAnalysisStorageContext(
+                            file == null ? null : file.getOriginalFilename(),
+                            analysisJobId
+                    );
             AdCheckFileStorageService.StoredFile storedFile =
                     adCheckFileStorageService.uploadOriginal(file, storageContext);
-            TextExtractorService.ExtractResult extraction = textExtractorService.extractWithTiming(file);
+            TextExtractorService.ExtractResult extraction;
+            try {
+                aiJudgeProgressCallbackClient.notify(context, "DATA_EXTRACTION");
+                extraction = textExtractorService.extractWithTiming(file);
+            } catch (RuntimeException e) {
+                AdCheckDto.FileCheckRes partialResponse = buildExtractionErrorResponse(
+                        storageContext,
+                        file == null ? null : file.getOriginalFilename(),
+                        storedFile,
+                        e,
+                        totalStartedAt,
+                        context
+                );
+                partialResponse = storeFinalResult(storageContext, partialResponse);
+                adCheckAnalysisMongoStorageService.save(partialResponse);
+                aiJudgeKafkaEventPublisher.publishFailed(partialResponse);
+                throw new FileCheckException(e.getMessage(), partialResponse, e);
+            }
             AdCheckFileStorageService.StoredFile extractedTextFile =
                     adCheckFileStorageService.uploadText(storageContext, EXTRACTED_TEXT_PATH, extraction.text());
             List<AdCheckDto.FileArtifact> imageArtifacts =
@@ -61,8 +90,10 @@ public class AiJudgeFileCheckService {
             long aiStartedAt = System.nanoTime();
 
             try {
+                aiJudgeProgressCallbackClient.notify(context, "DATA_ANALYSIS");
                 AdCheckDto.Res result = aiJudgeService.check(extraction.text());
                 long aiAnalysisMillis = elapsedMillis(aiStartedAt);
+                aiJudgeProgressCallbackClient.notify(context, "RESULT_BUILDING");
                 AdCheckFileStorageService.StoredFile aiResultFile =
                         uploadJsonArtifact(storageContext, AI_RESULT_PATH, result);
                 AdCheckDto.FileCheckRes response = buildFileCheckResponse(
@@ -79,11 +110,13 @@ public class AiJudgeFileCheckService {
                         extraction.text(),
                         extraction.extractionMode(),
                         buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt),
-                        null
+                        null,
+                        context
                 );
                 response = storeFinalResult(storageContext, response);
-                adCheckAnalysisMongoStorageService.save(response);
-                aiJudgeKafkaEventPublisher.publishCompleted(response);
+                if (adCheckAnalysisMongoStorageService.save(response)) {
+                    aiJudgeKafkaEventPublisher.publishCompleted(response);
+                }
                 return response;
             } catch (RuntimeException e) {
                 long aiAnalysisMillis = elapsedMillis(aiStartedAt);
@@ -103,16 +136,57 @@ public class AiJudgeFileCheckService {
                         extraction.text(),
                         extraction.extractionMode(),
                         buildProcessingTimes(extraction, aiAnalysisMillis, totalStartedAt),
-                        e.getMessage()
+                        e.getMessage(),
+                        context
                 );
                 partialResponse = storeFinalResult(storageContext, partialResponse);
-                adCheckAnalysisMongoStorageService.save(partialResponse);
-                aiJudgeKafkaEventPublisher.publishFailed(partialResponse);
+                if (adCheckAnalysisMongoStorageService.save(partialResponse)) {
+                    aiJudgeKafkaEventPublisher.publishFailed(partialResponse);
+                }
                 throw new FileCheckException(e.getMessage(), partialResponse, e);
             }
         } catch (IOException e) {
             throw new RuntimeException("File processing failed.", e);
         }
+    }
+
+    private AdCheckDto.FileCheckRes buildExtractionErrorResponse(
+            AdCheckFileStorageService.AnalysisStorageContext storageContext,
+            String fileName,
+            AdCheckFileStorageService.StoredFile storedFile,
+            RuntimeException exception,
+            long totalStartedAt,
+            Map<String, Object> context
+    ) {
+        AdCheckFileStorageService.StoredFile aiErrorFile =
+                uploadJsonArtifact(storageContext, AI_ERROR_PATH, Map.of(
+                        "errorMessage", String.valueOf(exception.getMessage()),
+                        "errorStage", "text_extraction"
+                ));
+
+        return buildFileCheckResponse(
+                storageContext,
+                fileName,
+                storedFile.getObjectKey(),
+                storedFile.getViewUrl(),
+                storedFile.getContentType(),
+                storedFile.getFileSize(),
+                null,
+                List.of(),
+                aiErrorFile,
+                null,
+                null,
+                "text_extraction_failed",
+                AdCheckDto.ProcessingTimes.builder()
+                        .textExtractionMillis(0L)
+                        .layoutMillis(0L)
+                        .ocrMillis(0L)
+                        .aiAnalysisMillis(0L)
+                        .totalMillis(elapsedMillis(totalStartedAt))
+                        .build(),
+                exception.getMessage(),
+                context
+        );
     }
 
     private AdCheckDto.ProcessingTimes buildProcessingTimes(
@@ -183,7 +257,8 @@ public class AiJudgeFileCheckService {
             String extractedText,
             String extractionMode,
             AdCheckDto.ProcessingTimes processingTimes,
-            String errorMessage
+            String errorMessage,
+            Map<String, Object> context
     ) {
         AdCheckDto.FileCheckRes.FileCheckResBuilder builder = AdCheckDto.FileCheckRes.builder()
                 .analysisJobId(storageContext.getWorkId())
@@ -201,14 +276,16 @@ public class AiJudgeFileCheckService {
                 .extractedText(extractedText)
                 .extractionMode(extractionMode)
                 .processingTimes(processingTimes)
-                .errorMessage(errorMessage);
+                .errorMessage(errorMessage)
+                .context(context == null ? Map.of() : Map.copyOf(context));
 
         if (result != null) {
             builder.status(result.status())
                     .law(result.law())
                     .violationText(result.violationText())
                     .reason(result.reason())
-                    .suggestion(result.suggestion());
+                    .suggestion(result.suggestion())
+                    .verdictLevel(result.verdictLevel());
         }
         return builder.build();
     }
@@ -238,6 +315,20 @@ public class AiJudgeFileCheckService {
             return objectMapper.writeValueAsString(value);
         } catch (Exception e) {
             throw new RuntimeException("S3 artifact JSON cannot be serialized.", e);
+        }
+    }
+
+    private Map<String, Object> parseContext(String rawContext) {
+        if (!hasText(rawContext)) {
+            return Map.of();
+        }
+
+        try {
+            Map<String, Object> context = objectMapper.readValue(rawContext, new TypeReference<Map<String, Object>>() {});
+            return context == null ? Map.of() : context;
+        } catch (Exception e) {
+            log.warn("AI judge context cannot be parsed. context={}", rawContext, e);
+            return Map.of();
         }
     }
 

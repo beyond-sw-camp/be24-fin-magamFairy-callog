@@ -1,6 +1,7 @@
 import api from '/plugins/interceptor.js'
 
 const AD_CHECK_TIMEOUT_MS = 180000
+const AD_CHECK_JOB_TIMEOUT_MS = 60000
 
 function createAdCheckError(message, data) {
   const error = new Error(message)
@@ -60,9 +61,12 @@ export const CheckAdFile = async (file) => {
   }
 }
 
-export const CheckAdFileWithAiJudge = async (file) => {
+export const CheckAdFileWithAiJudge = async (file, options = {}) => {
   const formData = new FormData()
   formData.append('file', file)
+  if (options.campaignId) {
+    formData.append('campaignId', options.campaignId)
+  }
   try {
     return unwrapResponse(
       await api.post('/ad/check/file/aijudge', formData, {
@@ -70,6 +74,100 @@ export const CheckAdFileWithAiJudge = async (file) => {
         headers: { 'Content-Type': 'multipart/form-data' },
       }),
     )
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const CheckCampaignAdFileWithAiJudge = async (campaignId, file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  try {
+    return unwrapResponse(
+      await api.post(`/campaigns/${campaignId}/ad-analyses/check/file`, formData, {
+        timeout: AD_CHECK_TIMEOUT_MS,
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    )
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const ListAdAiAnalyses = async (campaignId) => {
+  try {
+    return unwrapResponse(await api.get(`/campaigns/${campaignId}/ad-analyses`))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const GetAdAiAnalysisDetail = async (campaignId, analysisId) => {
+  try {
+    return unwrapResponse(await api.get(`/campaigns/${campaignId}/ad-analyses/${analysisId}`))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const CreateAdCheckJob = async (file, options = {}) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (options.campaignId) {
+    formData.append('campaignId', options.campaignId)
+  }
+  try {
+    return unwrapResponse(
+      await api.post('/ad/check/jobs', formData, {
+        timeout: AD_CHECK_JOB_TIMEOUT_MS,
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    )
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const GetAdCheckJob = async (jobId) => {
+  try {
+    return unwrapResponse(await api.get(`/ad/check/jobs/${jobId}`))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const ListAdCheckJobs = async (options = {}) => {
+  const params = {}
+  if (options.campaignId) {
+    params.campaignId = options.campaignId
+  }
+
+  try {
+    return unwrapResponse(await api.get('/ad/check/jobs', { params }))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const GetAdCheckJobDetail = async (jobId) => {
+  try {
+    return unwrapResponse(await api.get(`/ad/check/jobs/${jobId}/detail`))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const ListActiveAdCheckJobs = async () => {
+  try {
+    return unwrapResponse(await api.get('/ad/check/jobs/active'))
+  } catch (error) {
+    throw toAdCheckError(error)
+  }
+}
+
+export const CancelAdCheckJob = async (jobId) => {
+  try {
+    return unwrapResponse(await api.post(`/ad/check/jobs/${jobId}/cancel`))
   } catch (error) {
     throw toAdCheckError(error)
   }

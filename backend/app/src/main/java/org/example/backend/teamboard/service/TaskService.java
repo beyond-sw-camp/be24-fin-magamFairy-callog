@@ -28,8 +28,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -74,7 +76,7 @@ public class TaskService {
         User assignee = getUserOrThrow(authUser.getIdx());
         Task saved = taskRepository.save(req.toEntity(null, null, null, assignee));
         sseService.broadcastCalendarRefresh(null, "task");
-        dashboardCacheEvictor.evictAll();
+        evictTaskDashboard(null, null, null, assignee);
         return TaskDto.ResTask.from(saved);
     }
 
@@ -112,7 +114,7 @@ public class TaskService {
                 "TASK_CREATE", "업무 '" + saved.getName() + "' 생성");
         sseService.broadcastCalendarRefresh(campaignIdx, "task");
         // Dashboard 캐시 무효화 (reviewQueue, summary.pending, blockers 영향)
-        dashboardCacheEvictor.evictAll();
+        evictTaskDashboard(null, resolveCampaign(saved), null, assignee);
         return TaskDto.ResTask.from(saved);
     }
 
@@ -120,6 +122,7 @@ public class TaskService {
     public TaskDto.ResTask update(Long taskIdx, TaskDto.ReqTask req, AuthUserDetails authUser) {
         Task task = getTaskOrThrow(taskIdx);
         User previousAssignee = task.getAssignee();
+        Campaign previousCampaign = resolveCampaign(task);
         TaskStatus previousStatus = task.getStatus();
         String previousName = task.getName();
         CampaignParticipant previousParticipant = task.getParticipant();
@@ -193,7 +196,7 @@ public class TaskService {
                 ? task.getTaskPart().getCampaign().getIdx() : null;
         sseService.broadcastCalendarRefresh(campaignIdxForSse, "task");
         // Dashboard 캐시 무효화 (status 변경 시 reviewQueue/blockers/passPct 모두 영향)
-        dashboardCacheEvictor.evictAll();
+        evictTaskDashboard(previousCampaign, resolveCampaign(task), previousAssignee, task.getAssignee());
         return TaskDto.ResTask.from(task);
     }
 
@@ -203,10 +206,12 @@ public class TaskService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "업무를 찾을 수 없습니다."));
         Long campaignIdxForSse = task.getTaskPart() != null && task.getTaskPart().getCampaign() != null
                 ? task.getTaskPart().getCampaign().getIdx() : null;
+        Campaign campaign = resolveCampaign(task);
+        User assignee = task.getAssignee();
         taskRepository.deleteById(taskIdx);
         sseService.broadcastCalendarRefresh(campaignIdxForSse, "task");
         // Dashboard 캐시 무효화 (reviewQueue/blockers 에서 제거)
-        dashboardCacheEvictor.evictAll();
+        evictTaskDashboard(campaign, null, assignee, null);
     }
 
     /** 활동 로그용 캠페인 해석: 직접 campaign → 업무파트 경유 → 참여사 경유. 없으면 null(개인 업무). */
@@ -221,6 +226,40 @@ public class TaskService {
             return task.getParticipant().getCampaign();
         }
         return null;
+    }
+
+    private void evictTaskDashboard(
+            Campaign previousCampaign,
+            Campaign nextCampaign,
+            User previousAssignee,
+            User nextAssignee
+    ) {
+        Set<Long> campaignIdxs = new LinkedHashSet<>();
+        addCampaignIdx(campaignIdxs, previousCampaign);
+        addCampaignIdx(campaignIdxs, nextCampaign);
+
+        Set<Long> userIdxs = new LinkedHashSet<>();
+        addUserIdx(userIdxs, previousAssignee);
+        addUserIdx(userIdxs, nextAssignee);
+
+        if (!campaignIdxs.isEmpty()) {
+            dashboardCacheEvictor.evictCampaigns(campaignIdxs);
+        }
+        if (!userIdxs.isEmpty()) {
+            dashboardCacheEvictor.evictUsers(userIdxs);
+        }
+    }
+
+    private void addCampaignIdx(Set<Long> campaignIdxs, Campaign campaign) {
+        if (campaign != null && campaign.getIdx() != null) {
+            campaignIdxs.add(campaign.getIdx());
+        }
+    }
+
+    private void addUserIdx(Set<Long> userIdxs, User user) {
+        if (user != null && user.getIdx() != null) {
+            userIdxs.add(user.getIdx());
+        }
     }
 
     private Task getTaskOrThrow(Long taskIdx) {

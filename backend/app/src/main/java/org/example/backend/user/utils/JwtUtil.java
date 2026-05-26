@@ -118,4 +118,8 @@ public class JwtUtil {
                 .getExpiration()
                 .before(new Date());
     }
+    public Date getExpiration(String token) {
+        return Jwts.parser().verifyWith(encodeKey).build()
+                .parseSignedClaims(token).getPayload().getExpiration();
+    }
 }
