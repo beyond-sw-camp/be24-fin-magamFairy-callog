@@ -12,8 +12,13 @@ import org.example.evaluation.event.EvaluationStartRequestedEvent;
 import org.example.evaluation.kafka.EvaluationKafkaProducer;
 import org.example.evaluation.model.EvaluationDocument;
 import org.example.evaluation.model.EvaluationDto;
+import org.example.evaluation.model.N8nEvaluationPayloadDto;
 import org.example.evaluation.repository.EvaluationMongoRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -126,5 +131,92 @@ public class EvaluationService {
         return documents.stream()
                 .map(EvaluationDto.MongoEvaluationRes::of)
                 .collect(Collectors.toList());
+    }
+    private final MongoTemplate mongoTemplate;
+    public void collect(N8nEvaluationPayloadDto payload) {
+        Query query = new Query(Criteria.where("sessionId").is(payload.getUuid()));
+        Update update = new Update();
+        // 2. 공통 기본 인프라 정보 업데이트 설정
+        update.set("publicId", String.valueOf(payload.getCampaignIdx()));
+
+        // 3. 카테고리별 분기 및 객체 바인딩 수행 [cite: 5, 10, 20]
+        String category = payload.getCategory().toUpperCase();
+        switch (category) {
+            case "BRAND":
+                EvaluationDocument.Brand brand = EvaluationDocument.Brand.builder()
+                        .overallScore(payload.getOverallScore())
+                        .improvementDirections(payload.getImprovementDirections())
+                        .brandTone(payload.getBrandTone())
+                        .priceRange(payload.getPriceRange())
+                        .customerExperience(payload.getCustomerExperience())
+                        .brandTrust(payload.getBrandTrust())
+                        .reputationRisk(payload.getReputationRisk())
+                        .hanwhaImageConsistency(payload.getHanwhaImageConsistency())
+                        .build();
+                update.set("evaluations.brand", brand);
+                break;
+
+            case "COST":
+                EvaluationDocument.Cost cost = EvaluationDocument.Cost.builder()
+                        .overallScore(payload.getOverallScore())
+                        .improvementDirections(payload.getImprovementDirections())
+                        .partnerSampleScale(payload.getPartnerSampleScale())
+                        .partnerDiscountCostBurden(payload.getPartnerDiscountCostBurden())
+                        .coProductionCostSharing(payload.getCoProductionCostSharing())
+                        .hanwhaDirectCostBurden(payload.getHanwhaDirectCostBurden())
+                        .existingHanwhaChannelUtilization(payload.getExistingHanwhaChannelUtilization())
+                        .build();
+                update.set("evaluations.cost", cost);
+                break;
+
+            case "CUSTOMER":
+                EvaluationDocument.Customer customer = EvaluationDocument.Customer.builder()
+                        .overallScore(payload.getOverallScore())
+                        .improvementDirections(payload.getImprovementDirections())
+                        .customerAgeGroup(payload.getCustomerAgeGroup())
+                        .customerSpendingPatterns(payload.getCustomerSpendingPatterns())
+                        .membershipTier(payload.getMembershipTier())
+                        .usageChannel(payload.getUsageChannel())
+                        .benefitCategory(payload.getBenefitCategory())
+                        .build();
+                update.set("evaluations.customer", customer);
+                break;
+
+            case "OPERATION":
+                EvaluationDocument.Operation operation = EvaluationDocument.Operation.builder()
+                        .overallScore(payload.getOverallScore())
+                        .improvementDirections(payload.getImprovementDirections())
+                        .approvalStepsCount(payload.getApprovalStepsCount())
+                        .legalReviewRequired(payload.getLegalReviewRequired())
+                        .brandReviewRequired(payload.getBrandReviewRequired())
+                        .deliverablesCount(payload.getDeliverablesCount())
+                        .participatingDeptsAndPartners(payload.getParticipatingDeptsAndPartners())
+                        .scheduleUrgency(payload.getScheduleUrgency())
+                        .offlineOrOnsiteStaffRequired(payload.getOfflineOrOnsiteStaffRequired())
+                        .build();
+                update.set("evaluations.operation", operation);
+                break;
+
+            case "REVENUE":
+                EvaluationDocument.Revenue revenue = EvaluationDocument.Revenue.builder()
+                        .overallScore(payload.getOverallScore())
+                        .improvementDirections(payload.getImprovementDirections())
+                        .purchaseConversionProbability(payload.getPurchaseConversionProbability())
+                        .roomReservationIncreaseProbability(payload.getRoomReservationIncreaseProbability())
+                        .appRegistrationIncreaseProbability(payload.getAppRegistrationIncreaseProbability())
+                        .membershipRegistrationRevisitProbability(payload.getMembershipRegistrationRevisitProbability())
+                        .alignmentwithCampaignGoalsandKPIs(payload.getAlignmentwithCampaignGoalsandKPIs())
+                        .build();
+                update.set("evaluations.revenue", revenue);
+                break;
+
+            default:
+                log.error("Unknown evaluation category type: {}", category);
+                throw new IllegalArgumentException("Unknown evaluation category type: " + category);
+        }
+
+        // 4. 원자적 Upsert 실행 (@EnableMongoAuditing이 적용되어 있다면 내부적으로 startedAt/endedAt도 제어됨)
+        mongoTemplate.upsert(query, update, EvaluationDocument.class);
+        log.info("Successfully upserted data to MongoDB for sessionId: {}", payload.getUuid());
     }
 }

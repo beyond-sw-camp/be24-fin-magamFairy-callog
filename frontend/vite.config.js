@@ -22,6 +22,7 @@ export default defineConfig({
     },
   },
   server: {
+    host:'0.0.0.0',
     proxy: {
       // 경로가 /api로 시작하는 요청을 대상으로 함
       '/api': {
