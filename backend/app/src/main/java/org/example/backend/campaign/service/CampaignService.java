@@ -198,7 +198,7 @@ public class CampaignService {
         }
 
         // Dashboard 캐시 무효화 (active count, partnerCount, kpiCategories, blockers 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(saved.getIdx());
 
         return buildResponseFor(saved, owner);
     }
@@ -230,7 +230,7 @@ public class CampaignService {
 
         sseService.broadcastCalendarRefresh(campaign.getIdx(), "campaign");
         // Dashboard 캐시 무효화 (캠페인명/partner 변경 시 partnerProgress 등 stale 방지)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaign.getIdx());
         return buildResponseFor(campaign, user);
     }
 
@@ -240,7 +240,7 @@ public class CampaignService {
         User user = userRepository.findUserById(ownerLoginId).orElse(null);
         campaign.updatePartners(normalizeList(dto.partners()));
         // Dashboard 캐시 무효화 (partnerCount, partnerProgress 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaign.getIdx());
         return buildResponseFor(campaign, user);
     }
 
@@ -256,7 +256,7 @@ public class CampaignService {
 
         campaign.updateStatus(status);
         // Dashboard 캐시 무효화 (active count, activeByOrg 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaign.getIdx());
         return buildResponseFor(campaign, user);
     }
 

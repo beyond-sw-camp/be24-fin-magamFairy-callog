@@ -11,6 +11,7 @@ import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.model.User;
 import org.example.backend.user.model.UserAccountStatus;
 import org.example.backend.user.repository.UserRepository;
+import org.example.backend.user.service.JwtBlacklistService;
 import org.example.backend.user.utils.JwtUtil;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -30,6 +31,7 @@ import java.util.List;
 public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
+    private final JwtBlacklistService jwtBlacklistService;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -86,6 +88,10 @@ public class JwtFilter extends OncePerRequestFilter {
         String category = jwtUtil.getCategory(token);
         if (!"access".equals(category)) {
             writeError(response, HttpServletResponse.SC_UNAUTHORIZED, "invalid token category");
+            return;
+        }
+        if (jwtBlacklistService.isBlacklisted(token)) {
+            writeError(response, HttpServletResponse.SC_UNAUTHORIZED, "blacklisted token");
             return;
         }
 

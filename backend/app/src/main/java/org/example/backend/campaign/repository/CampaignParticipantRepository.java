@@ -17,6 +17,9 @@ public interface CampaignParticipantRepository extends JpaRepository<CampaignPar
 
     List<CampaignParticipant> findAllByCampaignIdx(Long campaignIdx);
 
+    @Query("SELECT DISTINCT cp.organization.idx FROM CampaignParticipant cp WHERE cp.campaign.idx = :campaignIdx")
+    java.util.Set<Long> findOrganizationIdxByCampaignIdx(@Param("campaignIdx") Long campaignIdx);
+
     /**
      * 여러 캠페인의 참여자를 단일 IN 쿼리로 (N+1 회피).
      * Dashboard partnerProgress / summary 에서 캠페인 N개 × 1쿼리 → 1쿼리.

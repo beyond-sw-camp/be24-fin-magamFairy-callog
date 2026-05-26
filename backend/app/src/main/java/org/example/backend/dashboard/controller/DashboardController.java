@@ -22,7 +22,7 @@ public class DashboardController {
 
     /**
      * ⚡ B4: Dashboard 페이지 통합 endpoint.
-     * 이전 5개 endpoint (summary, quarter-goals, partner-progress, asset-categories, kpi-categories)
+     * 이전 핵심 endpoint (summary, quarter-goals, partner-progress, asset-categories)
      * 를 한 번의 호출로 묶음. 응답 = DashboardPageDto.
      *
      * Frontend dashboardStore.loadAll() 이 이 endpoint 하나만 호출하도록 변경됨.
@@ -116,6 +116,15 @@ public class DashboardController {
             @AuthenticationPrincipal AuthUserDetails user) {
         requireAuth(user);
         return ResponseEntity.ok(BaseResponse.success(aggregateService.revenueYoY(user.getIdx(), year, quarter)));
+    }
+
+    /** ⭐NEW: Zone4 P2 매출 추이 "분기" 토글 — 선택 연도의 분기별(Q1~Q4) 매출 합계. */
+    @GetMapping("/revenue-quarters")
+    public ResponseEntity<BaseResponse> revenueQuarters(
+            @RequestParam(required = false) Integer year,
+            @AuthenticationPrincipal AuthUserDetails user) {
+        requireAuth(user);
+        return ResponseEntity.ok(BaseResponse.success(aggregateService.revenueQuarters(user.getIdx(), year)));
     }
 
     private void requireAuth(AuthUserDetails user) {
