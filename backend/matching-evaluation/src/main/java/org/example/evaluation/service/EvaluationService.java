@@ -50,7 +50,7 @@ public class EvaluationService {
         log.info("[Evaluation MSA] 메인 모듈에 데이터 조회 요청 전송. publicId={}, benefitIdx={}",
                 dto.getCampaignIdx(), dto.getBenefitIdx());
 
-//        evaluationKafkaProducer.sendStart(event);
+        evaluationKafkaProducer.sendStart(event);
     }
 
     public void requestCollectEvaluation(EvaluationDto.SaveEvaluationReq dto) {

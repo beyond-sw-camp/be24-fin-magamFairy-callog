@@ -38,9 +38,9 @@ public class EvaluationKafkaProducer {
     @Value("${app.kafka.topics.evaluation-collect-dlq:evaluation.collect.dlq}")
     private String evaluationCollectDlqTopic;
 
-//    public void sendStart(EvaluationStartRequestedEvent event) {
-//        send(evaluationStartTopic, event.key(), event);
-//    }
+    public void sendStart(EvaluationStartRequestedEvent event) {
+        send(evaluationStartTopic, event.getCampaignPublicId(), event);
+    }
 
     public void sendCollect(EvaluationCollectRequestedEvent event) {
         send(evaluationCollectTopic, event.key(), event);

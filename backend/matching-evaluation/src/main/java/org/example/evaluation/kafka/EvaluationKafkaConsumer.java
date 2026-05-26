@@ -6,8 +6,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.evaluation.event.EvaluationCompletedEvent;
 import org.example.evaluation.event.EvaluationCollectRequestedEvent;
-import org.example.evaluation.event.EvaluationFailedEvent;
-import org.example.evaluation.event.EvaluationStartRequestedEvent;
 import org.example.evaluation.model.EvaluationDocument;
 import org.example.evaluation.model.EvaluationDto;
 import org.example.evaluation.service.EvaluationService;
@@ -23,21 +21,25 @@ public class EvaluationKafkaConsumer {
     private final EvaluationService evaluationService;
     private final EvaluationKafkaProducer evaluationKafkaProducer;
 
+    /**
+     * ⭐️ 메인 모듈(모놀리식)이 꽉 채워 보내준 데이터 스냅샷을 수신하는 리스너
+     * 오직 모놀리식의 '응답 토픽'만 구독해야 합니다.
+     */
     @KafkaListener(
-            topics = "${app.kafka.topics.evaluation-start}",
+            topics = "${app.kafka.topics.evaluation-start-reply:evaluation.start-reply}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    @KafkaListener(topics = "campaign-response-topic", groupId = "evaluation-module-group")
     public void consumeMainModuleResponse(EvaluationDto.StartEvaluation response) {
         log.info("[Evaluation MSA] 메인 모듈로부터 데이터 스냅샷 수신 완료. campaignIdx(publicId)={}",
                 response.getCampaignIdx());
 
-        // 2. 수신한 꽉 찬 데이터를 가지고 n8n 웰훅을 찌르거나 파이프라인 가동!
-        // 기존 startEvaluation(EvaluationDto.StartEvaluationReq dto)을
-        // 넘겨받은 상세 데이터에 맞게 가공하여 오버로딩 혹은 수정해서 호출하시면 됩니다.
+        // 수신한 데이터를 가지고 n8n 웹훅을 호출하는 비즈니스 로직 가동
         evaluationService.startEvaluation(response);
     }
 
+    /**
+     * n8n 연산 완료 후 결과 수집을 위한 기존 리스너 (기존 코드 유지)
+     */
     @KafkaListener(
             topics = "${app.kafka.topics.evaluation-collect}",
             groupId = "${spring.kafka.consumer.group-id}"
