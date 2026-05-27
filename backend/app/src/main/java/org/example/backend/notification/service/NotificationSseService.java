@@ -3,6 +3,7 @@ package org.example.backend.notification.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.backend.notification.model.NotificationDto;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
@@ -18,6 +19,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class NotificationSseService {
     private static final long SSE_TIMEOUT_MILLIS = 30L * 60L * 1000L;
     public static final String SSE_Channel = "sse:events";
@@ -107,6 +109,9 @@ public class NotificationSseService {
         try {
             redis.convertAndSend(SSE_Channel, objectMapper.writeValueAsString(sse));
         } catch (Exception e) {
+            // ⚠️ Redis Pub/Sub 실패 — 로컬 Pod에만 전달됨 (멀티 Pod 환경에서 다른 Pod 구독자 누락 가능)
+            log.warn("[SSE] Redis Pub/Sub 실패 — 로컬 전용 폴백 (event={}, userIdx={})",
+                    sse.eventName(), sse.userIdx(), e);
             deliverLocally(sse);
         }
     }

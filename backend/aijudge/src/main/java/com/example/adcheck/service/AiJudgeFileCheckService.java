@@ -67,7 +67,7 @@ public class AiJudgeFileCheckService {
                     adCheckFileStorageService.uploadOriginal(file, storageContext);
             TextExtractorService.ExtractResult extraction;
             try {
-                aiJudgeProgressCallbackClient.notify(context, "DATA_EXTRACTION");
+                notifyProgress(context, "DATA_EXTRACTION");
                 extraction = textExtractorService.extractWithTiming(file);
             } catch (RuntimeException e) {
                 AdCheckDto.FileCheckRes partialResponse = buildExtractionErrorResponse(
@@ -90,10 +90,10 @@ public class AiJudgeFileCheckService {
             long aiStartedAt = System.nanoTime();
 
             try {
-                aiJudgeProgressCallbackClient.notify(context, "DATA_ANALYSIS");
+                notifyProgress(context, "DATA_ANALYSIS");
                 AdCheckDto.Res result = aiJudgeService.check(extraction.text());
                 long aiAnalysisMillis = elapsedMillis(aiStartedAt);
-                aiJudgeProgressCallbackClient.notify(context, "RESULT_BUILDING");
+                notifyProgress(context, "RESULT_BUILDING");
                 AdCheckFileStorageService.StoredFile aiResultFile =
                         uploadJsonArtifact(storageContext, AI_RESULT_PATH, result);
                 AdCheckDto.FileCheckRes response = buildFileCheckResponse(
@@ -330,6 +330,11 @@ public class AiJudgeFileCheckService {
             log.warn("AI judge context cannot be parsed. context={}", rawContext, e);
             return Map.of();
         }
+    }
+
+    private void notifyProgress(Map<String, Object> context, String step) {
+        aiJudgeKafkaEventPublisher.publishProgress(context, step);
+        aiJudgeProgressCallbackClient.notify(context, step);
     }
 
     private long elapsedMillis(long startedAt) {

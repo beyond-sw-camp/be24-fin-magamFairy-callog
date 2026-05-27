@@ -261,7 +261,16 @@ public class AdCheckAnalysisMongoStorageService {
                 .errorMessage(text(result, "errorMessage"))
                 .extractionMode(text(document, "extractionMode"))
                 .processingTimes(toProcessingTimes(processingTimes))
+                .context(contextMap(document))
                 .build();
+    }
+
+    private Map<String, Object> contextMap(Document document) {
+        if (document == null) {
+            return Map.of();
+        }
+        Document context = document.get("context", Document.class);
+        return context == null ? Map.of() : new java.util.LinkedHashMap<>(context);
     }
 
     private List<AdCheckDto.FileArtifact> imageArtifacts(Document artifacts) {

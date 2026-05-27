@@ -7,7 +7,7 @@ spring:
   application:
     name: ai-evaluation
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -18,8 +18,8 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   data:
     mongodb:
-      uri: ${MONGODB_URL}
-      database: ${MONGODB_EVALUATION}
+      uri: ${MONGODB_URL:mongodb://localhost:27017/callog_evaluation}
+      database: ${MONGODB_EVALUATION:callog_evaluation}
 
 management:
   endpoints:
@@ -37,18 +37,18 @@ management:
     tags:
       application: ${spring.application.name}
   tracing:
-    #    enabled: false
+    enabled: ${TRACING_ENABLED:false}
     sampling:
       probability: 1.0   # 모든 요청에 대한 데이터를 수집하겠다.
   otlp:
     tracing:
-      endpoint: ${JAEGER_URL}
+      endpoint: ${JAEGER_URL:http://localhost:4318/v1/traces}
       transport: http
 
 custom:
   n8n:
-    webhook-url: ${N8N_URL}
-    evaluation-endpoint: ${EVALUATION_ENDPOINT}
+    webhook-url: ${N8N_URL:http://localhost:5678/webhook}
+    evaluation-endpoint: ${EVALUATION_ENDPOINT:/evaluation}
 
 app:
   kafka:
@@ -61,10 +61,10 @@ app:
       evaluation-collect-dlq: evaluation.collect.dlq
 eureka:
   client:
-    register-with-eureka: true
-    fetch-registry: true
+    register-with-eureka: ${EUREKA_REGISTER_WITH_EUREKA:false}
+    fetch-registry: ${EUREKA_FETCH_REGISTRY:false}
     service-url:
-      defaultZone: ${EUREKA_URI}
+      defaultZone: ${EUREKA_URI:http://localhost:9090/eureka/}
 
 logging:
   level:

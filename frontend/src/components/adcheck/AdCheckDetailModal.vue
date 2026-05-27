@@ -36,6 +36,10 @@ const rawDocument = computed(() => props.detail?.rawDocument ?? {})
 const hasDetail = computed(() => Boolean(props.detail))
 const processingTimes = computed(() => detailData.value?.processingTimes ?? rawDocument.value?.processingTimes ?? null)
 
+function firstTextValue(...values) {
+  return values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
+}
+
 const fileInfo = computed(() => ({
   name: detailData.value?.fileName || summaryData.value?.fileName || '광고 소재',
   url: detailData.value?.fileUrl || detailValue(['file', 'url']) || summaryData.value?.fileUrl || '',
@@ -45,6 +49,13 @@ const fileInfo = computed(() => ({
     || '',
   size: detailData.value?.fileSize || detailValue(['file', 'size']) || summaryData.value?.fileSize || null,
 }))
+
+const uploaderLabel = computed(() => {
+  const name = firstTextValue(summaryData.value?.requesterName, summaryData.value?.requesterLoginId)
+  const organization = firstTextValue(summaryData.value?.requesterOrganizationName)
+  const primary = name || '요청자'
+  return organization ? `${primary} · ${organization}` : primary
+})
 
 const verdict = computed(() =>
   getAdCheckDisplayVerdict({
@@ -130,7 +141,6 @@ const summarySections = computed(() =>
 const documentStructureStats = computed(() => {
   const structure = rawDocument.value?.documentStructureResult ?? {}
   return [
-    { label: '추출 방식', value: extractionModeLabel(detailData.value?.extractionMode || structure.extractionMode) },
     { label: '문서 구조 분석 시간', value: formatDuration(structure.layoutMillis ?? processingTimes.value?.layoutMillis) },
     { label: '추출 이미지', value: `${extractedImages.value.length}개` },
     { label: '분석 페이지', value: imagePages.value.length ? `${imagePages.value.length}페이지` : '확인 중' },
@@ -299,19 +309,6 @@ function textLengthLabel(value) {
   return length ? `${length.toLocaleString('ko-KR')}자` : '없음'
 }
 
-function extractionModeLabel(mode) {
-  if (mode === 'plain_text') return 'TXT 직접 읽기'
-  if (mode === 'pdf_embedded_text') return 'PDF 내장 텍스트'
-  if (mode === 'pdf_layout_ocr') return 'PDF Layout + OCR'
-  if (mode === 'image_layout_ocr') return '이미지 Layout + OCR'
-  if (mode === 'pdf_ocr_fallback') return 'PDF OCR fallback'
-  if (mode === 'image_ocr_fallback') return '이미지 OCR fallback'
-  if (mode === 'pdf_ocr') return 'PDF OCR'
-  if (mode === 'image_ocr') return '이미지 OCR'
-  if (mode === 'text_extraction_failed') return '텍스트 추출 실패'
-  return mode || '확인 중'
-}
-
 function setImagePage(index) {
   imagePageIndex.value = Math.max(0, Math.min(index, imagePages.value.length - 1))
 }
@@ -394,6 +391,10 @@ onBeforeUnmount(() => {
                 <div>
                   <dt>조치 안내</dt>
                   <dd>{{ verdict.guidance }}</dd>
+                </div>
+                <div>
+                  <dt>업로드</dt>
+                  <dd>{{ uploaderLabel }}</dd>
                 </div>
                 <div>
                   <dt>콘텐츠 유형</dt>

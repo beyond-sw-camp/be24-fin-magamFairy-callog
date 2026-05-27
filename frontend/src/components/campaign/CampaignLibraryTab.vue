@@ -1,9 +1,11 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { GetAdCheckJobDetail, ListAdCheckJobs } from '@/api/adcheck/index.js'
+import { DeleteAdCheckJob, GetAdCheckJobDetail, ListAdCheckJobs } from '@/api/adcheck/index.js'
+import { getCampaignMembers } from '@/api/campaignMembers'
 import AdCheckDetailModal from '@/components/adcheck/AdCheckDetailModal.vue'
 import {
+  AD_CHECK_VERDICT_LEVELS,
   getAdCheckDisplayVerdict,
   normalizeAdCheckResultStatus,
   normalizeAdCheckVerdictLevel,
@@ -25,6 +27,8 @@ const detailLoadingJobId = ref('')
 const detailErrorMessage = ref('')
 const detailsByJobId = ref({})
 const thumbnailHydrationIds = ref(new Set())
+const deletingJobIds = ref(new Set())
+const currentUserIdx = ref(null)
 const activeFilter = ref('all')
 const searchQuery = ref('')
 const selectedRecordId = ref(null)
@@ -34,10 +38,11 @@ const PAGE_SIZE = 6
 
 const filterOptions = [
   { id: 'all', label: '전체' },
-  { id: 'completed', label: '완료' },
-  { id: 'review', label: '확인 필요' },
-  { id: 'failed', label: '실패' },
-  { id: 'active', label: '진행중' },
+  { id: 'level-1', label: '완료' },
+  { id: 'level-2', label: '확인 필요' },
+  { id: 'level-3', label: '수정 제안' },
+  { id: 'level-4', label: '수정 필요' },
+  { id: 'level-5', label: '반려' },
 ]
 
 function normalizeStatus(status) {
@@ -50,8 +55,21 @@ function normalizeResultStatus(status) {
   return normalizeAdCheckResultStatus(status)
 }
 
+function normalizeRecordVerdictLevel(record) {
+  const level = normalizeAdCheckVerdictLevel(record?.verdictLevel ?? record?.riskLevel)
+  if (level != null) return level
+
+  const resultStatus = normalizeResultStatus(record?.resultStatus)
+  return resultStatus === 'pass' ? 1 : null
+}
+
 function recordKey(record) {
   return String(record?.jobId ?? record?.mongoDocumentId ?? record?.fileName ?? '')
+}
+
+function normalizeNumericId(value) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null
 }
 
 function normalizeText(value) {
@@ -142,12 +160,30 @@ function recordThumbnail(record) {
   return detailThumbnailUrl(detailsByJobId.value[record?.archiveId ?? recordKey(record)])
 }
 
+function recordUploaderLabel(record) {
+  const name = firstTextValue(record?.requesterName, record?.requesterLoginId)
+  const organization = firstTextValue(record?.requesterOrganizationName)
+  const primary = name || '요청자'
+  return organization ? `${primary} · ${organization}` : primary
+}
+
+function canDeleteRecord(record) {
+  return Boolean(
+    record?.archiveId
+    && currentUserIdx.value
+    && normalizeNumericId(record.requesterId) === currentUserIdx.value,
+  )
+}
+
 const normalizedRecords = computed(() =>
   records.value.map((record) => ({
     ...record,
     normalizedStatus: normalizeStatus(record.status),
     normalizedResultStatus: normalizeResultStatus(record.resultStatus),
-    verdictLevel: normalizeAdCheckVerdictLevel(record.verdictLevel ?? record.riskLevel),
+    verdictLevel: normalizeRecordVerdictLevel(record),
+    requesterLoginId: record.requesterLoginId ?? '',
+    requesterName: record.requesterName ?? '',
+    requesterOrganizationName: record.requesterOrganizationName ?? '',
     fileUrl: record.fileUrl ?? '',
     fileContentType: record.fileContentType ?? '',
     fileSize: record.fileSize ?? null,
@@ -158,18 +194,18 @@ const normalizedRecords = computed(() =>
 
 const summary = computed(() => {
   const total = normalizedRecords.value.length
-  const completed = normalizedRecords.value.filter((record) => record.normalizedStatus === 'SUCCEEDED').length
-  const review = normalizedRecords.value.filter((record) => record.verdictLevel > 1).length
-  const failed = normalizedRecords.value.filter((record) =>
-    record.normalizedStatus === 'FAILED' || record.normalizedResultStatus === 'failed',
-  ).length
-  const active = normalizedRecords.value.filter((record) => isActiveStatus(record.normalizedStatus)).length
+  const countByLevel = AD_CHECK_VERDICT_LEVELS.reduce((acc, level) => {
+    acc[level.level] = normalizedRecords.value.filter((record) => record.verdictLevel === level.level).length
+    return acc
+  }, {})
+
   return {
     total,
-    completed,
-    review,
-    failed,
-    active,
+    level1: countByLevel[1] ?? 0,
+    level2: countByLevel[2] ?? 0,
+    level3: countByLevel[3] ?? 0,
+    level4: countByLevel[4] ?? 0,
+    level5: countByLevel[5] ?? 0,
   }
 })
 
@@ -179,12 +215,8 @@ const filteredRecords = computed(() => {
   return normalizedRecords.value
     .filter((record) => {
       if (activeFilter.value === 'all') return true
-      if (activeFilter.value === 'completed') return record.normalizedStatus === 'SUCCEEDED'
-      if (activeFilter.value === 'review') return record.verdictLevel > 1
-      if (activeFilter.value === 'failed') {
-        return record.normalizedStatus === 'FAILED' || record.normalizedResultStatus === 'failed'
-      }
-      if (activeFilter.value === 'active') return isActiveStatus(record.normalizedStatus)
+      const levelMatch = activeFilter.value.match(/^level-([1-5])$/)
+      if (levelMatch) return record.verdictLevel === Number(levelMatch[1])
       return true
     })
     .filter((record) => {
@@ -197,6 +229,9 @@ const filteredRecords = computed(() => {
         record.status,
         record.jobId,
         record.mongoDocumentId,
+        record.requesterName,
+        record.requesterLoginId,
+        record.requesterOrganizationName,
       ]
         .map(normalizeText)
         .join(' ')
@@ -241,6 +276,18 @@ async function loadLibrary() {
     errorMessage.value = error?.message ?? '자료실 목록을 불러오지 못했습니다.'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadMemberContext() {
+  if (!props.campaignId) return
+
+  try {
+    const response = await getCampaignMembers(props.campaignId)
+    currentUserIdx.value = normalizeNumericId(response?.data?.data?.me?.userIdx)
+  } catch (error) {
+    currentUserIdx.value = null
+    console.warn('Campaign member context load failed.', error)
   }
 }
 
@@ -337,6 +384,33 @@ function closeDetailModal() {
   }
 }
 
+async function deleteRecord(record) {
+  if (!canDeleteRecord(record) || deletingJobIds.value.has(record.archiveId)) return
+  if (!window.confirm('이 검수 자료를 삭제할까요? 삭제한 자료는 자료실에서 숨겨집니다.')) return
+
+  const nextDeletingIds = new Set(deletingJobIds.value)
+  nextDeletingIds.add(record.archiveId)
+  deletingJobIds.value = nextDeletingIds
+  errorMessage.value = ''
+
+  try {
+    await DeleteAdCheckJob(record.archiveId)
+    records.value = records.value.filter((item) => recordKey(item) !== record.archiveId)
+    const nextDetails = { ...detailsByJobId.value }
+    delete nextDetails[record.archiveId]
+    detailsByJobId.value = nextDetails
+    if (selectedRecordId.value === record.archiveId) {
+      selectedRecordId.value = null
+    }
+  } catch (error) {
+    errorMessage.value = error?.message ?? '검수 자료 삭제에 실패했습니다.'
+  } finally {
+    const remainingDeletingIds = new Set(deletingJobIds.value)
+    remainingDeletingIds.delete(record.archiveId)
+    deletingJobIds.value = remainingDeletingIds
+  }
+}
+
 function applyRouteSelection() {
   const routeJobId = String(route.query.adCheckJobId || '').trim()
   if (routeJobId && normalizedRecords.value.some((record) => record.archiveId === routeJobId)) {
@@ -392,6 +466,8 @@ watch(
     selectedRecordId.value = null
     detailsByJobId.value = {}
     detailErrorMessage.value = ''
+    currentUserIdx.value = null
+    void loadMemberContext()
     void loadLibrary()
   },
 )
@@ -400,7 +476,10 @@ watch([activeFilter, searchQuery], () => {
   currentPage.value = 1
 })
 
-onMounted(loadLibrary)
+onMounted(() => {
+  void loadMemberContext()
+  void loadLibrary()
+})
 </script>
 
 <template>
@@ -417,20 +496,28 @@ onMounted(loadLibrary)
 
     <div class="library-stats" aria-label="자료실 요약">
       <article>
+        <span>전체 자료</span>
+        <strong>{{ summary.total }}</strong>
+      </article>
+      <article>
         <span>완료</span>
-        <strong>{{ summary.completed }}</strong>
+        <strong>{{ summary.level1 }}</strong>
       </article>
       <article>
         <span>확인 필요</span>
-        <strong>{{ summary.review }}</strong>
+        <strong>{{ summary.level2 }}</strong>
       </article>
       <article>
-        <span>실패</span>
-        <strong>{{ summary.failed }}</strong>
+        <span>수정 제안</span>
+        <strong>{{ summary.level3 }}</strong>
       </article>
       <article>
-        <span>전체 자료</span>
-        <strong>{{ summary.total }}</strong>
+        <span>수정 필요</span>
+        <strong>{{ summary.level4 }}</strong>
+      </article>
+      <article>
+        <span>반려</span>
+        <strong>{{ summary.level5 }}</strong>
       </article>
     </div>
 
@@ -489,9 +576,19 @@ onMounted(loadLibrary)
           </div>
           <div class="library-item__meta">
             <span>{{ recordVerdict(record).title }}</span>
+            <span>업로드 {{ recordUploaderLabel(record) }}</span>
             <time>{{ formatDateTime(record.createdAt) }}</time>
             <button type="button" class="library-detail-button" @click.stop="selectRecord(record)">
               상세 보기
+            </button>
+            <button
+              v-if="canDeleteRecord(record)"
+              type="button"
+              class="library-delete-button"
+              :disabled="deletingJobIds.has(record.archiveId)"
+              @click.stop="deleteRecord(record)"
+            >
+              {{ deletingJobIds.has(record.archiveId) ? '삭제 중' : '삭제' }}
             </button>
           </div>
         </article>
@@ -570,7 +667,8 @@ onMounted(loadLibrary)
 }
 
 .library-button,
-.library-detail-button {
+.library-detail-button,
+.library-delete-button {
   display: inline-flex;
   min-height: 34px;
   align-items: center;
@@ -592,16 +690,27 @@ onMounted(loadLibrary)
   opacity: 0.55;
 }
 
-.library-detail-button {
+.library-detail-button,
+.library-delete-button {
   min-height: 28px;
   border-radius: var(--radius-sm);
   font-size: 12px;
   padding: 0 9px;
 }
 
+.library-delete-button {
+  border-color: color-mix(in srgb, var(--color-danger) 34%, var(--border-color));
+  color: var(--color-danger-dark);
+}
+
+.library-delete-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .library-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -822,6 +931,21 @@ onMounted(loadLibrary)
   color: var(--color-success-dark);
 }
 
+.library-status--recheck {
+  background: color-mix(in srgb, var(--color-success-light) 62%, var(--color-warning-light));
+  color: var(--color-success-dark);
+}
+
+.library-status--suggestion {
+  background: var(--color-warning-light);
+  color: var(--color-warning-dark);
+}
+
+.library-status--revision {
+  background: color-mix(in srgb, var(--color-warning-light) 56%, var(--color-danger-light));
+  color: var(--color-warning-dark);
+}
+
 .library-status--rejected,
 .library-status--danger {
   background: var(--color-danger-light);
@@ -917,7 +1041,8 @@ onMounted(loadLibrary)
 
   .library-search,
   .library-button,
-  .library-detail-button {
+  .library-detail-button,
+  .library-delete-button {
     width: 100%;
   }
 

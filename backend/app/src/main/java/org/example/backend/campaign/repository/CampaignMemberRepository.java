@@ -8,11 +8,15 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 public interface CampaignMemberRepository extends JpaRepository<CampaignMember, Long> {
 
     @EntityGraph(attributePaths = {"user", "user.organization"})
     List<CampaignMember> findAllByCampaignIdx(Long campaignIdx);
+
+    @EntityGraph(attributePaths = {"campaign", "user", "user.organization"})
+    List<CampaignMember> findAllByCampaignIdxIn(Collection<Long> campaignIdxs);
 
     Optional<CampaignMember> findByCampaignIdxAndUserIdx(Long campaignIdx, Long userIdx);
 

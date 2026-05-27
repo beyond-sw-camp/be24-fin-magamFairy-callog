@@ -5,10 +5,13 @@ spring:
   application:
     name: ai-judge
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   servlet:
     multipart:
       max-file-size: 20MB
@@ -47,8 +50,13 @@ management:
 
 ai-judge:
   kafka:
-    enabled: ${AI_JUDGE_KAFKA_ENABLED:false}
+    enabled: ${AI_JUDGE_KAFKA_ENABLED:true}
+    request-topic: ${AI_JUDGE_REQUEST_TOPIC:ai-judge.requests}
+    request-group-id: ${AI_JUDGE_REQUEST_GROUP_ID:ai-judge-file-check}
     completed-topic: ${AI_JUDGE_COMPLETED_TOPIC:ai-judge.completed}
+    campaign-sync-enabled: ${AI_JUDGE_CAMPAIGN_SYNC_ENABLED:false}
+    campaign-sync-topic: ${CAMPAIGN_SYNC_TOPIC:campaign.sync}
+    campaign-sync-group-id: ${AI_JUDGE_CAMPAIGN_SYNC_GROUP_ID:ai-judge-campaign-projection}
   n8n:
     webhook-url: ${N8N_URL:}
     check-endpoint: ${CHECK_ENDPOINT:}
@@ -68,6 +76,10 @@ custom:
     analysis-uri: ${MONGODB_STD_URL:}
     analysis-database: ${MONGODB_STD_DATABASE:}
     analysis-collection: ${MONGODB_STD_COLLECTION:ad_check_analysis_results}
+    campaign-enabled: ${MONGODB_CAMPAIGN_SYNC_ENABLED:false}
+    campaign-uri: ${MONGODB_CAMPAIGN_SYNC_URL:${MONGODB_STD_URL:}}
+    campaign-database: ${MONGODB_CAMPAIGN_SYNC_DATABASE:${MONGODB_STD_DATABASE:}}
+    campaign-collection: ${MONGODB_CAMPAIGN_SYNC_COLLECTION:campaign_projection}
 
 eureka:
   client:

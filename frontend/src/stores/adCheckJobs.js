@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import {
   CancelAdCheckJob,
   CreateAdCheckJob,
+  DeleteAdCheckJob,
   GetAdCheckJob,
   GetAdCheckJobDetail,
   ListAdCheckJobs,
@@ -75,7 +76,9 @@ export const AD_CHECK_JOB_STEPS = [
 
 const ACTIVE_STATUSES = new Set(['QUEUED', 'RUNNING'])
 const TERMINAL_STATUSES = new Set(['SUCCEEDED', 'FAILED', 'CANCELED'])
+const NON_RETRYABLE_POLL_STATUSES = new Set([400, 401, 403, 404, 410])
 const JOB_POLL_INTERVAL_MS = 2500
+const JOB_POLL_MAX_DURATION_MS = 3 * 60 * 1000
 const STEP_ALIASES = {
   REQUEST_RECEIVED: 'QUEUED',
   STARTED: 'DATA_EXTRACTION',
@@ -126,6 +129,9 @@ function normalizeJob(rawJob) {
     ...job,
     jobId: String(job.jobId ?? ''),
     requesterId: job.requesterId ?? null,
+    requesterLoginId: job.requesterLoginId ?? '',
+    requesterName: job.requesterName ?? '',
+    requesterOrganizationName: job.requesterOrganizationName ?? '',
     campaignId: job.campaignId ?? null,
     fileName: job.fileName ?? 'upload',
     status,
@@ -153,6 +159,9 @@ function normalizeJobSummary(rawSummary) {
     ...summary,
     jobId: String(summary.jobId ?? ''),
     requesterId: summary.requesterId ?? null,
+    requesterLoginId: summary.requesterLoginId ?? '',
+    requesterName: summary.requesterName ?? '',
+    requesterOrganizationName: summary.requesterOrganizationName ?? '',
     campaignId: summary.campaignId ?? null,
     fileName: summary.fileName ?? 'upload',
     status: String(summary.status || 'QUEUED').toUpperCase(),
@@ -233,6 +242,7 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
   const summaryLoadError = ref('')
   const detailLoadError = ref('')
   const pollingTimers = new Map()
+  const pollingStartedAtById = new Map()
 
   const visibleJobs = computed(() =>
     jobs.value.filter((job) => !dismissedJobIds.value.has(job.jobId)),
@@ -242,6 +252,22 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
   const queuedJobs = computed(() => activeJobs.value.filter((job) => job.status === 'QUEUED'))
   const terminalJobs = computed(() => visibleJobs.value.filter((job) => isTerminalJobStatus(job.status)))
   const floatingJob = computed(() => runningJobs.value[0] ?? queuedJobs.value[0] ?? terminalJobs.value[0] ?? null)
+
+  function isJobDismissed(jobId) {
+    return dismissedJobIds.value.has(String(jobId ?? ''))
+  }
+
+  function isNonRetryablePollError(error) {
+    const status = Number(error?.status ?? error?.response?.status ?? error?.data?.status)
+    return NON_RETRYABLE_POLL_STATUSES.has(status)
+  }
+
+  function isPollingExpired(jobId, job) {
+    const startedAt = pollingStartedAtById.get(jobId)
+    const updatedAt = Date.parse(job?.updatedAt || job?.createdAt || '')
+    const referenceAt = Number.isNaN(updatedAt) ? startedAt : updatedAt
+    return Boolean(referenceAt) && Date.now() - referenceAt > JOB_POLL_MAX_DURATION_MS
+  }
 
   function upsertJob(rawJob) {
     const job = normalizeJob(rawJob)
@@ -253,7 +279,7 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
     nextJobs.push(job)
     jobs.value = sortJobs(nextJobs)
 
-    if (isActiveJobStatus(job.status)) {
+    if (isActiveJobStatus(job.status) && !isJobDismissed(job.jobId)) {
       scheduleJobPoll(job.jobId)
     } else {
       clearJobPoll(job.jobId)
@@ -333,7 +359,11 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
       const preservedJobs = jobs.value.filter((job) => !activeJobIds.has(job.jobId))
 
       jobs.value = sortJobs([...preservedJobs, ...normalizedActiveJobs])
-      normalizedActiveJobs.forEach((job) => scheduleJobPoll(job.jobId))
+      normalizedActiveJobs.forEach((job) => {
+        if (!isJobDismissed(job.jobId)) {
+          scheduleJobPoll(job.jobId)
+        }
+      })
       return normalizedActiveJobs
     } catch (error) {
       loadError.value = error?.message ?? '진행 중인 검수 작업을 불러오지 못했습니다.'
@@ -348,6 +378,16 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
     return upsertJob(job)
   }
 
+  async function deleteJob(jobId) {
+    await DeleteAdCheckJob(jobId)
+    jobs.value = jobs.value.filter((job) => job.jobId !== jobId)
+    jobSummaries.value = jobSummaries.value.filter((summary) => summary.jobId !== jobId)
+    const nextDetails = { ...jobDetailsById.value }
+    delete nextDetails[jobId]
+    jobDetailsById.value = nextDetails
+    clearJobPoll(jobId)
+  }
+
   function dismissJob(jobId) {
     if (!jobId) {
       return
@@ -355,6 +395,7 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
     const nextDismissedIds = new Set(dismissedJobIds.value)
     nextDismissedIds.add(jobId)
     dismissedJobIds.value = nextDismissedIds
+    clearJobPoll(jobId)
   }
 
   function findJob(jobId) {
@@ -369,25 +410,39 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
   }
 
   function scheduleJobPoll(jobId) {
-    if (!jobId || typeof window === 'undefined' || pollingTimers.has(jobId)) {
+    if (!jobId || typeof window === 'undefined' || pollingTimers.has(jobId) || isJobDismissed(jobId)) {
       return
+    }
+
+    if (!pollingStartedAtById.has(jobId)) {
+      pollingStartedAtById.set(jobId, Date.now())
     }
 
     const timerId = window.setTimeout(async () => {
       pollingTimers.delete(jobId)
       const currentJob = findJob(jobId)
 
-      if (!currentJob || !isActiveJobStatus(currentJob.status)) {
+      if (!currentJob || isJobDismissed(jobId) || !isActiveJobStatus(currentJob.status)) {
+        pollingStartedAtById.delete(jobId)
+        return
+      }
+
+      if (isPollingExpired(jobId, currentJob)) {
+        pollingStartedAtById.delete(jobId)
         return
       }
 
       try {
         await fetchJob(jobId)
       } catch (error) {
+        if (isNonRetryablePollError(error)) {
+          dismissJob(jobId)
+          return
+        }
         console.warn('Ad check job polling failed.', error)
       } finally {
         const nextJob = findJob(jobId)
-        if (nextJob && isActiveJobStatus(nextJob.status)) {
+        if (nextJob && !isJobDismissed(jobId) && isActiveJobStatus(nextJob.status)) {
           scheduleJobPoll(jobId)
         }
       }
@@ -402,6 +457,7 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
     }
 
     const timerId = pollingTimers.get(jobId)
+    pollingStartedAtById.delete(jobId)
     if (!timerId) {
       return
     }
@@ -434,7 +490,9 @@ export const useAdCheckJobsStore = defineStore('adCheckJobs', () => {
     loadJobDetail,
     loadActiveJobs,
     cancelJob,
+    deleteJob,
     dismissJob,
+    clearJobPoll,
     findJob,
     findJobDetail,
   }

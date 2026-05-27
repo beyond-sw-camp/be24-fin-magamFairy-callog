@@ -30,4 +30,6 @@ public interface AdReviewRequestRepository extends JpaRepository<AdReviewRequest
             Long campaignIdx,
             String requesterLoginId
     );
+
+    boolean existsByCampaignIdxAndAdCheckJobId(Long campaignIdx, String adCheckJobId);
 }

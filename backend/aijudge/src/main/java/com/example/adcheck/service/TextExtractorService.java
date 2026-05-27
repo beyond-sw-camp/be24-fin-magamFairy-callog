@@ -72,12 +72,8 @@ public class TextExtractorService {
             ObjectMapper objectMapper,
             @Value("${custom.layout.api-key:}") String layoutServiceApiKey
     ) {
-        if (!StringUtils.hasText(layoutServiceApiKey)) {
-            throw new IllegalStateException("LAYOUT_SERVICE_API_KEY is required for layout/OCR service calls.");
-        }
-
         this.objectMapper = objectMapper;
-        this.layoutServiceApiKey = layoutServiceApiKey.trim();
+        this.layoutServiceApiKey = StringUtils.hasText(layoutServiceApiKey) ? layoutServiceApiKey.trim() : "";
 
         SimpleClientHttpRequestFactory longRunningFactory = new SimpleClientHttpRequestFactory();
         longRunningFactory.setConnectTimeout(5000);
@@ -89,18 +85,21 @@ public class TextExtractorService {
         cropFactory.setReadTimeout(30000);
         cropFactory.setProxy(Proxy.NO_PROXY);
 
-        this.layoutRestClient = RestClient.builder()
-                .requestFactory(longRunningFactory)
-                .defaultHeader(LAYOUT_API_KEY_HEADER, this.layoutServiceApiKey)
-                .build();
-        this.ocrRestClient = RestClient.builder()
-                .requestFactory(longRunningFactory)
-                .defaultHeader(LAYOUT_API_KEY_HEADER, this.layoutServiceApiKey)
-                .build();
-        this.cropRestClient = RestClient.builder()
-                .requestFactory(cropFactory)
-                .defaultHeader(LAYOUT_API_KEY_HEADER, this.layoutServiceApiKey)
-                .build();
+        this.layoutRestClient = buildRestClient(longRunningFactory, this.layoutServiceApiKey);
+        this.ocrRestClient = buildRestClient(longRunningFactory, this.layoutServiceApiKey);
+        this.cropRestClient = buildRestClient(cropFactory, this.layoutServiceApiKey);
+    }
+
+    private static RestClient buildRestClient(
+            SimpleClientHttpRequestFactory requestFactory,
+            String layoutServiceApiKey
+    ) {
+        RestClient.Builder builder = RestClient.builder()
+                .requestFactory(requestFactory);
+        if (StringUtils.hasText(layoutServiceApiKey)) {
+            builder.defaultHeader(LAYOUT_API_KEY_HEADER, layoutServiceApiKey);
+        }
+        return builder.build();
     }
 
     public String extract(MultipartFile file) throws IOException {

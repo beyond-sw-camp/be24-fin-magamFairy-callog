@@ -11,42 +11,44 @@ jdbc:
       logging: true
 
 jwt:
-  key: ${JWT_SECRET}
-  secret: ${JWT_SECRET}
-  expire: ${JWT_EXPIRE}
+  key: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY}
+  secret: ${JWT_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY}
+  expire: ${JWT_EXPIRE:86400000}
 project:
   aes:
-    key: ${AES_SECRET_KEY}
+    key: ${AES_SECRET_KEY:0123456789abcdef0123456789abcdef}
 app:
-  frontend-url: ${FRONTEND_URL}
-  secure-cookie: ${SECURE_COOKIE}
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  secure-cookie: ${SECURE_COOKIE:false}
   kafka:
+    campaign-sync-enabled: ${CAMPAIGN_SYNC_ENABLED:false}
     topics:
       evaluation-start: evaluation.start
       evaluation-collect: evaluation.collect
+      campaign-sync: ${CAMPAIGN_SYNC_TOPIC:campaign.sync}
     consumer:
       propoerties:
         spring.json.use.type.headers: false
 msa:
   matching-evaluation:
-    base-url: ${EVALUATION_URL}
+    base-url: ${EVALUATION_URL:http://localhost:8082}
 aws:
   s3:
-    bucket-name: ${AWS_BUCKET_NAME}
-    access-key: ${AWS_ACCESS_KEY}
-    secret-key: ${AWS_SECRET_KEY}
+    bucket-name: ${AWS_BUCKET_NAME:callog-local}
+    access-key: ${AWS_ACCESS_KEY:local-access-key}
+    secret-key: ${AWS_SECRET_KEY:local-secret-key}
     region: ap-northeast-2
 openai:
   image:
-    api-key: ${OPEN_API_IMAGE}
-    model: ${OPENAI_IMAGE_MODEL}
-    quality: ${OPENAI_IMAGE_QUALITY}
+    api-key: ${OPEN_API_IMAGE:local-openai-image-key}
+    model: ${OPENAI_IMAGE_MODEL:gpt-image-1}
+    quality: ${OPENAI_IMAGE_QUALITY:standard}
 admin:
-  id: ${ADMIN_ID}
-  email: ${ADMIN_EMAIL}
-  name: ${ADMIN_NAME}
-  role: ${ADMIN_ROLE}
-  password: ${ADMIN_PASSWORD}
+  id: ${ADMIN_ID:admin@callog.com}
+  email: ${ADMIN_EMAIL:admin@callog.com}
+  name: ${ADMIN_NAME:Admin}
+  role: ${ADMIN_ROLE:ROLE_ADMIN}
+  password: ${ADMIN_PASSWORD:Qwer1234!}
 spring:
   application:
     name: app
@@ -54,9 +56,9 @@ spring:
     type: redis   # 명시: Redis 미가용 시 부팅 실패(fail-fast) — silent NoOp fallback 방지
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
-    url: ${DB_URL}
-    username: ${DB_USER}
-    password: ${DB_PASS}
+    url: "${DB_URL:jdbc:mariadb://localhost:3306/callog?createDatabaseIfNotExist=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8}"
+    username: ${DB_USER:root}
+    password: ${DB_PASS:}
     hikari:
       initialization-fail-timeout: 120000 # 120초 동안은 실패해도 포기하지 않고 재시도
       connection-timeout: 15000 # 15초마다 재시도, 총 4회까지 연결 시도
@@ -81,16 +83,16 @@ spring:
     #   - 모든 값은 k8s ConfigMap/Secret 에서 환경변수로 주입 — 누락 시 부팅 실패(fail-fast)
     # ─────────────────────────────────────────────────────────────────────
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       # Master/Replica 의 AUTH password (Bitnami 기본: 'admin')
-      password: ${REDIS_PASSWORD}
+      password: ${REDIS_PASSWORD:}
       timeout: 5000ms
       sentinel:
-        master: ${REDIS_SENTINEL_MASTER}
+        master: ${REDIS_SENTINEL_MASTER:}
         # 콤마 구분 — 여러 sentinel: "host1:26379,host2:26379,host3:26379"
-        nodes: ${REDIS_SENTINEL_NODES}
-        password: ${REDIS_SENTINEL_PASSWORD}
+        nodes: ${REDIS_SENTINEL_NODES:}
+        password: ${REDIS_SENTINEL_PASSWORD:}
       lettuce:
         pool:
           enabled: true
@@ -119,17 +121,17 @@ logging:
 
 custom:
   n8n:
-    webhook-url: ${N8N_URL}
-    evaluation-endpoint: ${EVALUATION_ENDPOINT}
-    check-endpoint: ${CHECK_ENDPOINT}
+    webhook-url: ${N8N_URL:http://localhost:5678/webhook}
+    evaluation-endpoint: ${EVALUATION_ENDPOINT:/evaluation}
+    check-endpoint: ${CHECK_ENDPOINT:/check}
   ocr:
-    url: ${OCR_SERVICE_URL}
-    async-enabled: ${OCR_ASYNC_ENABLED}
-    job-url: ${OCR_JOB_SERVICE_URL}
-    job-poll-interval-ms: ${OCR_JOB_POLL_INTERVAL_MS}
-    job-poll-timeout-ms: ${OCR_JOB_POLL_TIMEOUT_MS}
+    url: ${OCR_SERVICE_URL:http://localhost:8001/ocr}
+    async-enabled: ${OCR_ASYNC_ENABLED:true}
+    job-url: ${OCR_JOB_SERVICE_URL:http://localhost:8001/ocr/jobs}
+    job-poll-interval-ms: ${OCR_JOB_POLL_INTERVAL_MS:1000}
+    job-poll-timeout-ms: ${OCR_JOB_POLL_TIMEOUT_MS:120000}
   layout:
-    url: ${LAYOUT_SERVICE_URL}
+    url: ${LAYOUT_SERVICE_URL:http://localhost:8001/v1/layout/analyze}
     api-key: ${LAYOUT_SERVICE_API_KEY:}
   mongodb:
     analysis-enabled: ${MONGODB_STD_ENABLED:false}
@@ -153,16 +155,16 @@ management:
     tags:
       application: ${spring.application.name}
   tracing:
-    #    enabled: false
+    enabled: ${TRACING_ENABLED:false}
     sampling:
       probability: 1.0   # 모든 요청에 대한 데이터를 수집하겠다.
   otlp:
     tracing:
-      endpoint: ${JAEGER_URL}
+      endpoint: ${JAEGER_URL:http://localhost:4318/v1/traces}
       transport: http
 eureka:
   client:
-    register-with-eureka: true
-    fetch-registry: true
+    register-with-eureka: ${EUREKA_REGISTER_WITH_EUREKA:false}
+    fetch-registry: ${EUREKA_FETCH_REGISTRY:false}
     service-url:
-      defaultZone: ${EUREKA_URI}
+      defaultZone: ${EUREKA_URI:http://localhost:9090/eureka/}

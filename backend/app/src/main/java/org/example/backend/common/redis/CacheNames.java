@@ -40,6 +40,9 @@ public final class CacheNames {
     // ── 캠페인 멤버 권한 (★ 변경 즉시 evict 필수) ──
     public static final String CAMPAIGN_MEMBER_ROLE       = "campaign:member:role";
 
+    public static final String TASK_LIST                  = "task:list";
+    public static final String CAMPAIGN_KPI               = "campaign:kpi";
+
     // ── 메타데이터 (거의 안 바뀜) ──
     public static final String KPI_TEMPLATES              = "kpi:templates";
 

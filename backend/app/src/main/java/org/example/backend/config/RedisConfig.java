@@ -76,6 +76,8 @@ public class RedisConfig {
 
             Map.entry(CacheNames.CAMPAIGN_LIST,             Duration.ofMinutes(2)),  // 캠페인 목록 — 변경 잦아 짧게
             Map.entry(CacheNames.CAMPAIGN_MEMBER_ROLE,      Duration.ofMinutes(2)),  // ★ 짧게, evict 보강
+            Map.entry(CacheNames.TASK_LIST,                 Duration.ofMinutes(1)),
+            Map.entry(CacheNames.CAMPAIGN_KPI,              Duration.ofMinutes(3)),
             Map.entry(CacheNames.KPI_TEMPLATES,             Duration.ofHours(1)),
             Map.entry(CacheNames.NOTIFICATION_SETTING,      Duration.ofMinutes(30)),
             Map.entry(CacheNames.USER_AUTH,                 Duration.ofSeconds(60))   // 기존 in-memory와 동일 TTL
@@ -131,6 +133,8 @@ public class RedisConfig {
      * - PROPERTY 형식 ({"@class": "...", ...}) — write/read 형식 일관성 보장.
      *   기본 WRAPPER_ARRAY 는 BaseResponse 같은 generic wrapper 에서 deserialize 실패 가능.
      * - LocalDateTime 등 java.time 타입 ISO-8601 문자열로 처리.
+     * - ⚡ 보안 강화: 역직렬화 허용 타입을 프로젝트 패키지 + Java 표준 타입으로 제한.
+     *   기존 allowIfBaseType(Object.class)는 사실상 제한 없음 → Gadget Chain 공격 위험.
      */
     private GenericJackson2JsonRedisSerializer jsonSerializer() {
         ObjectMapper om = new ObjectMapper();
@@ -138,7 +142,20 @@ public class RedisConfig {
         om.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
         om.activateDefaultTyping(
-                BasicPolymorphicTypeValidator.builder().allowIfBaseType(Object.class).build(),
+                BasicPolymorphicTypeValidator.builder()
+                        // 프로젝트 내부 패키지만 허용
+                        .allowIfSubType("org.example.backend.")
+                        // Java 표준 컬렉션/자료구조 허용
+                        .allowIfSubType(java.util.Collection.class)
+                        .allowIfSubType(java.util.Map.class)
+                        // 숫자, 문자열, 불리언 등 값 타입
+                        .allowIfSubType(java.lang.Number.class)
+                        .allowIfSubType(java.lang.String.class)
+                        .allowIfSubType(java.lang.Boolean.class)
+                        // java.time 타입
+                        .allowIfSubType(java.time.temporal.Temporal.class)
+                        .allowIfSubType(java.util.Date.class)
+                        .build(),
                 ObjectMapper.DefaultTyping.EVERYTHING,
                 JsonTypeInfo.As.PROPERTY
         );

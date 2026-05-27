@@ -23,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -119,8 +120,12 @@ public class AdAiAnalysisService {
 
         AdAiAnalysis analysis = adAiAnalysisRepository.findByAnalysisJobId(analysisJobId).orElse(null);
         if (analysis == null) {
-            log.warn("Skipped ai-judge event because metadata is missing. analysisJobId={}", analysisJobId);
-            return;
+            analysis = createAnalysisFromEvent(event);
+            if (analysis == null) {
+                log.warn("Skipped ai-judge event because metadata is missing. analysisJobId={}", analysisJobId);
+                return;
+            }
+            analysis = adAiAnalysisRepository.save(analysis);
         }
 
         String eventType = text(event, "eventType");
@@ -148,6 +153,53 @@ public class AdAiAnalysisService {
         }
 
         log.warn("Skipped unsupported ai-judge event. analysisJobId={}, eventType={}", analysisJobId, eventType);
+    }
+
+    private AdAiAnalysis createAnalysisFromEvent(JsonNode event) {
+        String analysisJobId = text(event, "analysisJobId");
+        JsonNode context = event == null ? null : event.path("context");
+        String campaignPublicId = text(context, "campaignId");
+        Long authorIdx = longValue(context, "requesterUserIdx");
+        if (analysisJobId == null || campaignPublicId == null || authorIdx == null) {
+            return null;
+        }
+
+        Campaign campaign = campaignRepository.findByPublicId(campaignPublicId).orElse(null);
+        if (campaign == null) {
+            return null;
+        }
+
+        if (campaignMemberRepository.findByCampaignIdxAndUserIdx(campaign.getIdx(), authorIdx).isEmpty()) {
+            log.warn(
+                    "Skipped ai-judge event because requester is not a campaign member. analysisJobId={}, campaignId={}, requesterIdx={}",
+                    analysisJobId,
+                    campaignPublicId,
+                    authorIdx
+            );
+            return null;
+        }
+
+        Optional<User> user = userRepository.findById(authorIdx);
+        String authorLoginId = firstText(text(context, "requesterLoginId"), user.map(User::getId).orElse(null));
+        String authorName = firstText(text(context, "requesterName"), user.map(User::getName).orElse(null), authorLoginId);
+
+        if (authorLoginId == null || authorName == null) {
+            return null;
+        }
+
+        return AdAiAnalysis.builder()
+                .analysisJobId(analysisJobId)
+                .campaign(campaign)
+                .authorIdx(authorIdx)
+                .authorLoginId(authorLoginId)
+                .authorName(authorName)
+                .fileName(text(event, "fileName"))
+                .fileObjectKey(text(event, "fileObjectKey"))
+                .fileContentType(text(event, "fileContentType"))
+                .fileSize(longValue(event, "fileSize"))
+                .aiStatus(text(event, "aiStatus"))
+                .analysisStatus(AdAiAnalysis.STATUS_PENDING)
+                .build();
     }
 
     private Campaign findCampaign(String campaignPublicId) {
@@ -182,10 +234,28 @@ public class AdAiAnalysisService {
         if (node == null || node.path(name).isMissingNode() || node.path(name).isNull()) {
             return null;
         }
-        return node.path(name).canConvertToLong() ? node.path(name).asLong() : null;
+        if (node.path(name).canConvertToLong()) {
+            return node.path(name).asLong();
+        }
+        try {
+            String raw = node.path(name).asText(null);
+            return raw == null || raw.isBlank() ? null : Long.parseLong(raw.trim());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private String normalize(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String firstText(String... values) {
+        for (String value : values) {
+            String normalized = normalize(value);
+            if (normalized != null) {
+                return normalized;
+            }
+        }
+        return null;
     }
 }

@@ -136,6 +136,7 @@ public class AdCheckDto {
     }
 
     public record ReviewRequestCreateReq(
+            String jobId,
             String fileName,
             String fileObjectKey,
             String fileContentType,
@@ -146,6 +147,8 @@ public class AdCheckDto {
             String violationText,
             String reason,
             String suggestion,
+            Integer verdictLevel,
+            String mongoDocumentId,
             String requestMemo
     ) {
     }
@@ -173,6 +176,9 @@ public class AdCheckDto {
             String violationText,
             String reason,
             String suggestion,
+            String adCheckJobId,
+            String mongoDocumentId,
+            Integer verdictLevel,
             String requestMemo,
             String requesterLoginId,
             String requesterName,
@@ -202,6 +208,9 @@ public class AdCheckDto {
                     .violationText(entity.getViolationText())
                     .reason(entity.getReason())
                     .suggestion(entity.getSuggestion())
+                    .adCheckJobId(entity.getAdCheckJobId())
+                    .mongoDocumentId(entity.getMongoDocumentId())
+                    .verdictLevel(entity.getVerdictLevel())
                     .requestMemo(entity.getRequestMemo())
                     .requesterLoginId(entity.getRequesterLoginId())
                     .requesterName(entity.getRequesterName())

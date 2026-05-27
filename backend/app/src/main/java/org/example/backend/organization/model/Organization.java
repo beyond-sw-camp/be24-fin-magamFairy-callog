@@ -1,5 +1,6 @@
 package org.example.backend.organization.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,6 +17,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.example.backend.user.model.User;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -49,6 +51,7 @@ public class Organization {
     @Setter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "generalManager_idx")
+    @JsonIgnoreProperties("organization")
     private User generalManager;
 
     @Setter
