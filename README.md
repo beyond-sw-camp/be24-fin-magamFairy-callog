@@ -103,7 +103,8 @@ Backend Services
 
 ## 시스템 아키텍처
 
-<img width="1251" height="1011" alt="시스템아키텍쳐(캘로그)(8)" src="https://github.com/user-attachments/assets/fc99ddaa-dd3f-47c1-95d8-add5a645b779" />
+<img width="1251" height="1011" alt="시스템아키텍쳐(캘로그)(8)" src="https://github.com/user-attachments/assets/e6234427-d586-4fa6-bca0-9362633f61e2" />
+
 
 - **테스트 빌드:** sub 브랜치에 Push할 경우, Main과 동일하게 조성된 서버환경에 사전 배포, 각종 테스트를 거친 후 Main 브랜치 Push
 - **CI/CD 흐름:** 코드 Push → Jenkins 웹훅 감지 → 빌드 및 Docker 이미지 패키징 → Kubernetes 클러스터 배포
