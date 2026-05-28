@@ -1,29 +1,16 @@
-# Callog Frontend
+<div align="center">
 
-캠페인 운영, 협업, 매칭, AI 검수를 지원하는 Callog 프론트엔드입니다.
+<img width="455" height="128" alt="Image" src="https://github.com/user-attachments/assets/5810aa16-13ae-4e1f-a74e-755e2523f613" />
 
-## 바로가기
+### 캠페인 운영 · 협업 · 매칭 · AI 검수를 하나로
 
-| 구분 | 링크 |
-|---|---|
-| 서비스 배포 주소 | [https://www.magamfairy.kro.kr/](https://www.magamfairy.kro.kr/) |
-| 화면 설계서 | [Figma 화면 설계서](https://www.figma.com/design/1AczfcXlvCL1qyRhlAYAPo/callog?node-id=3-2&t=nuKk7NuGMftcvFai-1) |
-| 공통 README | [../README.md](../README.md) |
-| 백엔드 README | `../backend/README.md` 작성 예정 |
 
----
+**[🚀 서비스 바로가기](https://www.magamfairy.kro.kr/)** &nbsp;|&nbsp;
+**[🎨 Figma 설계서](https://www.figma.com/design/1AczfcXlvCL1qyRhlAYAPo/callog?node-id=3-2&t=nuKk7NuGMftcvFai-1)** &nbsp;|&nbsp;
+**[📘 공통 README](../README.md)** &nbsp;|&nbsp;
+**[⚙️ 백엔드 README](../backend/README.md)**
 
-## 주요 화면
-
-> 전체 화면 설계는 [Figma 설계서](https://www.figma.com/design/1AczfcXlvCL1qyRhlAYAPo/callog?node-id=3-2&t=nuKk7NuGMftcvFai-1)를 참고하세요. 아래는 핵심 화면만 발췌했습니다.
-
-| 메인 대시보드 | AI 검수 |
-|---|---|
-| ![dashboard](./docs/screenshots/dashboard.png) | ![inspection](./docs/screenshots/inspection.png) |
-
-| 캠페인 오버뷰 | 권한별 화면 (본사 / 협력사) |
-|---|---|
-| ![campaign](./docs/screenshots/campaign.png) | ![role](./docs/screenshots/role-diff.png) |
+</div>
 
 ---
 
@@ -35,6 +22,18 @@
 - 캠페인 KPI, 프레임, 레퍼런스실
 - 혜택 제안, 매칭 평가
 - AI 자료 검수, 승인 대기, 알림 센터
+
+---
+
+## 권한별 화면 기준
+
+| 권한 | 주요 화면 | 설명 |
+|---|---|---|
+| Admin | 사용자 관리 | 본사 및 협력사 계정을 관리 |
+| 본사 | 대시보드, KPI, 매칭, 검수 승인 | 운영 지표 확인과 최종 승인 업무 중심 |
+| 협력사 | 회원가입, 혜택 제안, 검수 승인 요청 | 캠페인 참여와 혜택 제안 업무 중심 |
+
+---
 
 ## 화면 설계서 구성
 
@@ -86,6 +85,36 @@
 
 ---
 
+## 주요 화면
+
+> 전체 화면 설계는 [Figma 설계서](https://www.figma.com/design/1AczfcXlvCL1qyRhlAYAPo/callog?node-id=3-2&t=nuKk7NuGMftcvFai-1)를 참고하세요.
+
+<details>
+<summary><b>🖥️ 메인 대시보드</b></summary>
+<br>
+<img width="100%" src="https://github.com/user-attachments/assets/c9248229-0215-42e0-b4d9-a0ae469fc5cf" />
+</details>
+
+<details>
+<summary><b>🔍 AI 검수</b></summary>
+<br>
+<img width="100%" src="https://github.com/user-attachments/assets/9d6b2723-656b-474c-ade0-b297ba6d6a83" />
+</details>
+
+<details>
+<summary><b>📊 캠페인 오버뷰</b></summary>
+<br>
+<img width="100%" src="https://github.com/user-attachments/assets/bce914ef-153b-46e7-9e2e-a6d3e4a820e6" />
+</details>
+
+<details>
+<summary><b>📈 본사측 KPI</b></summary>
+<br>
+<img width="100%" src="https://github.com/user-attachments/assets/5590be54-0c26-41e5-bb7e-5c8018655af1" />
+</details>
+
+---
+
 ## 기능 테스트 영상
 
 ### 메인 대시보드
@@ -98,8 +127,7 @@ https://github.com/user-attachments/assets/ca439c09-4469-4444-8cc6-ba658bc2db25
 https://github.com/user-attachments/assets/60a57c27-7f29-4554-aa1b-d1d33bbdea78
 
 ### 환경 설정
-<img width="1920" height="1032" alt="환경설정_10fps" src="https://github.com/user-attachments/assets/6992a45f-5500-43bd-a9d7-9e24e7138227" />
-
+<img width="100%" alt="환경설정" src="https://github.com/user-attachments/assets/6992a45f-5500-43bd-a9d7-9e24e7138227" />
 
 ---
 
@@ -120,44 +148,34 @@ Callog는 단일 서비스 내에 **Admin / 본사 / 협력사** 세 가지 권�
 
 ### 배포 흐름
 
-<img alt="Frontend Canary 배포 테스트" src="https://github.com/user-attachments/assets/93ecdef8-bf08-485a-8c43-a1433998de30" />
-
----
-
-## 권한별 화면 기준
-
-| 권한 | 주요 화면 | 설명 |
-|---|---|---|
-| Admin | 사용자 관리 | 본사 및 협력사 계정을 관리 |
-| 본사 | 대시보드, KPI, 매칭, 검수 승인 | 운영 지표 확인과 최종 승인 업무 중심 |
-| 협력사 | 회원가입, 혜택 제안, 검수 승인 요청 | 캠페인 참여와 혜택 제안 업무 중심 |
+<img width="100%" alt="Frontend Canary 배포 테스트" src="https://github.com/user-attachments/assets/93ecdef8-bf08-485a-8c43-a1433998de30" />
 
 ---
 
 ## 기술 스택
 
-### Core & Framework
+**Core**  
+![HTML5](https://img.shields.io/badge/-HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/-CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white)
+![JavaScript](https://img.shields.io/badge/-JAVASCRIPT-F7DF1E?style=for-the-badge&logo=javascript&logoColor=111111)
 
-![Vue.js](https://img.shields.io/badge/Vue.js-3-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-![JavaScript](https://img.shields.io/badge/JavaScript-ESM-F7DF1E?style=for-the-badge&logo=javascript&logoColor=111111)
+**Framework & State**  
+![Vue.js](https://img.shields.io/badge/-VUE.JS-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white)
+![Vite](https://img.shields.io/badge/-VITE-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Vue Router](https://img.shields.io/badge/-VUE_ROUTER-42B883?style=for-the-badge&logo=vuedotjs&logoColor=white)
+![Pinia](https://img.shields.io/badge/-PINIA-FFD859?style=for-the-badge&logo=pinia&logoColor=111111)
 
-### State & Routing
+**Styling & UI**  
+![Tailwind CSS](https://img.shields.io/badge/-TAILWIND_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
+![ApexCharts](https://img.shields.io/badge/-APEXCHARTS-00A8E8?style=for-the-badge)
 
-![Pinia](https://img.shields.io/badge/Pinia-3-FFD859?style=for-the-badge&logo=vuedotjs&logoColor=111111)
-![Vue Router](https://img.shields.io/badge/Vue_Router-5-42B883?style=for-the-badge&logo=vuedotjs&logoColor=white)
+**API & Auth**  
+![Axios](https://img.shields.io/badge/-AXIOS-5A29E4?style=for-the-badge&logo=axios&logoColor=white)
+![JWT](https://img.shields.io/badge/-JWT-111111?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 
-### API & Visualization
-
-![Axios](https://img.shields.io/badge/Axios-1-5A29E4?style=for-the-badge&logo=axios&logoColor=white)
-![ApexCharts](https://img.shields.io/badge/ApexCharts-5-00A8E8?style=for-the-badge)
-![Editor.js](https://img.shields.io/badge/Editor.js-2-111111?style=for-the-badge)
-
-### Styling & Build
-
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
-![PostCSS](https://img.shields.io/badge/PostCSS-8-DD3A0A?style=for-the-badge&logo=postcss&logoColor=white)
-![Prettier](https://img.shields.io/badge/Prettier-3-F7B93E?style=for-the-badge&logo=prettier&logoColor=111111)
+**Infra & Tools**  
+![Nginx](https://img.shields.io/badge/-NGINX-009639?style=for-the-badge&logo=nginx&logoColor=white)
+![Prettier](https://img.shields.io/badge/-PRETTIER-F7B93E?style=for-the-badge&logo=prettier&logoColor=111111)
 
 ---
 
@@ -222,3 +240,6 @@ frontend/
 |---|---|---|
 | 본사 GM | `hqgm@callog.com` | `Qwer1234!` |
 | 협력사 GM | `partner@callog.com` | `Qwer1234!` |
+
+> 위 계정은 시연 및 테스트용 계정입니다.
+---
