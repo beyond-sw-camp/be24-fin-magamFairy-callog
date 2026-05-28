@@ -23,14 +23,16 @@
 2. [서비스 구조](#서비스-구조)
 3. [기술 스택](#기술-스택)
 4. [레포지토리 구조](#레포지토리-구조)
-5. [기능 테스트 및 시연](#기능-테스트-및-시연)
-6. [배포 방식](#배포-방식)
-7. [무중단 배포 테스트](#무중단-배포-테스트)
+5. [요구사항 정의서](#요구사항-정의서)
+6. [시스템 아키텍처](#시스템-아키텍처)
+7. [DB 설계](#db-설계)
+8. [기능 테스트 및 시연](#기능-테스트-및-시연)
+9. [배포 방식](#배포-방식)
+10. [무중단 배포 테스트](#무중단-배포-테스트)
 
 ---
 
 ## 프로젝트 소개
-
 
 Callog는 캠페인 기획부터 실행, 성과 관리, 콘텐츠 제작, 파트너 협업까지 하나의 흐름으로 관리할 수 있는 서비스입니다.
 
@@ -90,6 +92,48 @@ Backend Services
 └── README.md              # 전체 프로젝트 안내 문서
 ```
 
+---
+
+## 요구사항 정의서
+
+| 문서 | 설명 |
+| --- | --- |
+| [PRD.xlsx](./docs/PRD.xlsx) | 서비스 요구사항, 주요 기능, 사용자 흐름, 기능별 우선순위를 정리한 요구사항 정의서 |
+
+---
+
+## 시스템 아키텍처
+
+<img width="1251" height="1011" alt="시스템아키텍쳐(캘로그)(8)" src="https://github.com/user-attachments/assets/fc99ddaa-dd3f-47c1-95d8-add5a645b779" />
+
+- **테스트 빌드:** sub 브랜치에 Push할 경우, Main과 동일하게 조성된 서버환경에 사전 배포, 각종 테스트를 거친 후 Main 브랜치 Push
+- **CI/CD 흐름:** 코드 Push → Jenkins 웹훅 감지 → 빌드 및 Docker 이미지 패키징 → Kubernetes 클러스터 배포
+- **무중단 배포 전략:** Blue Green 전환방식, 안정성 확보를 위해 Jenkins에서 자동으로 전환하지 않고 수동으로 전환.
+- **MSA 적용:** Database Per Service, Circuit Breaker, Event Sourcing, API-Gateway 패턴 적용
+
+---
+
+## DB 설계
+
+<img src="./docs/erd.png" alt="Callog ERD" />
+
+### 데이터 저장 구조
+
+| 구분 | 저장소 | 주요 데이터 |
+| --- | --- | --- |
+| 핵심 서비스 데이터 | MariaDB | 사용자, 조직, 캠페인, 참여자, 업무, 마일스톤, KPI, 알림, 레퍼런스 |
+| AI 검수 결과 | MongoDB | AI 검수 job 결과, 분석 상세, 원본 응답 데이터 |
+| 매칭 평가 결과 | MongoDB | 파트너 혜택 평가 결과, 평가 점수, 개선 방향 |
+
+### 상세 문서
+
+| 문서 | 설명 |
+| --- | --- |
+| [mongodb_aijudge.html](./docs/mongodb_aijudge.html) | AI 검수 결과 저장 구조 |
+| [mongodb_evaluation.html](./docs/mongodb_evaluation.html) | 매칭 평가 결과 저장 구조 |
+
+---
+
 ## 기능 테스트 및 시연
 
 기능 테스트 영상과 시연 자료는 프론트엔드/백엔드 README에서 기능별로 확인할 수 있습니다.
@@ -97,21 +141,6 @@ Backend Services
 - 프론트 기능 테스트 영상: [frontend/README.md](./frontend/README.md)
 - 백엔드 API 테스트 및 시나리오: [backend/README.md](./backend/README.md)
 - 전체 기능 테스트 가이드: [docs/callog-feature-test-guide.md](./docs/callog-feature-test-guide.md)
-
----
-
-## 배포 방식
-
-프론트엔드와 백엔드는 Docker 기반으로 배포합니다.
-
-| 영역 | 배포 방식 |
-| --- | --- |
-| Frontend | Docker 이미지 빌드 후 Nginx로 정적 파일 서빙 |
-| Backend | Spring Boot 애플리케이션을 Docker 이미지로 빌드 후 서비스별 배포 |
-| Frontend Strategy | Canary 배포 |
-| Backend Strategy | Blue/Green 배포 |
-
-
 
 ---
 
