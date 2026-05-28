@@ -63,7 +63,7 @@ export const CheckAdFile = async (file) => {
   formData.append('file', file)
   try {
     return unwrapDirectAiJudgeResponse(
-      await api.post('/aijudge/check/file', formData, {
+      await api.post('/ad/check/file/aijudge', formData, {
         timeout: AD_CHECK_TIMEOUT_MS,
         headers: { 'Content-Type': 'multipart/form-data' },
       }),
@@ -81,7 +81,7 @@ export const CheckAdFileWithAiJudge = async (file, options = {}) => {
   }
   try {
     return unwrapDirectAiJudgeResponse(
-      await api.post('/aijudge/check/file', formData, {
+      await api.post('/ad/check/file/aijudge', formData, {
         timeout: AD_CHECK_TIMEOUT_MS,
         headers: { 'Content-Type': 'multipart/form-data' },
       }),
@@ -99,7 +99,7 @@ export const CheckCampaignAdFileWithAiJudge = async (campaignId, file) => {
   }
   try {
     return unwrapDirectAiJudgeResponse(
-      await api.post('/aijudge/check/file', formData, {
+      await api.post('/ad/check/file/aijudge', formData, {
         timeout: AD_CHECK_TIMEOUT_MS,
         headers: { 'Content-Type': 'multipart/form-data' },
       }),

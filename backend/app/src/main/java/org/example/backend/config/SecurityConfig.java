@@ -45,6 +45,7 @@ public class SecurityConfig {
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/login", "/login", "/error").permitAll()
                 .requestMatchers("/auth/reissue", "/auth/logout", "/matching/evaluation/collect", "/actuator/**").permitAll()
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/auth/signup").permitAll()
                 .requestMatchers("/auth/usercreate").hasAnyAuthority("ROLE_ADMIN", "ROLE_GENERAL_MANAGER", "ROLE_MANAGER")
                 .requestMatchers("/auth/manage").hasAnyAuthority("ROLE_GENERAL_MANAGER")

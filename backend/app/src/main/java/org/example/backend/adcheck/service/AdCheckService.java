@@ -3,13 +3,20 @@ package org.example.backend.adcheck.service;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.adcheck.client.AiJudgeClient;
 import org.example.backend.adcheck.model.AdCheckDto;
+import org.example.backend.campaign.model.Campaign;
+import org.example.backend.campaign.repository.CampaignMemberRepository;
+import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.common.security.CampaignMemberGuard;
 import org.example.backend.notification.service.NotificationService;
 import org.example.backend.user.model.AuthUserDetails;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +26,8 @@ public class AdCheckService {
 
     private final AiJudgeClient aiJudgeClient;
     private final NotificationService notificationService;
+    private final CampaignRepository campaignRepository;
+    private final CampaignMemberRepository campaignMemberRepository;
 
     public AdCheckDto.Res check(String copy) {
         return checkWithAiJudge(copy);
@@ -50,6 +59,10 @@ public class AdCheckService {
             String campaignId,
             Map<String, Object> extraContext
     ) {
+        if (campaignId != null && !campaignId.isBlank()) {
+            requireCampaignAccess(campaignId, requester);
+        }
+
         Map<String, Object> context = aiJudgeContext(requester, campaignId);
         if (extraContext != null && !extraContext.isEmpty()) {
             context.putAll(extraContext);
@@ -103,6 +116,37 @@ public class AdCheckService {
             context.put("campaignId", campaignId.trim());
         }
         return context;
+    }
+
+    private Campaign requireCampaignAccess(String campaignId, AuthUserDetails requester) {
+        if (requester == null || requester.getIdx() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 사용자 정보가 필요합니다.");
+        }
+
+        Campaign campaign = resolveCampaign(campaignId);
+        CampaignMemberGuard.requireMember(campaignMemberRepository
+                .findByCampaignIdxAndUserIdx(campaign.getIdx(), requester.getIdx())
+                .orElse(null));
+        return campaign;
+    }
+
+    private Campaign resolveCampaign(String campaignId) {
+        String normalized = campaignId == null ? null : campaignId.trim();
+        if (normalized == null || normalized.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "campaignId is required.");
+        }
+
+        Optional<Campaign> byPublicId = campaignRepository.findByPublicId(normalized);
+        if (byPublicId.isPresent()) {
+            return byPublicId.get();
+        }
+
+        try {
+            return campaignRepository.findById(Long.parseLong(normalized))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Campaign not found."));
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Campaign not found.");
+        }
     }
 
     public static class FileCheckException extends RuntimeException {

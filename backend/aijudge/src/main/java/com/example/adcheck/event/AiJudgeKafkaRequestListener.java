@@ -1,6 +1,5 @@
 package com.example.adcheck.event;
 
-import com.example.adcheck.campaign.CampaignProjectionMongoService;
 import com.example.adcheck.model.AdCheckDto;
 import com.example.adcheck.service.AdCheckFileStorageService;
 import com.example.adcheck.service.AiJudgeFileCheckService;
@@ -28,7 +27,6 @@ public class AiJudgeKafkaRequestListener {
     private final ObjectMapper objectMapper;
     private final AiJudgeFileCheckService aiJudgeFileCheckService;
     private final AiJudgeKafkaEventPublisher aiJudgeKafkaEventPublisher;
-    private final CampaignProjectionMongoService campaignProjectionMongoService;
     private final AdCheckFileStorageService adCheckFileStorageService;
 
     @KafkaListener(
@@ -56,7 +54,6 @@ public class AiJudgeKafkaRequestListener {
             fileName = firstText(text(event, "fileName"), "upload");
             contentType = text(event, "fileContentType");
             context = parseContext(event.path("context"));
-            verifyCampaignAccess(context);
 
             byte[] fileBytes = resolveFilePayload(event);
             MultipartFile file = new StoredMultipartFile(fileName, contentType, fileBytes);
@@ -90,26 +87,6 @@ public class AiJudgeKafkaRequestListener {
             throw new IllegalArgumentException("fileObjectKey or fileBase64 is required.");
         }
         return Base64.getDecoder().decode(fileBase64);
-    }
-
-    private void verifyCampaignAccess(Map<String, Object> context) {
-        String campaignId = stringValue(context.get("campaignId"));
-        if (campaignId == null || campaignId.isBlank()) {
-            return;
-        }
-
-        Long requesterUserIdx = longValue(context.get("requesterUserIdx"));
-        if (requesterUserIdx == null) {
-            throw new IllegalArgumentException("requesterUserIdx is required.");
-        }
-        if (!campaignProjectionMongoService.isEnabled()) {
-            log.warn("Skip AI judge campaign projection check because projection storage is disabled. campaignId={}, requesterUserIdx={}",
-                    campaignId, requesterUserIdx);
-            return;
-        }
-        if (!campaignProjectionMongoService.hasActiveMember(campaignId, requesterUserIdx)) {
-            throw new IllegalArgumentException("campaign access denied.");
-        }
     }
 
     private Map<String, Object> parseContext(JsonNode contextNode) {
@@ -170,18 +147,6 @@ public class AiJudgeKafkaRequestListener {
 
     private String stringValue(Object value) {
         return value == null ? null : String.valueOf(value).trim();
-    }
-
-    private Long longValue(Object value) {
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        try {
-            String raw = stringValue(value);
-            return raw == null || raw.isBlank() ? null : Long.parseLong(raw);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("requesterUserIdx must be a number.", e);
-        }
     }
 
     private static class StoredMultipartFile implements MultipartFile {
