@@ -15,10 +15,13 @@
 ---
 
 ## 🏗 시스템 아키텍처 (Architecture)
-> 여기에 아키텍처 구성도 이미지(인프라 구성 및 CI/CD 흐름)를 첨부하면 가독성이 극대화됩니다.
+> <img width="1251" height="1011" alt="시스템아키텍쳐(캘로그)(8)" src="https://github.com/user-attachments/assets/fc99ddaa-dd3f-47c1-95d8-add5a645b779" />
+
 
 * **테스트 빌드:** sub 브랜치에 Push할 경우, Main과 동일하게 조성된 서버환경에 사전 배포, 각종 테스트를 거친 후 Main 브랜치 Push
 * **CI/CD 흐름:** 코드 Push → Jenkins 웹훅 감지 → 빌드 및 Docker 이미지 패키징 → Kubernetes 클러스터 배포
+* **무중단 배포 전략:** Blue Green 전환방식, 안정성 확보를 위해 Jenkins에서 자동으로 전환하지 않고 수동으로 전환.
+* **MSA 적용:** Database Per Service, Circuit Breaker, Event Sourcing, API-Gateway 패턴 적용
 
 ---
 
@@ -31,6 +34,7 @@
   * 브랜드 자산 데이터를 파싱·비교하여 최적의 파트너 혜택을 매칭
 * **AI 기반 캠페인 컨텐츠 사전 검수**
   * 브랜드 톤&매너, 금칙어, 법적 리스크등을 일차적으로 검수
+* 상세 위키 보기
 
 ---
 ## 📃 Swagger API
@@ -52,8 +56,7 @@
 <br>
 
 ### 🔹 쿠버네티스(K8s) 무중단 배포 시연 영상
-> Jenkins 파이프라인을 통한 빌드 자동화 및 Kubernetes 환경에서의 Rolling Update 무중단 배포 검증 영상입니다.
-> (서비스 중단 없이 신규 버전의 백엔드 애플리케이션이 파드(Pod)에 교체 적용되는 과정 포함)
+> K8S 환경에서의 Blue/Green 수동 전환시 배포가 중단되지 않음을 검증하는 영상입니다.
 
 > 📺 **[무중단 배포 테스트 영상]**
 > Blue/Green
