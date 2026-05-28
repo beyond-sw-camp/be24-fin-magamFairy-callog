@@ -1,10 +1,4 @@
-import axios from 'axios'
-
-const matchingEvaluationApi = axios.create({
-  baseURL: '/matching-evaluation-api',
-  timeout: 5000,
-  withCredentials: true,
-})
+import api from '/plugins/interceptor.js'
 
 function isSuccessResponse(payload) {
   return (
@@ -30,17 +24,17 @@ function unwrapResponse(response) {
 }
 
 export const startEvaluation = async (payload) => {
-  return unwrapResponse(await matchingEvaluationApi.post('/evaluation/start', payload))
+  return unwrapResponse(await api.post('/evaluation/start', payload))
 }
 
 export const getEvaluationResult = async (campaignIdx) => {
   return unwrapResponse(
-    await matchingEvaluationApi.get(`/evaluation/result?campaignIdx=${campaignIdx}`)
+    await api.get(`/evaluation/result?campaignIdx=${campaignIdx}`)
   )
 }
 
 export const collectEvaluation = async (payload) => {
-  return unwrapResponse(await matchingEvaluationApi.post('/evaluation/collect', payload))
+  return unwrapResponse(await api.post('/evaluation/collect', payload))
 }
 
 export default {

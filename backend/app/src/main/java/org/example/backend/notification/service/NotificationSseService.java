@@ -1,6 +1,11 @@
 package org.example.backend.notification.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.backend.notification.model.NotificationDto;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -13,10 +18,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class NotificationSseService {
     private static final long SSE_TIMEOUT_MILLIS = 30L * 60L * 1000L;
+    public static final String SSE_Channel = "sse:events";
 
     private final Map<Long, CopyOnWriteArrayList<SseEmitter>> emitters = new ConcurrentHashMap<>();
+
+    private final StringRedisTemplate redis;
+    private final ObjectMapper objectMapper;
 
     public SseEmitter subscribe(Long userIdx) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MILLIS);
@@ -31,7 +42,7 @@ public class NotificationSseService {
     }
 
     public void sendToUser(Long userIdx, NotificationDto.Res notification) {
-        sendToUser(userIdx, "notification.created", notification);
+        publish(SseMessage.toUser(userIdx, "notification.created", notification));
     }
 
     /**
@@ -44,8 +55,7 @@ public class NotificationSseService {
                 "campaignIdx", campaignIdx == null ? -1 : campaignIdx,
                 "kind", kind == null ? "unknown" : kind
         );
-        emitters.forEach((userIdx, userEmitters) ->
-                userEmitters.forEach(emitter -> sendEvent(userIdx, emitter, "calendar.refresh", payload)));
+        publish(SseMessage.broadcast("calendar.refresh", payload));
     }
 
     /**
@@ -54,7 +64,8 @@ public class NotificationSseService {
      */
     public void notifyMyCampaignsRefresh(Long userIdx) {
         if (userIdx == null) return;
-        sendToUser(userIdx, "my-campaigns.refresh", Map.of("ts", System.currentTimeMillis()));
+        publish(SseMessage.toUser(userIdx, "my-campaigns.refresh",
+                Map.of("ts", System.currentTimeMillis())));
     }
 
     @Scheduled(fixedRate = 25000)
@@ -63,7 +74,7 @@ public class NotificationSseService {
                 userEmitters.forEach(emitter -> sendEvent(userIdx, emitter, "heartbeat", "ping")));
     }
 
-    private void sendToUser(Long userIdx, String eventName, Object data) {
+    public void sendToUser(Long userIdx, String eventName, Object data) {
         List<SseEmitter> userEmitters = emitters.get(userIdx);
         if (userEmitters == null || userEmitters.isEmpty()) {
             return;
@@ -91,6 +102,28 @@ public class NotificationSseService {
         userEmitters.remove(emitter);
         if (userEmitters.isEmpty()) {
             emitters.remove(userIdx);
+        }
+    }
+
+    private void publish(SseMessage sse) {
+        try {
+            redis.convertAndSend(SSE_Channel, objectMapper.writeValueAsString(sse));
+        } catch (Exception e) {
+            // ⚠️ Redis Pub/Sub 실패 — 로컬 Pod에만 전달됨 (멀티 Pod 환경에서 다른 Pod 구독자 누락 가능)
+            log.warn("[SSE] Redis Pub/Sub 실패 — 로컬 전용 폴백 (event={}, userIdx={})",
+                    sse.eventName(), sse.userIdx(), e);
+            deliverLocally(sse);
+        }
+    }
+    // ───── 구독자가 호출: 실제 로컬 emitters 전송 ─────
+    public void deliverLocally(SseMessage msg) {
+        if (msg.broadcast()) {
+            emitters.forEach((uid, list) ->
+                    list.forEach(em -> sendEvent(uid, em, msg.eventName(), msg.data())));
+        } else {
+            List<SseEmitter> list = emitters.get(msg.userIdx());
+            if (list == null) return;                 // 이 Pod엔 연결 없음 → 무시
+            list.forEach(em -> sendEvent(msg.userIdx(), em, msg.eventName(), msg.data()));
         }
     }
 }

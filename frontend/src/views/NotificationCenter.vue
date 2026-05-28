@@ -18,6 +18,9 @@ const selectedNotificationId = ref('')
 const isSettingsModalOpen = ref(false)
 const invitationActionError = ref('')
 const invitationActionLoading = ref('')
+const currentPage = ref(1)
+
+const NOTIFICATION_PAGE_SIZE = 10
 
 const filterOptions = [
   { key: 'all', label: '전체' },
@@ -78,11 +81,28 @@ const filteredNotifications = computed(() => {
   return notifications.value.filter((item) => item.category === activeFilter.value)
 })
 
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredNotifications.value.length / NOTIFICATION_PAGE_SIZE)),
+)
+const pagedNotifications = computed(() => {
+  const start = (currentPage.value - 1) * NOTIFICATION_PAGE_SIZE
+  return filteredNotifications.value.slice(start, start + NOTIFICATION_PAGE_SIZE)
+})
+const notificationRange = computed(() => {
+  const total = filteredNotifications.value.length
+  if (!total) {
+    return { start: 0, end: 0, total }
+  }
+
+  const start = (currentPage.value - 1) * NOTIFICATION_PAGE_SIZE + 1
+  const end = Math.min(start + NOTIFICATION_PAGE_SIZE - 1, total)
+  return { start, end, total }
+})
+
 const selectedNotification = computed(
   () =>
-    notifications.value.find((item) => item.id === selectedNotificationId.value) ??
-    filteredNotifications.value[0] ??
-    notifications.value[0] ??
+    filteredNotifications.value.find((item) => item.id === selectedNotificationId.value) ??
+    pagedNotifications.value[0] ??
     null,
 )
 
@@ -92,6 +112,10 @@ function getCategoryMeta(category) {
 
 function getSeverityMeta(severity) {
   return severityMeta[severity] ?? severityMeta.normal
+}
+
+function getReviewOutcomeMeta(notification) {
+  return notificationStore.getReviewOutcomeMeta(notification?.reviewOutcome)
 }
 
 function getFilterCount(key) {
@@ -159,12 +183,26 @@ function closeNotificationSettings() {
   isSettingsModalOpen.value = false
 }
 
-function openTarget(notification) {
-  if (!notification?.targetUrl) {
+async function openTarget(notification) {
+  const targetUrl = await notificationStore.resolveNotificationTargetUrl(notification)
+  if (!targetUrl) {
     return
   }
 
-  router.push(notification.targetUrl)
+  router.push(targetUrl)
+}
+
+function setCurrentPage(page) {
+  currentPage.value = Math.max(1, Math.min(page, totalPages.value))
+}
+
+function syncPageToNotification(notificationId) {
+  if (!notificationId) return
+
+  const index = filteredNotifications.value.findIndex((item) => item.id === notificationId)
+  if (index < 0) return
+
+  currentPage.value = Math.floor(index / NOTIFICATION_PAGE_SIZE) + 1
 }
 
 function isCampaignInvitationActionable(notification) {
@@ -248,12 +286,17 @@ watch(
   (notificationId) => {
     if (typeof notificationId === 'string') {
       selectedNotificationId.value = notificationId
+      syncPageToNotification(notificationId)
     }
   },
   { immediate: true },
 )
 
 watch(filteredNotifications, (items) => {
+  if (currentPage.value > totalPages.value) {
+    currentPage.value = totalPages.value
+  }
+
   if (!items.length) {
     selectedNotificationId.value = ''
     return
@@ -261,7 +304,22 @@ watch(filteredNotifications, (items) => {
 
   if (!items.some((item) => item.id === selectedNotificationId.value)) {
     selectedNotificationId.value = items[0].id
+    currentPage.value = 1
+  } else {
+    syncPageToNotification(selectedNotificationId.value)
   }
+})
+
+watch(pagedNotifications, (items) => {
+  if (!items.length) return
+
+  if (!items.some((item) => item.id === selectedNotificationId.value)) {
+    selectedNotificationId.value = items[0].id
+  }
+})
+
+watch(activeFilter, () => {
+  currentPage.value = 1
 })
 
 watch(
@@ -344,13 +402,16 @@ onMounted(() => {
         <div class="notification-panel-head">
           <div>
             <strong>알림 요약</strong>
-            <p>{{ filteredNotifications.length }}개의 알림을 표시합니다.</p>
+            <p>
+              총 {{ notificationRange.total }}개 중
+              {{ notificationRange.start }}-{{ notificationRange.end }}개를 표시합니다.
+            </p>
           </div>
         </div>
 
         <TransitionGroup name="notification-list" tag="div" class="notification-list">
           <article
-            v-for="item in filteredNotifications"
+            v-for="item in pagedNotifications"
             :key="item.id"
             class="notification-item"
             :class="{
@@ -371,6 +432,14 @@ onMounted(() => {
             <div class="notification-item__body">
               <div class="notification-item__top">
                 <span class="notification-chip">{{ getCategoryMeta(item.category).label }}</span>
+                <span
+                  v-if="getReviewOutcomeMeta(item)"
+                  class="notification-result-chip"
+                  :class="`notification-result-chip--${getReviewOutcomeMeta(item).tone}`"
+                >
+                  <span class="material-symbols-outlined">{{ getReviewOutcomeMeta(item).icon }}</span>
+                  {{ getReviewOutcomeMeta(item).label }}
+                </span>
                 <span class="notification-time">{{ formatRelativeTime(item.createdAt) }}</span>
               </div>
               <strong>{{ item.title }}</strong>
@@ -394,6 +463,28 @@ onMounted(() => {
           <strong>표시할 알림이 없습니다.</strong>
           <p>다른 필터를 선택하거나 새 알림이 도착하면 이곳에 표시됩니다.</p>
         </div>
+
+        <nav
+          v-if="filteredNotifications.length > NOTIFICATION_PAGE_SIZE"
+          class="notification-pagination"
+          aria-label="알림 목록 페이지"
+        >
+          <button type="button" :disabled="currentPage === 1" @click="setCurrentPage(currentPage - 1)">
+            이전
+          </button>
+          <button
+            v-for="page in totalPages"
+            :key="page"
+            type="button"
+            :class="{ active: currentPage === page }"
+            @click="setCurrentPage(page)"
+          >
+            {{ page }}
+          </button>
+          <button type="button" :disabled="currentPage === totalPages" @click="setCurrentPage(currentPage + 1)">
+            다음
+          </button>
+        </nav>
       </section>
 
       <aside class="notification-detail" aria-label="알림 상세 정보">
@@ -409,6 +500,14 @@ onMounted(() => {
                 {{ getCategoryMeta(selectedNotification.category).label }}
               </p>
               <h3>{{ selectedNotification.title }}</h3>
+              <span
+                v-if="getReviewOutcomeMeta(selectedNotification)"
+                class="notification-result-chip"
+                :class="`notification-result-chip--${getReviewOutcomeMeta(selectedNotification).tone}`"
+              >
+                <span class="material-symbols-outlined">{{ getReviewOutcomeMeta(selectedNotification).icon }}</span>
+                {{ getReviewOutcomeMeta(selectedNotification).label }}
+              </span>
               <span>{{ formatRelativeTime(selectedNotification.createdAt) }}</span>
             </div>
           </div>
@@ -431,6 +530,14 @@ onMounted(() => {
             <div class="notification-detail__box">
               {{ selectedNotification.detail }}
             </div>
+            <button
+              v-if="getReviewOutcomeMeta(selectedNotification) && selectedNotification.targetUrl"
+              type="button"
+              class="notification-button notification-button--primary notification-result-action"
+              @click="openTarget(selectedNotification)"
+            >
+              검수 결과 보기
+            </button>
             <div
               v-if="isGroupCampaignInvitation(selectedNotification)"
               class="notification-group-banner"
@@ -498,6 +605,18 @@ onMounted(() => {
                     :class="`notification-severity--${selectedNotification.severity}`"
                   >
                     {{ getSeverityMeta(selectedNotification.severity).label }}
+                  </span>
+                </dd>
+              </div>
+              <div v-if="getReviewOutcomeMeta(selectedNotification)">
+                <dt>검수 결과</dt>
+                <dd>
+                  <span
+                    class="notification-result-chip"
+                    :class="`notification-result-chip--${getReviewOutcomeMeta(selectedNotification).tone}`"
+                  >
+                    <span class="material-symbols-outlined">{{ getReviewOutcomeMeta(selectedNotification).icon }}</span>
+                    {{ getReviewOutcomeMeta(selectedNotification).label }}
                   </span>
                 </dd>
               </div>
@@ -916,6 +1035,45 @@ onMounted(() => {
   color: var(--text-heading);
 }
 
+.notification-result-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 8px;
+  border: 1px solid var(--line-soft);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.notification-result-chip .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.notification-result-chip--completed {
+  border-color: rgba(16, 185, 129, 0.28);
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.notification-result-chip--review-required {
+  border-color: rgba(217, 119, 6, 0.28);
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+}
+
+.notification-result-chip--failed {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+
+.notification-result-action {
+  margin-top: 10px;
+}
+
 .notification-time {
   color: var(--text-muted);
   font-size: 11px;
@@ -966,6 +1124,37 @@ onMounted(() => {
 
 .notification-severity--low {
   color: var(--text-muted);
+}
+
+.notification-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0 12px 14px;
+}
+
+.notification-pagination button {
+  min-height: 30px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-control);
+  color: var(--text-body);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 0 10px;
+}
+
+.notification-pagination button.active {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.notification-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .notification-group-banner { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--panel-muted); display: flex; flex-direction: column; gap: 8px; }

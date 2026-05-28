@@ -143,7 +143,8 @@ public class NotificationDto {
     private static String categoryOf(NotificationType type) {
         return switch (type) {
             case TASK_ASSIGNED, TASK_STATUS_CHANGED, TASK_UPDATED -> "task";
-            case REVIEW_REQUESTED, REVIEW_APPROVED, REVIEW_REJECTED -> "qa";
+            case REVIEW_REQUESTED, REVIEW_APPROVED, REVIEW_REJECTED,
+                    AI_JUDGE_COMPLETED, AI_JUDGE_REVIEW_REQUIRED, AI_JUDGE_FAILED -> "qa";
             case DEADLINE_24H, DEADLINE_1H, DEADLINE_OVERDUE -> "schedule";
             case CAMPAIGN_INVITED, CAMPAIGN_INVITATION_ACCEPTED, CAMPAIGN_INVITATION_REJECTED,
                     CAMPAIGN_MEMBER_ADDED -> "campaign";

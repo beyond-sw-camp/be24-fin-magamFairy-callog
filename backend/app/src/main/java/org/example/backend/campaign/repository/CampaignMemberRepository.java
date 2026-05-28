@@ -8,11 +8,15 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 public interface CampaignMemberRepository extends JpaRepository<CampaignMember, Long> {
 
     @EntityGraph(attributePaths = {"user", "user.organization"})
     List<CampaignMember> findAllByCampaignIdx(Long campaignIdx);
+
+    @EntityGraph(attributePaths = {"campaign", "user", "user.organization"})
+    List<CampaignMember> findAllByCampaignIdxIn(Collection<Long> campaignIdxs);
 
     Optional<CampaignMember> findByCampaignIdxAndUserIdx(Long campaignIdx, Long userIdx);
 
@@ -21,6 +25,9 @@ public interface CampaignMemberRepository extends JpaRepository<CampaignMember, 
     List<CampaignMember> findAllWithCampaignByUserIdx(@Param("userIdx") Long userIdx);
 
     boolean existsByCampaignIdxAndUserIdx(Long campaignIdx, Long userIdx);
+
+    @Query("SELECT cm.user.idx FROM CampaignMember cm WHERE cm.campaign.idx = :campaignIdx")
+    java.util.Set<Long> findUserIdxByCampaignIdx(@Param("campaignIdx") Long campaignIdx);
 
     @Query("SELECT cm.user.idx FROM CampaignMember cm WHERE cm.campaign.idx = :campaignIdx AND cm.user.idx IN :userIdxList")
     java.util.Set<Long> findUserIdxByCampaignIdxAndUserIdxIn(

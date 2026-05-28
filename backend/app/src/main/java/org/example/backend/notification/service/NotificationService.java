@@ -1,6 +1,7 @@
 package org.example.backend.notification.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.backend.adcheck.model.AdCheckDto;
 import org.example.backend.adcheck.model.AdReviewRequest;
 import org.example.backend.campaign.model.CampaignInvitation;
 import org.example.backend.campaign.model.CampaignInvitationStatus;
@@ -24,6 +25,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -354,6 +357,80 @@ public class NotificationService {
     }
 
     @Transactional
+    public void notifyAiJudgeResult(Long requesterIdx, AdCheckDto.FileCheckRes response) {
+        notifyAiJudgeResult(requesterIdx, response, null);
+    }
+
+    @Transactional
+    public void notifyAiJudgeResult(Long requesterIdx, AdCheckDto.FileCheckRes response, String targetUrl) {
+        if (requesterIdx == null || response == null) {
+            return;
+        }
+
+        User requester = userRepository.findById(requesterIdx).orElse(null);
+        if (requester == null) {
+            return;
+        }
+
+        NotificationType type = resolveAiJudgeNotificationType(response);
+        NotificationSeverity severity = type == NotificationType.AI_JUDGE_COMPLETED
+                ? NotificationSeverity.NORMAL
+                : NotificationSeverity.HIGH;
+
+        create(
+                requester,
+                null,
+                type,
+                severity,
+                aiJudgeTitle(type),
+                nonBlank(response.getFileName(), "업로드 파일"),
+                aiJudgeDetail(response, type),
+                "검수 결과 보기",
+                nonBlank(targetUrl, aiJudgeTargetUrl(response)),
+                aiJudgeDedupeKey(response.getAnalysisJobId(), requesterIdx),
+                "AI_JUDGE_ANALYSIS",
+                null,
+                type.name(),
+                false
+        );
+    }
+
+    @Transactional
+    public void notifyAiJudgeJobFailure(
+            Long requesterIdx,
+            String jobId,
+            String fileName,
+            String errorMessage,
+            String targetUrl
+    ) {
+        if (requesterIdx == null) {
+            return;
+        }
+
+        User requester = userRepository.findById(requesterIdx).orElse(null);
+        if (requester == null) {
+            return;
+        }
+
+        create(
+                requester,
+                null,
+                NotificationType.AI_JUDGE_FAILED,
+                NotificationSeverity.HIGH,
+                "AI 검수 처리에 실패했습니다",
+                nonBlank(fileName, "업로드 파일"),
+                nonBlank(errorMessage, "AI 검수 처리 중 오류가 발생했습니다."),
+                "검수 결과 보기",
+                nonBlank(targetUrl, "/campaign-folder"),
+                aiJudgeDedupeKey(nonBlank(jobId, null), requesterIdx),
+                "AI_JUDGE_ANALYSIS",
+                null,
+                NotificationType.AI_JUDGE_FAILED.name(),
+                false
+        );
+    }
+
+    @Transactional
     public void notifyDeadline(Task task, Collection<User> recipients, NotificationType type, String dedupePrefix) {
         if (task == null || type == null) {
             return;
@@ -494,6 +571,92 @@ public class NotificationService {
 
         notificationRepository.findAllByReferenceTypeAndReferenceId(referenceType, referenceId)
                 .forEach(notification -> notification.updateReferenceStatus(referenceStatus));
+    }
+
+    private NotificationType resolveAiJudgeNotificationType(AdCheckDto.FileCheckRes response) {
+        if (response.getErrorMessage() != null && !response.getErrorMessage().isBlank()) {
+            return NotificationType.AI_JUDGE_FAILED;
+        }
+
+        return "pass".equalsIgnoreCase(normalize(response.getStatus()))
+                ? NotificationType.AI_JUDGE_COMPLETED
+                : NotificationType.AI_JUDGE_REVIEW_REQUIRED;
+    }
+
+    private String aiJudgeTitle(NotificationType type) {
+        return switch (type) {
+            case AI_JUDGE_COMPLETED -> "AI 검수가 완료되었습니다";
+            case AI_JUDGE_REVIEW_REQUIRED -> "AI 검수 결과 확인이 필요합니다";
+            case AI_JUDGE_FAILED -> "AI 검수 처리에 실패했습니다";
+            default -> "AI 검수 알림";
+        };
+    }
+
+    private String aiJudgeDetail(AdCheckDto.FileCheckRes response, NotificationType type) {
+        if (type == NotificationType.AI_JUDGE_FAILED) {
+            return nonBlank(response.getErrorMessage(), "AI 검수 처리 중 오류가 발생했습니다.");
+        }
+
+        StringBuilder detail = new StringBuilder();
+        appendDetailLine(detail, "판정", response.getStatus());
+        appendDetailLine(detail, "관련 법령", response.getLaw());
+        appendDetailLine(detail, "문제 문구", response.getViolationText());
+        appendDetailLine(detail, "사유", response.getReason());
+        appendDetailLine(detail, "수정 제안", response.getSuggestion());
+
+        if (detail.isEmpty()) {
+            return type == NotificationType.AI_JUDGE_COMPLETED
+                    ? "AI 검수가 정상 완료되었습니다."
+                    : "AI 검수 결과를 확인해 주세요.";
+        }
+
+        return detail.toString();
+    }
+
+    private void appendDetailLine(StringBuilder builder, String label, String value) {
+        String nextValue = normalize(value);
+        if (nextValue == null) {
+            return;
+        }
+
+        if (!builder.isEmpty()) {
+            builder.append('\n');
+        }
+        builder.append(label).append(": ").append(nextValue);
+    }
+
+    private String aiJudgeTargetUrl(AdCheckDto.FileCheckRes response) {
+        String campaignId = contextText(response == null ? null : response.getContext(), "campaignId");
+        String jobId = contextText(response == null ? null : response.getContext(), "adCheckJobId");
+        if (campaignId != null) {
+            StringBuilder builder = new StringBuilder("/campaigns/")
+                    .append(campaignId)
+                    .append("?tab=review");
+            if (jobId != null) {
+                builder.append("&adCheckJobId=")
+                        .append(URLEncoder.encode(jobId, StandardCharsets.UTF_8));
+            }
+            return builder.toString();
+        }
+
+        return "/campaign-folder";
+    }
+
+    private String contextText(Map<String, Object> context, String key) {
+        if (context == null || key == null) {
+            return null;
+        }
+        Object value = context.get(key);
+        return value == null ? null : normalize(String.valueOf(value));
+    }
+
+    private String aiJudgeDedupeKey(String analysisJobId, Long requesterIdx) {
+        String normalizedId = normalize(analysisJobId);
+        if (normalizedId == null || requesterIdx == null) {
+            return null;
+        }
+
+        return "ai-judge:" + normalizedId + ":recipient:" + requesterIdx;
     }
 
     private List<User> uniqueUsers(Collection<User> users) {

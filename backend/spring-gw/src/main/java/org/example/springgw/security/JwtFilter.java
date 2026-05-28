@@ -40,7 +40,8 @@ public class JwtFilter extends AbstractGatewayFilterFactory<JwtFilter.Config> {
             if (path.startsWith("/auth/login") ||
                     path.startsWith("/login") ||
                     path.startsWith("/auth/reissue") ||
-                    path.startsWith("/auth/logout")) {
+                    path.startsWith("/auth/logout") ||
+            path.startsWith("/evaluation/collect")) {
                 return chain.filter(exchange);
             }
 

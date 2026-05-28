@@ -23,6 +23,7 @@ const defaultThemeUi = {
 
 const defaultNotifications = {
   enabled: true,
+  showAdCheckProgressPanel: true,
   methods: {
     inApp: true,
     email: false,
@@ -125,6 +126,10 @@ function normalizeNotifications(source = {}) {
   return {
     enabled:
       typeof nextSource.enabled === 'boolean' ? nextSource.enabled : defaultNotifications.enabled,
+    showAdCheckProgressPanel:
+      typeof nextSource.showAdCheckProgressPanel === 'boolean'
+        ? nextSource.showAdCheckProgressPanel
+        : defaultNotifications.showAdCheckProgressPanel,
     methods: normalizeBooleanOptions(nextSource.methods, defaultNotifications.methods),
     level: normalizeNotificationLevel(nextSource.level),
     conditions: normalizeBooleanOptions(nextSource.conditions, defaultNotifications.conditions),

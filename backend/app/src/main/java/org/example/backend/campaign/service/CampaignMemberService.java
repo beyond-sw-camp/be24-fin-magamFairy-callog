@@ -148,7 +148,7 @@ public class CampaignMemberService {
         created.forEach(member -> sseService.notifyMyCampaignsRefresh(member.getUser().getIdx()));
 
         // Dashboard 캐시 무효화 (blockers 의 GM 미배정 체크 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
         return created.stream().map(CampaignMemberDto.Res::from).toList();
     }
 
@@ -399,7 +399,7 @@ public class CampaignMemberService {
         target.setCampaignRole(nextRole);
 
         // Dashboard 캐시 무효화 (GM 역할 변경 시 blockers 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
         return CampaignMemberDto.Res.from(target);
     }
 
@@ -434,12 +434,13 @@ public class CampaignMemberService {
             CampaignMemberGuard.requireSameCompany(caller, target.getUser());
         }
 
+        Campaign campaign = target.getCampaign();
         Long removedUserIdx = target.getUser().getIdx();
         memberRepository.delete(target);
         // SSE — 추방된 사용자에게 my-campaigns.refresh 푸시 (그 사람의 사이드바에서 즉시 사라짐)
         sseService.notifyMyCampaignsRefresh(removedUserIdx);
         // Dashboard 캐시 무효화 (마지막 GM 제거 시 blockers 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
     }
 
     @Transactional
@@ -484,7 +485,7 @@ public class CampaignMemberService {
         }
 
         // Dashboard 캐시 무효화 (협력사/멤버 추가 시 partnerCount, partnerProgress, blockers 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
         return CampaignMemberDto.InvitationRes.from(invitation, joinedCount, null);
     }
 
