@@ -1,6 +1,5 @@
 <div align="center">
-
-<img width="455" height="128" alt="Image" src="https://github.com/user-attachments/assets/5810aa16-13ae-4e1f-a74e-755e2523f613" />
+  <img src="../docs/callog-logo.png" alt="Callog 로고" width="500" />
 
 ### 캠페인 운영 · 협업 · 매칭 · AI 검수를 하나로
 
