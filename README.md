@@ -61,17 +61,23 @@ Backend Services
 ```
 
 ---
-
 ## 기술 스택
 
-| 영역 | 기술                                                  |
-| --- |-----------------------------------------------------|
-| Frontend | Vue 3, Vite, Pinia, Vue Router, Tailwind CSS, Axios |
-| Backend | Java 17, Spring Boot, Spring Cloud, Gradle          |
-| Service Discovery | Eureka                                              |
-| Gateway | Spring Cloud Gateway                                |
-| Deployment | Docker, Nginx                                       |
-| CI/CD | Jenkins, K8s                                        |
+### Frontend
+![Vue.js](https://img.shields.io/badge/Vue.js-3.x-4FC08D?style=for-the-badge&logo=Vue.js&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-5.x-646CFF?style=for-the-badge&logo=vite&logoColor=white) ![Pinia](https://img.shields.io/badge/Pinia-2.x-FFD43B?style=for-the-badge&logo=Pinia&logoColor=black) ![Vue Router](https://img.shields.io/badge/Vue_Router-4.x-4FC08D?style=for-the-badge&logo=Vue.js&logoColor=white) ![Axios](https://img.shields.io/badge/Axios-1.x-5A29E4?style=for-the-badge&logo=Axios&logoColor=white) ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.x-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white) ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white) ![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white) ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black) ![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
+
+### Backend
+![Java 17](https://img.shields.io/badge/Java_17-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white) ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.x-6DB33F?style=for-the-badge&logo=springboot&logoColor=white) ![Spring Gateway](https://img.shields.io/badge/Spring_Gateway-6DB33F?style=for-the-badge&logo=spring&logoColor=white) ![Spring Data JPA](https://img.shields.io/badge/Spring_Data_JPA-6DB33F?style=for-the-badge&logo=spring&logoColor=white) ![Spring Kafka](https://img.shields.io/badge/Spring_Kafka-6DB33F?style=for-the-badge&logo=spring&logoColor=white) ![Spring Security](https://img.shields.io/badge/Spring_Security-6DB33F?style=for-the-badge&logo=springsecurity&logoColor=white) ![Netflix Eureka](https://img.shields.io/badge/Netflix_Eureka-6DB33F?style=for-the-badge&logo=spring&logoColor=white) ![Swagger](https://img.shields.io/badge/Swagger-API_Docs-85EA2D?style=for-the-badge&logo=swagger&logoColor=black) ![Gradle](https://img.shields.io/badge/Gradle-8.x-02303A?style=for-the-badge&logo=gradle&logoColor=white)
+
+### Data & Cache
+![Valkey](https://img.shields.io/badge/Valkey-Sentinel-030303?style=for-the-badge&logo=redhat&logoColor=white) ![Redis](https://img.shields.io/badge/Redis-Compatible-DC382D?style=for-the-badge&logo=redis&logoColor=white) ![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-Event-231F20?style=for-the-badge&logo=apachekafka&logoColor=white) ![MariaDB](https://img.shields.io/badge/MariaDB-DDL-003545?style=for-the-badge&logo=mariadb&logoColor=white) ![MongoDB](https://img.shields.io/badge/MongoDB-NoSQL-47A248?style=for-the-badge&logo=mongodb&logoColor=white) ![AWS S3](https://img.shields.io/badge/Amazon_S3-S3-569A31?style=for-the-badge&logo=amazons3&logoColor=white)
+
+### DevOps, CI/CD & Observability
+![Kubernetes](https://img.shields.io/badge/Kubernetes-k8s-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-Container-2496ED?style=for-the-badge&logo=docker&logoColor=white) ![Jenkins](https://img.shields.io/badge/Jenkins-Pipeline-D24939?style=for-the-badge&logo=jenkins&logoColor=white) ![Nginx](https://img.shields.io/badge/Nginx-Proxy-009639?style=for-the-badge&logo=nginx&logoColor=white) ![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-E6522C?style=for-the-badge&logo=prometheus&logoColor=white) ![Jaeger](https://img.shields.io/badge/Jaeger-OTLP-000000?style=for-the-badge&logo=jaeger&logoColor=white)
+
+### AI & Automation
+![n8n](https://img.shields.io/badge/n8n-Automation-FF6C37?style=for-the-badge&logo=n8n&logoColor=white) ![OpenAI](https://img.shields.io/badge/OpenAI-GPT_4-412991?style=for-the-badge&logo=openai&logoColor=white) ![Apache PDFBox](https://img.shields.io/badge/PDFBox-Parsing-003545?style=for-the-badge&logo=apache&logoColor=white) ![OCR](https://img.shields.io/badge/OCR_Engine-Tesseract-E34F26?style=for-the-badge&logo=google&logoColor=white)
+
 
 ---
 
