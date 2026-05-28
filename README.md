@@ -136,7 +136,9 @@ Backend Services
 | --- | --- |
 | [ERD 상세 화면 설계서](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/erd.html) | 관계선을 포함한 ERD HTML 화면 |
 | [MongoDB AI 검수 부분 설계서](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/mongodb_aijudge.html) | MongoDB AI 검수 부분 설계서 |
-| [MongoDB 매칭 평가 부분 설계서](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/mongodb_evaluation.html) | [MongoDB 매칭 평가 부분 설계서 |
+| [MongoDB 매칭 평가 부분 설계서](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/mongodb_evaluation.html) | MongoDB 매칭 평가 부분 설계서 |
+| [Redis 캐시 설계서](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/redis_spec.png) | Redis 캐시 설계서 |
+| [Redis 캐시 명세서](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/redis_definition.html) | Redis 캐시 명세서 |
 
 ---
 
