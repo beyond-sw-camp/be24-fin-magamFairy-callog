@@ -114,7 +114,13 @@ Backend Services
 
 ## DB 설계
 
-<img src="./docs/erd.png" alt="Callog ERD" />
+<div align="center">
+  <a href="https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/erd.html">
+    <img src="./docs/erd.png" alt="Callog ERD" />
+  </a>
+</div>
+
+> ERD 이미지를 클릭하면 `erd.html` 화면으로 확인할 수 있습니다.
 
 ### 데이터 저장 구조
 
@@ -128,8 +134,9 @@ Backend Services
 
 | 문서 | 설명 |
 | --- | --- |
-| [MongoDB AI 검수 결과](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/mongodb_aijudge.html) | MongoDB AI 검수 결과 |
-| [MongoDB 매칭 평가 결과](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/mongodb_evaluation.html) | MongoDB 매칭 평가 결과 |
+| [ERD 상세 화면 설계서](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/erd.html) | 관계선을 포함한 ERD HTML 화면 |
+| [MongoDB AI 검수 부분 설계서](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/mongodb_aijudge.html) | MongoDB AI 검수 부분 설계서 |
+| [MongoDB 매칭 평가 부분 설계서](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/mongodb_evaluation.html) | [MongoDB 매칭 평가 부분 설계서 |
 
 ---
 
