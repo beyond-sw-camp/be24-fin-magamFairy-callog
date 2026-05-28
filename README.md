@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./docs/callog-logo.png" alt="Callog 로고" width="600" />
+  <img width="1672" height="941" alt="ae7b1e66-4910-4aed-8591-6f1fd9a5de33" src="https://github.com/user-attachments/assets/f85e60aa-5a2e-4614-8843-805d9a1f369c" />
 </div>
 
 ---
