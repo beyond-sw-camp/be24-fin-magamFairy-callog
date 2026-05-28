@@ -2,12 +2,18 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/aijudge/callog.aijudge.main.iml" filepath="$PROJECT_DIR$/.idea/modules/aijudge/callog.aijudge.main.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/callog.app.main.iml" filepath="$PROJECT_DIR$/.idea/modules/app/callog.app.main.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/callog.app.test.iml" filepath="$PROJECT_DIR$/.idea/modules/app/callog.app.test.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/eureka/callog.eureka.main.iml" filepath="$PROJECT_DIR$/.idea/modules/eureka/callog.eureka.main.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/matching-evaluation/callog.matching-evaluation.main.iml" filepath="$PROJECT_DIR$/.idea/modules/matching-evaluation/callog.matching-evaluation.main.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/spring-gw/callog.spring-gw.main.iml" filepath="$PROJECT_DIR$/.idea/modules/spring-gw/callog.spring-gw.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/callog.iml" filepath="$PROJECT_DIR$/.idea/modules/callog.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/aijudge/callog.aijudge.iml" filepath="$PROJECT_DIR$/.idea/modules/aijudge/callog.aijudge.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/aijudge/callog.aijudge.test.iml" filepath="$PROJECT_DIR$/.idea/modules/aijudge/callog.aijudge.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/callog.app.iml" filepath="$PROJECT_DIR$/.idea/modules/app/callog.app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/eureka/callog.eureka.iml" filepath="$PROJECT_DIR$/.idea/modules/eureka/callog.eureka.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/eureka/callog.eureka.test.iml" filepath="$PROJECT_DIR$/.idea/modules/eureka/callog.eureka.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/callog.main.iml" filepath="$PROJECT_DIR$/.idea/modules/callog.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/matching-evaluation/callog.matching-evaluation.iml" filepath="$PROJECT_DIR$/.idea/modules/matching-evaluation/callog.matching-evaluation.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/matching-evaluation/callog.matching-evaluation.test.iml" filepath="$PROJECT_DIR$/.idea/modules/matching-evaluation/callog.matching-evaluation.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/spring-gw/callog.spring-gw.iml" filepath="$PROJECT_DIR$/.idea/modules/spring-gw/callog.spring-gw.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/spring-gw/callog.spring-gw.test.iml" filepath="$PROJECT_DIR$/.idea/modules/spring-gw/callog.spring-gw.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/callog.test.iml" filepath="$PROJECT_DIR$/.idea/modules/callog.test.iml" />
     </modules>
   </component>
 </project>
