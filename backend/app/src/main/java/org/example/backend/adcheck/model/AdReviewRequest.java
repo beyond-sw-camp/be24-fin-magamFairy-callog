@@ -68,6 +68,14 @@ public class AdReviewRequest extends BaseEntity {
     @Column(length = 2000)
     private String suggestion;
 
+    @Column(length = 80)
+    private String adCheckJobId;
+
+    @Column(length = 120)
+    private String mongoDocumentId;
+
+    private Integer verdictLevel;
+
     @Lob
     @Column(columnDefinition = "TEXT")
     private String requestMemo;

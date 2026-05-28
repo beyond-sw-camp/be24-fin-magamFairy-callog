@@ -12,6 +12,34 @@ spring:
     gateway:
       routes:
         # ai 판사
+        - id: gateway-local-info
+          uri: noop://localhost
+          predicates:
+            - Path=/gw/**
+          filters:
+            - StripPrefix=1
+
+        - id: app-api-docs
+          uri: ${APP_URI:lb://app}
+          predicates:
+            - Path=/app/v3/api-docs,/app/v3/api-docs/**
+          filters:
+            - RewritePath=/app(?<segment>/v3/api-docs.*), $\{segment}
+
+        - id: ai-judge-api-docs
+          uri: ${AI_JUDGE_URI:lb://ai-judge}
+          predicates:
+            - Path=/aijudge/v3/api-docs,/aijudge/v3/api-docs/**
+          filters:
+            - RewritePath=/aijudge(?<segment>/v3/api-docs.*), $\{segment}
+
+        - id: matching-evaluation-api-docs
+          uri: ${EVALUATION_URL:lb://matching-evaluation}
+          predicates:
+            - Path=/evaluation/v3/api-docs,/evaluation/v3/api-docs/**
+          filters:
+            - RewritePath=/evaluation(?<segment>/v3/api-docs.*), $\{segment}
+
         - id: ai-judge-actuator
           uri: ${AI_JUDGE_URI:lb://ai-judge}
           predicates:
@@ -23,17 +51,18 @@ spring:
           uri: ${AI_JUDGE_URI:lb://ai-judge}
           predicates:
             - Path=/aijudge/**
+          filters:
+            - JwtFilter
 
-        # ai 평가
         - id: matching-evaluation-actuator
-          uri: ${MATCHING_EVALUATION_URI:lb://matching-evaluation}
+          uri: ${EVALUATION_URL:lb://matching-evaluation}
           predicates:
             - Path=/evaluation/actuator/**
           filters:
             - StripPrefix=1
 
         - id: matching-evaluation
-          uri: ${MATCHING_EVALUATION_URI:lb://matching-evaluation}
+          uri: ${EVALUATION_URL:lb://matching-evaluation}
           predicates:
             - Path=/evaluation/**
 
@@ -64,5 +93,15 @@ eureka:
     register-with-eureka: true
     fetch-registry: true
     service-url:
-      # 유레카 서버의 접속 주소
       defaultZone: ${EUREKA_URI:http://localhost:8761/eureka/}
+
+springdoc:
+  swagger-ui:
+    disable-swagger-default-url: true
+    urls:
+      - name: APP service
+        url: /app/v3/api-docs
+      - name: Matching Evaluation service
+        url: /evaluation/v3/api-docs
+      - name: AI Judge service
+        url: /aijudge/v3/api-docs

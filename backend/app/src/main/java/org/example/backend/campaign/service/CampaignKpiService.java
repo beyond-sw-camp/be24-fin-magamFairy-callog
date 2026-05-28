@@ -5,6 +5,7 @@ import org.example.backend.campaign.model.*;
 import org.example.backend.campaign.repository.CampaignKpiRepository;
 import org.example.backend.campaign.repository.CampaignMemberRepository;
 import org.example.backend.campaign.repository.CampaignRepository;
+import org.example.backend.common.redis.CacheNames;
 import org.example.backend.common.redis.DashboardCacheEvictor;
 import org.example.backend.common.security.CampaignMemberGuard;
 import org.example.backend.kpi.model.CampaignKpiContribution;
@@ -12,6 +13,8 @@ import org.example.backend.kpi.repository.CampaignKpiContributionRepository;
 import org.example.backend.kpi.repository.OrganizationKpiRepository;
 import org.example.backend.user.model.User;
 import org.example.backend.user.repository.UserRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +41,7 @@ public class CampaignKpiService {
 
     // ── 조회 ────────────────────────────────────────────────
 
+    @Cacheable(value = CacheNames.CAMPAIGN_KPI, key = "#campaignId + ':' + #callerLoginId", unless = "#result == null")
     public CampaignKpiDto.ListRes listKpis(Long campaignId, String callerLoginId) {
         User caller = findUser(callerLoginId);
         CampaignMember me = findMember(campaignId, caller.getIdx());
@@ -82,6 +86,7 @@ public class CampaignKpiService {
     // ── 추가 ────────────────────────────────────────────────
 
     @Transactional
+    @CacheEvict(value = CacheNames.CAMPAIGN_KPI, allEntries = true)
     public CampaignKpiDto.Res createKpi(Long campaignId, String callerLoginId, CampaignKpiDto.CreateReq req) {
         User caller = findUser(callerLoginId);
         CampaignMember me = findMember(campaignId, caller.getIdx());
@@ -124,13 +129,14 @@ public class CampaignKpiService {
         }
 
         // Dashboard 캐시 무효화 (kpiCategories, summary.matchAvg 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
         return CampaignKpiDto.Res.from(saved);
     }
 
     // ── 메타 수정 ────────────────────────────────────────────
 
     @Transactional
+    @CacheEvict(value = CacheNames.CAMPAIGN_KPI, allEntries = true)
     public CampaignKpiDto.Res updateMeta(Long campaignId, Long kpiId, String callerLoginId,
                                          CampaignKpiDto.UpdateMetaReq req) {
         User caller = findUser(callerLoginId);
@@ -151,13 +157,14 @@ public class CampaignKpiService {
         kpi.setOwnerLabel(req.ownerLabel());
         kpi.setOwnerUser(ownerUser);
         // Dashboard 캐시 무효화 (category 변경 시 kpiCategories, target 변경 시 평균 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
         return CampaignKpiDto.Res.from(kpi);
     }
 
     // ── 실적값 입력 ──────────────────────────────────────────
 
     @Transactional
+    @CacheEvict(value = CacheNames.CAMPAIGN_KPI, allEntries = true)
     public CampaignKpiDto.Res updateActual(Long campaignId, Long kpiId, String callerLoginId,
                                            CampaignKpiDto.UpdateActualReq req) {
         User caller = findUser(callerLoginId);
@@ -179,13 +186,14 @@ public class CampaignKpiService {
         }
 
         // Dashboard 캐시 무효화 (quarterGoals, partnerProgress.avgPct, summary.matchAvg 모두 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
         return CampaignKpiDto.Res.from(kpi);
     }
 
     // ── 삭제 ────────────────────────────────────────────────
 
     @Transactional
+    @CacheEvict(value = CacheNames.CAMPAIGN_KPI, allEntries = true)
     public void deleteKpi(Long campaignId, Long kpiId, String callerLoginId) {
         User caller = findUser(callerLoginId);
         CampaignMember me = findMember(campaignId, caller.getIdx());
@@ -194,12 +202,13 @@ public class CampaignKpiService {
         requireOpen(kpi.getCampaign());
         kpiRepository.delete(kpi);
         // Dashboard 캐시 무효화 (kpiCategories, summary.matchAvg 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
     }
 
     // ── 성과 분석 메모 ────────────────────────────────────────
 
     @Transactional
+    @CacheEvict(value = CacheNames.CAMPAIGN_KPI, allEntries = true)
     public void updateAnalysis(Long campaignId, String callerLoginId, CampaignKpiDto.UpdateAnalysisReq req) {
         User caller = findUser(callerLoginId);
         CampaignMember me = findMember(campaignId, caller.getIdx());
@@ -218,6 +227,7 @@ public class CampaignKpiService {
     // ── 프레임워크 일괄 등록 ──────────────────────────────────
 
     @Transactional
+    @CacheEvict(value = CacheNames.CAMPAIGN_KPI, allEntries = true)
     public List<CampaignKpiDto.Res> importFramework(Long campaignId, String callerLoginId,
                                                      CampaignKpiDto.ImportFrameworkReq req) {
         User caller = findUser(callerLoginId);
@@ -238,7 +248,7 @@ public class CampaignKpiService {
         ).toList();
         List<CampaignKpiDto.Res> result = kpiRepository.saveAll(created).stream().map(CampaignKpiDto.Res::from).toList();
         // Dashboard 캐시 무효화 (대량 KPI 추가 — kpiCategories, summary.matchAvg 영향)
-        dashboardCacheEvictor.evictAll();
+        dashboardCacheEvictor.evictCampaign(campaignId);
         return result;
     }
 

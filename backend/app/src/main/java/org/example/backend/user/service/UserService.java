@@ -9,7 +9,6 @@ import org.example.backend.user.model.AuthUserDetails;
 import org.example.backend.user.model.User;
 import org.example.backend.user.model.UserAccountStatus;
 import org.example.backend.user.model.UserDto;
-import org.example.backend.user.repository.RefreshTokenRepository;
 import org.example.backend.user.repository.UserRepository;
 import org.example.backend.userInfo.service.UserProfileService;
 import org.springframework.security.core.Authentication;
@@ -49,9 +48,9 @@ public class UserService implements UserDetailsService {
             Pattern.compile("^01[016789]\\d{7,8}$");
 
     private final UserRepository userRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
     private final UserProfileService userProfileService;
     private final OrganizationService organizationService;
+    private final RefreshTokenRedisService refreshTokenRedisService;
     private final PasswordEncoder passwordEncoder;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -286,7 +285,7 @@ public class UserService implements UserDetailsService {
         validateNewPassword(currentPassword, newPassword);
 
         user.setPassword(passwordEncoder.encode(newPassword));
-        refreshTokenRepository.deleteByUserId(user.getId());
+        refreshTokenRedisService.deleteByUserId(user.getId());
 
         return UserDto.ChangePasswordRes.builder()
                 .id(user.getId())
@@ -316,7 +315,7 @@ public class UserService implements UserDetailsService {
                 && target.getIdx().equals(organization.getGeneralManager().getIdx())) {
             organization.setGeneralManager(null);
         }
-        refreshTokenRepository.deleteByUserId(target.getId());
+        refreshTokenRedisService.deleteByUserId(target.getId());
 
         return UserDto.DeleteUserRes.from(target);
     }

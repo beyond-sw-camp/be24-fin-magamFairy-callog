@@ -9,8 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -66,13 +68,19 @@ public class AdCheckFileStorageService {
     private String bucketName;
 
     public AnalysisStorageContext createAnalysisStorageContext(String originalFileName) {
+        return createAnalysisStorageContext(originalFileName, null);
+    }
+
+    public AnalysisStorageContext createAnalysisStorageContext(String originalFileName, String requestedWorkId) {
         Instant now = Instant.now();
         String safeBaseName = sanitizeBaseName(removeExtension(resolveOriginalFileName(originalFileName)));
-        String workId = FILE_TIMESTAMP_FORMATTER.format(now)
+        String workId = requestedWorkId == null || requestedWorkId.isBlank()
+                ? FILE_TIMESTAMP_FORMATTER.format(now)
                 + "_"
                 + UUID.randomUUID().toString().substring(0, 8)
                 + "_"
-                + safeBaseName;
+                + safeBaseName
+                : sanitizeBaseName(requestedWorkId);
 
         return AnalysisStorageContext.builder()
                 .workId(workId)
@@ -187,6 +195,18 @@ public class AdCheckFileStorageService {
                 .build();
         PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
         return presignedRequest.url().toString();
+    }
+
+    public byte[] downloadBytes(String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ad check file object key is required.");
+        }
+
+        ResponseBytes<GetObjectResponse> objectBytes = s3Client.getObjectAsBytes(GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(objectKey)
+                .build());
+        return objectBytes.asByteArray();
     }
 
     private String resolveViewContentType(String contentType, String objectKey) {

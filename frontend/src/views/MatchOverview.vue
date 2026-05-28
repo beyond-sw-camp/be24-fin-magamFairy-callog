@@ -66,8 +66,6 @@ function moveToMatchingTab(criteria) {
 
 function requestEvaluation(candidate) {
   evaluationCandidate.value = candidate ?? null
-  console.log(candidate)
-  console.log("ㅎㅇ")
   startEvaluation(evaluationCandidate.value);
   currentTab.value = 'evaluation'
 }
@@ -133,37 +131,35 @@ function handleMatchingComplete(target) {
 }
 
 .match-tabs {
-  display: flex;
-  align-items: flex-end;
-  gap: 1.9rem;
-  min-height: 2.45rem;
-  border-bottom: 1px solid var(--border-color);
-  padding: 0 0.15rem;
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--panel-color);
+  padding: 6px;
 }
 
 .match-tabs__button {
-  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.38rem;
-  min-height: 2.45rem;
-  border: 0;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
-  padding: 0 0 0.72rem;
   color: var(--text-secondary);
   cursor: pointer;
+  padding: 0 14px;
   white-space: nowrap;
   transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
     color var(--transition-fast),
     opacity var(--transition-fast);
-}
-
-.match-tabs__button::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 0;
-  height: 2px;
-  background: transparent;
 }
 
 .match-tabs__button:hover {
@@ -171,16 +167,14 @@ function handleMatchingComplete(target) {
 }
 
 .match-tabs__button--active {
-  color: var(--text-primary);
-}
-
-.match-tabs__button--active::after {
-  background: var(--text-primary);
+  border-color: color-mix(in srgb, var(--color-primary-500) 34%, var(--border-color));
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
 }
 
 .match-tabs__button > strong {
   color: inherit;
-  font-size: 0.78rem;
+  font-size: 13px;
   font-weight: 900;
   line-height: 1;
 }
@@ -200,7 +194,7 @@ function handleMatchingComplete(target) {
 }
 
 .match-tabs__button--active .match-tabs__count {
-  background: var(--text-primary);
+  background: var(--color-primary-500);
   color: #fff;
 }
 
@@ -215,14 +209,13 @@ function handleMatchingComplete(target) {
 
 @media (max-width: 1200px) {
   .match-tabs {
-    gap: 1.2rem;
     overflow-x: auto;
   }
 }
 
 @media (max-width: 820px) {
   .match-tabs {
-    gap: 1rem;
+    width: 100%;
   }
 }
 </style>

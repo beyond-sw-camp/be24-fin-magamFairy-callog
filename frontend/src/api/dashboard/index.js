@@ -75,6 +75,13 @@ export const GetRevenueYoY = async (year, quarter) => {
   return unwrapResponse(await api.get('/dashboard/revenue-yoy', { params }))
 }
 
+/** Zone4 P2 · 매출 추이 "분기" 토글 — 선택 연도 분기별 합계 → [{ label, value }] (Q1~Q4) */
+export const GetRevenueQuarters = async (year) => {
+  const params = {}
+  if (year != null) params.year = year
+  return unwrapResponse(await api.get('/dashboard/revenue-quarters', { params }))
+}
+
 /** Zone1 P1좌 / Zone3 P2 · 검수 대기/목록 → [{ ... }] */
 export const GetReviewQueue = async () => {
   return unwrapResponse(await api.get('/dashboard/review-queue'))
@@ -100,6 +107,7 @@ export default {
   GetCampaignPipeline,
   GetCampaignProgress,
   GetRevenueYoY,
+  GetRevenueQuarters,
   GetReviewQueue,
   GetAdReviewQueue,
   GetBlockers,

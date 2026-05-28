@@ -23,7 +23,7 @@ public final class CacheNames {
      * ⚡ Fix A: 통합 endpoint /dashboard 의 응답 (DashboardPageDto) 통째 캐시.
      * key = "{callerIdx}:{periodCode}"
      * cache hit 시 sub-method 들의 @Cacheable 거치지 않고 즉시 응답 (self-invocation 우회).
-     * 5종 캐시 데이터의 직렬화/역직렬화도 1회로 감소.
+     * Frontend loadAll aggregate cache.
      */
     public static final String DASHBOARD_PAGE             = "dashboard:page";
 
@@ -40,9 +40,15 @@ public final class CacheNames {
     // ── 캠페인 멤버 권한 (★ 변경 즉시 evict 필수) ──
     public static final String CAMPAIGN_MEMBER_ROLE       = "campaign:member:role";
 
+    public static final String TASK_LIST                  = "task:list";
+    public static final String CAMPAIGN_KPI               = "campaign:kpi";
+
     // ── 메타데이터 (거의 안 바뀜) ──
     public static final String KPI_TEMPLATES              = "kpi:templates";
 
     // ── 알림 ──
     public static final String NOTIFICATION_SETTING       = "notification:setting";
+
+    // ── 인증 user 캐시 (Pod 간 공유) ──
+    public static final String USER_AUTH            = "user:auth";
 }

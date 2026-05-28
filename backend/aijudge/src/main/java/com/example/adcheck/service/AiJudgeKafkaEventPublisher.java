@@ -37,6 +37,30 @@ public class AiJudgeKafkaEventPublisher {
         publish("AI_JUDGE_FAILED", response);
     }
 
+    public void publishProgress(Map<String, Object> context, String step) {
+        if (!enabled || context == null || context.isEmpty() || step == null || step.isBlank()) {
+            return;
+        }
+
+        String jobId = stringValue(context.get("adCheckJobId"));
+        if (jobId == null || jobId.isBlank()) {
+            return;
+        }
+
+        try {
+            Map<String, Object> event = new LinkedHashMap<>();
+            event.put("eventId", UUID.randomUUID().toString());
+            event.put("eventType", "AI_JUDGE_PROGRESS");
+            event.put("occurredAt", Instant.now().toString());
+            event.put("analysisJobId", jobId);
+            event.put("step", step);
+            event.put("context", context);
+            kafkaTemplate.send(completedTopic, jobId, objectMapper.writeValueAsString(event));
+        } catch (Exception e) {
+            log.warn("AI judge Kafka progress event cannot be serialized. jobId={}, step={}", jobId, step, e);
+        }
+    }
+
     private void publish(String eventType, AdCheckDto.FileCheckRes response) {
         if (!enabled || response == null) {
             return;
@@ -77,9 +101,16 @@ public class AiJudgeKafkaEventPublisher {
         event.put("violationText", response.getViolationText());
         event.put("reason", response.getReason());
         event.put("suggestion", response.getSuggestion());
+        event.put("verdictLevel", response.getVerdictLevel());
         event.put("extractionMode", response.getExtractionMode());
         event.put("finalResultObjectKey", response.getFinalResultObjectKey());
         event.put("errorMessage", response.getErrorMessage());
+        event.put("context", response.getContext());
+        event.put("result", response);
         return event;
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value).trim();
     }
 }

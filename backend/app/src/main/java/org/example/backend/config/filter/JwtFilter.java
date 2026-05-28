@@ -7,10 +7,11 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.example.backend.common.redis.CachedUserAuth;
+import org.example.backend.common.redis.UserAuthCache;
 import org.example.backend.user.model.AuthUserDetails;
-import org.example.backend.user.model.User;
 import org.example.backend.user.model.UserAccountStatus;
-import org.example.backend.user.repository.UserRepository;
+import org.example.backend.user.service.JwtBlacklistService;
 import org.example.backend.user.utils.JwtUtil;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -18,6 +19,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -29,7 +31,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
-    private final UserRepository userRepository;
+    private final UserAuthCache userAuthCache;
+    private final JwtBlacklistService jwtBlacklistService;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -88,10 +91,23 @@ public class JwtFilter extends OncePerRequestFilter {
             writeError(response, HttpServletResponse.SC_UNAUTHORIZED, "invalid token category");
             return;
         }
+        if (jwtBlacklistService.isBlacklisted(token)) {
+            writeError(response, HttpServletResponse.SC_UNAUTHORIZED, "blacklisted token");
+            return;
+        }
 
         Long idx = jwtUtil.getUserIdx(token);
-        User userEntity = userRepository.findById(idx).orElse(null);
-        if (userEntity == null || !Boolean.TRUE.equals(userEntity.getEnable()) || resolveStatus(userEntity) != UserAccountStatus.ACTIVE) {
+        // User 엔티티(password 포함) 대신 CachedUserAuth DTO를 캐시에서 조회
+        CachedUserAuth userEntity;
+        try {
+            userEntity = userAuthCache.loadUser(idx);
+        } catch (ResponseStatusException e) {
+            writeError(response, HttpServletResponse.SC_FORBIDDEN, "user access blocked");
+            return;
+        }
+        if (userEntity == null
+                || !Boolean.TRUE.equals(userEntity.enable())
+                || userEntity.accountStatus() != UserAccountStatus.ACTIVE) {
             writeError(response, HttpServletResponse.SC_FORBIDDEN, "user access blocked");
             return;
         }
@@ -109,9 +125,9 @@ public class JwtFilter extends OncePerRequestFilter {
                 .id(id)
                 .email(email)
                 .role(resolvedRole)
-                .name(userEntity.getName())
-                .enable(userEntity.getEnable())
-                .accountStatus(resolveStatus(userEntity))
+                .name(userEntity.name())
+                .enable(userEntity.enable())
+                .accountStatus(userEntity.accountStatus())
                 .build();
 
         String orgType = jwtUtil.getOrgType(token);
@@ -126,10 +142,6 @@ public class JwtFilter extends OncePerRequestFilter {
 
         // 다음 필터로 요청 전달
         filterChain.doFilter(request, response);
-    }
-
-    private UserAccountStatus resolveStatus(User user) {
-        return user.getAccountStatus() == null ? UserAccountStatus.ACTIVE : user.getAccountStatus();
     }
 
     private boolean isSseRequest(HttpServletRequest request) {
