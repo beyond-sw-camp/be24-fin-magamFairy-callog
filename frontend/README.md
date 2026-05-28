@@ -8,13 +8,28 @@
 |---|---|
 | 서비스 배포 주소 | [https://www.magamfairy.kro.kr/](https://www.magamfairy.kro.kr/) |
 | 화면 설계서 | [Figma 화면 설계서](https://www.figma.com/design/1AczfcXlvCL1qyRhlAYAPo/callog?node-id=3-2&t=nuKk7NuGMftcvFai-1) |
-| 기능 테스트 영상 | 아래 `기능 테스트 영상` 참고 |
 | 공통 README | [../README.md](../README.md) |
 | 백엔드 README | `../backend/README.md` 작성 예정 |
 
+---
+
+## 주요 화면
+
+> 전체 화면 설계는 [Figma 설계서](https://www.figma.com/design/1AczfcXlvCL1qyRhlAYAPo/callog?node-id=3-2&t=nuKk7NuGMftcvFai-1)를 참고하세요. 아래는 핵심 화면만 발췌했습니다.
+
+| 메인 대시보드 | AI 검수 |
+|---|---|
+| ![dashboard](./docs/screenshots/dashboard.png) | ![inspection](./docs/screenshots/inspection.png) |
+
+| 캠페인 오버뷰 | 권한별 화면 (본사 / 협력사) |
+|---|---|
+| ![campaign](./docs/screenshots/campaign.png) | ![role](./docs/screenshots/role-diff.png) |
+
+---
+
 ## 주요 기능
 
-- 인증 / 계정 관리
+- 인증 / 계정 관리 (권한: Admin, 본사, 협력사)
 - 메인 대시보드, 캘린더, 협업 보드
 - 캠페인 생성, 참여자 설정, 팀보드 입력
 - 캠페인 KPI, 프레임, 레퍼런스실
@@ -22,8 +37,6 @@
 - AI 자료 검수, 승인 대기, 알림 센터
 
 ## 화면 설계서 구성
-
-화면 설계서는 실제 사용 흐름 기준으로 정리했습니다.
 
 <details>
 <summary><strong>01 인증 / 계정 관리</strong></summary>
@@ -71,47 +84,45 @@
 
 </details>
 
-
+---
 
 ## 기능 테스트 영상
 
-영상은 주요 화면 동작과 기능 흐름을 확인하기 위한 용도로 간단히 정리했습니다.
-
 ### 메인 대시보드
-
-운영 지표와 주요 현황을 확인하는 화면입니다.
-
 https://github.com/user-attachments/assets/10d1db8e-2362-4823-ab11-47aa4cb5dcd4
 
 ### AI 자료 검수
-
-자료 검수 요청, 진행 상태, 검수 결과를 확인하는 화면입니다.
-
 https://github.com/user-attachments/assets/ca439c09-4469-4444-8cc6-ba658bc2db25
 
 ### 알림 기능
-
-알림 수신, 알림 목록, 상세 팝업을 확인하는 화면입니다.
-
 https://github.com/user-attachments/assets/60a57c27-7f29-4554-aa1b-d1d33bbdea78
 
 ### 환경 설정
-
-프로필, 알림, 테마/UI, 계정/보안 설정을 확인하는 화면입니다.
-
-<img width="1920" height="1032" alt="환경설정_10fps" src="https://github.com/user-attachments/assets/fe8336df-4eb2-42a5-b57c-62af3a86b97c" />
+<img width="1920" height="1032" alt="환경설정_10fps" src="https://github.com/user-attachments/assets/6992a45f-5500-43bd-a9d7-9e24e7138227" />
 
 
-## 무중단 배포 테스트
+---
 
-### Frontend Canary
+## 무중단 배포 — Canary 전략
 
-프론트엔드는 Canary 배포 방식을 적용하여 신규 버전을 일부 사용자에게 먼저 배포하고, 정상 동작 확인 후 전체 트래픽으로 점진 확대하는 방식으로 테스트했습니다.
+### 왜 Canary를 선택했는가
 
-사용자가 가장 먼저 마주하는 화면이기 때문에, 작은 UI 변경도 사용 흐름에 직접적인 영향을 줄 수 있습니다.  
-따라서 신규 화면을 일부 사용자에게 먼저 노출하여 화면 오류, 라우팅 문제, API 응답 처리, 브라우저 호환성을 사전에 확인한 뒤 전체 배포로 확장할 수 있도록 구성했습니다.
+Callog는 단일 서비스 내에 **Admin / 본사 / 협력사** 세 가지 권한이 공존하고,
+각 권한마다 접근 가능한 화면과 API 호출 흐름이 다릅니다.
+
+이 구조에서 전체 배포(Big Bang)를 선택하면 다음 문제가 생깁니다.
+
+- **권한 간 연쇄 영향**: 한 권한의 UI 변경이 다른 권한의 라우팅이나 상태관리에 영향을 줄 수 있고, 테스트 환경에서는 재현이 어렵습니다.
+- **AI 검수 연동 리스크**: AI API 응답에 의존하는 화면은 실제 트래픽이 유입되어야만 드러나는 에러 패턴이 있습니다. 소수 사용자에게 먼저 노출해서 응답 처리 오류를 사전에 잡아야 했습니다.
+- **롤백 비용**: 배포 후 문제가 생기면 진행 중인 캠페인 데이터 정합성에 영향을 줄 수 있어, 전체 롤백보다 트래픽 비율 조절로 빠르게 격리하는 방식이 안전합니다.
+
+이런 이유로 신규 버전을 일부 사용자에게 먼저 배포하고, 화면 오류 / 라우팅 문제 / API 응답 처리 / 브라우저 호환성을 확인한 뒤 전체 트래픽으로 점진 확대하는 Canary 전략을 채택했습니다.
+
+### 배포 흐름
 
 <img alt="Frontend Canary 배포 테스트" src="https://github.com/user-attachments/assets/93ecdef8-bf08-485a-8c43-a1433998de30" />
+
+---
 
 ## 권한별 화면 기준
 
@@ -121,8 +132,7 @@ https://github.com/user-attachments/assets/60a57c27-7f29-4554-aa1b-d1d33bbdea78
 | 본사 | 대시보드, KPI, 매칭, 검수 승인 | 운영 지표 확인과 최종 승인 업무 중심 |
 | 협력사 | 회원가입, 혜택 제안, 검수 승인 요청 | 캠페인 참여와 혜택 제안 업무 중심 |
 
-
-
+---
 
 ## 기술 스택
 
@@ -149,6 +159,8 @@ https://github.com/user-attachments/assets/60a57c27-7f29-4554-aa1b-d1d33bbdea78
 ![PostCSS](https://img.shields.io/badge/PostCSS-8-DD3A0A?style=for-the-badge&logo=postcss&logoColor=white)
 ![Prettier](https://img.shields.io/badge/Prettier-3-F7B93E?style=for-the-badge&logo=prettier&logoColor=111111)
 
+---
+
 ## 실행 방법
 
 ```bash
@@ -156,17 +168,15 @@ npm install
 npm run dev
 ```
 
-개발 서버:
-
-```text
-http://localhost:5173
-```
+개발 서버: `http://localhost:5173`
 
 ## 빌드
 
 ```bash
 npm run build
 ```
+
+---
 
 ## 주요 폴더
 
@@ -183,6 +193,8 @@ frontend/
 │  └─ views/
 └─ vite.config.js
 ```
+
+---
 
 ## 주요 라우트
 
@@ -201,6 +213,8 @@ frontend/
 | `/references` | 레퍼런스실 |
 | `/matching` | 매칭 |
 | `/usercreate` | 사용자 관리 |
+
+---
 
 ## 테스트 계정
 
