@@ -37,9 +37,10 @@
 * 상세 위키 보기
 
 ---
-## 📃 Swagger API
-
-
+## 📃 모듈별 API 명세서
+| 베이스 모듈 (APP) | AI Judge 서비스 모듈 | Matching 서비스 모듈 |
+|:-----------------:| :---: |:----------:|
+|[APP 서비스 API 명세서-1.pdf](https://github.com/user-attachments/files/28331564/APP.API.-1.pdf)|[AI Judge 서비스 API 명세서.pdf](https://github.com/user-attachments/files/28331565/AI.Judge.API.pdf)|[matching 서비스 API 명세서.pdf](https://github.com/user-attachments/files/28331566/matching.API.pdf)|
 
 ---
 
