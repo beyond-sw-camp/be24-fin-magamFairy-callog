@@ -263,8 +263,7 @@ const donutSegs = computed(() => {
   --urgent: #E25B49; --urgent-soft: rgba(226,91,73,.14);
 }
 /* 성과트래커+매출추이 페이지 — 외곽 카드 배경/그림자 숨김 (안쪽 카드가 자체 배경) */
-.zone4--bare { background: transparent !important; box-shadow: none !important; padding: 0 !important; } 
-/* .zone4--bare { background: transparent !important; box-shadow: none !important; padding: 0 !important; }*/
+.zone4--bare { background: transparent !important; box-shadow: none !important; padding: 12px !important; }
 
 .z4-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .z4-scroll { overflow-y: auto; overflow-x: hidden; }
@@ -285,16 +284,9 @@ const donutSegs = computed(() => {
 /* ── 성과 트래커 (퍼플) ── */
 .z4-card--tracker {
   background: linear-gradient(155deg, #BCA9EA 0%, #9D85FF 60%, #8E72F2 100%);
-  color: #fff; padding: 18px 20px 16px; position: relative; overflow: hidden; gap: 8px; box-sizing: border-box; flex: 0.725;
+  color: #fff; padding: 18px 20px 16px; position: relative; overflow: hidden; gap: 8px;
 }
-.card-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px; }
-
-/* .z4-card--tracker {
-  background: linear-gradient(155deg, #BCA9EA 0%, #9D85FF 60%, #8E72F2 100%);
-  color: #fff; padding: 18px 20px 16px; position: relative; overflow: hidden; gap: 8px; box-sizing: border-box;
-} */
-
-.z4-card--tracker::before { content:''; position:absolute; top:-60px; right:-40px; width:180px; height:180px; border-radius:999px; background:rgba(255,255,255,.10);  }
+.z4-card--tracker::before { content:''; position:absolute; top:-60px; right:-40px; width:180px; height:180px; border-radius:999px; background:rgba(255,255,255,.10); }
 .z4-card--tracker .z4-pg-h { position: relative; }
 .z4-card--tracker .z4-pg-h h2 { color: #fff; }
 .z4-card--tracker .z4-pg-h p { color: rgba(255,255,255,.82); }
@@ -314,7 +306,7 @@ const donutSegs = computed(() => {
 .z4-stat-v { display: block; font-size: 16px; font-weight: 800; margin-top: 4px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 
 /* ── 매출 추이 (라이트) ── */
-.z4-card--rev { background: var(--lp-cream, #F4EFE6); padding: 16px 18px 14px; flex: 0.8; }
+.z4-card--rev { background: var(--lp-cream, #F4EFE6); padding: 16px 18px 14px; }
 .z4-rev-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .z4-rev-h-l { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
 .z4-rev-h-l h2 { margin: 0; font-size: 16px; font-weight: 800; color: var(--lp-text); }

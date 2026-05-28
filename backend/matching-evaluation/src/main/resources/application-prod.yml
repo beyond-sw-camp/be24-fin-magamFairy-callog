@@ -1,0 +1,67 @@
+server:
+  port: 8082
+  tomcat:
+    keep-alive-timeout: 60000
+    max-keep-alive-requests: -1
+spring:
+  application:
+    name: ai-evaluation
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: matching-evaluation
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+  data:
+    mongodb:
+      uri: ${MONGODB_URL}
+      database: ${MONGODB_EVALUATION}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+  endpoint:
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    enabled: ${TRACING_ENABLED}
+    sampling:
+      probability: 1.0   # 모든 요청에 대한 데이터를 수집하겠다.
+  otlp:
+    tracing:
+      endpoint: ${JAEGER_URL}
+      transport: http
+
+custom:
+  n8n:
+    webhook-url: ${N8N_URL}
+    evaluation-endpoint: ${EVALUATION_ENDPOINT}
+
+app:
+  kafka:
+    topics:
+      evaluation-start: ${EVALUATION_START_TOPIC}
+      evaluation-collect: evaluation.collect
+      evaluation-completed: evaluation.completed
+      evaluation-failed: evaluation.failed
+      evaluation-start-dlq: evaluation.start.dlq
+      evaluation-collect-dlq: evaluation.collect.dlq
+eureka:
+  client:
+    register-with-eureka: ${EUREKA_REGISTER_WITH_EUREKA}
+    fetch-registry: ${EUREKA_FETCH_REGISTRY}
+    service-url:
+      defaultZone: ${EUREKA_URI}

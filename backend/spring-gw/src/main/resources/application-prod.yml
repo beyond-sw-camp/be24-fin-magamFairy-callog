@@ -1,0 +1,57 @@
+jwt:
+  key: ${JWT_SECRET}
+
+spring:
+  application:
+    name: spring-gw
+  cloud:
+    gateway:
+      routes:
+        - id: gateway-local-info
+          uri: noop://localhost
+          predicates:
+            - Path=/gw/**
+          filters:
+            - StripPrefix=1
+
+        # ai 판사
+        - id: ai-judge-actuator
+          uri: ${AI_JUDGE_URI} # 환경변수 처리
+          predicates:
+            - Path=/aijudge/actuator/**
+          filters:
+            - StripPrefix=1
+
+        - id: ai-judge
+          uri: ${AI_JUDGE_URI} # 환경변수 처리
+          predicates:
+            - Path=/aijudge/**
+          filters:
+            - JwtFilter
+
+        # ai 평가
+        - id: ai-evaluation-actuator
+          uri: ${EVALUATION_URL} # 환경변수 처리
+          predicates:
+            - Path=/evaluation/actuator/**
+          filters:
+            - StripPrefix=1
+
+        - id: ai-evaluation
+          uri: ${EVALUATION_URL} # 환경변수 처리
+          predicates:
+            - Path=/evaluation/**
+
+        - id: app
+          uri: ${APP_URI} # 환경변수 처리
+          predicates:
+            - Path=/**
+          filters:
+            - JwtFilter
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_URI}
