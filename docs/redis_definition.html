@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Redis 캐시 구조 명세서</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-light.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Pretendard', sans-serif; background: #f8fafc; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .menu-item.active {
+      background-color: #fff7ed;
+      color: #c2410c;
+      border-right: 3px solid #f97316;
+      font-weight: 700;
+    }
+    pre code.hljs {
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      font-size: 0.875rem;
+      line-height: 1.55;
+      background-color: #fffdf8;
+      border: 1px solid #fed7aa;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.18rem 0.62rem;
+      font-size: 0.7rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800">
+  <aside class="w-80 bg-white border-r border-slate-200 flex flex-col h-full shadow-sm z-10 flex-shrink-0">
+    <div class="p-5 border-b border-slate-100 flex items-center gap-3">
+      <div class="bg-orange-100 text-orange-600 p-2 rounded-lg">
+        <i class="fa-solid fa-bolt text-xl"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-lg leading-tight text-slate-800">Redis 명세서</h1>
+        <p class="text-xs text-slate-500">캐시 · 토큰 · Pub/Sub · 락</p>
+      </div>
+    </div>
+    <div class="flex-1 overflow-y-auto py-4" id="sidebar-menu"></div>
+  </aside>
+
+  <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
+    <header class="bg-white px-8 py-5 border-b border-slate-200 flex items-center justify-between shadow-sm z-10">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span id="module-badge" class="px-2.5 py-1 text-xs font-bold rounded-md bg-orange-100 text-orange-700">모듈</span>
+          <span class="text-sm text-slate-400"><i class="fa-solid fa-angle-right"></i></span>
+          <span id="domain-badge" class="px-2.5 py-1 text-xs font-bold rounded-md bg-amber-100 text-amber-700 uppercase tracking-wide">영역</span>
+          <span class="text-sm text-slate-400"><i class="fa-solid fa-angle-right"></i></span>
+          <span class="text-sm font-medium text-slate-500" id="type-label">Redis 객체</span>
+        </div>
+        <h2 id="item-title" class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          항목을 선택하세요
+        </h2>
+      </div>
+      <div class="hidden lg:flex items-center gap-2">
+        <span class="chip bg-slate-100 text-slate-600">Spring Boot 캐시</span>
+        <span class="chip bg-orange-100 text-orange-700">Redis Sentinel 대응</span>
+        <span class="chip bg-emerald-100 text-emerald-700">GZIP JSON</span>
+      </div>
+    </header>
+
+    <div class="flex-1 overflow-y-auto p-8" id="content-area" style="display: none;">
+      <div class="max-w-6xl mx-auto space-y-6">
+        <section class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex gap-4 items-start">
+          <div class="bg-orange-100 p-3 rounded-full text-orange-600 mt-1">
+            <i class="fa-regular fa-lightbulb text-lg"></i>
+          </div>
+          <div class="flex-1">
+            <h3 class="font-bold text-slate-800 mb-1">설계 포인트 (Design Note)</h3>
+            <p id="item-desc" class="text-sm text-slate-600 leading-relaxed"></p>
+          </div>
+        </section>
+
+        <section class="grid grid-cols-1 xl:grid-cols-4 gap-4">
+          <article class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <p class="text-xs font-bold text-slate-400 uppercase mb-1">키 패턴</p>
+            <p id="key-pattern" class="text-sm font-mono text-orange-700 break-all"></p>
+          </article>
+          <article class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <p class="text-xs font-bold text-slate-400 uppercase mb-1">자료형</p>
+            <p id="data-type" class="text-sm font-bold text-slate-800"></p>
+          </article>
+          <article class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <p class="text-xs font-bold text-slate-400 uppercase mb-1">직렬화</p>
+            <p id="serialization" class="text-sm font-bold text-slate-800"></p>
+          </article>
+          <article class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <p class="text-xs font-bold text-slate-400 uppercase mb-1">만료 시간</p>
+            <p id="ttl" class="text-sm font-bold text-slate-800"></p>
+          </article>
+        </section>
+
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="bg-slate-50 px-5 py-4 border-b border-slate-200 flex justify-between items-center">
+            <h3 class="font-bold text-slate-800"><i class="fa-solid fa-table-list text-slate-400 mr-2"></i> 캐시 명세서</h3>
+            <span class="text-xs text-slate-500 border border-slate-200 px-2 py-1 rounded bg-white font-mono" id="source-file"></span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th class="px-5 py-3">항목</th>
+                  <th class="px-5 py-3">값</th>
+                </tr>
+              </thead>
+              <tbody id="spec-tbody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="bg-slate-50 px-5 py-4 border-b border-slate-200 flex justify-between items-center">
+            <h3 class="font-bold text-slate-800"><i class="fa-solid fa-code text-slate-400 mr-2"></i> 예시 값 / 페이로드</h3>
+            <button onclick="copyExample()" class="text-xs text-orange-600 hover:text-orange-800 font-medium flex items-center gap-1">
+              <i class="fa-regular fa-copy"></i> 복사
+            </button>
+          </div>
+          <pre><code id="example-code" class="language-json block"></code></pre>
+        </section>
+
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-12">
+          <div class="bg-slate-50 px-5 py-4 border-b border-slate-200">
+            <h3 class="font-bold text-slate-800"><i class="fa-solid fa-link text-slate-400 mr-2"></i> 연관 RDB / 이벤트 소스</h3>
+          </div>
+          <div id="relations" class="p-5 flex flex-wrap gap-2"></div>
+        </section>
+      </div>
+    </div>
+
+    <div id="empty-state" class="flex-1 flex flex-col items-center justify-center text-slate-400">
+      <i class="fa-solid fa-database text-6xl mb-4 text-slate-200"></i>
+      <p class="text-lg font-medium text-slate-500">좌측 메뉴에서 Redis 키스페이스를 선택해주세요.</p>
+    </div>
+  </main>
+
+  <script>
+    const schemaData = {
+      "app": {
+        "Dashboard Cache": [
+          {
+            id: "dashboard-page",
+            name: "dashboard:page",
+            icon: "fa-gauge-high",
+            color: "orange",
+            desc: "대시보드 진입 시 필요한 DashboardPageDto 통합 응답을 한 번에 캐시한다. sync=true로 동일 키 cold-start DB 폭주를 막고, 데이터 변경 시 버전 키를 올려 새 캐시 키를 사용한다.",
+            keyPattern: "dashboard:page::{callerIdx}:{periodCode}:v{globalVersion}:{userVersion}",
+            type: "String",
+            serialization: "GZIP 압축 GenericJackson2JsonRedisSerializer",
+            ttl: "2분",
+            policy: "Spring Cache 사용, null 값 캐시 비활성화, 읽기는 replica 우선",
+            invalidation: "DashboardCacheEvictor.evictAll / evictUser / evictCampaign 호출 시 cache_ver 증가",
+            source: "DashboardAggregateService.loadAll, RedisConfig.CACHE_TTL",
+            relations: ["user", "organizations", "campaigns", "campaign_members", "campaign_kpis", "task", "ad_review_request"],
+            example: `{
+  "@class": "org.example.backend.dashboard.dto.DashboardPageDto",
+  "summary": { "progressPct": 72, "activeCampaigns": 8 },
+  "quarterGoals": [],
+  "partnerProgress": [],
+  "reviewQueue": [],
+  "blockers": [],
+  "assetCategories": { "customer": 12, "content": 4 }
+}`
+          },
+          {
+            id: "dashboard-summary",
+            name: "dashboard:summary",
+            icon: "fa-chart-simple",
+            color: "amber",
+            desc: "사용자 범위(HQ, 계열사, 외부 파트너, 실무자)에 맞춘 대시보드 요약 KPI를 캐시한다.",
+            keyPattern: "dashboard:summary::{callerIdx}:v{globalVersion}:{userVersion}",
+            type: "String",
+            serialization: "GZIP 압축 JSON",
+            ttl: "3분",
+            policy: "Spring Cache",
+            invalidation: "대시보드 버전 키 증가",
+            source: "DashboardAggregateService.summary",
+            relations: ["campaigns", "campaign_kpis", "ad_review_request", "task"],
+            example: `{
+  "@class": "org.example.backend.dashboard.dto.DashboardSummaryDto",
+  "scope": "HQ",
+  "progressPct": 72,
+  "activeCampaigns": 8,
+  "pendingReviews": 3
+}`
+          },
+          {
+            id: "dashboard-quarter-goals",
+            name: "dashboard:quarter-goals",
+            icon: "fa-bullseye",
+            color: "amber",
+            desc: "분기별 조직 KPI와 달성률을 periodCode 단위로 캐시한다.",
+            keyPattern: "dashboard:quarter-goals::{callerIdx}:{periodCode|all}:v{globalVersion}:{userVersion}",
+            type: "String",
+            serialization: "GZIP 압축 JSON",
+            ttl: "5분",
+            policy: "Spring Cache",
+            invalidation: "조직 KPI 생성/수정/삭제/스냅샷 변경 시 대시보드 버전 증가",
+            source: "DashboardAggregateService.quarterGoals",
+            relations: ["organization_kpi", "kpi_daily_snapshot", "kpi_monthly_snapshot"],
+            example: `[
+  {
+    "@class": "org.example.backend.dashboard.dto.QuarterGoalProgressDto",
+    "name": "브랜드 인지도",
+    "periodCode": "2026-Q2",
+    "achievementPercent": 86
+  }
+]`
+          },
+          {
+            id: "dashboard-review-queue",
+            name: "dashboard:review-queue / dashboard:ad-review-queue",
+            icon: "fa-list-check",
+            color: "rose",
+            desc: "Task 검수 큐와 광고 최종 승인 큐를 사용자별로 캐시한다. 변경 빈도가 높아 TTL이 짧다.",
+            keyPattern: "dashboard:review-queue::{callerIdx}:v{globalVersion}:{userVersion}",
+            type: "String",
+            serialization: "GZIP 압축 JSON",
+            ttl: "1분",
+            policy: "Spring Cache",
+            invalidation: "Task, AdReviewRequest 변경 시 대시보드 버전 증가",
+            source: "DashboardAggregateService.reviewQueue, adReviewQueue",
+            relations: ["task", "ad_check_job", "ad_review_request", "campaigns"],
+            example: `{
+  "reviewQueue": [
+    { "taskId": 101, "taskName": "랜딩 페이지 검수", "campaignName": "Spring Campaign" }
+  ],
+  "adReviewQueue": {
+    "items": [
+      { "requestId": 9, "campaignId": 48, "requestStatus": "REQUESTED" }
+    ]
+  }
+}`
+          },
+          {
+            id: "dashboard-zone-extras",
+            name: "dashboard:* Zone 보조 캐시",
+            icon: "fa-layer-group",
+            color: "blue",
+            desc: "최근 활동, 캠페인 파이프라인, 진행률, 매출 YoY 등 Zone별 보조 데이터를 캐시한다.",
+            keyPattern: "dashboard:{recent-activity|campaign-pipeline|campaign-progress|revenue-yoy}::{callerIdx}[...]:v{globalVersion}:{userVersion}",
+            type: "String",
+            serialization: "GZIP 압축 JSON",
+            ttl: "30초 ~ 10분",
+            policy: "Spring Cache 사용, 데이터 실시간성에 따라 TTL 차등 적용",
+            invalidation: "캠페인/업무/KPI/매칭 자산 변경 시 대시보드 버전 증가",
+            source: "DashboardAggregateService zone methods, RedisConfig.CACHE_TTL",
+            relations: ["campaign_activity", "campaigns", "partner_benefits", "marketing_asset", "campaign_kpis"],
+            example: `{
+  "recentActivityTtl": "30s",
+  "campaignPipelineTtl": "3m",
+  "campaignProgressTtl": "3m",
+  "revenueYoYTtl": "10m"
+}`
+          }
+        ],
+        "Domain Cache": [
+          {
+            id: "campaign-list",
+            name: "campaign:list",
+            icon: "fa-bullhorn",
+            color: "indigo",
+            desc: "대시보드/사이드바에서 사용하는 사용자별 캠페인 목록을 mine/org scope로 캐시한다.",
+            keyPattern: "campaign:list::{userIdx}:{scope}",
+            type: "String",
+            serialization: "GZIP 압축 JSON",
+            ttl: "2분",
+            policy: "Spring Cache",
+            invalidation: "DashboardCacheEvictor가 영향받은 사용자의 mine/org 키를 직접 evict",
+            source: "CampaignService.listCampaigns, DashboardCacheEvictor.evictCampaignList",
+            relations: ["campaigns", "campaign_members", "campaign_participant", "organizations"],
+            example: `[
+  {
+    "@class": "org.example.backend.campaign.model.CampaignDto$Res",
+    "id": "campaign-public-id",
+    "name": "2026 통합 프로모션",
+    "status": "live",
+    "myCampaignRole": "MANAGER"
+  }
+]`
+          },
+          {
+            id: "campaign-member-role",
+            name: "campaign:member:role",
+            icon: "fa-user-shield",
+            color: "rose",
+            desc: "캠페인 상세/권한 체크에서 사용하는 사용자별 캠페인 역할을 캐시한다. 보안 민감도가 높아 멤버 변경 시 전체 evict한다.",
+            keyPattern: "campaign:member:role::{campaignId}:{userIdx}",
+            type: "String",
+            serialization: "GZIP 압축 JSON enum",
+            ttl: "2분",
+            policy: "Spring Cache 사용, 보안 민감 캐시",
+            invalidation: "멤버 추가, 역할 변경, 추방 시 allEntries=true",
+            source: "CampaignMemberService.getRole",
+            relations: ["campaign_members", "user", "campaigns"],
+            example: `"GENERAL_MANAGER"`
+          },
+          {
+            id: "task-list",
+            name: "task:list",
+            icon: "fa-bars-progress",
+            color: "blue",
+            desc: "캠페인 팀보드의 Task 목록을 campaignIdx 단위로 캐시한다.",
+            keyPattern: "task:list::{campaignIdx}",
+            type: "String",
+            serialization: "GZIP 압축 JSON",
+            ttl: "1분",
+            policy: "Spring Cache",
+            invalidation: "Task 생성/수정/삭제 시 campaignIdx 키 evict",
+            source: "TaskService.listByCampaign, TaskService.evictTaskList",
+            relations: ["task", "task_parts", "milestones", "campaigns"],
+            example: `[
+  {
+    "@class": "org.example.backend.teamboard.model.TaskDto$ResList",
+    "idx": 77,
+    "name": "소재 검수",
+    "status": "TODO",
+    "campaignIdx": 48
+  }
+]`
+          },
+          {
+            id: "campaign-kpi",
+            name: "campaign:kpi",
+            icon: "fa-chart-line",
+            color: "emerald",
+            desc: "캠페인 상세 KPI 탭의 KPI 목록/분석 결과를 campaignId와 callerLoginId 조합으로 캐시한다.",
+            keyPattern: "campaign:kpi::{campaignId}:{callerLoginId}",
+            type: "String",
+            serialization: "GZIP 압축 JSON",
+            ttl: "3분",
+            policy: "Spring Cache",
+            invalidation: "KPI 생성/메타 수정/실적 수정/삭제/프레임워크 import/분석 수정 시 allEntries=true",
+            source: "CampaignKpiService.listKpis",
+            relations: ["campaign_kpis", "campaigns", "user"],
+            example: `{
+  "@class": "org.example.backend.campaign.model.CampaignKpiDto$ListRes",
+  "items": [
+    { "id": 11, "name": "참여율", "targetValue": 80, "actualValue": 63 }
+  ]
+}`
+          },
+          {
+            id: "kpi-templates",
+            name: "kpi:templates",
+            icon: "fa-table-cells",
+            color: "emerald",
+            desc: "KPI 템플릿 카탈로그를 scope와 organization 단위로 캐시한다. 변경 빈도가 낮아 TTL이 길다.",
+            keyPattern: "kpi:templates::{scope|ALL}:{orgId|X}",
+            type: "String",
+            serialization: "GZIP 압축 JSON",
+            ttl: "1시간",
+            policy: "Spring Cache",
+            invalidation: "템플릿 생성 또는 instantiate로 usageCount 변경 시 allEntries=true",
+            source: "KpiTemplateService.list",
+            relations: ["kpi_template", "organization_kpi"],
+            example: `[
+  {
+    "@class": "org.example.backend.kpi.dto.KpiTemplateDto",
+    "name": "브랜드 인지도",
+    "scope": "GLOBAL",
+    "usageCount": 13
+  }
+]`
+          },
+          {
+            id: "notification-setting",
+            name: "notification:setting",
+            icon: "fa-bell",
+            color: "violet",
+            desc: "사용자별 알림 설정을 캐시한다. 업데이트 시 본인 키만 즉시 evict한다.",
+            keyPattern: "notification:setting::{userIdx}",
+            type: "String",
+            serialization: "GZIP 압축 JSON",
+            ttl: "30분",
+            policy: "Spring Cache",
+            invalidation: "NotificationSettingsService.updateSetting 호출 시 key evict",
+            source: "NotificationSettingsService.getSetting",
+            relations: ["notification_settings", "user"],
+            example: `{
+  "@class": "org.example.backend.notification.model.NotificationDto$SettingRes",
+  "deadlineEnabled": true,
+  "reviewEnabled": true,
+  "campaignEnabled": true
+}`
+          }
+        ],
+        "Auth & Session": [
+          {
+            id: "user-auth",
+            name: "user:auth",
+            icon: "fa-id-card",
+            color: "rose",
+            desc: "JwtFilter에서 사용하는 경량 사용자 인증 DTO를 캐시한다. User 엔티티 전체와 password를 Redis에 올리지 않는 보안 목적 캐시다.",
+            keyPattern: "user:auth::{userIdx}",
+            type: "String",
+            serialization: "GZIP 압축 JSON CachedUserAuth",
+            ttl: "60초",
+            policy: "Spring Cache 사용, null 값 캐시 비활성화",
+            invalidation: "UserAuthCache.invalidate 또는 clearAll 호출, 기본적으로 짧은 TTL 자연 만료",
+            source: "UserAuthCache.loadUser, CachedUserAuth",
+            relations: ["user"],
+            example: `{
+  "@class": "org.example.backend.common.redis.CachedUserAuth",
+  "idx": 12,
+  "name": "홍길동",
+  "enable": true,
+  "accountStatus": "ACTIVE"
+}`
+          },
+          {
+            id: "refresh-user",
+            name: "refresh:user / refresh:token",
+            icon: "fa-rotate",
+            color: "orange",
+            desc: "Refresh Token을 사용자 정방향 키와 토큰 역방향 키로 저장한다. Lua 스크립트로 기존 토큰을 지우고 새 토큰을 원자적으로 로테이션한다.",
+            keyPattern: "refresh:user:{userId}, refresh:token:{refreshToken}",
+            type: "String",
+            serialization: "일반 문자열",
+            ttl: "14일",
+            policy: "StringRedisTemplate 사용, Lua 원자적 토큰 로테이션",
+            invalidation: "로그아웃, 토큰 재발급, 사용자 삭제/비활성 처리 시 DEL",
+            source: "RefreshTokenRedisService",
+            relations: ["user", "auth"],
+            example: `{
+  "refresh:user:hqgm@callog.com": "eyJhbGciOiJIUzI1NiJ9...",
+  "refresh:token:eyJhbGciOiJIUzI1NiJ9...": "hqgm@callog.com"
+}`
+          },
+          {
+            id: "jwt-blacklist",
+            name: "jwt:blacklist",
+            icon: "fa-ban",
+            color: "slate",
+            desc: "로그아웃된 Access Token을 만료 시각까지 블랙리스트에 저장한다. 긴 JWT 원문 대신 MD5 해시를 키로 사용한다.",
+            keyPattern: "jwt:blacklist:{md5(accessToken)}",
+            type: "String",
+            serialization: "일반 문자열 값 = 1",
+            ttl: "Access Token 잔여 만료 시간",
+            policy: "StringRedisTemplate",
+            invalidation: "TTL 자동 만료",
+            source: "JwtBlacklistService",
+            relations: ["auth"],
+            example: `{
+  "jwt:blacklist:4f9f2cab3a0d5b8e7e9a22e4f2c9a111": "1"
+}`
+          }
+        ],
+        "Versioning & Infra": [
+          {
+            id: "dashboard-version",
+            name: "cache_ver:dashboard:*",
+            icon: "fa-code-branch",
+            color: "indigo",
+            desc: "대시보드 캐시를 직접 모두 지우는 대신 global/user 버전을 키 일부로 포함한다. 변경 시 버전만 증가시켜 다음 요청부터 새 캐시 키를 보게 한다.",
+            keyPattern: "cache_ver:dashboard:global, cache_ver:dashboard:user:{userIdx}",
+            type: "String",
+            serialization: "Long 숫자 문자열",
+            ttl: "global 365일, user 60일",
+            policy: "StringRedisTemplate INCR + EXPIRE",
+            invalidation: "evictAll은 global INCR, evictUser/evictCampaign은 영향받은 사용자 키 INCR",
+            source: "DashboardCacheVersionService, DashboardCacheEvictor",
+            relations: ["dashboard:* cache keys"],
+            example: `{
+  "cache_ver:dashboard:global": "17",
+  "cache_ver:dashboard:user:12": "5",
+  "resolvedSpELSuffix": ":v17:5"
+}`
+          },
+          {
+            id: "sse-events",
+            name: "sse:events",
+            icon: "fa-tower-broadcast",
+            color: "blue",
+            desc: "멀티 Pod 환경에서 알림/캘린더 갱신 이벤트를 모든 Pod의 SSE 연결로 전달하기 위한 Redis Pub/Sub 채널이다.",
+            keyPattern: "sse:events",
+            type: "Pub/Sub Channel",
+            serialization: "ObjectMapper JSON SseMessage",
+            ttl: "없음",
+            policy: "Redis convertAndSend / RedisMessageListenerContainer 사용",
+            invalidation: "비영속 메시지. 구독 중인 Pod만 수신",
+            source: "NotificationSseService, RedisConfig.sseListenerContainer",
+            relations: ["notifications", "campaigns", "task"],
+            example: `{
+  "userIdx": 12,
+  "eventName": "notification.created",
+  "data": { "title": "검수 요청이 도착했습니다." },
+  "broadcast": false
+}`
+          },
+          {
+            id: "redis-lock",
+            name: "lock:*",
+            icon: "fa-lock",
+            color: "slate",
+            desc: "스케줄러 중복 실행을 막는 분산 락이다. SET NX PX로 획득하고 Lua 스크립트로 토큰이 일치할 때만 해제한다.",
+            keyPattern: "lock:snapshot:monthly, lock:snapshot:daily, lock:notification:deadline",
+            type: "String",
+            serialization: "UUID 토큰",
+            ttl: "snapshot 10분, notification deadline 4분",
+            policy: "SET IF ABSENT + Lua 비교 후 삭제",
+            invalidation: "작업 완료 시 unlock, 장애 시 TTL 자동 만료",
+            source: "RedisLock, SnapshotScheduler, NotificationDeadlineScheduler",
+            relations: ["kpi_daily_snapshot", "kpi_monthly_snapshot", "notifications"],
+            example: `{
+  "lock:snapshot:daily": "5594b4ff-d8fe-4421-9336-9c2c2a2e712e",
+  "lock:notification:deadline": "2e45b7de-676f-4fb6-bba8-7194a2d2195a"
+}`
+          }
+        ]
+      }
+    };
+
+    const colors = {
+      orange: "bg-orange-100 text-orange-600",
+      amber: "bg-amber-100 text-amber-600",
+      blue: "bg-blue-100 text-blue-600",
+      indigo: "bg-indigo-100 text-indigo-600",
+      emerald: "bg-emerald-100 text-emerald-600",
+      rose: "bg-rose-100 text-rose-600",
+      violet: "bg-violet-100 text-violet-600",
+      slate: "bg-slate-100 text-slate-600"
+    };
+
+    const moduleLabels = {
+      app: "애플리케이션"
+    };
+
+    const domainLabels = {
+      "Dashboard Cache": "대시보드 캐시",
+      "Domain Cache": "도메인 캐시",
+      "Auth & Session": "인증 / 세션",
+      "Versioning & Infra": "버전 관리 / 인프라"
+    };
+
+    const typeLabels = {
+      "String": "문자열",
+      "Pub/Sub Channel": "Pub/Sub 채널"
+    };
+    const badgeColors = {
+      orange: "bg-orange-100 text-orange-700",
+      amber: "bg-amber-100 text-amber-700",
+      blue: "bg-blue-100 text-blue-700",
+      indigo: "bg-indigo-100 text-indigo-700",
+      emerald: "bg-emerald-100 text-emerald-700",
+      rose: "bg-rose-100 text-rose-700",
+      violet: "bg-violet-100 text-violet-700",
+      slate: "bg-slate-100 text-slate-700"
+    };
+
+    let currentExample = "";
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderSidebar();
+      setTimeout(() => {
+        const firstBtn = document.querySelector('.menu-item');
+        const first = schemaData.app["Dashboard Cache"][0];
+        if (firstBtn) selectItem("app", "Dashboard Cache", first.id, firstBtn);
+      }, 50);
+    });
+
+    function renderSidebar() {
+      const sidebar = document.getElementById('sidebar-menu');
+      sidebar.innerHTML = "";
+      Object.keys(schemaData).forEach(moduleName => {
+        const moduleHeader = document.createElement('div');
+        moduleHeader.className = "px-5 mt-4 mb-2 text-sm font-extrabold text-slate-800 flex items-center gap-2";
+        moduleHeader.innerHTML = `<i class="fa-solid fa-server text-orange-500"></i> ${moduleLabels[moduleName] || moduleName}`;
+        sidebar.appendChild(moduleHeader);
+
+        Object.keys(schemaData[moduleName]).forEach(domainName => {
+          const domainHeader = document.createElement('div');
+          domainHeader.className = "px-8 mt-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider";
+          domainHeader.innerText = domainLabels[domainName] || domainName;
+          sidebar.appendChild(domainHeader);
+
+          schemaData[moduleName][domainName].forEach(item => {
+            const btn = document.createElement('button');
+            btn.className = "menu-item w-full text-left px-8 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors flex items-center gap-3";
+            btn.onclick = () => selectItem(moduleName, domainName, item.id, btn);
+            const colorClass = colors[item.color] || colors.slate;
+            btn.innerHTML = `
+              <div class="w-6 h-6 rounded flex items-center justify-center ${colorClass} text-xs">
+                <i class="fa-solid ${item.icon}"></i>
+              </div>
+              <span class="font-medium truncate">${item.name}</span>
+            `;
+            sidebar.appendChild(btn);
+          });
+        });
+      });
+    }
+
+    function selectItem(moduleName, domainName, itemId, btnElement) {
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      if (btnElement) btnElement.classList.add('active');
+
+      const item = schemaData[moduleName][domainName].find(row => row.id === itemId);
+      if (!item) return;
+
+      document.getElementById('empty-state').style.display = 'none';
+      document.getElementById('content-area').style.display = 'block';
+
+      document.getElementById('module-badge').innerText = moduleLabels[moduleName] || moduleName;
+      const domainBadge = document.getElementById('domain-badge');
+      domainBadge.innerText = domainLabels[domainName] || domainName;
+      domainBadge.className = `px-2.5 py-1 text-xs font-bold rounded-md uppercase tracking-wide ${badgeColors[item.color] || badgeColors.slate}`;
+      document.getElementById('type-label').innerText = item.type === "Pub/Sub Channel" ? "Redis 채널" : "Redis 키";
+      document.getElementById('item-title').innerHTML = `<i class="fa-solid ${item.icon} text-${item.color}-500 mr-2"></i> ${item.name}`;
+
+      document.getElementById('item-desc').innerText = item.desc;
+      document.getElementById('key-pattern').innerText = item.keyPattern;
+      document.getElementById('data-type').innerText = typeLabels[item.type] || item.type;
+      document.getElementById('serialization').innerText = item.serialization;
+      document.getElementById('ttl').innerText = item.ttl;
+      document.getElementById('source-file').innerText = item.source;
+
+      const rows = [
+        ["비즈니스 대상", item.name],
+        ["키 네이밍 패턴", item.keyPattern],
+        ["자료형", typeLabels[item.type] || item.type],
+        ["직렬화 포맷", item.serialization],
+        ["수명", item.ttl],
+        ["운영 정책", item.policy],
+        ["무효화 트리거", item.invalidation],
+        ["소스 코드 근거", item.source]
+      ];
+      const tbody = document.getElementById('spec-tbody');
+      tbody.innerHTML = rows.map(([label, value]) => `
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="px-5 py-3 w-48 font-bold text-slate-700">${label}</td>
+          <td class="px-5 py-3 text-slate-700 ${label.includes('패턴') ? 'font-mono text-orange-700 break-all' : ''}">${value}</td>
+        </tr>
+      `).join("");
+
+      currentExample = item.example;
+      const code = document.getElementById('example-code');
+      code.textContent = item.example;
+      code.removeAttribute('data-highlighted');
+      hljs.highlightElement(code);
+
+      const relations = document.getElementById('relations');
+      relations.innerHTML = item.relations.map(rel => `<span class="chip bg-slate-100 text-slate-700 border border-slate-200">${rel}</span>`).join("");
+    }
+
+    function copyExample() {
+      if (!currentExample) return;
+      navigator.clipboard.writeText(currentExample).then(() => {
+        const btn = document.querySelector('button[onclick="copyExample()"]');
+        const origin = btn.innerHTML;
+        btn.innerHTML = `<i class="fa-solid fa-check text-green-600"></i> <span class="text-green-600">복사됨</span>`;
+        setTimeout(() => { btn.innerHTML = origin; }, 1800);
+      });
+    }
+  </script>
+</body>
+</html>
