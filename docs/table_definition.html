@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>데이터베이스 테이블 명세서</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap');
+        html { scroll-behavior: smooth; }
+        body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; }
+        .table-row:hover { background-color: #f8fafc; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* 뱃지 스타일링 헬퍼 */
+        .badge-pk { background: #fef08a; color: #854d0e; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
+        .badge-fk { background: #e2e8f0; color: #334155; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
+        .badge-uk { background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
+        .badge-nn { color: #ef4444; font-size: 0.75rem; font-weight: bold; margin-left: 4px; }
+    </style>
+</head>
+<body class="text-slate-800 p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto space-y-8">
+        
+        <!-- Header -->
+        <header class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 sticky top-0 z-50">
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-900 flex items-center gap-3">
+                <i class="fa-solid fa-server text-indigo-600"></i> Callog 데이터베이스 테이블 명세서
+            </h1>
+            <p class="text-slate-500 mt-2 text-sm">전체 도메인 및 24개 테이블 구조 상세 (ERD 제외 버전)</p>
+            
+            <!-- Navigation TOC -->
+			<div class="mt-4 flex flex-wrap gap-2 text-sm">
+				<button type="button" onclick="window.location.href='#domain-core'" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition">
+					<i class="fa-solid fa-users text-xs mr-1"></i> Core
+				</button>
+				
+				<button type="button" onclick="window.location.href='#domain-campaign'" class="px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition">
+					<i class="fa-solid fa-bullhorn text-xs mr-1"></i> Campaign
+				</button>
+				
+				<button type="button" onclick="window.location.href='#domain-frame'" class="px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition">
+					<i class="fa-solid fa-object-group text-xs mr-1"></i> Frame
+				</button>
+				
+				<button type="button" onclick="window.location.href='#domain-ai'" class="px-3 py-1.5 bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition">
+					<i class="fa-solid fa-gavel text-xs mr-1"></i> AI Judge
+				</button>
+				
+				<button type="button" onclick="window.location.href='#domain-matching'" class="px-3 py-1.5 bg-lime-50 text-lime-700 rounded-lg hover:bg-lime-100 transition">
+					<i class="fa-solid fa-handshake text-xs mr-1"></i> Matching
+				</button>
+				
+				<button type="button" onclick="window.location.href='#domain-noti'" class="px-3 py-1.5 bg-sky-50 text-sky-700 rounded-lg hover:bg-sky-100 transition">
+					<i class="fa-solid fa-bell text-xs mr-1"></i> Notification
+				</button>
+				
+				<button type="button" onclick="window.location.href='#domain-ref'" class="px-3 py-1.5 bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition">
+					<i class="fa-solid fa-bookmark text-xs mr-1"></i> Reference
+				</button>
+				
+				<button type="button" onclick="window.location.href='#domain-team'" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition">
+					<i class="fa-solid fa-list-check text-xs mr-1"></i> Team Board
+				</button>
+				
+				<button type="button" onclick="window.location.href='#domain-profile'" class="px-3 py-1.5 bg-fuchsia-50 text-fuchsia-700 rounded-lg hover:bg-fuchsia-100 transition">
+					<i class="fa-solid fa-id-card text-xs mr-1"></i> User Profile
+				</button>
+			</div>
+        </header>
+
+        <!-- ========================================== -->
+        <!-- 1. Core Domain -->
+        <!-- ========================================== -->
+        <section id="domain-core" class="pt-4 mt-8 scroll-mt-48">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 border-b-2 border-blue-500 pb-2">
+                <i class="fa-solid fa-users text-blue-500"></i> Core Domain (사용자 및 조직)
+            </h2>
+            <div class="grid lg:grid-cols-2 gap-6">
+                <!-- user -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-blue-50 p-4 border-b border-blue-100 font-bold text-blue-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-blue-600"></i> user
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left"><thead class="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                            <tr><th class="px-4 py-3">Column</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Constraints & Desc</th></tr></thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2">사용자 고유 식별자 (Auto Inc)</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">id <span class="badge-uk">UK</span></td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2">로그인 ID <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">email <span class="badge-uk">UK</span></td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2">이메일</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">name</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2">사용자 이름 <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">company_name</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2">회사명</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">department</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2">부서명</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">password</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2"><span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">enable</td><td class="px-4 py-2 text-slate-500">boolean</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 기본값: true</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">role</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 기본값: 'ROLE_USER'</td></tr>
+                                <tr class="table-row bg-blue-50/30"><td class="px-4 py-2 font-medium">organization_id <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2">소속 조직 (ref: organizations.idx)</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">account_status</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 기본값: 'ACTIVE'</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- organizations -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-blue-50 p-4 border-b border-blue-100 font-bold text-blue-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-blue-600"></i> organizations
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left"><thead class="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                            <tr><th class="px-4 py-3">Column</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Constraints & Desc</th></tr></thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2">(Auto Inc)</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">code <span class="badge-uk">UK</span></td><td class="px-4 py-2 text-slate-500">varchar(64)</td><td class="px-4 py-2">조직 고유 코드 <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">name</td><td class="px-4 py-2 text-slate-500">varchar(120)</td><td class="px-4 py-2">조직명 <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">type</td><td class="px-4 py-2 text-slate-500">varchar(40)</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 기본값: 'AFFILIATE'</td></tr>
+                                <tr class="table-row bg-blue-50/30"><td class="px-4 py-2 font-medium">general_manager_idx <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2">조직 총괄 관리자 (ref: user.idx)</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">can_create_campaign</td><td class="px-4 py-2 text-slate-500">boolean</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 기본값: false</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">created_at</td><td class="px-4 py-2 text-slate-500">timestamp</td><td class="px-4 py-2">생성일시</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 2. Campaign Domain -->
+        <!-- ========================================== -->
+        <section id="domain-campaign" class="pt-4 mt-8 scroll-mt-48">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 border-b-2 border-purple-500 pb-2">
+                <i class="fa-solid fa-bullhorn text-purple-500"></i> Campaign Domain (캠페인 메타데이터)
+            </h2>
+            <div class="grid lg:grid-cols-2 gap-6">
+                <!-- campaigns -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden lg:col-span-2">
+                    <div class="bg-purple-50 p-4 border-b border-purple-100 font-bold text-purple-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-purple-600"></i> campaigns
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left"><thead class="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                            <tr><th class="px-4 py-3 w-1/4">Column</th><th class="px-4 py-3 w-1/4">Type</th><th class="px-4 py-3 w-1/2">Constraints & Desc</th></tr></thead>
+                            <tbody class="divide-y divide-slate-100 grid-cols-2">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2">(Auto Inc)</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">public_id <span class="badge-uk">UK</span></td><td class="px-4 py-2 text-slate-500">varchar(36)</td><td class="px-4 py-2">외부 공개용 UUID</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">owner_login_id</td><td class="px-4 py-2 text-slate-500">varchar(100)</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 소유자 ID</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">name</td><td class="px-4 py-2 text-slate-500">varchar(120)</td><td class="px-4 py-2"><span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">purpose / goals</td><td class="px-4 py-2 text-slate-500">text</td><td class="px-4 py-2">목적 / 목표</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">start_date / end_date</td><td class="px-4 py-2 text-slate-500">date</td><td class="px-4 py-2">기간</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">asset_name / desc</td><td class="px-4 py-2 text-slate-500">varchar(160) / text</td><td class="px-4 py-2">연관 에셋 정보</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">primary_goal</td><td class="px-4 py-2 text-slate-500">varchar(120)</td><td class="px-4 py-2">주요 목표</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">max_cost / min_revenue</td><td class="px-4 py-2 text-slate-500">varchar(80)</td><td class="px-4 py-2">비용/수익 조건</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">status</td><td class="px-4 py-2 text-slate-500">varchar(30)</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 기본값: 'draft'</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">initials / icon / color</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2">UI 표시용 메타데이터 (<span class="badge-nn">NN</span> 포함)</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">visibility</td><td class="px-4 py-2 text-slate-500">varchar(30)</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 기본값: 'PRIVATE'</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- campaign_intro -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-purple-50 p-4 border-b border-purple-100 font-bold text-purple-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-purple-600"></i> campaign_intro
+                    </div>
+                    <div class="overflow-x-auto h-67">
+                        <table class="w-full text-sm text-left"><thead class="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                            <tr><th class="px-4 py-3">Column</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Desc</th></tr></thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"></td></tr>
+                                <tr class="table-row bg-purple-50/30"><td class="px-4 py-2 font-medium">campaign_idx <span class="badge-fk">FK</span><span class="badge-uk">UK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"><span class="badge-nn">NN</span> (1:1 ref)</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">rfp_code</td><td class="px-4 py-2 text-slate-500">varchar(50)</td><td class="px-4 py-2"></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">recruit_deadline</td><td class="px-4 py-2 text-slate-500">timestamp</td><td class="px-4 py-2"></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium text-orange-600">JSON 속성들 (10개)</td><td class="px-4 py-2 text-slate-500">json</td><td class="px-4 py-2">hanwha_assets, partner_roles 등</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">weight_... (5개)</td><td class="px-4 py-2 text-slate-500">integer</td><td class="px-4 py-2">가중치 5축</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">target_segment/scale</td><td class="px-4 py-2 text-slate-500">varchar(500)</td><td class="px-4 py-2"></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">view_count</td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2">조회수</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- campaign_activity -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-purple-50 p-4 border-b border-purple-100 font-bold text-purple-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-purple-600"></i> campaign_activity
+                    </div>
+                    <div class="overflow-x-auto h-67">
+                        <table class="w-full text-sm text-left"><thead class="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                            <tr><th class="px-4 py-3">Column</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Desc</th></tr></thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"></td></tr>
+                                <tr class="table-row bg-purple-50/30"><td class="px-4 py-2 font-medium">campaign_id <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"><span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row bg-purple-50/30"><td class="px-4 py-2 font-medium">actor_user_id <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2">주체</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">type</td><td class="px-4 py-2 text-slate-500">varchar(40)</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 활동 유형</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">description</td><td class="px-4 py-2 text-slate-500">varchar(500)</td><td class="px-4 py-2"></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">created_at</td><td class="px-4 py-2 text-slate-500">timestamp</td><td class="px-4 py-2"><span class="badge-nn">NN</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- campaign_kpis -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-purple-50 p-4 border-b border-purple-100 font-bold text-purple-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-purple-600"></i> campaign_kpis
+                    </div>
+                    <div class="overflow-x-auto h-67">
+                        <table class="w-full text-sm text-left"><thead class="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                            <tr><th class="px-4 py-3">Column</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Desc</th></tr></thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"></td></tr>
+                                <tr class="table-row bg-purple-50/30"><td class="px-4 py-2 font-medium">campaign_idx <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"><span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row bg-purple-50/30"><td class="px-4 py-2 font-medium">owner_user_idx <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">name / category</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2"><span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">target/actual_value</td><td class="px-4 py-2 text-slate-500">decimal(18,4)</td><td class="px-4 py-2">수치</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">parent_org_kpi_id</td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2">상위조직연결</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- members, participant, invitations (Grouped in one card for brevity) -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-purple-50 p-4 border-b border-purple-100 font-bold text-purple-900 flex items-center gap-2">
+                        <i class="fa-solid fa-users-gear text-purple-600"></i> Members & Participants & Invitations
+                    </div>
+                    <div class="overflow-x-auto h-67">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                                <tr><th colspan="3" class="px-4 py-2">campaign_members</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row bg-purple-50/30"><td class="px-4 py-1">campaign_idx <span class="badge-fk">FK</span>, user_idx <span class="badge-fk">FK</span></td><td class="px-4 py-1 text-slate-500">bigint</td><td class="px-4 py-1"><span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-1">campaign_role</td><td class="px-4 py-1 text-slate-500">varchar</td><td class="px-4 py-1"></td></tr>
+                            </tbody>
+                            <thead class="text-xs text-slate-600 uppercase bg-slate-50 border-y border-slate-200">
+                                <tr><th colspan="3" class="px-4 py-2">campaign_participant</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row bg-purple-50/30"><td class="px-4 py-1">campaign_idx <span class="badge-fk">FK</span>, org_idx <span class="badge-fk">FK</span></td><td class="px-4 py-1 text-slate-500">bigint</td><td class="px-4 py-1"><span class="badge-nn">NN</span></td></tr>
+                            </tbody>
+                            <thead class="text-xs text-slate-600 uppercase bg-slate-50 border-y border-slate-200">
+                                <tr><th colspan="3" class="px-4 py-2">campaign_invitations</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row bg-purple-50/30"><td class="px-4 py-1">camp_idx <span class="badge-fk">FK</span>, inviter/invitee <span class="badge-fk">FK</span></td><td class="px-4 py-1 text-slate-500">bigint</td><td class="px-4 py-1"><span class="badge-nn">NN</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 3. Campaign Frame Domain -->
+        <!-- ========================================== -->
+        <section id="domain-frame" class="pt-4 mt-8 scroll-mt-48">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 border-b-2 border-amber-500 pb-2">
+                <i class="fa-solid fa-object-group text-amber-500"></i> Campaign Frame Domain (템플릿)
+            </h2>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="bg-amber-50 p-4 border-b border-amber-100 font-bold text-amber-900 flex items-center gap-2">
+                    <i class="fa-solid fa-table text-amber-600"></i> campaign_frame
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left"><thead class="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                        <tr><th class="px-4 py-3">Column</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Constraints & Desc</th></tr></thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"></td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">id</td><td class="px-4 py-2 text-slate-500">varchar(100)</td><td class="px-4 py-2"><span class="badge-nn">NN</span> (UK 복합키 대상)</td></tr>
+                            <tr class="table-row bg-amber-50/30"><td class="px-4 py-2 font-medium">owner_idx <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"><span class="badge-nn">NN</span> (ref: user.idx)</td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">category / version</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2"><span class="badge-nn">NN</span></td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">title / overview / tone_guide</td><td class="px-4 py-2 text-slate-500">varchar / text</td><td class="px-4 py-2">내용</td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">score / status</td><td class="px-4 py-2 text-slate-500">int / varchar(40)</td><td class="px-4 py-2"><span class="badge-nn">NN</span></td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">usage_count / pass_rate</td><td class="px-4 py-2 text-slate-500">int</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 기본값: 0</td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">avg_revisions</td><td class="px-4 py-2 text-slate-500">float</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 기본값: 0.0</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 4. AI Judge Domain -->
+        <!-- ========================================== -->
+        <section id="domain-ai" class="pt-4 mt-8 scroll-mt-48">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 border-b-2 border-rose-500 pb-2">
+                <i class="fa-solid fa-gavel text-rose-500"></i> AI Judge Domain (광고 검수 및 AI 분석)
+            </h2>
+            <div class="grid lg:grid-cols-2 gap-6">
+                <!-- ad_check_job -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden lg:col-span-2">
+                    <div class="bg-rose-50 p-4 border-b border-rose-100 font-bold text-rose-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-rose-600"></i> ad_check_job
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left"><thead class="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                            <tr><th class="px-4 py-3 w-1/3">Column</th><th class="px-4 py-3 w-1/4">Type</th><th class="px-4 py-3">Constraints & Desc</th></tr></thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span> / job_id <span class="badge-uk">UK</span></td><td class="px-4 py-2 text-slate-500">bigint / varchar</td><td class="px-4 py-2"><span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row bg-rose-50/30"><td class="px-4 py-2 font-medium">requester_idx <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"><span class="badge-nn">NN</span> (ref: user.idx)</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">file_name / bytes / contentType</td><td class="px-4 py-2 text-slate-500">varchar / blob / varchar</td><td class="px-4 py-2">검수 파일</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">status / current_step</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 진행 상태</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">result_payload</td><td class="px-4 py-2 text-orange-600">longtext</td><td class="px-4 py-2">검수 결과 전체 페이로드</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">mongo_document_id</td><td class="px-4 py-2 text-slate-500">varchar(120)</td><td class="px-4 py-2">NoSQL 저장소 연동 ID</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ad_ai_analysis -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-rose-50 p-4 border-b border-rose-100 font-bold text-rose-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-rose-600"></i> ad_ai_analysis
+                    </div>
+                    <div class="overflow-x-auto h-64">
+                        <table class="w-full text-sm text-left">
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span> / job_id <span class="badge-uk">UK</span></td><td class="px-4 py-2 text-slate-500">bigint/varchar</td></tr>
+                                <tr class="table-row bg-rose-50/30"><td class="px-4 py-2 font-medium">campaign_idx <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">author_idx / login_id / name</td><td class="px-4 py-2 text-slate-500">bigint/varchar</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">file_object_key</td><td class="px-4 py-2 text-slate-500">varchar(700)</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">analysis_status</td><td class="px-4 py-2 text-slate-500">varchar(30) <span class="badge-nn">NN</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ad_review_request -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-rose-50 p-4 border-b border-rose-100 font-bold text-rose-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-rose-600"></i> ad_review_request
+                    </div>
+                    <div class="overflow-x-auto h-64">
+                        <table class="w-full text-sm text-left">
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row bg-rose-50/30"><td class="px-4 py-2 font-medium">campaign_idx <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">file_object_key</td><td class="px-4 py-2 text-slate-500">varchar(700) <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">request_status / ai_status</td><td class="px-4 py-2 text-slate-500">varchar(30) <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">reviewer_login_id</td><td class="px-4 py-2 text-slate-500">varchar(100)</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">violation_text / reason</td><td class="px-4 py-2 text-slate-500">varchar</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 5. Matching Domain -->
+        <!-- ========================================== -->
+        <section id="domain-matching" class="pt-4 mt-8 scroll-mt-48">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 border-b-2 border-lime-500 pb-2">
+                <i class="fa-solid fa-handshake text-lime-500"></i> Matching Domain (파트너 혜택)
+            </h2>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="bg-lime-50 p-4 border-b border-lime-100 font-bold text-lime-900 flex items-center gap-2">
+                    <i class="fa-solid fa-table text-lime-600"></i> partner_benefits
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left"><thead class="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                        <tr><th class="px-4 py-3">Column</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Constraints & Desc</th></tr></thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"></td></tr>
+                            <tr class="table-row bg-lime-50/30"><td class="px-4 py-2 font-medium">affiliation_id <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2">(ref: organizations.idx)</td></tr>
+                            <tr class="table-row bg-lime-50/30"><td class="px-4 py-2 font-medium">campaign_idx <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2">(ref: campaigns.idx)</td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">name / type / description</td><td class="px-4 py-2 text-slate-500">varchar / text</td><td class="px-4 py-2">혜택 정보</td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">quantity / total_value</td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2">규모/가치</td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">cost_..._percent</td><td class="px-4 py-2 text-slate-500">integer</td><td class="px-4 py-2">비용 부담 비율</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 6. Notification Domain -->
+        <!-- ========================================== -->
+        <section id="domain-noti" class="pt-4 mt-8 scroll-mt-48">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 border-b-2 border-sky-500 pb-2">
+                <i class="fa-solid fa-bell text-sky-500"></i> Notification Domain (알림 및 설정)
+            </h2>
+            <div class="grid lg:grid-cols-2 gap-6">
+                <!-- notification_settings -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-sky-50 p-4 border-b border-sky-100 font-bold text-sky-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-sky-600"></i> notification_settings
+                    </div>
+                    <div class="overflow-x-auto h-64">
+                        <table class="w-full text-sm text-left">
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row bg-sky-50/30"><td class="px-4 py-2 font-medium">user_idx <span class="badge-fk">FK</span><span class="badge-uk">UK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">enabled / level</td><td class="px-4 py-2 text-slate-500">boolean / varchar</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">_enabled 설정 플래그 (다수)</td><td class="px-4 py-2 text-slate-500">boolean <span class="badge-nn">NN</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- notifications -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-sky-50 p-4 border-b border-sky-100 font-bold text-sky-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-sky-600"></i> notifications
+                    </div>
+                    <div class="overflow-x-auto h-64">
+                        <table class="w-full text-sm text-left">
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span> / dedupe_key <span class="badge-uk">UK</span></td><td class="px-4 py-2 text-slate-500">bigint/varchar</td></tr>
+                                <tr class="table-row bg-sky-50/30"><td class="px-4 py-2 font-medium">recipient_idx <span class="badge-fk">FK</span> / sender <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">type / severity</td><td class="px-4 py-2 text-slate-500">varchar <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">title / message</td><td class="px-4 py-2 text-slate-500">varchar <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">is_read</td><td class="px-4 py-2 text-slate-500">boolean <span class="badge-nn">NN</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 7. Reference Domain -->
+        <!-- ========================================== -->
+        <section id="domain-ref" class="pt-4 mt-8 scroll-mt-48">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 border-b-2 border-violet-500 pb-2">
+                <i class="fa-solid fa-bookmark text-violet-500"></i> Reference Domain (레퍼런스)
+            </h2>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="bg-violet-50 p-4 border-b border-violet-100 font-bold text-violet-900 flex items-center gap-2">
+                    <i class="fa-solid fa-table text-violet-600"></i> reference_items
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left"><thead class="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-200">
+                        <tr><th class="px-4 py-3">Column</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Constraints & Desc</th></tr></thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td><td class="px-4 py-2"></td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">owner_login_id</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2"><span class="badge-nn">NN</span></td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">type / title / url</td><td class="px-4 py-2 text-slate-500">varchar / text</td><td class="px-4 py-2"><span class="badge-nn">NN</span> 레퍼런스 정보</td></tr>
+                            <tr class="table-row"><td class="px-4 py-2 font-medium">channel / objective</td><td class="px-4 py-2 text-slate-500">varchar</td><td class="px-4 py-2"></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 8. Team Board Domain -->
+        <!-- ========================================== -->
+        <section id="domain-team" class="pt-4 mt-8 scroll-mt-48">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 border-b-2 border-indigo-500 pb-2">
+                <i class="fa-solid fa-list-check text-indigo-500"></i> Team Board Domain (업무 및 마일스톤)
+            </h2>
+            <div class="grid lg:grid-cols-3 gap-6">
+                <!-- milestones -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-indigo-50 p-4 border-b border-indigo-100 font-bold text-indigo-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-indigo-600"></i> milestones
+                    </div>
+                    <div class="overflow-x-auto h-64">
+                        <table class="w-full text-sm text-left">
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row bg-indigo-50/30"><td class="px-4 py-2 font-medium">campaign_id <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">name</td><td class="px-4 py-2 text-slate-500">varchar <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">start_date / end</td><td class="px-4 py-2 text-slate-500">timestamp</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- task_parts -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-indigo-50 p-4 border-b border-indigo-100 font-bold text-indigo-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-indigo-600"></i> task_parts
+                    </div>
+                    <div class="overflow-x-auto h-64">
+                        <table class="w-full text-sm text-left">
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row bg-indigo-50/30"><td class="px-4 py-2 font-medium">campaign/milestone_id <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row bg-indigo-50/30"><td class="px-4 py-2 font-medium">owner_team_id <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">name</td><td class="px-4 py-2 text-slate-500">varchar(50) <span class="badge-nn">NN</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- task -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-indigo-50 p-4 border-b border-indigo-100 font-bold text-indigo-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-indigo-600"></i> task
+                    </div>
+                    <div class="overflow-x-auto h-64">
+                        <table class="w-full text-sm text-left">
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row bg-indigo-50/30"><td class="px-4 py-2 font-medium">campaign_id <span class="badge-fk">FK</span> 외 FK 4개</td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">name</td><td class="px-4 py-2 text-slate-500">varchar(200) <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">status / priority</td><td class="px-4 py-2 text-slate-500">varchar <span class="badge-nn">NN</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 9. User Profile Domain -->
+        <!-- ========================================== -->
+        <section id="domain-profile" class="pt-4 pb-12 mt-8 scroll-mt-48">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 border-b-2 border-fuchsia-500 pb-2">
+                <i class="fa-solid fa-id-card text-fuchsia-500"></i> User Profile Domain (상세 프로필 및 이력)
+            </h2>
+            <div class="grid lg:grid-cols-3 gap-6">
+                <!-- user_profile -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-fuchsia-50 p-4 border-b border-fuchsia-100 font-bold text-fuchsia-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-fuchsia-600"></i> user_profile
+                    </div>
+                    <div class="overflow-x-auto h-64">
+                        <table class="w-full text-sm text-left">
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row bg-fuchsia-50/30"><td class="px-4 py-2 font-medium">user_idx <span class="badge-fk">FK</span><span class="badge-uk">UK</span></td><td class="px-4 py-2 text-slate-500">bigint <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">email / phone</td><td class="px-4 py-2 text-slate-500">varchar</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">profile_image_key</td><td class="px-4 py-2 text-slate-500">varchar(512)</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- profile_image_history -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-fuchsia-50 p-4 border-b border-fuchsia-100 font-bold text-fuchsia-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-fuchsia-600"></i> profile_image_history
+                    </div>
+                    <div class="overflow-x-auto h-64">
+                        <table class="w-full text-sm text-left">
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row bg-fuchsia-50/30"><td class="px-4 py-2 font-medium">user / gen_log <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">object_key</td><td class="px-4 py-2 text-slate-500">varchar(512) <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">history_type</td><td class="px-4 py-2 text-slate-500">varchar(20) <span class="badge-nn">NN</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- profile_image_generation_log -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-fuchsia-50 p-4 border-b border-fuchsia-100 font-bold text-fuchsia-900 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-fuchsia-600"></i> profile_image_generation_log
+                    </div>
+                    <div class="overflow-x-auto h-64">
+                        <table class="w-full text-sm text-left">
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">idx <span class="badge-pk">PK</span></td><td class="px-4 py-2 text-slate-500">bigint</td></tr>
+                                <tr class="table-row bg-fuchsia-50/30"><td class="px-4 py-2 font-medium">user_idx <span class="badge-fk">FK</span></td><td class="px-4 py-2 text-slate-500">bigint <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">prompt / model</td><td class="px-4 py-2 text-slate-500">varchar <span class="badge-nn">NN</span></td></tr>
+                                <tr class="table-row"><td class="px-4 py-2 font-medium">status</td><td class="px-4 py-2 text-slate-500">varchar(20) <span class="badge-nn">NN</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
+</body>
+</html>
