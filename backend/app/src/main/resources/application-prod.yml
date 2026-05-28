@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8083
   error:
     whitelabel:
       enabled: false  # 기본 whitelabel 에러 페이지 비활성화
@@ -20,12 +20,24 @@ project:
 app:
   frontend-url: ${FRONTEND_URL}
   secure-cookie: ${SECURE_COOKIE}
+  kafka:
+    campaign-sync-enabled: ${CAMPAIGN_SYNC_ENABLED}
+    topics:
+      evaluation-start: evaluation.start
+      evaluation-collect: evaluation.collect
+      campaign-sync: ${CAMPAIGN_SYNC_TOPIC}
+    consumer:
+      propoerties:
+        spring.json.use.type.headers: false
+msa:
+  matching-evaluation:
+    base-url: ${EVALUATION_URL}
 aws:
   s3:
     bucket-name: ${AWS_BUCKET_NAME}
     access-key: ${AWS_ACCESS_KEY}
     secret-key: ${AWS_SECRET_KEY}
-    region: ap-northeast-2
+    region: ${AWS_REGION}
 openai:
   image:
     api-key: ${OPEN_API_IMAGE}
@@ -39,7 +51,7 @@ admin:
   password: ${ADMIN_PASSWORD}
 spring:
   application:
-    name: callog
+    name: app
   cache:
     type: redis   # 명시: Redis 미가용 시 부팅 실패(fail-fast) — silent NoOp fallback 방지
   datasource:
@@ -65,8 +77,6 @@ spring:
       max-request-size: 20MB
 
   data:
-    mongodb:
-      uri: ${MONGODB_URL}
     # ─────────────────────────────────────────────────────────────────────
     # Redis (Bitnami Sentinel — callog-redis Service in redis-test namespace)
     #   - Sentinel 모드 전용 (master failover 자동 처리, HA)
@@ -82,7 +92,7 @@ spring:
         master: ${REDIS_SENTINEL_MASTER}
         # 콤마 구분 — 여러 sentinel: "host1:26379,host2:26379,host3:26379"
         nodes: ${REDIS_SENTINEL_NODES}
-        password: ${REDIS_SENTINEL_PASSWORD}
+        password: ${REDIS_SENTINEL_PASSWORD:}
       lettuce:
         pool:
           enabled: true
@@ -91,6 +101,11 @@ spring:
           min-idle: 2
           max-wait: 5000ms
         shutdown-timeout: 2000ms   # graceful shutdown 중 in-flight Redis 명령 정리 시간
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    topics:
+      evaluation-start: ${EVALUATION_START_TOPIC}
 
 logging:
   level:
@@ -107,7 +122,7 @@ logging:
 custom:
   n8n:
     webhook-url: ${N8N_URL}
-    evaluation-endpoint: ${EVALUATION_ENDPOINT}
+    evaluation-endpoint: ${EVALUATION_ENDPOINTn}
     check-endpoint: ${CHECK_ENDPOINT}
   ocr:
     url: ${OCR_SERVICE_URL}
@@ -119,16 +134,16 @@ custom:
     url: ${LAYOUT_SERVICE_URL}
     api-key: ${LAYOUT_SERVICE_API_KEY:}
   mongodb:
-    analysis-enabled: ${MONGODB_STD_ENABLED:false}
-    analysis-uri: ${MONGODB_STD_URL:}
-    analysis-database: ${MONGODB_STD_DATABASE:}
-    analysis-collection: ${MONGODB_STD_COLLECTION:ad_check_analysis_results}
+    analysis-enabled: ${MONGODB_STD_ENABLED}
+    analysis-uri: ${MONGODB_STD_URL}
+    analysis-database: ${MONGODB_STD_DATABASE}
+    analysis-collection: ${MONGODB_STD_COLLECTION}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health, info, prometheus, metrics
+        include: "*"
   endpoint:
     health:
       show-details: always
@@ -140,10 +155,16 @@ management:
     tags:
       application: ${spring.application.name}
   tracing:
-    #    enabled: false
+    enabled: ${TRACING_ENABLED}
     sampling:
       probability: 1.0   # 모든 요청에 대한 데이터를 수집하겠다.
   otlp:
     tracing:
       endpoint: ${JAEGER_URL}
       transport: http
+eureka:
+  client:
+    register-with-eureka: ${EUREKA_REGISTER_WITH_EUREKA}
+    fetch-registry: ${EUREKA_FETCH_REGISTRY}
+    service-url:
+      defaultZone: ${EUREKA_URI}

@@ -1,7 +1,6 @@
 package org.example.backend.campaign.service;
 
 import lombok.RequiredArgsConstructor;
-import org.example.backend.campaign.event.CampaignKafkaEventPublisher;
 import org.example.backend.campaign.model.Campaign;
 import org.example.backend.campaign.model.CampaignInvitation;
 import org.example.backend.campaign.model.CampaignInvitationStatus;
@@ -52,7 +51,6 @@ public class CampaignMemberService {
     private final org.example.backend.notification.service.NotificationSseService sseService;
     private final org.example.backend.userInfo.service.UserProfileService userProfileService;
     private final DashboardCacheEvictor dashboardCacheEvictor;
-    private final CampaignKafkaEventPublisher campaignKafkaEventPublisher;
 
     /**
      * 캠페인 멤버 권한 조회 — 권한 체크에 가장 빈번히 호출되는 read-heavy 메서드라 캐싱.
@@ -151,7 +149,6 @@ public class CampaignMemberService {
 
         // Dashboard 캐시 무효화 (blockers 의 GM 미배정 체크 영향)
         dashboardCacheEvictor.evictCampaign(campaignId);
-        created.forEach(campaignKafkaEventPublisher::publishMemberUpserted);
         return created.stream().map(CampaignMemberDto.Res::from).toList();
     }
 
@@ -403,7 +400,6 @@ public class CampaignMemberService {
 
         // Dashboard 캐시 무효화 (GM 역할 변경 시 blockers 영향)
         dashboardCacheEvictor.evictCampaign(campaignId);
-        campaignKafkaEventPublisher.publishMemberUpserted(target);
         return CampaignMemberDto.Res.from(target);
     }
 
@@ -445,7 +441,6 @@ public class CampaignMemberService {
         sseService.notifyMyCampaignsRefresh(removedUserIdx);
         // Dashboard 캐시 무효화 (마지막 GM 제거 시 blockers 영향)
         dashboardCacheEvictor.evictCampaign(campaignId);
-        campaignKafkaEventPublisher.publishMemberRemoved(campaign, removedUserIdx);
     }
 
     @Transactional
@@ -491,8 +486,6 @@ public class CampaignMemberService {
 
         // Dashboard 캐시 무효화 (협력사/멤버 추가 시 partnerCount, partnerProgress, blockers 영향)
         dashboardCacheEvictor.evictCampaign(campaignId);
-        campaignKafkaEventPublisher.publishCampaignUpserted(campaign);
-        memberRepository.findAllByCampaignIdx(campaignId).forEach(campaignKafkaEventPublisher::publishMemberUpserted);
         return CampaignMemberDto.InvitationRes.from(invitation, joinedCount, null);
     }
 

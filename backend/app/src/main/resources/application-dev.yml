@@ -21,11 +21,9 @@ app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
   secure-cookie: ${SECURE_COOKIE:false}
   kafka:
-    campaign-sync-enabled: ${CAMPAIGN_SYNC_ENABLED:false}
     topics:
       evaluation-start: evaluation.start
       evaluation-collect: evaluation.collect
-      campaign-sync: ${CAMPAIGN_SYNC_TOPIC:campaign.sync}
     consumer:
       propoerties:
         spring.json.use.type.headers: false

@@ -1,7 +1,6 @@
 package com.example.adcheck.controller;
 
 import com.example.adcheck.analysis.service.AdCheckAnalysisMongoStorageService;
-import com.example.adcheck.campaign.CampaignProjectionMongoService;
 import com.example.adcheck.model.AdCheckDto;
 import com.example.adcheck.service.AiJudgeFileCheckService;
 import com.example.adcheck.service.AiJudgeService;
@@ -33,20 +32,17 @@ public class AiJudgeController {
     private final AiJudgeService aiJudgeService;
     private final AiJudgeFileCheckService aiJudgeFileCheckService;
     private final AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService;
-    private final CampaignProjectionMongoService campaignProjectionMongoService;
     private final ObjectMapper objectMapper;
 
     public AiJudgeController(
             AiJudgeService aiJudgeService,
             AiJudgeFileCheckService aiJudgeFileCheckService,
             AdCheckAnalysisMongoStorageService adCheckAnalysisMongoStorageService,
-            CampaignProjectionMongoService campaignProjectionMongoService,
             ObjectMapper objectMapper
     ) {
         this.aiJudgeService = aiJudgeService;
         this.aiJudgeFileCheckService = aiJudgeFileCheckService;
         this.adCheckAnalysisMongoStorageService = adCheckAnalysisMongoStorageService;
-        this.campaignProjectionMongoService = campaignProjectionMongoService;
         this.objectMapper = objectMapper;
     }
 
@@ -82,7 +78,6 @@ public class AiJudgeController {
                 requesterName,
                 requesterOrgType
         );
-        verifyCampaignAccess(mergedContext);
         return aiJudgeFileCheckService.checkFile(file, serializeContext(mergedContext), analysisJobId);
     }
 
@@ -122,24 +117,6 @@ public class AiJudgeController {
         return context;
     }
 
-    private void verifyCampaignAccess(Map<String, Object> context) {
-        String campaignId = stringValue(context.get("campaignId"));
-        if (!hasText(campaignId)) {
-            return;
-        }
-
-        Long requesterUserIdx = longValue(context.get("requesterUserIdx"));
-        if (requesterUserIdx == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "requester user is required.");
-        }
-        if (!campaignProjectionMongoService.isEnabled()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "campaign projection is not ready.");
-        }
-        if (!campaignProjectionMongoService.hasActiveMember(campaignId, requesterUserIdx)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "campaign access denied.");
-        }
-    }
-
     private String serializeContext(Map<String, Object> context) {
         if (context.isEmpty()) {
             return null;
@@ -168,22 +145,6 @@ public class AiJudgeController {
     private void putIfHasText(Map<String, Object> context, String key, String value) {
         if (hasText(value)) {
             context.put(key, value.trim());
-        }
-    }
-
-    private String stringValue(Object value) {
-        return value == null ? null : String.valueOf(value).trim();
-    }
-
-    private Long longValue(Object value) {
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        try {
-            String raw = stringValue(value);
-            return hasText(raw) ? Long.parseLong(raw) : null;
-        } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "requesterUserIdx must be a number.", e);
         }
     }
 
