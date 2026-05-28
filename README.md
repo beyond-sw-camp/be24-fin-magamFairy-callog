@@ -128,8 +128,8 @@ Backend Services
 
 | 문서 | 설명 |
 | --- | --- |
-| [mongodb_aijudge.html](./docs/mongodb_aijudge.html) | AI 검수 결과 저장 구조 |
-| [mongodb_evaluation.html](./docs/mongodb_evaluation.html) | 매칭 평가 결과 저장 구조 |
+| [MongoDB AI 검수 결과](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/mongodb_aijudge.html) | MongoDB AI 검수 결과 |
+| [MongoDB 매칭 평가 결과](https://raw.githack.com/beyond-sw-camp/be24-fin-magamFairy-callog/main/docs/mongodb_evaluation.html) | MongoDB 매칭 평가 결과 |
 
 ---
 
