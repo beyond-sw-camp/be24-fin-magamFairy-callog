@@ -99,7 +99,8 @@ https://github.com/user-attachments/assets/60a57c27-7f29-4554-aa1b-d1d33bbdea78
 
 프로필, 알림, 테마/UI, 계정/보안 설정을 확인하는 화면입니다.
 
-준비 중
+<img width="1920" height="1032" alt="환경설정_10fps" src="https://github.com/user-attachments/assets/fe8336df-4eb2-42a5-b57c-62af3a86b97c" />
+
 
 ## 무중단 배포 테스트
 
@@ -110,7 +111,7 @@ https://github.com/user-attachments/assets/60a57c27-7f29-4554-aa1b-d1d33bbdea78
 사용자가 가장 먼저 마주하는 화면이기 때문에, 작은 UI 변경도 사용 흐름에 직접적인 영향을 줄 수 있습니다.  
 따라서 신규 화면을 일부 사용자에게 먼저 노출하여 화면 오류, 라우팅 문제, API 응답 처리, 브라우저 호환성을 사전에 확인한 뒤 전체 배포로 확장할 수 있도록 구성했습니다.
 
-https://github.com/user-attachments/assets/93ecdef8-bf08-485a-8c43-a1433998de30
+<img alt="Frontend Canary 배포 테스트" src="https://github.com/user-attachments/assets/93ecdef8-bf08-485a-8c43-a1433998de30" />
 
 ## 권한별 화면 기준
 
