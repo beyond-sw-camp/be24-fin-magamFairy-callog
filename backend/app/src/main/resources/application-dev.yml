@@ -76,8 +76,7 @@ spring:
       encoding: UTF-8
       continue-on-error: false
       data-locations:
-        - classpath:db/seed/DummyData.sql
-        - classpath:db/seed/TargetAccountsData.sql
+        - classpath:db/seed/DummyDummySQLData.sql
 
   servlet:
     multipart:
