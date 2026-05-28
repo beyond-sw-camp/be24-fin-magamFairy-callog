@@ -55,6 +55,9 @@
 ## 🚀 기능 시연 및 테스트 영상 리스트
 
 <details>
+<summary><b>백엔드 기능 테스트</b></summary>
+
+<details>
 <summary><b>🎥 1. Auth_User</b></summary>
 <br>
 
@@ -444,6 +447,7 @@
 
 </details>
 
+</details>
 
 <br>
 
