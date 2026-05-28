@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System ERD with Relationship Lines</title>
+<style>
+  :root {
+    --bg-color: #f4f6f9;
+    --card-bg: #ffffff;
+    --text-main: #2c3e50;
+    --text-sub: #7f8c8d;
+    --border: #e0e6ed;
+    --pk-color: #e74c3c;
+    --fk-color: #d35400;
+    --fk-bg: #fdf2e9;
+  }
+  
+  body {
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+    width: 1920px;
+    height: 1080px;
+    background-color: var(--bg-color);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+    color: var(--text-main);
+    position: relative;
+    overflow: hidden; /* 스크롤 방지 */
+  }
+
+  /* SVG Line Container (뒤에 깔림) */
+  #erd-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .rel-line {
+    stroke: rgba(189, 195, 199, 0.4);
+    stroke-width: 1.5px;
+    fill: none;
+    transition: stroke 0.2s, stroke-width 0.2s, opacity 0.2s;
+  }
+
+  .rel-line.active {
+    stroke: rgba(231, 76, 60, 0.9);
+    stroke-width: 3px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 2;
+  }
+  
+  .header h1 {
+    margin: 0;
+    font-size: 24px;
+    color: #34495e;
+  }
+
+  /* Masonry Layout */
+  .masonry {
+    column-count: 6;
+    column-gap: 15px;
+    height: calc(1080px - 80px);
+    position: relative;
+    z-index: 2; /* 선 위로 테이블이 올라오도록 설정 */
+  }
+
+  .domain-group {
+    background: var(--bg-color); /* 투명도 방지 */
+    border-radius: 8px;
+    margin-bottom: 15px;
+    break-inside: avoid;
+  }
+
+  .domain-title {
+    font-size: 14px;
+    font-weight: bold;
+    margin: 0 0 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 2px solid var(--border);
+    color: #34495e;
+    text-transform: uppercase;
+  }
+
+  .table-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    overflow: hidden;
+    position: relative;
+    transition: box-shadow 0.2s;
+  }
+
+  .table-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-color: #bdc3c7;
+  }
+
+  .table-header {
+    background: #f8f9fa;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .table-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 10px;
+    font-size: 10px;
+    border-bottom: 1px solid #f1f1f1;
+  }
+
+  .table-row:last-child {
+    border-bottom: none;
+  }
+
+  .col-name { font-weight: 500; }
+  .col-type { color: var(--text-sub); font-family: 'Consolas', monospace; font-size: 9px; }
+  
+  .pk .col-name { color: var(--pk-color); font-weight: 700; }
+  .pk .col-name::before { content: "🔑 "; }
+
+  .fk { background-color: var(--fk-bg); }
+  .fk-badge { font-size: 8px; background: var(--fk-color); color: white; padding: 1px 4px; border-radius: 3px; margin-left: 5px; }
+</style>
+</head>
+<body>
+
+  <svg id="erd-lines"></svg>
+
+  <div class="header">
+    <h1>Database Schema ERD (Interactive Relations)</h1>
+  </div>
+
+  <div class="masonry">
+    
+    <div class="domain-group" data-domain="Core">
+      <h2 class="domain-title">Core Domain</h2>
+      
+      <div class="table-card" id="table-user">
+        <div class="table-header"><span>user</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">id</span><span class="col-type">varchar</span></div>
+        <div class="table-row"><span class="col-name">email</span><span class="col-type">varchar</span></div>
+        <div class="table-row"><span class="col-name">name</span><span class="col-type">varchar</span></div>
+        <div class="table-row fk" data-target="organizations"><span class="col-name">organization_id<span class="fk-badge">→ orgs</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">role</span><span class="col-type">varchar</span></div>
+        <div class="table-row"><span class="col-name">account_status</span><span class="col-type">varchar</span></div>
+      </div>
+
+      <div class="table-card" id="table-organizations">
+        <div class="table-header"><span>organizations</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">code</span><span class="col-type">varchar(64)</span></div>
+        <div class="table-row"><span class="col-name">name</span><span class="col-type">varchar(120)</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">general_manager_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">type</span><span class="col-type">varchar(40)</span></div>
+      </div>
+    </div>
+
+    <div class="domain-group" data-domain="Campaign">
+      <h2 class="domain-title">Campaign Domain</h2>
+      
+      <div class="table-card" id="table-campaigns">
+        <div class="table-header"><span>campaigns</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">public_id</span><span class="col-type">varchar(36)</span></div>
+        <div class="table-row"><span class="col-name">owner_login_id</span><span class="col-type">varchar(100)</span></div>
+        <div class="table-row"><span class="col-name">name</span><span class="col-type">varchar(120)</span></div>
+        <div class="table-row"><span class="col-name">status</span><span class="col-type">varchar(30)</span></div>
+      </div>
+
+      <div class="table-card" id="table-campaign_intro">
+        <div class="table-header"><span>campaign_intro</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_idx<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">rfp_code</span><span class="col-type">varchar(50)</span></div>
+        <div class="table-row"><span class="col-name">[... 20+ config fields ...]</span><span class="col-type">mixed</span></div>
+      </div>
+
+      <div class="table-card" id="table-campaign_participant">
+        <div class="table-header"><span>campaign_participant</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_idx<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="organizations"><span class="col-name">organization_idx<span class="fk-badge">→ orgs</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">campaign_role</span><span class="col-type">varchar(30)</span></div>
+      </div>
+
+      <div class="table-card" id="table-campaign_members">
+        <div class="table-header"><span>campaign_members</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_idx<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">user_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">campaign_role</span><span class="col-type">varchar(30)</span></div>
+      </div>
+
+      <div class="table-card" id="table-campaign_kpis">
+        <div class="table-header"><span>campaign_kpis</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_idx<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">name</span><span class="col-type">varchar(120)</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">owner_user_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+      </div>
+
+      <div class="table-card" id="table-campaign_invitations">
+        <div class="table-header"><span>campaign_invitations</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_idx<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">inviter_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">invitee_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="organizations"><span class="col-name">invitee_org_idx<span class="fk-badge">→ orgs</span></span><span class="col-type">bigint</span></div>
+      </div>
+      
+      <div class="table-card" id="table-campaign_activity">
+        <div class="table-header"><span>campaign_activity</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_id<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">actor_user_id<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">type</span><span class="col-type">varchar(40)</span></div>
+      </div>
+    </div>
+
+    <div class="domain-group" data-domain="TeamBoard">
+      <h2 class="domain-title">Team Board</h2>
+      
+      <div class="table-card" id="table-milestones">
+        <div class="table-header"><span>milestones</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_id<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">name</span><span class="col-type">varchar</span></div>
+      </div>
+
+      <div class="table-card" id="table-task_parts">
+        <div class="table-header"><span>task_parts</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_id<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="milestones"><span class="col-name">milestone_id<span class="fk-badge">→ milestones</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaign_participant"><span class="col-name">owner_team_id<span class="fk-badge">→ participant</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">name</span><span class="col-type">varchar(50)</span></div>
+      </div>
+
+      <div class="table-card" id="table-task">
+        <div class="table-header"><span>task</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_id<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="milestones"><span class="col-name">milestone_id<span class="fk-badge">→ milestones</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="task_parts"><span class="col-name">task_part_id<span class="fk-badge">→ task_parts</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaign_participant"><span class="col-name">participant_id<span class="fk-badge">→ participant</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">assignee_id<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">status</span><span class="col-type">varchar(20)</span></div>
+      </div>
+    </div>
+
+    <div class="domain-group" data-domain="AI_Judge">
+      <h2 class="domain-title">AI Judge</h2>
+      
+      <div class="table-card" id="table-ad_check_job">
+        <div class="table-header"><span>ad_check_job</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">job_id</span><span class="col-type">varchar(80)</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">requester_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">campaign_id</span><span class="col-type">varchar(80)</span></div>
+        <div class="table-row"><span class="col-name">status</span><span class="col-type">varchar(30)</span></div>
+      </div>
+
+      <div class="table-card" id="table-ad_ai_analysis">
+        <div class="table-header"><span>ad_ai_analysis</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_idx<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">author_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">analysis_status</span><span class="col-type">varchar(30)</span></div>
+      </div>
+
+      <div class="table-card" id="table-ad_review_request">
+        <div class="table-header"><span>ad_review_request</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_idx<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">request_status</span><span class="col-type">varchar(30)</span></div>
+      </div>
+    </div>
+
+    <div class="domain-group" data-domain="UserProfile">
+      <h2 class="domain-title">User Profile</h2>
+      
+      <div class="table-card" id="table-user_profile">
+        <div class="table-header"><span>user_profile</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">user_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">profile_image_url</span><span class="col-type">varchar</span></div>
+      </div>
+
+      <div class="table-card" id="table-profile_image_generation_log">
+        <div class="table-header"><span>profile_image_generation_log</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">user_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">status</span><span class="col-type">varchar(20)</span></div>
+      </div>
+
+      <div class="table-card" id="table-profile_image_history">
+        <div class="table-header"><span>profile_image_history</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">user_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="profile_image_generation_log"><span class="col-name">generation_log_idx<span class="fk-badge">→ log</span></span><span class="col-type">bigint</span></div>
+      </div>
+    </div>
+
+    <div class="domain-group" data-domain="Misc">
+      <h2 class="domain-title">Misc (Notice / Match / Frame)</h2>
+      
+      <div class="table-card" id="table-notification_settings">
+        <div class="table-header"><span>notification_settings</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">user_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+      </div>
+
+      <div class="table-card" id="table-notifications">
+        <div class="table-header"><span>notifications</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">recipient_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">sender_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+      </div>
+
+      <div class="table-card" id="table-partner_benefits">
+        <div class="table-header"><span>partner_benefits</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="organizations"><span class="col-name">affiliation_id<span class="fk-badge">→ orgs</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="campaigns"><span class="col-name">campaign_idx<span class="fk-badge">→ campaigns</span></span><span class="col-type">bigint</span></div>
+      </div>
+
+      <div class="table-card" id="table-campaign_frame">
+        <div class="table-header"><span>campaign_frame</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row fk" data-target="user"><span class="col-name">owner_idx<span class="fk-badge">→ user</span></span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">title</span><span class="col-type">varchar(160)</span></div>
+      </div>
+
+      <div class="table-card" id="table-reference_items">
+        <div class="table-header"><span>reference_items</span></div>
+        <div class="table-row pk"><span class="col-name">idx</span><span class="col-type">bigint</span></div>
+        <div class="table-row"><span class="col-name">owner_login_id</span><span class="col-type">varchar</span></div>
+        <div class="table-row"><span class="col-name">url</span><span class="col-type">text</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function drawLines() {
+      const svg = document.getElementById('erd-lines');
+      svg.innerHTML = '';
+      
+      const fks = document.querySelectorAll('.table-row.fk');
+      
+      fks.forEach(fk => {
+        const targetId = fk.getAttribute('data-target');
+        const targetTable = document.getElementById('table-' + targetId);
+        const sourceTable = fk.closest('.table-card');
+        
+        if (targetTable && sourceTable) {
+          const rect1 = fk.getBoundingClientRect();
+          const rect2 = targetTable.querySelector('.table-header').getBoundingClientRect();
+          
+          const scrollX = window.scrollX || window.pageXOffset;
+          const scrollY = window.scrollY || window.pageYOffset;
+
+          // 시작점: FK Row의 중앙
+          const startX = rect1.left + scrollX + (rect1.width / 2);
+          const startY = rect1.top + scrollY + (rect1.height / 2);
+          
+          // 끝점: 타겟 테이블 Header의 중앙
+          const endX = rect2.left + scrollX + (rect2.width / 2);
+          const endY = rect2.top + scrollY + (rect2.height / 2);
+
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          // 카드 밑으로 숨어 들어가도록 직선 연결
+          path.setAttribute("d", `M ${startX} ${startY} L ${endX} ${endY}`);
+          path.setAttribute("data-source", sourceTable.id);
+          path.setAttribute("data-target", targetTable.id);
+          path.classList.add('rel-line');
+          
+          svg.appendChild(path);
+        }
+      });
+    }
+
+    // 마우스 호버 시 관계선 하이라이트 이벤트
+    function setupInteractions() {
+      const cards = document.querySelectorAll('.table-card');
+      const lines = document.getElementsByClassName('rel-line');
+
+      cards.forEach(card => {
+        card.addEventListener('mouseenter', () => {
+          const cardId = card.id;
+          Array.from(lines).forEach(line => {
+            if(line.getAttribute('data-source') === cardId || line.getAttribute('data-target') === cardId) {
+              line.classList.add('active');
+              // 활성화된 선을 위로 올리기 위해 재배치
+              line.parentNode.appendChild(line);
+            } else {
+              line.style.opacity = '0.1';
+            }
+          });
+        });
+
+        card.addEventListener('mouseleave', () => {
+          Array.from(lines).forEach(line => {
+            line.classList.remove('active');
+            line.style.opacity = '1';
+          });
+        });
+      });
+    }
+
+    window.onload = () => {
+      // 레이아웃이 완전히 잡힌 후 선을 그리기 위해 약간의 지연 시간 부여
+      setTimeout(() => {
+        drawLines();
+        setupInteractions();
+      }, 100);
+    };
+    window.onresize = drawLines;
+  </script>
+</body>
+</html>
