@@ -53,7 +53,7 @@ custom:
 app:
   kafka:
     topics:
-      evaluation-start: evaluation.start
+      evaluation-start: ${EVALUATION_START_TOPIC}
       evaluation-collect: evaluation.collect
       evaluation-completed: evaluation.completed
       evaluation-failed: evaluation.failed
