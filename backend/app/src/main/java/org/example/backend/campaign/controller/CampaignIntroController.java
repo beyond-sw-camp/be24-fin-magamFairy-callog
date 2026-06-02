@@ -33,20 +33,10 @@ public class CampaignIntroController {
             @PathVariable String campaignId,
             @AuthenticationPrincipal AuthUserDetails user
     ) {
-        try {
-            Long campaignIdx = toIdx(campaignId);
-            Long callerIdx = user == null ? null : user.getIdx();
-            CampaignIntroDto.GetRes dto = introService.getIntro(campaignIdx, callerIdx);
-            return ResponseEntity.ok(BaseResponse.success(dto));
-        } catch (ResponseStatusException e) {
-            throw e;
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        }
+        Long campaignIdx = toIdx(campaignId);
+        Long callerIdx = user == null ? null : user.getIdx();
+        CampaignIntroDto.GetRes dto = introService.getIntro(campaignIdx, callerIdx);
+        return ResponseEntity.ok(BaseResponse.success(dto));
     }
 
     @PatchMapping("/{campaignId}/intro")
@@ -58,19 +48,9 @@ public class CampaignIntroController {
         if (user == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
         }
-        try {
-            Long campaignIdx = toIdx(campaignId);
-            introService.updateIntro(campaignIdx, dto, user.getIdx());
-            return ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.SUCCESS));
-        } catch (ResponseStatusException e) {
-            throw e;
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        }
+        Long campaignIdx = toIdx(campaignId);
+        introService.updateIntro(campaignIdx, dto, user.getIdx());
+        return ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.SUCCESS));
     }
 
     private Long toIdx(String publicId) {
