@@ -138,6 +138,12 @@ public class EvaluationService {
         Update update = new Update();
         // 2. 공통 기본 인프라 정보 업데이트 설정
         update.set("publicId", String.valueOf(payload.getPublicId()));
+        update.set("goal", payload.getGoal());
+        update.set("title", payload.getTitle());
+        update.set("partner", payload.getPartner());
+        update.set("assetDescription", payload.getAssetDescription());
+        update.set("offer", payload.getOffer());
+        update.set("target", payload.getTarget());
 
         // 3. 카테고리별 분기 및 객체 바인딩 수행 [cite: 5, 10, 20]
         String category = payload.getCategory().toUpperCase();

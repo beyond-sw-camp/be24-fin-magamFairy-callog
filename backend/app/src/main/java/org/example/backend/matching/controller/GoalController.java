@@ -20,16 +20,8 @@ public class GoalController {
 
     @GetMapping("/goal/{idx}")
     public ResponseEntity getGoal(@PathVariable Long idx) {
-        try {
-            MatchingDto.GoalRes dto = goalService.getGoal(idx);
-            return ResponseEntity.ok(BaseResponse.success(dto));
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        }
+        MatchingDto.GoalRes dto = goalService.getGoal(idx);
+        return ResponseEntity.ok(BaseResponse.success(dto));
     }
 
     @GetMapping("/goal/list")
@@ -37,13 +29,8 @@ public class GoalController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        try {
-            MatchingDto.GoalList dto = goalService.getGoalList(page, size);
-            return ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.LIST_SUCCESS, dto));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        }
+        MatchingDto.GoalList dto = goalService.getGoalList(page, size);
+        return ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.LIST_SUCCESS, dto));
     }
 
     @PostMapping("/goal/add")
@@ -51,17 +38,9 @@ public class GoalController {
             @RequestBody MatchingDto.AddGoal dto,
             @AuthenticationPrincipal AuthUserDetails user
     ) {
-        try {
-            goalService.addGoal(dto, user);
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(BaseResponse.success(BaseResponseStatus.SUCCESS));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        }
+        goalService.addGoal(dto, user);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(BaseResponse.success(BaseResponseStatus.SUCCESS));
     }
 
     @PutMapping("/goal/update/{idx}")
@@ -69,32 +48,13 @@ public class GoalController {
             @PathVariable Long idx,
             @RequestBody MatchingDto.AddGoal dto
     ) {
-        try {
-            goalService.updateGoal(idx, dto);
-            return ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.SUCCESS));
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        }
+        goalService.updateGoal(idx, dto);
+        return ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.SUCCESS));
     }
 
     @DeleteMapping("/goal/delete/{idx}")
     public ResponseEntity deleteGoal(@PathVariable Long idx) {
-        try {
-            goalService.deleteGoal(idx);
-            return ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.SUCCESS));
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        }
+        goalService.deleteGoal(idx);
+        return ResponseEntity.ok(BaseResponse.success(BaseResponseStatus.SUCCESS));
     }
 }

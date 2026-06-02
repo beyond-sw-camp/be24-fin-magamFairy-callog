@@ -23,19 +23,9 @@ public class BenefitController {
 
     @GetMapping("/benefit/{campaignIdx}")
     public ResponseEntity getBenefit(@PathVariable String campaignIdx) {
-        try {
-            List<MatchingDto.BenefitRes> dto = benefitService.getBenefit(campaignIdx);
-            return ResponseEntity.status(HttpStatus.OK)
-                    .body(BaseResponse.success(dto));
-        }
-        catch (NoSuchElementException e) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT, null));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
+        List<MatchingDto.BenefitRes> dto = benefitService.getBenefit(campaignIdx);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(dto));
     }
 
     @GetMapping("/benefit/list")
@@ -43,32 +33,16 @@ public class BenefitController {
             @RequestParam(required = true, defaultValue = "0") int page,
             @RequestParam(required = true, defaultValue = "10") int size
     ) {
-        try {
-            MatchingDto.BenefitList dto = benefitService.getBenefitList(page, size);
-            return ResponseEntity.status(HttpStatus.OK)
-                    .body(BaseResponse.success(BaseResponseStatus.LIST_SUCCESS, dto));
-        }
-        catch (NoSuchElementException e){
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
+        MatchingDto.BenefitList dto = benefitService.getBenefitList(page, size);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(BaseResponseStatus.LIST_SUCCESS, dto));
     }
 
     @PostMapping("/benefit/add")
     public ResponseEntity addBenefit(@RequestBody MatchingDto.AddBenefit dto,
                                    @RequestHeader("X-User-Idx") Long userIdx){
-        try {
-            benefitService.addBenefit(dto, userIdx);
-            return  ResponseEntity.status(HttpStatus.CREATED)
-                    .body(BaseResponse.success(BaseResponseStatus.BENEFIT_ADD_SUCCESS));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
+        benefitService.addBenefit(dto, userIdx);
+        return  ResponseEntity.status(HttpStatus.CREATED)
+                .body(BaseResponse.success(BaseResponseStatus.BENEFIT_ADD_SUCCESS));
     }
 }

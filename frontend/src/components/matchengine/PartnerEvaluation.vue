@@ -7,7 +7,6 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  // 부모 컴포넌트에서 API 호출 후 배열을 넘겨줄 경우를 대비한 Prop
   serverCandidatesList: {
     type: Array,
     default: () => [],
@@ -40,91 +39,51 @@ const statusCounts = computed(() =>
   }, {}),
 )
 
-function getScoreFromBreakdown(candidate, label, fallback) {
-  return candidate.scoreBreakdown?.find((item) => item.label === label)?.score ?? fallback
-}
-
-const goalLabels = {
-  NEW_CUSTOMER: '신규 고객 유입',
-  CUSTOMER_REVISIT: '기존 고객 재방문',
-  MEMBER_SIGNUP: '회원 가입 유도',
-  PURCHASE_BOOKING: '구매/예약 유도',
-  BRAND_AWARENESS: '브랜드 인지도 확대',
-  REVENUE: '매출 증대',
-  UPSELL: '객단가/업셀 향상',
-  DIRECT_BOOKING: '직접예약 비중 확대',
-  REVIEW_REPUTATION: '리뷰/평판 개선',
-  OTHER: '기타',
-}
-
-function getDetailMeta(candidate, label, fallback = '미입력') {
-  return candidate.detailCards?.find((card) => card.label === label)?.meta ?? fallback
-}
-
 // 1. UI용 데이터 포맷으로 정규화하는 함수
 function mapCandidateToProposal(candidate) {
   const score = Number(candidate.score ?? 0)
-  const fallback = score || 75
-  const title = candidate.title ?? '선택한 조합'
-  const partnerName = candidate.partner ?? '파트너 미정'
-  const scheduleMeta = getDetailMeta(candidate, '일정', candidate.schedule ?? '일정 미입력')
-
+  
   return {
     id: candidate.id,
     isSample: candidate.isSample === true,
-    campaignName: title,
-    partnerName,
-    benefitSummary: candidate.offer ?? candidate.title ?? '혜택 정보 미입력',
-    goalLabel: goalLabels[candidate.goal] ?? candidate.goalLabel ?? '목표 미지정',
-    period: scheduleMeta,
-    status: candidate.statusLabel ?? '신규 추천',
-    reviewStatus: candidate.reviewStatus ?? 'new',
+    campaignName: candidate.title,
+    partnerName: candidate.partner,
+    benefitSummary: candidate.offer || '혜택 정보 미입력',
+    goalLabel: candidate.goal,
+    period: candidate.schedule,
+    status: '신규 추천',
+    reviewStatus: 'new',
     scores: {
-      customerFit: getScoreFromBreakdown(candidate, '고객 적합도', fallback),
-      revenue: getScoreFromBreakdown(candidate, '수익 기여도', fallback),
-      cost: getScoreFromBreakdown(candidate, '비용 효율성', fallback),
-      operation: getScoreFromBreakdown(candidate, '운영 용이성', fallback),
-      brand: getScoreFromBreakdown(candidate, '브랜드 적합도', fallback),
+      customerFit: candidate.scoreBreakdown[0].score,
+      revenue: candidate.scoreBreakdown[1].score,
+      cost: candidate.scoreBreakdown[2].score,
+      operation: candidate.scoreBreakdown[3].score,
+      brand: candidate.scoreBreakdown[4].score,
     },
-    comparison: candidate.comparison ?? null,
-    warnings: candidate.risk ? [candidate.risk] : [],
-    reason: candidate.reasons?.[0] ?? title + '의 평가 후보입니다.',
-    targetKpis: candidate.targetKpis?.length ? candidate.targetKpis : [],
-    detailCards: candidate.detailCards?.length
-      ? candidate.detailCards
-      : [
-          { label: '보유 자산', value: candidate.asset ?? '미입력', meta: candidate.target ?? '대상 미입력' },
-          { label: '파트너 혜택', value: candidate.offer ?? '미입력', meta: candidate.partner ?? '파트너 미입력' },
-          { label: '채널', value: candidate.channels ?? '미입력', meta: '채널 정보 미입력' },
-          { label: '산출물', value: candidate.outputs ?? '미입력', meta: '산출물 정보 미입력' },
-          { label: '일정', value: candidate.schedule ?? '미입력', meta: '일정 정보 미입력' },
-          { label: '리스크', value: candidate.risk ?? '미입력', meta: '리스크 정보 미입력' },
-        ],
-    evidence: [
-      candidate.reasons?.[0] ?? '추천 사유 미입력',
-      candidate.reasons?.[1] ?? '수익 기여 근거 미입력',
-      getDetailMeta(candidate, '파트너 혜택', '비용 근거 미입력'),
-      getDetailMeta(candidate, '일정', '운영 근거 미입력'),
-      candidate.reasons?.[0] ?? '브랜드 적합 근거 미입력',
-    ],
-    riskMatrix: candidate.riskMatrix ?? null,
-    nextActions: candidate.nextActions ?? [],
-    comments: candidate.comments ?? [],
-    detailedMetrics: candidate.detailedMetrics || null,
-    manualScore: score || null,
+    comparison: null,
+    warnings: [],
+    reason: '',
+    targetKpis: candidate.targetKpis, 
+    detailCards: candidate.detailCards,
+    evidence: [],
+    riskMatrix: null,
+    nextActions: [],
+    comments: [], // JSON 내 코멘트 부재로 빈 배열 처리
+    detailedMetrics: candidate.detailedMetrics,
+    manualScore: score,
   }
 }
 
 // 2. 서버에서 받은 JSON 데이터를 모델 규격으로 변환하는 어댑터 함수
 function adaptServerDataToCandidate(serverData, index = 0) {
-  const getScore = (evalObj) => evalObj?.overallScore ?? 0;
+  const evals = serverData.evaluations || {};
   
   const scores = {
-    customerFit: getScore(serverData.evaluations.customer),
-    revenue: getScore(serverData.evaluations.revenue),
-    cost: getScore(serverData.evaluations.cost),
-    operation: getScore(serverData.evaluations.operation),
-    brand: getScore(serverData.evaluations.brand),
+    customerFit: evals.customer?.overallScore ?? 0,
+    revenue: evals.revenue?.overallScore ?? 0,
+    cost: evals.cost?.overallScore ?? 0,
+    operation: evals.operation?.overallScore ?? 0,
+    brand: evals.brand?.overallScore ?? 0,
   };
 
   const finalScore = Math.round(
@@ -135,23 +94,29 @@ function adaptServerDataToCandidate(serverData, index = 0) {
     scores.brand * 0.15
   );
 
+  // 각 평가 항목 내부의 상세 텍스트 필드들을 결합하여 근거 본문 생성
+  const getEvaluationText = (evalObj) => {
+    if (!evalObj) return '';
+    return Object.entries(evalObj)
+      .filter(([key]) => key !== 'overallScore' && key !== 'improvementDirections')
+      .map(([_, value]) => value)
+      .filter(Boolean)
+      .join('\n\n');
+  };
+
   return {
-    id: `server-candidate-${index}-${Date.now()}`, // 배열 내 고유 ID 부여
+    id: serverData.sessionId || `server-candidate-${index}-${Date.now()}`,
     isSample: false,
-    goal: serverData.goal || 'MEMBER_SIGNUP',
+    goal: serverData.goal || '목표 미지정',
     title: serverData.title || '제목 미입력',
-    partner: serverData.partner || '미상 (공동 프로모션)',
+    partner: serverData.partner || '파트너 미정',
     offer: serverData.offer || '혜택 미입력',
-    asset: serverData.assetDescription || '자산 정보 미상',
+    asset: serverData.assetDescription || '자산 정보 미입력',
     target: serverData.target || '타겟 미정',
-    schedule: `${serverData.startDate || '미정'} ~ ${serverData.endDate || '미정'}`,
-    risk: serverData.operationEval?.improvementDirections?.[0] || '리스크 정보 없음',
+    schedule: (serverData.startedAt || serverData.endedAt)
+      ? `${serverData.startedAt || '미정'} ~ ${serverData.endedAt || '미정'}`
+      : '일정 정보 미입력',
     score: finalScore,
-    reasons: [
-      serverData.customerEval?.improvementDirections?.[0],
-      serverData.revenueEval?.improvementDirections?.[0],
-      serverData.costEval?.improvementDirections?.[0]
-    ].filter(Boolean),
     scoreBreakdown: [
       { label: '고객 적합도', score: scores.customerFit },
       { label: '수익 기여도', score: scores.revenue },
@@ -159,27 +124,32 @@ function adaptServerDataToCandidate(serverData, index = 0) {
       { label: '운영 용이성', score: scores.operation },
       { label: '브랜드 적합도', score: scores.brand },
     ],
-    targetKpis: ['신규 회원 가입 유도', '객단가(AOV) 상승 유도', '프리미엄 혜택 전환'],
+    targetKpis: [], // JSON 구조 내 가짜 KPI 데이터 제거
+    detailCards: [
+      { label: '보유 자산', value: serverData.assetDescription || '미입력', meta: '' },
+      { label: '파트너 혜택', value: serverData.offer || '미입력', meta: '' },
+      { label: '타겟 대상', value: serverData.target || '미입력', meta: '' }
+    ],
     detailedMetrics: {
       customerFit: {
-        text: serverData.customerEval?.customerAgeGroup,
-        reasons: serverData.customerEval?.improvementDirections || []
+        text: getEvaluationText(evals.customer),
+        reasons: evals.customer?.improvementDirections || []
       },
       revenue: {
-        text: serverData.revenueEval?.purchaseConversionProbability,
-        reasons: serverData.revenueEval?.improvementDirections || []
+        text: getEvaluationText(evals.revenue),
+        reasons: evals.revenue?.improvementDirections || []
       },
       cost: {
-        text: serverData.costEval?.partnerDiscountCostBurden,
-        reasons: serverData.costEval?.improvementDirections || []
+        text: getEvaluationText(evals.cost),
+        reasons: evals.cost?.improvementDirections || []
       },
       operation: {
-        text: serverData.operationEval?.approvalStepsCount,
-        reasons: serverData.operationEval?.improvementDirections || []
+        text: getEvaluationText(evals.operation),
+        reasons: evals.operation?.improvementDirections || []
       },
       brand: {
-        text: serverData.brandEval?.brandTone,
-        reasons: serverData.brandEval?.improvementDirections || []
+        text: getEvaluationText(evals.brand),
+        reasons: evals.brand?.improvementDirections || []
       }
     }
   };
@@ -196,7 +166,6 @@ const fetchEvaluationData = async () => {
         .map((data, index) => adaptServerDataToCandidate(data, index))
         .map(mapCandidateToProposal)
       
-      // 데이터 세팅 후 첫 번째 항목 자동 선택
       setActiveStatus('new')
       selectedId.value = proposalQueue.value[0]?.id ?? null
     }
@@ -209,29 +178,6 @@ onMounted(() => {
   fetchEvaluationData()
 })
 
-// // 4. 배열 데이터를 순회하며 UI 큐(Queue) 초기화
-// proposalQueue.value = serverDataList
-//   .map((data, index) => adaptServerDataToCandidate(data, index))
-//   .map(mapCandidateToProposal)
-
-/* 
- * [참고사항] 
- * 만약 하드코딩 배열(serverDataList) 대신 부모 컴포넌트로부터 
- * Props(serverCandidatesList)를 통해 배열을 동적으로 넘겨받는다면, 
- * 아래 Watch를 활성화하여 사용하시면 됩니다.
- * 
- * watch(() => props.serverCandidatesList, (newVal) => {
- *   if (newVal && newVal.length > 0) {
- *     proposalQueue.value = newVal
- *       .map((data, index) => adaptServerDataToCandidate(data, index))
- *       .map(mapCandidateToProposal)
- *     
- *     setActiveStatus('new')
- *     selectedId.value = proposalQueue.value[0]?.id ?? null
- *   }
- * }, { immediate: true })
- */
-
 const metrics = [
   { key: 'customerFit', label: '고객 적합도', weight: 25 },
   { key: 'revenue', label: '수익 기여도', weight: 25 },
@@ -240,47 +186,13 @@ const metrics = [
   { key: 'brand', label: '브랜드 적합도', weight: 15 },
 ]
 
+// 하드코딩 빈 값 처리 (서버 데이터를 우선 하도록 변경)
 const metricDetails = {
-  customerFit: {
-    benchmark: 78,
-    reasons: [
-      '타겟 고객군과 혜택 이용층이 겹칩니다.',
-      '채널 접점이 명확해 캠페인 노출 손실이 적습니다.',
-      '대상 고객이 구체적일수록 점수가 높게 산정됩니다.',
-    ],
-  },
-  revenue: {
-    benchmark: 74,
-    reasons: [
-      '가입, 구매, 예약 같은 전환 행동과 연결됩니다.',
-      '성과 측정 KPI가 비교적 명확합니다.',
-      '단순 노출형 캠페인보다 수익 기여를 크게 봅니다.',
-    ],
-  },
-  cost: {
-    benchmark: 76,
-    reasons: [
-      '파트너 부담 비용과 자체 채널 활용 가능성을 함께 봅니다.',
-      '추가 제작비가 낮을수록 점수가 높습니다.',
-      '혜택 규모 대비 운영 비용이 적정합니다.',
-    ],
-  },
-  operation: {
-    benchmark: 72,
-    reasons: [
-      '승인 단계와 제작 산출물 수를 기준으로 봅니다.',
-      '법무/브랜드 검수가 많으면 점수가 낮아집니다.',
-      '일정이 짧을수록 실행 리스크가 커집니다.',
-    ],
-  },
-  brand: {
-    benchmark: 80,
-    reasons: [
-      '브랜드 톤과 고객 경험의 연결성이 높습니다.',
-      '평판 리스크가 낮을수록 점수가 높습니다.',
-      '제휴사가 가진 이미지가 캠페인 메시지를 보강합니다.',
-    ],
-  },
+  customerFit: { benchmark: 0, reasons: [] },
+  revenue: { benchmark: 0, reasons: [] },
+  cost: { benchmark: 0, reasons: [] },
+  operation: { benchmark: 0, reasons: [] },
+  brand: { benchmark: 0, reasons: [] },
 }
 
 const selectedId = ref(proposalQueue.value[0]?.id || null)
@@ -302,15 +214,12 @@ const activeMetricDetails = computed(() => {
   if (selectedProposal.value?.detailedMetrics?.[activeMetric.value.key]) {
     return selectedProposal.value.detailedMetrics[activeMetric.value.key]
   }
-  return metricDetails[activeMetric.value.key] ?? metricDetails.customerFit
+  return metricDetails[activeMetric.value.key]
 })
 
 const activeMetricEvidence = computed(() => {
   if (!selectedProposal.value) return ''
-  if (selectedProposal.value.detailedMetrics?.[activeMetric.value.key]?.text) {
-    return selectedProposal.value.detailedMetrics[activeMetric.value.key].text
-  }
-  return selectedProposal.value.evidence[activeMetricIndex.value] ?? selectedProposal.value.reason
+  return selectedProposal.value.detailedMetrics?.[activeMetric.value.key]?.text || ''
 })
 
 const topMetric = computed(() => {
@@ -643,7 +552,7 @@ function grade(score) {
                 <b>{{ selectedProposal.scores[metric.key] }}점 · {{ metric.weight }}%</b>
               </button>
             </div>
-            <p>{{ activeMetricEvidence }}</p>
+            <p style="white-space: pre-wrap;">{{ activeMetricEvidence }}</p>
             <ul>
               <li v-for="reason in activeMetricDetails.reasons" :key="reason">{{ reason }}</li>
             </ul>
@@ -689,7 +598,7 @@ function grade(score) {
           <h4>코멘트</h4>
           <span>{{ selectedProposal.comments.length }}건</span>
         </header>
-        <ol>
+        <ol v-if="selectedProposal.comments.length">
           <li v-for="comment in selectedProposal.comments" :key="comment.author + comment.time">
             <b>{{ comment.author }}</b>
             <small>{{ comment.time }}</small>
@@ -1372,7 +1281,7 @@ function grade(score) {
 .pe-stat-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.55rem;
   margin-top: 0.75rem;
 }
 
@@ -1613,1105 +1522,5 @@ function grade(score) {
   .pe-mini-actions button {
     width: 100%;
   }
-}
-
-.eval-workspace {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.55fr) minmax(0, 1.45fr);
-  gap: 0.7rem;
-  height: 100%;
-  min-height: 0;
-}
-
-.eval-list,
-.eval-detail {
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 0.8rem;
-  box-shadow: 0 6px 18px rgba(19, 35, 68, 0.04);
-  min-height: 0;
-}
-
-.eval-list {
-  display: grid;
-  grid-auto-rows: max-content;
-  align-content: start;
-  gap: 0.5rem;
-  overflow: auto;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--panel-muted) 86%, var(--accent-soft)),
-      var(--panel-muted)
-    );
-  border-color: color-mix(in srgb, var(--border-strong) 72%, var(--accent-color));
-  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--border-color) 72%, transparent);
-}
-
-.eval-detail {
-  display: grid;
-  align-content: start;
-  gap: 0.75rem;
-  overflow: auto;
-  background: var(--panel-color);
-  border-color: var(--border-strong);
-}
-
-.eval-head,
-.eval-hero__main,
-.section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.eval-head h3,
-.eval-hero h3,
-.section-head h4,
-.now-panel h5 {
-  color: var(--text-primary);
-  font-size: 0.95rem;
-}
-
-.eval-head span,
-.eval-hero p,
-.eval-item small,
-.section-head span,
-.metric-evidence p,
-.kpi-list small,
-.condition-list li,
-.action-list li {
-  color: var(--muted-text);
-  font-size: 0.76rem;
-}
-
-.eval-status-tabs {
-  display: grid;
-  gap: 0.38rem;
-}
-
-.eval-status-tab {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  min-height: 2.2rem;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: var(--panel-color);
-  color: var(--text-secondary);
-  padding: 0 0.58rem;
-  cursor: pointer;
-  text-align: left;
-}
-
-.eval-status-tab span {
-  overflow: hidden;
-  font-size: 0.74rem;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.eval-status-tab b {
-  display: inline-flex;
-  min-width: 1.28rem;
-  min-height: 1.28rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: var(--panel-muted);
-  color: var(--muted-text);
-  font-size: 0.66rem;
-  font-weight: 900;
-}
-
-.eval-status-tab:hover,
-.eval-status-tab.active {
-  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-strong));
-  background: color-mix(in srgb, var(--accent-color) 9%, var(--panel-color));
-  color: var(--text-primary);
-}
-
-.eval-status-tab.active b {
-  background: var(--accent-color);
-  color: #fff;
-}
-
-.eval-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 2.6rem;
-  align-items: center;
-  gap: 0.6rem;
-  min-height: 4rem;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--panel-color) 66%, var(--panel-muted));
-  padding: 0.6rem;
-  text-align: left;
-}
-
-.eval-item.active {
-  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-strong));
-  background: color-mix(in srgb, var(--accent-color) 11%, var(--panel-color));
-  box-shadow:
-    0 5px 14px rgba(19, 35, 68, 0.06),
-    inset 3px 0 0 var(--accent-color);
-}
-
-.eval-item span {
-  display: grid;
-  min-width: 0;
-  gap: 0.15rem;
-}
-
-.eval-item__titleline,
-.eval-hero__titleline {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
-}
-
-.eval-hero__titleline h3 {
-  margin: 0;
-}
-
-.sample-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.25rem;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 28%, var(--border-color));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent-color) 9%, var(--panel-color));
-  color: var(--accent-color);
-  padding: 0 0.45rem;
-  font-size: 0.62rem;
-  font-style: normal;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.eval-item strong {
-  color: var(--text-primary);
-  font-size: 0.86rem;
-}
-
-.eval-item small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.eval-item__status {
-  display: inline-flex !important;
-  width: fit-content;
-  min-height: 1.25rem;
-  align-items: center;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--border-color));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent-color) 7%, var(--panel-color));
-  color: var(--accent-color) !important;
-  padding: 0 0.46rem;
-  font-size: 0.64rem !important;
-  font-weight: 900 !important;
-}
-
-.eval-item b,
-.eval-score strong {
-  color: var(--accent-color);
-}
-
-.eval-hero,
-.eval-what,
-.eval-composition,
-.eval-now,
-.eval-collab {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--panel-color) 80%, var(--panel-muted)),
-      var(--panel-color)
-  );
-  padding: 0.85rem;
-}
-
-.eval-hero {
-  border-color: color-mix(in srgb, var(--accent-color) 36%, var(--border-color));
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--accent-color) 10%, var(--panel-color)),
-      var(--panel-color) 62%
-    );
-}
-
-.eval-score {
-  min-width: 7rem;
-  text-align: right;
-}
-
-.eval-score strong {
-  display: block;
-  font-size: 1.75rem;
-  line-height: 1;
-}
-
-.eval-score span {
-  color: var(--text-primary);
-  font-size: 0.76rem;
-  font-weight: 900;
-}
-
-.eval-assessment {
-  display: grid;
-  gap: 0.45rem;
-  margin-top: 0.8rem;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 18%, var(--border-color));
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent-color) 5%, var(--panel-color));
-  padding: 0.72rem 0.78rem;
-}
-
-.eval-assessment__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-
-.eval-assessment__head span {
-  color: var(--muted-text);
-  font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-}
-
-.eval-assessment__head b {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.45rem;
-  border-radius: 999px;
-  background: var(--accent-color);
-  color: #fff;
-  padding: 0 0.62rem;
-  font-size: 0.7rem;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.eval-assessment p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  font-weight: 750;
-  line-height: 1.58;
-}
-
-.formula-toggle {
-  margin-top: 0.65rem;
-  border: 0;
-  background: transparent;
-  color: var(--accent-color);
-  padding: 0;
-  font-size: 0.72rem;
-  font-weight: 900;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.conditions-toggle {
-  margin-top: 0.65rem;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--panel-muted);
-  color: var(--text-secondary);
-  padding: 0.38rem 0.55rem;
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
-.score-formula {
-  margin-top: 0.45rem;
-  border-top: 1px solid var(--border-color);
-  padding-top: 0.45rem;
-  color: var(--muted-text);
-  font-size: 0.72rem;
-  line-height: 1.45;
-}
-
-.metric-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.55fr);
-  gap: 0.7rem;
-  margin-top: 0.65rem;
-}
-
-.metric-bars {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.eval-bar {
-  display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
-  align-items: center;
-  gap: 0.55rem;
-  width: 100%;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  padding: 0.5rem;
-  text-align: left;
-}
-
-.eval-bar.active {
-  border-color: color-mix(in srgb, var(--accent-color) 42%, var(--border-color));
-  background: color-mix(in srgb, var(--accent-color) 8%, var(--panel-color));
-}
-
-.eval-bar span {
-  color: var(--text-secondary);
-  font-size: 0.76rem;
-  font-weight: 800;
-}
-
-.eval-bar small {
-  color: var(--muted-text);
-  font-size: 0.64rem;
-}
-
-.eval-bar__meter {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 2rem;
-  align-items: center;
-  gap: 0.32rem;
-}
-
-.eval-bar__track {
-  height: 0.58rem;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--panel-muted);
-}
-
-.eval-bar i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent-color);
-}
-
-.eval-bar__meter strong {
-  color: var(--text-primary);
-  font-size: 0.78rem;
-  text-align: left;
-}
-
-.metric-evidence {
-  display: grid;
-  align-content: start;
-  gap: 0.55rem;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: var(--panel-muted);
-  padding: 0.7rem;
-}
-
-.metric-evidence__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-
-.metric-evidence span,
-.kpi-list span {
-  color: var(--muted-text);
-  font-size: 0.68rem;
-  font-weight: 900;
-}
-
-.metric-evidence strong {
-  color: var(--accent-color);
-  font-size: 1rem;
-}
-
-.metric-evidence ul {
-  display: grid;
-  gap: 0.28rem;
-  margin: 0;
-  padding-left: 1rem;
-}
-
-.metric-evidence li {
-  color: var(--text-secondary);
-  font-size: 0.72rem;
-  line-height: 1.42;
-}
-
-.metric-evidence li::marker {
-  color: var(--accent-color);
-}
-
-.metric-compare {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem 0.55rem;
-  border-top: 1px solid var(--border-color);
-  padding-top: 0.55rem;
-}
-
-.metric-compare div:not(.metric-compare__bar) {
-  display: grid;
-  gap: 0.08rem;
-}
-
-.metric-compare b {
-  color: var(--text-primary);
-  font-size: 0.82rem;
-}
-
-.metric-compare__bar {
-  position: relative;
-  grid-column: 1 / -1;
-  height: 0.46rem;
-  border-radius: 999px;
-  background: var(--panel-color);
-}
-
-.metric-compare__bar i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent-color);
-}
-
-.metric-compare__bar em {
-  position: absolute;
-  top: -0.18rem;
-  width: 2px;
-  height: 0.82rem;
-  border-radius: 999px;
-  background: var(--color-warning-dark, #b45309);
-}
-
-.composition-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.55rem;
-  margin: 0.65rem 0 0;
-}
-
-.composition-grid div {
-  min-width: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: var(--panel-muted);
-  padding: 0.65rem;
-}
-
-.composition-grid dt {
-  color: var(--muted-text);
-  font-size: 0.68rem;
-  font-weight: 900;
-}
-
-.composition-grid dd {
-  display: grid;
-  gap: 0.18rem;
-  margin: 0.2rem 0 0;
-}
-
-.composition-grid strong {
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  line-height: 1.35;
-}
-
-.composition-grid small {
-  color: var(--muted-text);
-  font-size: 0.71rem;
-  line-height: 1.42;
-}
-
-.now-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0.65rem;
-  margin-top: 0.65rem;
-}
-
-.now-panel {
-  min-width: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: var(--panel-muted);
-  padding: 0.7rem;
-}
-
-.kpi-list {
-  display: grid;
-  gap: 0.42rem;
-  margin-top: 0.5rem;
-}
-
-.target-kpi-list {
-  display: grid;
-  gap: 0.38rem;
-  margin: 0.55rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.target-kpi-list li {
-  position: relative;
-  padding-left: 0.85rem;
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  font-weight: 800;
-  line-height: 1.45;
-}
-
-.target-kpi-list li::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0.58rem;
-  width: 0.32rem;
-  height: 0.32rem;
-  border-radius: 999px;
-  background: var(--accent-color);
-}
-
-.target-kpi-empty {
-  margin: 0.55rem 0 0;
-  color: var(--muted-text);
-  font-size: 0.75rem;
-  font-weight: 750;
-  font-style: italic;
-}
-
-.kpi-list div {
-  display: grid;
-  grid-template-columns: minmax(72px, 0.6fr) minmax(64px, 0.4fr);
-  gap: 0.1rem 0.45rem;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--panel-color);
-  padding: 0.48rem 0.55rem;
-}
-
-.kpi-list strong {
-  color: var(--accent-color);
-  font-size: 0.86rem;
-  text-align: right;
-}
-
-.kpi-list small {
-  grid-column: 1 / -1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.condition-list,
-.action-list {
-  display: grid;
-  gap: 0.38rem;
-  margin: 0.55rem 0 0;
-  padding-left: 1rem;
-}
-
-.condition-list li,
-.action-list li {
-  line-height: 1.45;
-}
-
-.condition-list li::marker {
-  color: var(--accent-color);
-}
-
-.action-list {
-  margin-top: 0.5rem;
-  padding-left: 0;
-  list-style: none;
-}
-
-.action-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.45rem;
-  color: var(--text-secondary);
-  font-weight: 700;
-}
-
-.action-list span {
-  width: 0.82rem;
-  height: 0.82rem;
-  flex: 0 0 auto;
-  margin-top: 0.1rem;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 48%, var(--border-color));
-  border-radius: 3px;
-  background: var(--panel-color);
-}
-
-.decision-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-top: 0.8rem;
-}
-
-.decision-actions button {
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--panel-color);
-  color: var(--text-secondary);
-  padding: 0.48rem 0.7rem;
-  font-size: 0.74rem;
-  font-weight: 900;
-}
-
-.decision-actions .primary-action,
-.decision-actions button.active {
-  border-color: var(--accent-color);
-  background: var(--accent-color);
-  color: white;
-}
-
-.eval-hero__eyebrow {
-  display: inline-flex;
-  margin-bottom: 0.25rem;
-  color: var(--accent-color);
-  font-size: 0.68rem;
-  font-weight: 900;
-}
-
-.eval-hero__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.45rem;
-}
-
-.eval-hero__meta span,
-.eval-hero__meta b {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.35rem;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--panel-color);
-  color: var(--text-secondary);
-  padding: 0 0.55rem;
-  font-size: 0.68rem;
-  font-weight: 850;
-}
-
-.eval-hero__meta b {
-  border-color: color-mix(in srgb, var(--accent-color) 35%, var(--border-color));
-  background: color-mix(in srgb, var(--accent-color) 10%, var(--panel-color));
-  color: var(--accent-color);
-}
-
-.metric-compare small {
-  grid-column: 1 / -1;
-  color: var(--muted-text);
-  font-size: 0.66rem;
-  font-weight: 750;
-}
-
-
-.action-list--rich li {
-  align-items: flex-start;
-}
-
-.action-list--rich div {
-  display: grid;
-  gap: 0.12rem;
-  min-width: 0;
-}
-
-.action-list--rich strong {
-  color: var(--text-primary);
-  font-size: 0.78rem;
-  font-weight: 900;
-}
-
-.action-list--rich small {
-  color: var(--muted-text);
-  font-size: 0.69rem;
-  font-weight: 750;
-  line-height: 1.35;
-}
-
-.eval-collab {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.65rem;
-}
-
-.collab-panel {
-  min-width: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: var(--panel-muted);
-  padding: 0.7rem;
-}
-
-.comment-list {
-  display: grid;
-  gap: 0.45rem;
-  margin: 0.55rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.comment-list li {
-  display: grid;
-  gap: 0.12rem;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--panel-color);
-  padding: 0.55rem 0.6rem;
-}
-
-.comment-list strong {
-  color: var(--text-primary);
-  font-size: 0.76rem;
-  font-weight: 900;
-}
-
-.comment-list small {
-  color: var(--muted-text);
-  font-size: 0.68rem;
-  font-weight: 750;
-}
-
-.comment-list p {
-  margin: 0.22rem 0 0;
-  color: var(--text-secondary);
-  font-size: 0.74rem;
-  font-weight: 750;
-  line-height: 1.45;
-}
-
-.subtle-add {
-  margin-top: 0.55rem;
-  width: 100%;
-  border: 1px dashed var(--border-color);
-  border-radius: 6px;
-  background: var(--panel-color);
-  color: var(--accent-color);
-  padding: 0.48rem 0.6rem;
-  font-size: 0.72rem;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.subtle-add:hover {
-  border-color: var(--accent-color);
-  background: color-mix(in srgb, var(--accent-color) 7%, var(--panel-color));
-}
-
-.decision-help {
-  margin: 0.45rem 0 0;
-  color: var(--muted-text);
-  font-size: 0.72rem;
-  font-weight: 750;
-  line-height: 1.45;
-}
-
-.decision-actions--modal {
-  display: flex;
-  gap: 0.45rem;
-  margin-top: 0.8rem;
-}
-
-.decision-btn {
-  flex: 1;
-  height: 2.35rem;
-  border-radius: 7px;
-  font-size: 0.78rem;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.decision-btn--primary {
-  flex: 1.5;
-  border: 0;
-  background: var(--accent-color);
-  color: #fff;
-}
-
-.decision-btn--ghost,
-.decision-btn--danger-ghost {
-  border: 1px solid var(--border-color);
-  background: var(--panel-color);
-  color: var(--text-secondary);
-}
-
-.decision-btn--ghost:hover {
-  background: var(--panel-muted);
-  color: var(--text-primary);
-}
-
-.decision-btn--danger-ghost:hover {
-  border-color: color-mix(in srgb, #ef4444 35%, var(--border-color));
-  background: color-mix(in srgb, #ef4444 8%, var(--panel-color));
-  color: #b91c1c;
-}
-
-.decision-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 300;
-  display: grid;
-  place-items: center;
-  background: rgba(15, 23, 42, 0.52);
-  padding: 1rem;
-}
-
-.decision-modal__panel {
-  width: min(430px, 100%);
-  overflow: hidden;
-  border-top: 4px solid var(--accent-color);
-  border-radius: 11px;
-  background: var(--panel-color);
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
-}
-
-.decision-modal__panel--neutral {
-  border-top-color: #94a3b8;
-}
-
-.decision-modal__panel--danger {
-  border-top-color: #ef4444;
-}
-
-.decision-modal__head {
-  padding: 1.05rem 1.1rem 0.45rem;
-}
-
-.decision-modal__head h3 {
-  margin: 0 0 0.3rem;
-  color: var(--text-primary);
-  font-size: 1rem;
-  font-weight: 900;
-}
-
-.decision-modal__head p {
-  margin: 0;
-  color: var(--muted-text);
-  font-size: 0.75rem;
-  font-weight: 750;
-  line-height: 1.45;
-}
-
-.decision-modal__target {
-  display: grid;
-  gap: 0.15rem;
-  margin: 0.6rem 1.1rem 0;
-  border-radius: 7px;
-  background: var(--panel-muted);
-  padding: 0.58rem 0.72rem;
-}
-
-.decision-modal__target span:first-child {
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  font-weight: 900;
-}
-
-.decision-modal__target span:last-child {
-  color: var(--muted-text);
-  font-size: 0.72rem;
-  font-weight: 750;
-}
-
-.decision-modal__field {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0.75rem 1.1rem 0;
-}
-
-.decision-modal__field label {
-  color: var(--text-secondary);
-  font-size: 0.74rem;
-  font-weight: 900;
-}
-
-.decision-modal__field label span {
-  color: #ef4444;
-}
-
-.decision-modal__field textarea {
-  width: 100%;
-  min-height: 4.5rem;
-  resize: vertical;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: var(--panel-color);
-  color: var(--text-primary);
-  padding: 0.58rem 0.66rem;
-  font: inherit;
-  font-size: 0.78rem;
-}
-
-.decision-modal__field textarea:focus {
-  outline: 0;
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 24%, transparent);
-}
-
-.decision-modal__auto {
-  margin: 0.85rem 1.1rem 0;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 24%, var(--border-color));
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent-color) 5%, var(--panel-color));
-  padding: 0.66rem 0.75rem;
-}
-
-.decision-modal__auto > span {
-  display: block;
-  margin-bottom: 0.4rem;
-  color: var(--muted-text);
-  font-size: 0.66rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-}
-
-.decision-modal__auto ul {
-  display: grid;
-  gap: 0.32rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.decision-modal__auto li {
-  display: flex;
-  align-items: center;
-  gap: 0.42rem;
-  color: var(--text-secondary);
-  font-size: 0.74rem;
-  font-weight: 780;
-}
-
-.decision-modal__auto i {
-  color: var(--accent-color);
-  font-style: normal;
-  font-weight: 900;
-}
-
-.decision-modal__foot {
-  display: flex;
-  gap: 0.45rem;
-  padding: 1rem 1.1rem 1.1rem;
-}
-
-.decision-modal__cancel,
-.decision-modal__confirm {
-  flex: 1;
-  height: 2.3rem;
-  border-radius: 7px;
-  font-size: 0.78rem;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.decision-modal__cancel {
-  border: 1px solid var(--border-color);
-  background: var(--panel-color);
-  color: var(--text-secondary);
-}
-
-.decision-modal__confirm {
-  flex: 1.25;
-  border: 0;
-  color: #fff;
-}
-
-.decision-modal__confirm--primary {
-  background: var(--accent-color);
-}
-
-.decision-modal__confirm--neutral {
-  background: #475569;
-}
-
-.decision-modal__confirm--danger {
-  background: #dc2626;
-}
-
-.decision-modal__confirm:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.18s ease;
-}
-
-.modal-enter-active .decision-modal__panel,
-.modal-leave-active .decision-modal__panel {
-  transition: transform 0.18s ease, opacity 0.18s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.modal-enter-from .decision-modal__panel,
-.modal-leave-to .decision-modal__panel {
-  transform: scale(0.96);
-  opacity: 0;
-}
-
-@media (max-width: 1180px) {
-  .eval-workspace,
-  .metric-layout,
-  .composition-grid,
-  .now-grid,
-  .eval-collab {
-    grid-template-columns: 1fr;
-  }
-}
-
-.eval-empty-list {
-  margin: 0;
-  border: 1px dashed var(--border-color);
-  border-radius: 7px;
-  background: var(--panel-color);
-  color: var(--muted-text);
-  padding: 0.7rem;
-  font-size: 0.74rem;
-  font-weight: 800;
-  line-height: 1.45;
-}
-
-.eval-detail--empty {
-  min-height: 18rem;
-  align-content: center;
-  justify-items: center;
-  text-align: center;
-}
-
-.eval-detail--empty strong {
-  color: var(--text-primary);
-  font-size: 0.95rem;
-  font-weight: 900;
-}
-
-.eval-detail--empty p {
-  margin: 0.35rem 0 0;
-  color: var(--muted-text);
-  font-size: 0.76rem;
-  font-weight: 750;
 }
 </style>

@@ -84,6 +84,9 @@ spring:
       max-request-size: 20MB
 
   data:
+    mongodb:
+      auto-index-creation: true
+      uri: ${MONGODB_URL}
     # ─────────────────────────────────────────────────────────────────────
     # Redis (Bitnami Sentinel — callog-redis Service in redis-test namespace)
     #   - Sentinel 모드 전용 (master failover 자동 처리, HA)

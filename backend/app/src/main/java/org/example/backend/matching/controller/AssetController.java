@@ -21,19 +21,9 @@ public class AssetController {
 
     @GetMapping("/asset/{idx}")
     public ResponseEntity getAsset(@PathVariable Long idx) {
-        try {
-            MatchingDto.AssetRes dto = assetService.getAsset(idx);
-            return ResponseEntity.status(HttpStatus.OK)
-                    .body(BaseResponse.success(dto));
-        }
-        catch (NoSuchElementException e) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
+        MatchingDto.AssetRes dto = assetService.getAsset(idx);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(dto));
     }
 
     @GetMapping("/asset/list")
@@ -41,66 +31,30 @@ public class AssetController {
             @RequestParam(required = true, defaultValue = "0") int page,
             @RequestParam(required = true, defaultValue = "10") int size
     ) {
-        try {
-            MatchingDto.AssetList dto = assetService.getAssetList(page, size);
-            return ResponseEntity.status(HttpStatus.OK)
-                    .body(BaseResponse.success(BaseResponseStatus.LIST_SUCCESS, dto));
-        }
-        catch (NoSuchElementException e){
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
+        MatchingDto.AssetList dto = assetService.getAssetList(page, size);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(BaseResponseStatus.LIST_SUCCESS, dto));
     }
 
     @PostMapping("/asset/add")
     public ResponseEntity addAsset(@RequestBody MatchingDto.AddAsset dto,
                                    @AuthenticationPrincipal AuthUserDetails user){
-        try {
-            assetService.addAsset(dto, user);
-            return  ResponseEntity.status(HttpStatus.CREATED)
-                    .body(BaseResponse.success(BaseResponseStatus.ASSET_ADD_SUCCESS));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
+        assetService.addAsset(dto, user);
+        return  ResponseEntity.status(HttpStatus.CREATED)
+                .body(BaseResponse.success(BaseResponseStatus.ASSET_ADD_SUCCESS));
     }
 
     @PutMapping("/asset/{idx}")
     public ResponseEntity updateAsset(@PathVariable Long idx, @RequestBody MatchingDto.AddAsset dto) {
-        try {
-            assetService.updateAsset(idx, dto);
-            return ResponseEntity.status(HttpStatus.OK)
-                    .body(BaseResponse.success(BaseResponseStatus.SUCCESS));
-        }
-        catch (EntityNotFoundException | NoSuchElementException e) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
+        assetService.updateAsset(idx, dto);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(BaseResponseStatus.SUCCESS));
     }
 
     @DeleteMapping("/asset/{idx}")
     public ResponseEntity deleteAsset(@PathVariable Long idx) {
-        try {
-            assetService.deleteAsset(idx);
-            return ResponseEntity.status(HttpStatus.OK)
-                    .body(BaseResponse.success(BaseResponseStatus.SUCCESS));
-        }
-        catch (EntityNotFoundException | NoSuchElementException e) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
+        assetService.deleteAsset(idx);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(BaseResponse.success(BaseResponseStatus.SUCCESS));
     }
 }

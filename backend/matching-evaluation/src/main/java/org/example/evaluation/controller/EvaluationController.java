@@ -19,20 +19,12 @@ public class EvaluationController {
 
     @GetMapping("/result")
     public ResponseEntity<BaseResponse> getEvaluation(@RequestParam String campaignIdx) {
-        try {
             return ResponseEntity.ok(
                     BaseResponse.processing(
                             BaseResponseStatus.SUCCESS,
                             evaluationService.result(campaignIdx)
                     )
             );
-        } catch (NoSuchElementException e) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT, e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        }
     }
 
     @PostMapping("/collect")
@@ -41,15 +33,9 @@ public class EvaluationController {
         if (dto == null) {
             return ResponseEntity.badRequest().body(BaseResponse.fail(BaseResponseStatus.EMPTY_PAYLOAD));
         }
-
-        try {
-            evaluationService.collect(dto);
-            return ResponseEntity.accepted()
-                    .body(BaseResponse.processing(BaseResponseStatus.SUCCESSFULY_EVALUATED));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL, e.getMessage()));
-        }
+        evaluationService.collect(dto);
+        return ResponseEntity.accepted()
+                .body(BaseResponse.processing(BaseResponseStatus.SUCCESSFULY_EVALUATED));
     }
 
     @PostMapping("/start")

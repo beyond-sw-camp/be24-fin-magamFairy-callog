@@ -11,16 +11,22 @@ import java.util.List;
 @ToString
 public class N8nEvaluationPayloadDto {
 
-    // 공통 메타 데이터 [cite: 1, 6, 11, 16, 21]
+    // 공통 메타 데이터
     private String uuid;
     private String publicId;
+    private String goal;
+    private String title;
+    private String partner;
+    private String assetDescription;
+    private String offer;
+    private String target;
     private Long campaignIdx;
     private Long benefitIdx;
     private String category;
     private Integer overallScore;
     private List<String> improvementDirections;
 
-    // BRAND 영역 필드 [cite: 1]
+    // BRAND 영역 필드
     private String brandTone;
     private String priceRange;
     private String customerExperience;
@@ -28,21 +34,21 @@ public class N8nEvaluationPayloadDto {
     private String reputationRisk;
     private String hanwhaImageConsistency;
 
-    // COST 영역 필드 [cite: 6]
+    // COST 영역 필드
     private String partnerSampleScale;
     private String partnerDiscountCostBurden;
     private String coProductionCostSharing;
     private String hanwhaDirectCostBurden;
     private String existingHanwhaChannelUtilization;
 
-    // CUSTOMER 영역 필드 [cite: 11]
+    // CUSTOMER 영역 필드
     private String customerAgeGroup;
     private String customerSpendingPatterns;
     private String membershipTier;
     private String usageChannel;
     private String benefitCategory;
 
-    // OPERATION 영역 필드 [cite: 16]
+    // OPERATION 영역 필드
     private String approvalStepsCount;
     private String legalReviewRequired;
     private String brandReviewRequired;
@@ -51,7 +57,7 @@ public class N8nEvaluationPayloadDto {
     private String scheduleUrgency;
     private String offlineOrOnsiteStaffRequired;
 
-    // REVENUE 영역 필드 [cite: 21]
+    // REVENUE 영역 필드
     private String purchaseConversionProbability;
     private String roomReservationIncreaseProbability;
     private String appRegistrationIncreaseProbability;

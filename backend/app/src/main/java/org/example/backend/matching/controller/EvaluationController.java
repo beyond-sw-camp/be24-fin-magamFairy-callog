@@ -24,46 +24,20 @@ public class EvaluationController {
 
     @GetMapping("/evaluation/result")
     public ResponseEntity<BaseResponse> getEvaluation(@RequestParam String campaignIdx) {
-        try {
-            List<EvaluationDto.MongoEvaluationRes> dto = evaluationService.result(campaignIdx);
-            return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESS, dto));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
+        List<EvaluationDto.MongoEvaluationRes> dto = evaluationService.result(campaignIdx);
+        return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESS, dto));
     }
 
     @PostMapping("/evaluation/collect")
     public ResponseEntity collect(@RequestBody EvaluationDto.CollectDto dto){
-        try {
-            evaluationService.collect(dto);
-            return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESSFULY_EVALUATED, dto));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
+        evaluationService.collect(dto);
+        return  ResponseEntity.ok(BaseResponse.processing(BaseResponseStatus.SUCCESSFULY_EVALUATED, dto));
     }
 
     @PostMapping("/evaluation/start")
     public ResponseEntity startEvaluation(@RequestBody EvaluationDto.StartEvaluationReq dto){
-        try {
-            evaluationService.startEvaluation(dto);
-            return  ResponseEntity.status(HttpStatus.ACCEPTED)
-                    .body(BaseResponse.processing(BaseResponseStatus.EVLUATION_STARTED));
-        }
-        catch (EntityNotFoundException e){
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(BaseResponse.fail(BaseResponseStatus.NO_SUCH_ELEMENT,e.getMessage()));
-        }
-        catch (RuntimeException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(BaseResponse.fail(BaseResponseStatus.SERVER_NOT_RESPONDING,e.getMessage()));
-        }
-        catch (Exception e){
-            return ResponseEntity.status(HttpStatus.I_AM_A_TEAPOT)
-                    .body(BaseResponse.fail(BaseResponseStatus.FAIL,e.getMessage()));
-        }
+    evaluationService.startEvaluation(dto);
+    return  ResponseEntity.status(HttpStatus.ACCEPTED)
+            .body(BaseResponse.processing(BaseResponseStatus.EVLUATION_STARTED));
     }
 }
