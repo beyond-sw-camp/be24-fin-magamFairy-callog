@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spring-gw-blue
+  namespace: callog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spring-gw
+  template:
+    metadata:
+      labels:
+        app: spring-gw
+        version: blue
+    spec:
+      containers:
+      - name: spring-gw
+        image: tahcy/calloggateway-1.0-blue
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: callog-backend-config
+        volumeMounts:
+        - name: config-volume
+          mountPath: /config
+      volumes:
+      - name: config-volume
+        configMap:
+          name: callog-backend-config
